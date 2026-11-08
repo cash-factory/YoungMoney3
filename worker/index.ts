@@ -79,7 +79,7 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
   if (input.action === 'select') {
     const rows = await env.DB.prepare('SELECT id,payload,created_at,updated_at FROM workspace_records WHERE user_id=? AND table_name=? ORDER BY created_at DESC')
       .bind(user.id, table).all<{ id: string; payload: string; created_at: string; updated_at: string }>();
-    let data = rows.results.map(row => ({ id: row.id, user_id: user.id, ...JSON.parse(row.payload), created_at: row.created_at, updated_at: row.updated_at }));
+    let data = rows.results.map(row => ({ ...JSON.parse(row.payload), id: row.id, user_id: user.id, created_at: row.created_at, updated_at: row.updated_at }));
     for (const [key, value] of Object.entries(filters)) data = data.filter(row => value === null ? row[key] == null : String(row[key]) === String(value));
     for (const [key, values] of Object.entries(input.membershipFilters || {})) {
       data = data.filter(row => values.some(value => String(row[key]) === String(value)));
