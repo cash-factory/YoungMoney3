@@ -101,7 +101,7 @@ export function calculateRiskMetrics(trades: Trade[], options: RiskMetricOptions
     || todayTradeCount >= maxDailyTrades
     || (maxDrawdownPctLimit > 0 && currentDrawdownPct >= maxDrawdownPctLimit)) {
     status = 'danger';
-  } else if (dailyLossPctUsed >= 70 || todayTradeCount >= maxDailyTrades - 1 || (maxDrawdownPctLimit > 0 && currentDrawdownPct >= maxDrawdownPctLimit * 0.8)) {
+  } else if (dailyLossPctUsed >= 70 || (maxDailyTrades > 1 && todayTradeCount >= maxDailyTrades - 1) || (maxDrawdownPctLimit > 0 && currentDrawdownPct >= maxDrawdownPctLimit * 0.8)) {
     status = 'warning';
   }
 
