@@ -67,3 +67,9 @@ test('a breached maximum drawdown is a danger state', () => {
   assert.equal(metrics.currentDrawdownPct, 1);
   assert.equal(metrics.status, 'danger');
 });
+
+test('single-trade limit stays safe before the first trade and is dangerous after one', () => {
+  const single = { ...options, maxDailyTrades: 1 };
+  assert.equal(calculateRiskMetrics([], single).status, 'safe');
+  assert.equal(calculateRiskMetrics([makeTrade({ entry_time: '2026-10-20T12:00:00.000Z', pnl: 0 })], single).status, 'danger');
+});
