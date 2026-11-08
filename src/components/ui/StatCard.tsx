@@ -13,27 +13,35 @@ interface StatCardProps {
 
 export function StatCard({ label, value, sublabel, icon, trend, trendValue, accent = 'blue' }: StatCardProps) {
   const numericValue = parseFloat(value);
-  const isNumeric = !Number.isNaN(numericValue) && Number.isFinite(numericValue);
+  const isNumeric = !isNaN(numericValue) && isFinite(numericValue);
 
   return (
-    <div className={`card editorial-stat metric-accent-${accent} relative p-5`}>
-      <div className="relative flex items-start justify-between gap-3">
+    <div
+      className="card p-5 relative overflow-hidden"
+    >
+      <div className="flex items-start justify-between relative">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold tracking-[0.025em] text-secondary">{label}</p>
-          <p className="mt-3 break-words font-mono text-2xl font-semibold tracking-tight tabular-nums sm:text-[1.65rem]">
+          <p className="text-xs font-semibold text-muted uppercase tracking-wider">{label}</p>
+          <p className="mt-2 text-2xl font-bold font-mono tracking-tight">
             {isNumeric ? <AnimatedCounter value={numericValue} /> : value}
           </p>
-          {sublabel && <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted">{sublabel}</p>}
+          {sublabel && <p className="mt-1 text-xs text-muted truncate">{sublabel}</p>}
         </div>
-        {icon && <div className="editorial-stat-icon grid h-9 w-9 shrink-0 place-items-center rounded-md">
-          {icon}
-        </div>}
+        {icon && (
+          <div className="relative">
+            <div className={`p-2.5 rounded-xl border border-themed icon-bg-${accent}`}>
+              {icon}
+            </div>
+          </div>
+        )}
       </div>
-      {trend && trendValue && <div className="relative mt-4 flex items-center gap-2 border-t border-themed pt-3">
-        <span className={`text-xs font-semibold ${trend === 'up' ? 'text-success-500' : trend === 'down' ? 'text-error-500' : 'text-muted'}`}>
-          {trend === 'up' ? '↑' : trend === 'down' ? '↓' : '—'} {trendValue}
-        </span>
-      </div>}
+      {trend && trendValue && (
+        <div className="mt-3 flex items-center gap-1.5 relative">
+          <span className={`text-xs font-semibold ${trend === 'up' ? 'text-success-500' : trend === 'down' ? 'text-error-500' : 'text-muted'}`}>
+            {trend === 'up' ? '↑' : trend === 'down' ? '↓' : '—'} {trendValue}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
