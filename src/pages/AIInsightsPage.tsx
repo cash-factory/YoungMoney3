@@ -57,8 +57,8 @@ export function AIInsightsPage() {
   return (
     <div>
       <SectionHeader
-        title="AI Insights"
-        subtitle="Automated analysis of your trading patterns and performance"
+        title="Trading Insights"
+        subtitle="Rule-based analysis of your recorded trading patterns and performance"
         action={
           <button onClick={handleGenerate} disabled={generating} className="btn-primary">
             <RefreshCw size={18} className={generating ? 'animate-spin' : ''} /> {generating ? 'Analyzing...' : 'Refresh Analysis'}
@@ -92,7 +92,7 @@ export function AIInsightsPage() {
         <LoadingSpinner label="Analyzing your trading data..." />
       ) : !aiResult ? (
         <div className="card p-8">
-          <EmptyState icon={<Sparkles size={40} />} title="No data for this period" message="Add trades for this period to receive AI-powered insights and suggestions." />
+          <EmptyState icon={<Sparkles size={40} />} title="No data for this period" message="Add trades for this period to receive rule-based insights and suggestions." />
         </div>
       ) : (
         <div className="space-y-6 animate-fade-in">
