@@ -600,3 +600,35 @@
 .premium-dashboard .card :is(button,a):active{transform:scale(.985);}
 .premium-dashboard .card :is(.text-success-500,.text-error-500){font-weight:650;}
 @media(prefers-reduced-motion:reduce){.premium-dashboard .card :is(button,a){transition:none;}}
+
+/* All journey stages share the same visual DNA; no routing or authentication changes. */
+.cockpit-hero{overflow:visible;}
+.auth-showcase {
+  background:linear-gradient(145deg,color-mix(in srgb,var(--brand-dark) 30%,#0a1520),#0b1521 65%,#060c14);
+}
+.auth-showcase::after {
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(circle at 80% 18%,color-mix(in srgb,var(--brand) 14%,transparent),transparent 35%),
+             radial-gradient(circle at 18% 82%,color-mix(in srgb,var(--accent) 12%,transparent),transparent 34%);
+}
+.signature-landing {
+  background-image:radial-gradient(ellipse 70% 45% at 50% 0%,color-mix(in srgb,var(--brand) 8%,transparent),transparent 72%);
+}
+.signature-landing nav .btn-primary {box-shadow:0 8px 28px color-mix(in srgb,var(--brand) 18%,transparent);}
+.signature-landing :is(h1,h2){letter-spacing:-.045em;}
+.signature-landing .card {border-radius:20px;}
+.palette-control>summary{border-color:var(--border-strong);background:var(--bg-card);}
+.palette-control>summary:hover{border-color:var(--brand);}
+.palette-control [aria-pressed="true"] {
+  box-shadow:inset 3px 0 0 var(--brand);
+  background:var(--bg-secondary);
+}
+.palette-control [aria-pressed="true"]>span:first-child{border-color:var(--brand);}
+.workspace-main .premium-dashboard .card {border-color:var(--border);}
+.workspace-main .premium-dashboard .card:hover{border-color:var(--border-strong);}
+@media(min-width:1024px) {
+  .workspace-main {max-width:1500px;}
+}
+@media(prefers-reduced-motion:reduce) {
+  .signature-landing [data-reveal] {opacity:1;filter:none;transform:none;}
+}
