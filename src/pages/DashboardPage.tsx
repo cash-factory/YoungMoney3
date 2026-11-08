@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
+import { accountLedger, tradeCurrency } from '@/lib/tradeFinance';
+import { dateKeyInTimeZone } from '@/lib/riskMetrics';
+import { useEffect, useMemo, useState } from 'react';
 import { Wallet, Target, TrendingUp, Flame, Activity, Plus, ArrowUpRight, ArrowDownRight, Minus, Star, Clock, Eye } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { useAllTestTrades, useBacktests, useForwardTrades, useTestSessions, useTrades, useTradingAccounts, useTradingAccountAdjustments } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
-import { computeDashboardStats, equityCurveData, dailyPnlData, formatCurrency, formatPercent, formatDateTime, groupByPair } from '@/lib/utils';
+import { computeDashboardStats, equityCurveData, dailyPnlData, formatPercent, formatDateTime, groupByPair } from '@/lib/utils';
 import { StatCard } from '@/components/ui/StatCard';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
@@ -23,7 +25,7 @@ import { subDays, format } from 'date-fns';
 
 export function DashboardPage() {
   const { user } = useAuth();
-  const { trades: liveTrades, loading, addTrade } = useTrades(user?.id);
+  const { trades: liveTrades, loading, loadError, asOf, addTrade } = useTrades(user?.id);
   const { accounts } = useTradingAccounts(user?.id);
   const { adjustments } = useTradingAccountAdjustments(user?.id);
   const { backtests } = useBacktests(user?.id);
@@ -37,6 +39,7 @@ export function DashboardPage() {
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const [showRiskSettings, setShowRiskSettings] = useState(false);
   const [accountFilter, setAccountFilter] = useState('all');
+  const [tradeOrigin, setTradeOrigin] = useState('all');
   const [source, setSource] = useState<'live' | 'backtest' | 'forward'>('live');
 
   const account = accounts.find(a => a.id === accountFilter) || null;
@@ -72,27 +75,47 @@ export function DashboardPage() {
     })));
     return [...sessionSourceTrades, ...summaryTrades];
   }, [source, liveTrades, sessionSourceTrades, forwardTrades, backtests]);
-  const trades = useMemo(() => sourceTrades.filter(t => accountFilter === 'all' || t.account_id === accountFilter), [sourceTrades, accountFilter]);
+  const trades = useMemo(() => sourceTrades.filter(t =>
+    (accountFilter === 'all' || t.account_id === accountFilter)
+    && (source !== 'live' || tradeOrigin === 'all' || (t.trade_source || 'manual') === tradeOrigin)
+  ), [sourceTrades, accountFilter, source, tradeOrigin]);
 
+  type Summary = {account_id:string|null;currency:string;origin:string;profit:string;trades:number};
+  const [summaries,setSummaries]=useState<{at:number;rows:Summary[]}|null>(null);
+  useEffect(()=>{
+    if(!asOf) return;
+    const cancel=new AbortController();
+    fetch('/api/account-summaries',{signal:cancel.signal}).then(async reply=>{
+      if(!reply.ok) return;
+      const result=await reply.json();
+      if(!cancel.signal.aborted && Array.isArray(result.rows)) setSummaries({at:asOf,rows:result.rows});
+    }).catch(()=>{ /* The already-loaded journal provides the fallback below. */ });
+    return ()=>cancel.abort();
+  },[asOf]);
   const currencyTotals = useMemo(() => {
     const totals = new Map<string, number>();
+    if(source==='live' && summaries && summaries.at===asOf){
+      for(const row of summaries.rows) if((accountFilter==='all'||row.account_id===accountFilter) && (tradeOrigin==='all'||row.origin===tradeOrigin)) totals.set(row.currency,(totals.get(row.currency) || 0)+Number(row.profit));
+      return [...totals.entries()];
+    }
     trades.filter(t => t.status === 'closed').forEach(t => {
-      const currency = accounts.find(a => a.id === t.account_id)?.base_currency || 'USD';
+      const currency = tradeCurrency(t, accounts);
       totals.set(currency, (totals.get(currency) || 0) + t.pnl);
     });
     return [...totals.entries()];
-  }, [trades, accounts]);
-  const allHasMixedCurrencies = accountFilter === 'all' && new Set(accounts.filter(a => a.is_active).map(a => a.base_currency)).size > 1;
-  const mixedCurrencyView = allHasMixedCurrencies;
-  const formatAccountMoney = (value: number, currency: string) => new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(value);
-  const currentBalance = account ? account.balance + liveTrades.filter(t => t.account_id === account.id && t.status === 'closed').reduce((sum, t) => sum + t.pnl, 0) + adjustments.filter(a => a.account_id === account.id).reduce((sum, a) => sum + a.amount, 0) : null;
-  const accountPnl = account && currentBalance != null ? currentBalance - account.balance : 0;
+  }, [trades, accounts, source, summaries, asOf, accountFilter,tradeOrigin]);
+  const mixedCurrencyView = currencyTotals.length > 1;
+  const currency = currencyTotals[0]?.[0] || account?.base_currency || 'USD';
+  const formatAccountMoney = (value: number, currency: string) => /^[A-Z]{3}$/.test(currency) ? new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(value) : value.toFixed(2) + ' (currency needs review)';
+  const formatCurrency = (value: number) => formatAccountMoney(value, currency);
+  const ledger = account ? accountLedger(account, liveTrades, adjustments) : null;
+  const currentBalance = ledger?.balance ?? null;
+  const accountPnl = ledger?.profit ?? 0;
   const challengeProgress = account?.challenge_target_pct && account.balance > 0 ? Math.max(0, Math.min(100, accountPnl / (account.balance * account.challenge_target_pct / 100) * 100)) : 0;
-  const accountTodayPnl = account ? liveTrades.filter(t => t.account_id === account.id && t.status === 'closed' && localDayInZone(t.exit_time || t.entry_time, account.challenge_reset_timezone || 'UTC') === localDayInZone(new Date().toISOString(), account.challenge_reset_timezone || 'UTC')).reduce((sum, t) => sum + t.pnl, 0) : 0;
+  const accountTodayPnl = account ? liveTrades.filter(t => t.account_id === account.id && t.status === 'closed' && t.exit_time && dateKeyInTimeZone(t.exit_time, account.challenge_reset_timezone || 'UTC') === dateKeyInTimeZone(new Date(), account.challenge_reset_timezone || 'UTC')).reduce((sum, t) => sum + t.pnl, 0) : 0;
   const balancesByCurrency = useMemo(() => accounts.filter(a => a.is_active).reduce((groups, a) => {
-    const pnl = liveTrades.filter(t => t.account_id === a.id && t.status === 'closed').reduce((sum, t) => sum + t.pnl, 0);
-    const adjustmentTotal = adjustments.filter(item => item.account_id === a.id).reduce((sum, item) => sum + item.amount, 0);
-    groups.set(a.base_currency, (groups.get(a.base_currency) || 0) + a.balance + pnl + adjustmentTotal);
+    const balance = accountLedger(a, liveTrades, adjustments).balance;
+    groups.set(a.base_currency, (groups.get(a.base_currency) || 0) + balance);
     return groups;
   }, new Map<string, number>()), [accounts, liveTrades, adjustments]);
 
@@ -121,8 +144,11 @@ export function DashboardPage() {
 
   if (loading) return <LoadingSpinner label="Loading your dashboard..." />;
 
+  if (loadError && !asOf) return <p role="alert">Trade history unavailable. Risk figures will appear after the next successful refresh.</p>;
   return (
     <div>
+      {loadError && <p role="alert">Trade history unavailable. Showing figures last refreshed {new Date(asOf!).toLocaleString()}.</p>}
+      {trades.some(t=>t.status==='closed' && (!t.exit_time || tradeCurrency(t,accounts)==='Unknown' || t.realized_r == null)) && <p className="card p-3 text-sm" role="status">Some closed trades need review for close time, currency or initial risk. Daily risk and R statistics may be incomplete.</p>}
       <SectionHeader
         title="Dashboard"
         subtitle="Your trading performance at a glance"
@@ -136,11 +162,16 @@ export function DashboardPage() {
       <div className="card p-4 mb-6 flex flex-col sm:flex-row sm:items-end gap-3">
         <div className="flex-1"><label className="block text-xs font-semibold text-secondary mb-1.5">View account</label><select className="input-field" value={accountFilter} onChange={e => setAccountFilter(e.target.value)}><option value="all">All accounts</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name} · {a.base_currency}</option>)}</select></div>
         <div className="flex-1"><label className="block text-xs font-semibold text-secondary mb-1.5">Performance source</label><select className="input-field" value={source} onChange={e => setSource(e.target.value as 'live'|'backtest'|'forward')}><option value="live">Live trades</option><option value="backtest">Backtest logs</option><option value="forward">Forward test logs</option></select></div>
+        {source === 'live' && <label className="flex-1 text-xs font-semibold text-secondary">Journal source
+          <select className="input-field mt-1.5" value={tradeOrigin} onChange={event => setTradeOrigin(event.target.value)}>
+            <option value="all">All sources</option><option value="manual">Manual</option><option value="mt5">MT5 imports</option>
+          </select>
+        </label>}
         {source !== 'live' && <p className="text-xs text-muted sm:max-w-56">Simulated performance is shown separately from live account equity.</p>}
       </div>
 
       {source === 'live' && <div className="card p-4 mb-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-        {account ? <><span className="text-secondary">Current balance</span><strong className="font-mono">{formatAccountMoney(currentBalance || 0, account.base_currency)}</strong><span className="text-xs text-muted">Opening balance plus closed trade P&amp;L</span></> : accounts.length ? <><span className="text-secondary">Balances by currency</span>{Array.from(balancesByCurrency).map(([currency, value]) => <strong key={currency} className="font-mono">{formatAccountMoney(value, currency)}</strong>)}</> : <span className="text-muted">Add a trading account to track account balance here.</span>}
+        {account ? <><span className="text-secondary">Current balance</span><strong className="font-mono">{formatAccountMoney(currentBalance || 0, account.base_currency)}</strong><span className="text-xs text-muted">Opening balance, realized P&amp;L and adjustments</span></> : accounts.length ? <><span className="text-secondary">Balances by currency</span>{Array.from(balancesByCurrency).map(([currency, value]) => <strong key={currency} className="font-mono">{formatAccountMoney(value, currency)}</strong>)}</> : <span className="text-muted">Add a trading account to track account balance here.</span>}
       </div>}
 
       {source === 'live' && account?.account_type === 'propfirm' && <div className="card p-4 mb-6 space-y-3">
@@ -223,12 +254,12 @@ export function DashboardPage() {
 
       {/* Risk Guardian */}
       {source === 'live' && <div className="mb-6">
-        <RiskGuardian trades={trades} settings={settings} account={account} plan={accountPlan} onConfigure={() => setShowRiskSettings(true)} />
+        <RiskGuardian trades={liveTrades} settings={settings} account={account} plan={accountPlan} onConfigure={() => setShowRiskSettings(true)} />
       </div>}
 
       {/* Trade Calculator */}
       <div className="mb-6">
-        <TradeCalculator />
+        <TradeCalculator trades={liveTrades} adjustments={adjustments} />
       </div>
 
       {/* Equity curve + Daily P&L */}
@@ -399,7 +430,7 @@ export function DashboardPage() {
                       )}
                     </td>
                     <td className={`py-2.5 px-2 text-right font-mono font-semibold ${t.status === 'open' ? 'text-orange-500' : t.pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>
-                      {t.status === 'open' ? 'Pending' : mixedCurrencyView ? formatAccountMoney(t.pnl, accounts.find(a => a.id === t.account_id)?.base_currency || 'USD') : account ? formatAccountMoney(t.pnl, account.base_currency) : formatCurrency(t.pnl)}
+                      {t.status === 'open' ? 'Pending' : mixedCurrencyView ? formatAccountMoney(t.pnl, tradeCurrency(t, accounts)) : account ? formatAccountMoney(t.pnl, account.base_currency) : formatCurrency(t.pnl)}
                     </td>
                     <td className="py-2.5 px-2 text-right font-mono text-muted">{t.pips?.toFixed(1) || '0.0'}</td>
                     <td className="py-2.5 px-2 text-right">
@@ -445,7 +476,7 @@ export function DashboardPage() {
                 label="P&L"
                 value={selectedTrade.status === 'open'
                   ? 'Pending'
-                  : formatAccountMoney(selectedTrade.pnl, accounts.find(item => item.id === selectedTrade.account_id)?.base_currency || 'USD')}
+                  : formatAccountMoney(selectedTrade.pnl, tradeCurrency(selectedTrade, accounts))}
               />
               <TradeDetail label="Account" value={accounts.find(item => item.id === selectedTrade.account_id)?.name || 'Unassigned'} />
               <TradeDetail label="Strategy" value={selectedTrade.strategy || '—'} />
@@ -513,8 +544,3 @@ function toDashboardTrade(value: {
   };
 }
 
-function localDayInZone(value: string, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(value));
-  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(item => item.type === type)?.value || '';
-  return `${part('year')}-${part('month')}-${part('day')}`;
-}

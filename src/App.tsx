@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { ThemeProvider } from '@/context/ThemeContext';
-import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { ThemeProvider } from '@/context/ThemeProvider';
+import { AuthProvider } from '@/context/AuthProvider';
+import { useAuth } from '@/context/AuthContext';
 import { Layout, type PageId } from '@/components/Layout';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { TradesPage } from '@/pages/TradesPage';
@@ -29,6 +30,7 @@ import { supabase } from '@/lib/supabase';
 import { QuickCaptureModal } from '@/components/QuickCaptureModal';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { reportDataError } from '@/lib/recovery';
+import { Mt5Connections } from '@/components/Mt5Connections';
 import { RefreshCw } from 'lucide-react';
 
 const PAGE_IDS: PageId[] = [
@@ -151,9 +153,9 @@ function AppContent() {
         {page === 'study-material' && <StudyMaterialPage />}
         {page === 'brokers-charting' && <BrokersChartingPage />}
         {page === 'weekly-reviews' && <WeeklyReviewsPage />}
-        {page === 'account-settings' && <AccountSettingsPage />}
+        {page === 'account-settings' && <><AccountSettingsPage /><Mt5Connections /></>}
       </div>
-      <QuickCaptureModal open={quickAdd} onClose={() => setQuickAdd(false)} />
+      {quickAdd && <QuickCaptureModal open onClose={() => setQuickAdd(false)} />}
     </Layout>
   );
 }
@@ -171,3 +173,5 @@ function App() {
 }
 
 export default App;
+
+

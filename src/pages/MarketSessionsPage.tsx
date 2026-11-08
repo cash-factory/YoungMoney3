@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarClock, Plus, Trash2, Save, AlertOctagon, Clock, Globe, Newspaper, Mic, Ban } from 'lucide-react';
+import { CalendarClock, Plus, Trash2, Save, AlertOctagon, Clock, Newspaper, Mic, Ban } from 'lucide-react';
 import { useMarketEvents } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
 import { SectionHeader } from '@/components/ui/SectionHeader';
@@ -7,7 +7,7 @@ import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { Modal } from '@/components/ui/Modal';
 import { StatCard } from '@/components/ui/StatCard';
 import type { MarketEvent, MarketEventInput, MarketEventType, MarketImpact, TradeSession } from '@/lib/types';
-import { format, parseISO, isAfter, isBefore, startOfDay, endOfDay } from 'date-fns';
+import { format, parseISO, isAfter, isBefore } from 'date-fns';
 
 const EVENT_TYPES: MarketEventType[] = ['news', 'speech', 'data', 'holiday', 'session_open', 'session_close'];
 const IMPACTS: MarketImpact[] = ['high', 'medium', 'low'];

@@ -36,6 +36,8 @@ export interface TradeChecklistSnapshot {
 }
 
 export interface TradeCalculationSnapshot {
+  quantity_step?: number;
+  min_quantity?: number;
   instrument_id: string;
   symbol: string;
   asset_class: InstrumentAssetClass;
@@ -99,6 +101,13 @@ export type StrategyEntryModelInput = Omit<StrategyEntryModel, 'id' | 'user_id' 
 export type TraderStrategyInput = Omit<TraderStrategy, 'id' | 'user_id' | 'created_at' | 'updated_at'>;
 
 export interface Trade {
+  trade_source?: 'manual' | 'mt5';
+  settlement_currency?: string;
+  pnl_decimal?: string;
+  risk_capital_at_entry?: number | null;
+  realized_r?: number | null;
+  initial_risk?: number | null;
+  planned_r?: number | null;
   id: string;
   user_id: string | null;
   pair: string;
@@ -153,7 +162,7 @@ export interface Trade {
   updated_at: string;
 }
 
-export type TradeInput = Omit<Trade, 'id' | 'user_id' | 'created_at' | 'updated_at'>;
+export type TradeInput = Omit<Trade, 'id' | 'user_id' | 'created_at' | 'updated_at'> & { client_request_id?: string; expected_revision?: string };
 
 export type JournalType = 'daily' | 'weekly' | 'monthly';
 
@@ -601,6 +610,8 @@ export interface MarketInstrument {
   price_precision: number;
   contract_multiplier: number;
   quantity_unit: string;
+  quantity_step?: number;
+  min_quantity?: number;
   example_price: number | null;
   example_size: number;
   tick_value?: number | null;
@@ -621,6 +632,7 @@ export interface TradingAccount {
   account_type: string | null;
   base_currency: string;
   balance: number;
+  balance_as_of?: string;
   risk_per_trade_pct: number;
   default_strategy_id?: string | null;
   default_plan_id?: string | null;

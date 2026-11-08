@@ -16,6 +16,7 @@ export interface RiskMetrics {
   todayPnl: number;
   todayTradeCount: number;
   openTradeCount: number;
+  undatedCloseCount: number;
   maxDailyTrades: number;
   dailyLossLimitAmount: number;
   dailyLossUsed: number;
@@ -108,7 +109,8 @@ export function calculateRiskMetrics(trades: Trade[], options: RiskMetricOptions
   return {
     todayPnl,
     todayTradeCount,
-    openTradeCount: enteredToday.filter(trade => trade.status === 'open').length,
+    undatedCloseCount: accountTrades.filter(trade => trade.status === 'closed' && !trade.exit_time).length,
+    openTradeCount: accountTrades.filter(trade => trade.status === 'open').length,
     maxDailyTrades,
     dailyLossLimitAmount,
     dailyLossUsed,

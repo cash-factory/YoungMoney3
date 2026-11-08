@@ -1,0 +1,7 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'">
+<title>Connect MT5 account</title><style>body{max-width:32rem;margin:8vh auto;padding:1rem;font:1rem/1.5 system-ui;color:#152531;background:#f7faf9}label,input{display:block}input,button{font:inherit;padding:.55rem;margin:.3rem 0 1rem}input{width:90%}button{cursor:pointer}a{color:#224b40}</style></head>
+<body><a href="/#account-settings">Account settings</a><h1>Connect MT5 account</h1><p>Enter the broker server exactly as shown in MT5. Use the investor password for read-only access.</p>
+<form><label>Journal account<select id="account"><option value="">Create a new journal account</option></select></label><label>Account number<input id="login" inputmode="numeric" pattern="[0-9]{1,20}" maxlength="20" required></label><label>Broker server<input id="server" maxlength="128" required></label>
+<label>Investor password<input id="password" type="password" maxlength="128" autocomplete="off" required></label><button>Verify with my PC</button></form><p role="status" id="status"></p>
+<script src="/mt5-login.js" defer></script></body></html>

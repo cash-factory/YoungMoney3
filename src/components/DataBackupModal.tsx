@@ -7,6 +7,8 @@ import { RESTORE_ORDER, WORKSPACE_TABLES } from '@/lib/workspaceTables';
 
 const BACKUP_FORMAT = 'trade-journal-pro-backup';
 const BACKUP_VERSION = 1;
+const MAX_BACKUP_BYTES = 128 * 1024 * 1024;
+const backupTooLarge = 'This backup exceeds the 128 MiB browser backup limit.';
 
 const EXPORT_TABLES = WORKSPACE_TABLES;
 
@@ -57,6 +59,7 @@ function decodeBase64(base64: string): Uint8Array {
 
 function downloadJson(payload: TradingBackup) {
   const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+  if (blob.size > MAX_BACKUP_BYTES) throw new Error(backupTooLarge);
   const href = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = href;
@@ -128,21 +131,39 @@ export function DataBackupModal({ open, onClose }: DataBackupModalProps) {
       if (profileError) unavailableTables.push('profiles');
 
       const media: BackupMedia[] = [];
-      let offset = 0;
-      const pageSize = 100;
-      while (true) {
-        const { data: files, error: listError } = await supabase.storage.from('trading-media').list(user.id, { limit: pageSize, offset });
-        if (listError) throw new Error(`Could not list private media: ${listError.message}`);
+      const paths = new Set<string>();
+      let estimatedBytes = new Blob([JSON.stringify(data)]).size;
+      if (estimatedBytes > MAX_BACKUP_BYTES) throw new Error(backupTooLarge);
+      const queue = [{provider:'supabase',folder:'',cursor:''},{provider:'r2',folder:'',cursor:''}];
+      const visited=new Set<string>();
+      const providerPaths=new Set<string>();
+      while (queue.length) {
+        const item=queue.shift()!;
+        const params=new URLSearchParams(item).toString();
+        if(visited.has(params)) throw new Error('Media listing stopped advancing.');
+        visited.add(params);
+        const reply=await fetch('/api/media/page?'+params);
+        if(!reply.ok) throw new Error('Could not list private attachments.');
+        const page=await reply.json() as {files:{id:string;name:string;metadata?:{mimetype?:string}}[];folders:string[];next:string|null};
+        const files=page.files;
+        if(page.next!==null) queue.push({...item,cursor:page.next});
+        for(const folder of page.folders) queue.push({...item,folder,cursor:''});
         for (const file of files || []) {
           if (!file.id) continue;
           const path = `${user.id}/${file.name}`;
+          const key=item.provider+'|'+path;
+          if(providerPaths.has(key)) throw new Error('Attachment listing repeated a file. Retry the backup.');
+          providerPaths.add(key);
+          if(paths.has(path)) continue;
+          paths.add(path);
           setProgress(`Backing up attachment ${media.length + 1}…`);
           const { data: blob, error: downloadError } = await supabase.storage.from('trading-media').download(path);
           if (downloadError || !blob) throw new Error(`Could not read an attachment (${file.name}): ${downloadError?.message || 'file unavailable'}`);
+          estimatedBytes += 4 * Math.ceil(blob.size / 3);
+          if (estimatedBytes > MAX_BACKUP_BYTES) throw new Error(backupTooLarge);
           media.push({ bucket: 'trading-media', path, contentType: blob.type || file.metadata?.mimetype || 'application/octet-stream', base64: encodeBase64(new Uint8Array(await blob.arrayBuffer())) });
         }
-        if (!files || files.length < pageSize) break;
-        offset += pageSize;
+
       }
 
       const payload: TradingBackup = {
@@ -170,6 +191,7 @@ export function DataBackupModal({ open, onClose }: DataBackupModalProps) {
     setAcceptPartialRestore(false);
     if (!file) return;
     try {
+      if (file.size > MAX_BACKUP_BYTES) throw new Error(backupTooLarge);
       const parsed: unknown = JSON.parse(await file.text());
       if (!isBackup(parsed)) throw new Error('This file is not a supported Young-Money-Fx backup.');
       setBackup(parsed);

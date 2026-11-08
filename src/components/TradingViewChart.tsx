@@ -3,9 +3,19 @@ import { useEffect, useRef, useState } from 'react';
 export function TradingViewChart({ symbol, height = 360 }: { symbol?: string | null; height?: number }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [failed, setFailed] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    const details = rootRef.current?.closest('details');
+    if (!details) { setVisible(true); return; }
+    const sync = () => setVisible(details.open);
+    sync();
+    details.addEventListener('toggle', sync);
+    return () => details.removeEventListener('toggle', sync);
+  }, []);
   useEffect(() => {
     const root = rootRef.current;
-    if (!root) return;
+    if (!root || !visible) return;
     root.replaceChildren();
     setFailed(false);
     if (!symbol) { setFailed(true); return; }
@@ -23,9 +33,13 @@ export function TradingViewChart({ symbol, height = 360 }: { symbol?: string | n
     });
     script.onerror = () => setFailed(true);
     root.append(widget, script);
-    return () => root.replaceChildren();
-  }, [symbol, height]);
+    return () => { script.onerror = null; root.replaceChildren(); };
+  }, [symbol, height, visible, attempt]);
 
-  if (failed) return <div className="rounded-xl border border-themed bg-secondary p-4 text-xs text-muted">Chart preview is unavailable for this symbol or the chart service could not load.</div>;
-  return <div ref={rootRef} className="tradingview-widget-container w-full overflow-hidden rounded-xl border border-themed" style={{ minHeight: height }} />;
+  return <>
+    <div ref={rootRef} className="tradingview-widget-container w-full overflow-hidden rounded-xl border border-themed" style={{ minHeight: failed ? 0 : height }} />
+    {failed && <div role="status" className="rounded-xl border border-themed p-4 text-xs">
+      Chart preview unavailable. <button type="button" className="btn-secondary" onClick={() => setAttempt(n => n + 1)}>Retry chart</button>
+    </div>}
+  </>;
 }

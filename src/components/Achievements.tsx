@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Trophy, Flame, Target, TrendingUp, Star, Zap, Award, CheckCircle2, Lock } from 'lucide-react';
-import type { Trade, DashboardStats } from '@/lib/types';
+import type { Trade } from '@/lib/types';
 import { computeDashboardStats, groupByPair } from '@/lib/utils';
 
 interface Achievement {

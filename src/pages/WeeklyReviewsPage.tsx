@@ -33,7 +33,6 @@ export function WeeklyReviewsPage() {
 
   const avgRating = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
   const totalPnl = reviews.reduce((s, r) => s + r.pnl, 0);
-  const totalTrades = reviews.reduce((s, r) => s + r.trades_taken, 0);
 
   const chartData = useMemo(() => [...reviews].reverse().map(r => ({
     week: format(parseISO(r.week_start), 'MMM d'),

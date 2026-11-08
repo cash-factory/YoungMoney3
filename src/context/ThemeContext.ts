@@ -1,6 +1,6 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext,  } from 'react';
 
-type Theme = 'dark' | 'light';
+export type Theme = 'dark' | 'light';
 export type ColorPalette = 'obsidian' | 'sapphire-night' | 'black-opal' | 'royal-amethyst' | 'champagne-noir' | 'original' | 'true-pink' | 'tiffany' | 'charcoal-violet' | 'cyprus' | 'turmeric';
 export const COLOR_PALETTES: { id: ColorPalette; name: string; detail: string; swatch: string; accents?: [string, string, string] }[] = [
   { id: 'original', name: 'Original Ember', detail: 'The original YoungMoney3 look · ember · gold', swatch: '#f97316', accents: ['#0a0807','#f97316','#facc15'] },
@@ -17,31 +17,9 @@ export const COLOR_PALETTES: { id: ColorPalette; name: string; detail: string; s
 ];
 interface ThemeCtx { theme: Theme; palette: ColorPalette; toggle: () => void; setPalette: (palette: ColorPalette) => void; }
 
-const ThemeContext = createContext<ThemeCtx>({ theme: 'dark', palette: 'original', toggle: () => {}, setPalette: () => {} });
+export const ThemeContext = createContext<ThemeCtx>({ theme: 'dark', palette: 'original', toggle: () => {}, setPalette: () => {} });
 
-const isPalette = (value: string | null): value is ColorPalette => COLOR_PALETTES.some(palette => palette.id === value);
-
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('journal-theme') as Theme | null;
-    return saved || 'dark';
-  });
-  const [palette, setPalette] = useState<ColorPalette>(() => {
-    const saved = localStorage.getItem('journal-palette');
-    return isPalette(saved) ? saved : 'original';
-  });
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-    document.documentElement.dataset.palette = palette;
-    localStorage.setItem('journal-theme', theme);
-    localStorage.setItem('journal-palette', palette);
-  }, [theme, palette]);
-
-  const toggle = () => setTheme(t => (t === 'dark' ? 'light' : 'dark'));
-
-  return <ThemeContext.Provider value={{ theme, palette, toggle, setPalette }}>{children}</ThemeContext.Provider>;
-}
+export const isPalette = (value: string | null): value is ColorPalette => COLOR_PALETTES.some(palette => palette.id === value);
 
 export function useTheme() {
   return useContext(ThemeContext);

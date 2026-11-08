@@ -1,10 +1,12 @@
+import { accountLedger } from '@/lib/tradeFinance';
+import type { Trade, TradingAccountAdjustment } from '@/lib/types';
 import { useEffect, useMemo, useState } from 'react';
 import { Calculator, RotateCcw, ShieldAlert, Target } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useMarketInstruments, useTradingAccounts } from '@/hooks/useData';
 import { calculatePositionSize, instrumentDistanceLabel, instrumentDistanceStep, instrumentPnl } from '@/lib/instrumentMath';
 
-export function TradeCalculator() {
+export function TradeCalculator({ trades, adjustments }: { trades: Trade[]; adjustments: TradingAccountAdjustment[] }) {
   const { user } = useAuth();
   const { accounts } = useTradingAccounts(user?.id);
   const { instruments } = useMarketInstruments(user?.id);
@@ -30,6 +32,7 @@ export function TradeCalculator() {
 
   const account = accounts.find(item => item.id === accountId) || null;
   const instrument = instruments.find(item => item.id === instrumentId) || null;
+  const balance = account ? accountLedger(account, trades, adjustments).balance : 0;
   const conversionRequired = !!account && !!instrument && instrument.quote_currency !== account.base_currency;
   const conversionRate = conversionRequired ? Number(conversion) : 1;
 
@@ -48,14 +51,14 @@ export function TradeCalculator() {
     const stopRisk = instrument && validInputs && Number.isFinite(stopPrice) && stopPrice > 0
       ? Math.abs(instrumentPnl(instrument, direction, entryPrice, stopPrice, size, conversionRate)) + estimatedFees
       : 0;
-    const riskPercent = account && stopRisk > 0 ? stopRisk / account.balance * 100 : 0;
+    const riskPercent = account && balance > 0 && stopRisk > 0 ? stopRisk / balance * 100 : 0;
     const suggestedSize = instrument && account && validConversion && Number.isFinite(entryPrice) && entryPrice > 0 && Number.isFinite(stopPrice) && stopPrice > 0
-      ? calculatePositionSize(instrument, account.balance, account.risk_per_trade_pct, entryPrice, stopPrice, conversionRate, estimatedFees)
+      ? calculatePositionSize(instrument, balance, account.risk_per_trade_pct, entryPrice, stopPrice, conversionRate, estimatedFees)
       : null;
     const rr = stopRisk > 0 ? pnl / stopRisk : null;
 
     return { distance, pnl, stopRisk, riskPercent, rr, suggestedSize, hasData: hasPrices && validInputs, validConversion };
-  }, [account, conversionRate, conversionRequired, direction, entry, exit, fees, instrument, quantity, stopLoss]);
+  }, [account, balance, conversionRate, conversionRequired, direction, entry, exit, fees, instrument, quantity, stopLoss]);
 
   const reset = () => {
     setEntry(''); setExit(''); setStopLoss(''); setQuantity(''); setConversion(''); setFees('0');
@@ -85,13 +88,13 @@ export function TradeCalculator() {
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
         <div>
           <label className={labelCls}>Account</label>
-          <select className={inputCls} value={accountId} onChange={event => setAccountId(event.target.value)}>
+          <select className={inputCls} value={accountId} onChange={event => { setAccountId(event.target.value); setConversion(''); }}>
             {accounts.map(item => <option key={item.id} value={item.id}>{item.name} · {item.base_currency}</option>)}
           </select>
         </div>
         <div>
           <label className={labelCls}>Instrument</label>
-          <select className={inputCls} value={instrumentId} onChange={event => setInstrumentId(event.target.value)}>
+          <select className={inputCls} value={instrumentId} onChange={event => { setInstrumentId(event.target.value); setConversion(''); }}>
             {instruments.map(item => <option key={item.id} value={item.id}>{item.symbol}</option>)}
           </select>
         </div>

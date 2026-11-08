@@ -1,5 +1,5 @@
 export interface MediaCleanupAdapter {
-  listSupabasePage: (ownerId: string, offset: number, limit: number) => Promise<{ paths: string[]; hasMore: boolean }>;
+  listSupabasePage: (ownerId: string, offset: number, limit: number) => Promise<{ paths: string[]; folders?: string[]; hasMore: boolean }>;
   removeSupabase: (paths: string[]) => Promise<void>;
   listR2Page: (prefix: string, cursor?: string) => Promise<{ keys: string[]; truncated: boolean; cursor?: string }>;
   deleteR2: (keys: string[]) => Promise<void>;
@@ -23,16 +23,23 @@ async function deleteBatches(paths: string[], remove: (batch: string[]) => Promi
 export async function deleteOwnedMedia(ownerId: string, adapter: MediaCleanupAdapter): Promise<void> {
   if (!ownerId || ownerId.includes('/') || ownerId.includes('\\')) throw new Error('Invalid media owner ID.');
   const supabasePaths: string[] = [];
-  let offset = 0;
-  let hasMore = true;
-  while (hasMore) {
-    const page = await adapter.listSupabasePage(ownerId, offset, listPageSize);
-    page.paths.forEach(path => assertOwnedPath(path, ownerId));
-    supabasePaths.push(...page.paths);
-    hasMore = page.hasMore;
-    if (!hasMore) continue;
-    if (!page.paths.length) throw new Error('Supabase media listing reported more results without returning any paths.');
-    offset += page.paths.length;
+  const folders = [ownerId];
+  for (const folder of folders) {
+    let offset = 0;
+    while (true) {
+      const page = await adapter.listSupabasePage(folder, offset, listPageSize);
+      const children = page.folders ?? [];
+      for (const path of [...page.paths, ...children]) {
+        assertOwnedPath(path, ownerId);
+        if (path.slice(0, path.lastIndexOf('/')) !== folder) throw new Error('Unexpected storage directory.');
+      }
+      supabasePaths.push(...page.paths);
+      folders.push(...children);
+      if (!page.hasMore) break;
+      const count = children.length + page.paths.length;
+      if (!count) throw new Error('Supabase media listing reported more results without returning any paths.');
+      offset += count;
+    }
   }
   await deleteBatches(supabasePaths, adapter.removeSupabase);
 

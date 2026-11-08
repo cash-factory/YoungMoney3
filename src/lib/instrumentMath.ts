@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js-light';
 import type { MarketInstrument, TradeCalculationSnapshot } from './types.ts';
 
 export const SIZE_PRESETS: Record<string, number[]> = {
@@ -22,11 +23,10 @@ export function instrumentPnl(
 ): number {
   if (![entry, exit, quantity, conversionRate, instrument.price_increment, instrument.contract_multiplier].every(Number.isFinite)
     || instrument.price_increment <= 0 || instrument.contract_multiplier <= 0 || quantity <= 0 || conversionRate <= 0) return Number.NaN;
-  const signedMove = direction === 'long' ? exit - entry : entry - exit;
-  const ticksMoved = signedMove / instrument.price_increment;
+
   const tickValue = instrument.tick_value ?? instrument.price_increment * instrument.contract_multiplier;
   if (!Number.isFinite(tickValue) || tickValue <= 0) return Number.NaN;
-  return ticksMoved * tickValue * quantity * conversionRate;
+  return contractPnl(direction, entry, exit, quantity, instrument.price_increment, tickValue, conversionRate);
 }
 
 export function instrumentPnlFromSnapshot(
@@ -38,8 +38,12 @@ export function instrumentPnlFromSnapshot(
 ): number {
   if (![entry, exit, quantity, snapshot.price_increment, snapshot.tick_value, snapshot.conversion_rate].every(Number.isFinite)
     || snapshot.price_increment <= 0 || snapshot.tick_value <= 0 || snapshot.conversion_rate <= 0 || quantity <= 0) return Number.NaN;
-  const signedMove = direction === 'long' ? exit - entry : entry - exit;
-  return signedMove / snapshot.price_increment * snapshot.tick_value * quantity * snapshot.conversion_rate;
+  return contractPnl(direction, entry, exit, quantity, snapshot.price_increment, snapshot.tick_value, snapshot.conversion_rate);
+}
+
+function contractPnl(direction: 'long' | 'short', entry: number, exit: number, quantity: number, increment: number, tickValue: number, conversion: number) {
+  const move = direction === 'long' ? new Decimal(exit).minus(entry) : new Decimal(entry).minus(exit);
+  return move.div(increment).times(tickValue).times(quantity).times(conversion).toNumber();
 }
 
 export function createTradeCalculationSnapshot(
@@ -55,6 +59,8 @@ export function createTradeCalculationSnapshot(
     || !Number.isFinite(tickValue) || tickValue <= 0) return null;
 
   return {
+    quantity_step: quantityStep(instrument),
+    min_quantity: instrument.min_quantity ?? quantityStep(instrument),
     instrument_id: instrument.id,
     symbol: instrument.symbol,
     asset_class: instrument.asset_class,
@@ -90,10 +96,27 @@ export function calculatePositionSize(
   if (!Number.isFinite(tickValue) || tickValue <= 0) return null;
   const riskPerQuantity = distance / instrument.price_increment * tickValue * conversionRate;
   if (!Number.isFinite(riskPerQuantity) || riskPerQuantity <= 0) return null;
-  const raw = riskBudget / riskPerQuantity;
-  const precision = instrument.quantity_unit === 'lots' ? 2 : 4;
-  const scale = 10 ** precision;
-  return Math.floor((raw + Number.EPSILON) * scale) / scale;
+  const step = quantityStep(instrument);
+  const minimum = instrument.min_quantity ?? step;
+  if (![step, minimum].every(value => Number.isFinite(value) && value > 0)) return null;
+  const budget = new Decimal(accountBalance).times(riskPercent).div(100).minus(Math.max(0, fixedCosts));
+  const perUnit = new Decimal(entry).minus(stop).abs().div(instrument.price_increment).times(tickValue).times(conversionRate);
+  const size = budget.div(perUnit).div(step).toDecimalPlaces(0, Decimal.ROUND_FLOOR).times(step);
+  return size.lt(minimum) ? null : size.toNumber();
+}
+
+export function quantityStep(instrument: MarketInstrument): number {
+  if (instrument.quantity_step != null) return instrument.quantity_step;
+  if (['future', 'energy', 'agriculture'].includes(instrument.asset_class) && instrument.quantity_unit === 'contracts') return 1;
+  if (instrument.quantity_unit === 'lots') return 0.01;
+  return 0.0001;
+}
+
+export function validQuantity(instrument: MarketInstrument, size: number): boolean {
+  const step = quantityStep(instrument);
+  const minimum = instrument.min_quantity ?? step;
+  return Number.isFinite(size) && Number.isFinite(step) && step > 0 && Number.isFinite(minimum)
+    && minimum > 0 && size >= minimum && new Decimal(size).div(step).isInteger();
 }
 
 export function roundInstrumentPrice(instrument: MarketInstrument, value: number): number {

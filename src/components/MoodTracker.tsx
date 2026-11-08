@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Brain, Smile, Frown, Meh, Zap, AlertCircle } from 'lucide-react';
-import type { Trade, EmotionalState } from '@/lib/types';
+import type { Trade } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
 
 const EMOTION_META: Record<string, { label: string; color: string; bg: string; icon: typeof Smile }> = {

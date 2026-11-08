@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { DEFAULT_INSTRUMENTS } from '@/data/defaultInstruments';
 import { DEFAULT_PROP_FIRM_RULE_VERSIONS, DEFAULT_PROVIDER_CATALOG, DEFAULT_PROVIDER_OFFERINGS } from '@/data/providerCatalog';
 import { reportDataError } from '@/lib/recovery';
-import type { Trade, TradeInput, JournalEntry, JournalInput, TraderProfile, TraderStrategy, TraderStrategyInput, StrategyEntryModel, StrategyEntryModelInput, StrategyChecklistItem, StrategyChecklistInput, RiskSettings, RiskSettingsInput, PreTradeChecklistItem, PreTradeChecklistInput, TradingPlan, TradingPlanInput, Goal, GoalInput, BacktestResult, BacktestInput, ForwardTrade, ForwardTradeInput, TradingRule, TradingRuleInput, MarketEvent, MarketEventInput, TradingSetup, TradingSetupInput, StrategyTestSession, StrategyTestSessionInput, StrategyTestTrade, StrategyTestTradeInput, Resource, ResourceInput, Note, NoteInput, StudyMaterial, StudyMaterialInput, Broker, BrokerInput, ChartingTool, ChartingToolInput, WeeklyReview, WeeklyReviewInput, GoalTemplate, GoalTemplateInput, MarketInstrument, MarketInstrumentInput, TradingAccount, TradingAccountInput, TradingAccountAdjustment, TradingAccountAdjustmentInput, ProviderCatalogEntry, ProviderOffering, PropFirmRuleVersion, ProviderChangeReview } from '@/lib/types';
+import type { JournalEntry, JournalInput, TraderProfile, TraderStrategy, TraderStrategyInput, StrategyEntryModel, StrategyEntryModelInput, StrategyChecklistItem, StrategyChecklistInput, RiskSettings, RiskSettingsInput, PreTradeChecklistItem, PreTradeChecklistInput, TradingPlan, TradingPlanInput, Goal, GoalInput, BacktestResult, BacktestInput, ForwardTrade, ForwardTradeInput, TradingRule, TradingRuleInput, MarketEvent, MarketEventInput, TradingSetup, TradingSetupInput, StrategyTestSession, StrategyTestSessionInput, StrategyTestTrade, StrategyTestTradeInput, Resource, ResourceInput, Note, NoteInput, StudyMaterial, StudyMaterialInput, Broker, BrokerInput, ChartingTool, ChartingToolInput, WeeklyReview, WeeklyReviewInput, GoalTemplate, GoalTemplateInput, MarketInstrument, MarketInstrumentInput, TradingAccount, TradingAccountInput, TradingAccountAdjustment, TradingAccountAdjustmentInput, ProviderCatalogEntry, ProviderOffering, PropFirmRuleVersion, ProviderChangeReview } from '@/lib/types';
 
 function loadLocalCustomInstruments(ownerId: string): MarketInstrument[] {
   return JSON.parse(localStorage.getItem(`custom-instruments:${ownerId}`) || '[]') as MarketInstrument[];
@@ -90,17 +90,19 @@ export function useMarketInstruments(userId?: string | null) {
 
 export function useInstrumentFavorites(userId?: string | null) {
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [favoriteRows, setFavoriteRows] = useState<{ id: string; instrument_id: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const fetchFavorites = useCallback(async () => {
     if (!userId) { setFavoriteIds([]); setLoading(false); return; }
     setLoading(true);
-    const { data, error } = await supabase.from('instrument_favorites').select('instrument_id').eq('user_id', userId);
+    const { data, error } = await supabase.from('instrument_favorites').select('id,instrument_id').eq('user_id', userId);
     if (error) {
       reportDataError('Failed to load favorite instruments:', error);
       const ids = JSON.parse(localStorage.getItem(`instrument-favorites:${userId}`) || '[]') as string[];
       setFavoriteIds(ids);
     }
     else {
+      setFavoriteRows(data || []);
       const localIds = JSON.parse(localStorage.getItem(`instrument-favorites:${userId}`) || '[]') as string[];
       setFavoriteIds([...new Set([...(data || []).map((row: { instrument_id: string }) => row.instrument_id), ...localIds])]);
     }
@@ -117,8 +119,11 @@ export function useInstrumentFavorites(userId?: string | null) {
       return;
     }
     if (favoriteIds.includes(instrumentId)) {
-      const { error } = await supabase.from('instrument_favorites').delete().eq('instrument_id', instrumentId).eq('user_id', userId);
-      if (error) throw error;
+      const rows = favoriteRows.filter(row => row.instrument_id === instrumentId);
+      for (const row of rows) {
+        const { error } = await supabase.from('instrument_favorites').delete().eq('id', row.id).eq('user_id', userId);
+        if (error) throw error;
+      }
     } else {
       const { error } = await supabase.from('instrument_favorites').insert({ instrument_id: instrumentId, user_id: userId });
       if (error) throw error;
@@ -176,58 +181,7 @@ export function useTradingAccountAdjustments(userId?: string | null) {
   return { adjustments, fetchAdjustments, addAdjustment };
 }
 
-export function useTrades(userId?: string | null) {
-  const [trades, setTrades] = useState<Trade[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchTrades = useCallback(async () => {
-    setLoading(true);
-    let query = supabase.from('trades').select('*').order('entry_time', { ascending: false });
-    if (userId) query = query.eq('user_id', userId);
-    const { data, error } = await query;
-    if (error) {
-      reportDataError('Failed to fetch trades:', error);
-    } else {
-      setTrades(data as Trade[]);
-    }
-    setLoading(false);
-  }, [userId]);
-
-  useEffect(() => {
-    fetchTrades();
-  }, [fetchTrades]);
-
-  const addTrade = async (trade: TradeInput): Promise<Trade> => {
-    const { data, error } = await supabase
-      .from('trades')
-      .insert(trade)
-      .select()
-      .single();
-    if (error) throw error;
-    await fetchTrades();
-    return data as Trade;
-  };
-
-  const updateTrade = async (id: string, trade: Partial<TradeInput>): Promise<void> => {
-    const { error } = await supabase
-      .from('trades')
-      .update(trade)
-      .eq('id', id);
-    if (error) throw error;
-    await fetchTrades();
-  };
-
-  const deleteTrade = async (id: string): Promise<void> => {
-    const { error } = await supabase
-      .from('trades')
-      .delete()
-      .eq('id', id);
-    if (error) throw error;
-    await fetchTrades();
-  };
-
-  return { trades, loading, fetchTrades, addTrade, updateTrade, deleteTrade };
-}
+export { useTrades } from './useTrades';
 
 export function useJournalEntries(userId?: string | null) {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
@@ -1297,3 +1251,4 @@ export function useGoalTemplates(userId?: string | null) {
 
   return { templates, loading, fetchTemplates, upsertTemplate, deleteTemplate };
 }
+

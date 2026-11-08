@@ -1,31 +1,30 @@
 type Row = Record<string, unknown>;
-type Result = { data: Row | null; error: { message: string } | null };
+type Result = { data: Row | null; error: { message: string; status?:number } | null };
 type QueryResult = { data: unknown; error: { message: string } | null; count?: number | null };
 
-const tokenKey = 'trade-journal-session';
+// Sessions are issued as same-origin HttpOnly cookies. Discard pre-migration credentials.
+localStorage.removeItem('trade-journal-session');
 const listeners = new Set<(event: string, session: unknown) => void>();
 
 async function api(path: string, body?: unknown, method = 'POST'): Promise<Result> {
-  const token = localStorage.getItem(tokenKey);
   try {
     const response = await fetch(path, {
       method,
-      headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      headers: { 'content-type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const data = await response.json() as Row;
-    return { data: response.ok ? data : null, error: response.ok ? null : { message: String(data.error || 'Request failed.') } };
+    return { data: response.ok ? data : null, error: response.ok ? null : { message: String(data.error || 'Request failed.'),status:response.status } };
   } catch {
     return { data: null, error: { message: 'Could not reach the workspace service.' } };
   }
 }
 
 async function mediaApi(path: string, method = 'GET', body?: BodyInit, contentType?: string) {
-  const token = localStorage.getItem(tokenKey);
   try {
     const response = await fetch(path, {
       method,
-      headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(contentType ? { 'content-type': contentType } : {}) },
+      headers: { ...(contentType ? { 'content-type': contentType } : {}) },
       body,
     });
     if (!response.ok) {
@@ -43,6 +42,7 @@ class Query {
   private membershipFilters: Record<string, unknown[]> = {};
   private operation: 'select' | 'insert' | 'upsert' | 'update' | 'delete' = 'select';
   private payload: Row | Row[] | null = null;
+  private head = false;
   private one = false;
   private maybe = false;
   private wantedOrder: { column: string; ascending?: boolean } | undefined;
@@ -51,9 +51,9 @@ class Query {
   private orFilter: string | undefined;
 
   constructor(private table: string) {}
-  select(columns = '*', options?: { count?: string; head?: boolean }) { void columns; this.countRequested = !!options?.count; return this; }
+  select(columns = '*', options?: { count?: string; head?: boolean }) { void columns; this.head=!!options?.head; this.countRequested = !!options?.count; return this; }
   insert(value: Row | Row[]) { this.operation = 'insert'; this.payload = value; return this; }
-  upsert(value: Row | Row[], options?: { onConflict?: string; ignoreDuplicates?: boolean }) { void options; this.operation = 'upsert'; this.payload = value; return this; }
+  upsert(value: Row | Row[], options?: { onConflict?: string; ignoreDuplicates?: boolean }) { if(options && (options.ignoreDuplicates!==true || (options.onConflict!=='id' && !(this.table==='instrument_favorites' && options.onConflict==='user_id,instrument_id')))) throw new Error('Unsupported restore conflict policy.'); this.operation = 'upsert'; this.payload = value; return this; }
   update(value: Row) { this.operation = 'update'; this.payload = value; return this; }
   delete() { this.operation = 'delete'; return this; }
   eq(key: string, value: unknown) { this.filters[key] = value; return this; }
@@ -84,7 +84,7 @@ class Query {
         return { data: result.data?.user ? [result.data.user as Row] : [], error: result.error };
       }
     }
-    const result = await api('/api/data', {
+    const query = {
       action: this.operation,
       table: this.table,
       id: this.filters.id,
@@ -93,8 +93,21 @@ class Query {
       membershipFilters: this.membershipFilters,
       or: this.orFilter,
       order: this.wantedOrder,
-      limit: this.rowLimit,
-    });
+      limit: this.rowLimit, head:this.head,
+    };
+    const result = await api('/api/data', query);
+    if (this.operation==='select' && result.data && Array.isArray(result.data.data)) {
+      let page=result.data.nextPage;
+      while(typeof page==='number'){
+        const more=await api('/api/data',{...query,page});
+        if(more.error) return {data:null,error:more.error};
+        if(!Array.isArray(more.data?.data)) return {data:null,error:{message:'Incomplete data page.'}};
+        result.data.data.push(...more.data.data);
+        const next=more.data.nextPage;
+        if(typeof next==='number' && next<=page) return {data:null,error:{message:'Data pagination stalled.'}};
+        page=next;
+      }
+    }
     if (result.error) return { data: null, error: result.error };
     const value = result.data?.data;
     const rows = Array.isArray(value) ? value as Row[] : value ? [value as Row] : [];
@@ -105,7 +118,7 @@ class Query {
 }
 
 const emit = (event: string, session: unknown) => listeners.forEach(listener => listener(event, session));
-const sessionFrom = (token: string, user: Row) => ({ access_token: token, user });
+const sessionFrom = (user: Row) => ({ user });
 
 // The app's data-access shim intentionally mirrors the dynamically shaped Supabase client API.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -113,11 +126,10 @@ export const supabase: any = {
   from: (table: string) => new Query(table),
   auth: {
     async getSession() {
-      const token = localStorage.getItem(tokenKey);
-      if (!token) return { data: { session: null } };
+
       const result = await api('/api/me', undefined, 'GET');
-      if (result.error || !result.data?.user) { localStorage.removeItem(tokenKey); return { data: { session: null } }; }
-      return { data: { session: sessionFrom(token, result.data.user as Row) } };
+      if (result.error || !result.data?.user) return { data:{session:null}, error:result.error?.status===401 ? null : result.error };
+      return { data: { session: sessionFrom(result.data.user as Row) } };
     },
     async getUser() {
       const result = await api('/api/me', undefined, 'GET');
@@ -130,9 +142,7 @@ export const supabase: any = {
     async signInWithPassword({ email, password }: { email: string; password: string }) {
       const result = await api('/api/auth/signin', { email, password });
       if (result.error || !result.data) return { error: result.error };
-      const token = String(result.data.token);
-      const session = sessionFrom(token, result.data.user as Row);
-      localStorage.setItem(tokenKey, token);
+      const session = sessionFrom(result.data.user as Row);
       emit('SIGNED_IN', session);
       return { error: null, data: { session, user: result.data.user } };
     },
@@ -142,19 +152,17 @@ export const supabase: any = {
       const username = `${usernameBase.slice(0, 23)}_${crypto.randomUUID().slice(0, 8)}`;
       const result = await api('/api/auth/signup', { email, password, display_name, username, invite_code: options?.data?.pilot_invite_code });
       if (result.error || !result.data) return { error: result.error, data: { user: null } };
-      const token = String(result.data.token);
-      const session = sessionFrom(token, result.data.user as Row);
-      localStorage.setItem(tokenKey, token);
+      const session = sessionFrom(result.data.user as Row);
       emit('SIGNED_IN', session);
       return { error: null, data: { user: result.data.user, session } };
     },
     async signOut() {
       await api('/api/auth/signout', {});
-      localStorage.removeItem(tokenKey);
       emit('SIGNED_OUT', null);
     },
-    async updateUser({ password }: { password: string }) {
-      const result = await api('/api/auth/password', { password });
+    async updateUser({ password, current_password }: { password: string; current_password: string }) {
+      const result = await api('/api/auth/password', { password, current_password });
+      if (!result.error) emit('SIGNED_OUT', null);
       return { error: result.error };
     },
   },

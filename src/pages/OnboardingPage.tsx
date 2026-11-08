@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, Plus, X, Target, ArrowRight, Check, Sparkles, Brain, Zap, BookOpen, Wallet, ListChecks, Trash2, ChevronRight, Loader2 } from 'lucide-react';
+import { TrendingUp, Plus, Target, ArrowRight, Check, Sparkles, Brain, Zap, Wallet, ListChecks, Trash2, ChevronRight, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { ColorPaletteControl } from '@/components/ColorPaletteControl';
 import { useStrategies, useStrategyChecklist, useRiskSettings } from '@/hooks/useData';
@@ -26,7 +26,7 @@ const STEPS = [
 
 export function OnboardingPage({ onComplete }: OnboardingPageProps) {
   const { user } = useAuth();
-  const { strategies, addStrategy, deleteStrategy, loading: strategiesLoading } = useStrategies(user?.id);
+  const { strategies, addStrategy, deleteStrategy } = useStrategies(user?.id);
   const { saveSettings } = useRiskSettings(user?.id);
 
   const [step, setStep] = useState(0);
@@ -71,8 +71,8 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
       });
       setSavingAccount(false);
       return true;
-    } catch (err: any) {
-      setError(err.message || 'Failed to save account settings.');
+    } catch (err: unknown) {
+      setError(err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to save account settings.');
       setSavingAccount(false);
       return false;
     }
@@ -91,8 +91,8 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
       await addBatch(DEFAULT_CHECKLIST_ITEMS);
       setStrategyName('');
       setStrategyDesc('');
-    } catch (err: any) {
-      setError(err.message || 'Failed to add strategy.');
+    } catch (err: unknown) {
+      setError(err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to add strategy.');
     }
     setAddingStrategy(false);
   };
@@ -104,8 +104,8 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
         const remaining = strategies.filter(s => s.id !== id);
         setSelectedStrategyId(remaining.length > 0 ? remaining[0].id : null);
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete strategy.');
+    } catch (err: unknown) {
+      setError(err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to delete strategy.');
     }
   };
 
@@ -116,8 +116,8 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
       await addItem(newChecklistLabel.trim(), newChecklistRequired);
       setNewChecklistLabel('');
       setNewChecklistRequired(true);
-    } catch (err: any) {
-      setError(err.message || 'Failed to add checklist item.');
+    } catch (err: unknown) {
+      setError(err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to add checklist item.');
     }
     setAddingChecklist(false);
   };
@@ -125,14 +125,11 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
   const handleDeleteChecklistItem = async (id: string) => {
     try {
       await deleteItem(id);
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete checklist item.');
+    } catch (err: unknown) {
+      setError(err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to delete checklist item.');
     }
   };
 
-  const totalChecklistItems = strategies.reduce((sum, s) => {
-    return sum + (s.id === selectedStrategyId ? checklistItems.length : 0);
-  }, 0);
 
   const labelCls = 'block text-xs font-semibold text-secondary mb-1.5 uppercase tracking-wide';
   const inputCls = 'input-field';

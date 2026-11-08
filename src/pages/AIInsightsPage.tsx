@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Sparkles, TrendingUp, TrendingDown, Lightbulb, AlertTriangle, CheckCircle, BarChart2, Calendar, RefreshCw, ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { Sparkles, TrendingUp, Lightbulb, AlertTriangle, CheckCircle, BarChart2, RefreshCw, ArrowUp, ArrowDown, Minus } from 'lucide-react';
 import { useTrades } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
 import { generateAISummary, getPeriodTrades } from '@/lib/ai';
@@ -7,7 +7,7 @@ import { formatCurrency, formatPercent } from '@/lib/utils';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import type { JournalType } from '@/lib/types';
-import { format, subDays, subWeeks, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO } from 'date-fns';
+import { format, subDays, subWeeks, startOfWeek, endOfWeek } from 'date-fns';
 
 export function AIInsightsPage() {
   const { user } = useAuth();
@@ -125,13 +125,6 @@ export function AIInsightsPage() {
                 <tbody>
                   {Object.entries(aiResult.comparison.current).map(([key, curVal]) => {
                     const prevVal = aiResult.comparison.previous[key];
-                    const delta = aiResult.comparison.deltas[key.replace(/[^a-zA-Z]/g, '')] || 0;
-                    const isNumericDelta = typeof delta === 'number' && !isNaN(delta);
-                    const isPositive = isNumericDelta && delta > 0;
-                    const isNegative = isNumericDelta && delta < 0;
-                    const deltaKey = key.replace(/[^a-zA-Z]/g, '');
-
-                    // Map the delta properly
                     let actualDelta: number | null = null;
                     const metricMap: Record<string, string> = {
                       'NetPL': 'totalPnl', 'Trades': 'totalTrades', 'WinRate': 'winRate',
