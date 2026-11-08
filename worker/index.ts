@@ -91,16 +91,17 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
     }
     if (input.order?.column) data.sort((a, b) => String(a[input.order!.column] ?? '').localeCompare(String(b[input.order!.column] ?? '')) * (input.order?.ascending === false ? -1 : 1));
     const count = data.length;
-    if (Number.isInteger(input.limit) && input.limit! >= 0) data = data.slice(0, input.limit);
+    if (Number.isInteger(input.limit) && input.limit! >= 0) data = data.slice(0, Math.min(input.limit, 1000));
     return response({ data, count });
   }
   if (input.action === 'insert' || input.action === 'upsert') {
     const payloads = Array.isArray(input.payload) ? input.payload : [input.payload || {}];
+    if (payloads.length > 500 || payloads.some(item => !item || typeof item !== 'object' || Array.isArray(item))) return response({ error: 'Invalid record payload.' }, 400);
     const inserted: Record<string, unknown>[] = [];
     for (const item of payloads) {
       const recordId = typeof item.id === 'string' && item.id ? item.id : id();
       const timestamp = now();
-      const payload = { ...item, user_id: user.id };
+      const payload = { ...item, id: recordId, user_id: user.id };
       const statement = input.action === 'upsert' ? 'INSERT OR IGNORE' : 'INSERT';
       const result = await env.DB.prepare(`${statement} INTO workspace_records (id,user_id,table_name,payload,created_at,updated_at) VALUES (?,?,?,?,?,?)`)
         .bind(recordId, user.id, table, JSON.stringify(payload), timestamp, timestamp).run();
@@ -387,4 +388,4 @@ async function adminRoute(request: Request, env: Env, user: Record<string, unkno
   return response({ error: 'Unknown administration action.' }, 400);
 }
 
-export default { async fetch(request, env): Promise<Response> { const url = new URL(request.url); if (request.method === 'OPTIONS') return new Response(null, { status: 204 }); try { if (request.method === 'GET' && url.pathname === '/api/health') { const readiness = await env.DB.prepare('SELECT 1 AS ready').first<{ ready: number }>(); return readiness?.ready === 1 ? response({ status: 'ok', database: 'connected' }) : response({ status: 'unavailable', database: 'unavailable' }, 503); } if (request.method === 'POST' && (url.pathname === '/api/auth/signup' || url.pathname === '/api/auth/signin')) return authRoute(request, env, url.pathname); const user = await currentUser(request, env.DB); if (!user) return response({ error: 'Authentication required.' }, 401); if (request.method === 'GET' && url.pathname === '/api/me') return response({ user: profile(user) }); if (request.method === 'POST' && ['/api/auth/profile', '/api/auth/password', '/api/auth/signout'].includes(url.pathname)) return sessionRoute(request, env, user, url.pathname); if (request.method === 'POST' && url.pathname === '/api/data') return databaseRoute(request, env, user); if (url.pathname.startsWith('/api/media/')) return mediaRoute(request, env, user, url); if (request.method === 'POST' && url.pathname === '/api/admin') return adminRoute(request, env, user); return response({ error: 'Not found.' }, 404); } catch { return response({ error: 'The workspace service could not complete this request.' }, 500); } } } satisfies ExportedHandler<Env>;
+export default { async fetch(request, env): Promise<Response> { const url = new URL(request.url); if (request.method === 'OPTIONS') return new Response(null, { status: 204 }); try { if (request.method === 'GET' && url.pathname === '/api/health') { const readiness = await env.DB.prepare('SELECT 1 AS ready').first<{ ready: number }>(); return readiness?.ready === 1 ? response({ status: 'ok', database: 'connected' }) : response({ status: 'unavailable', database: 'unavailable' }, 503); } if (request.method === 'POST' && (url.pathname === '/api/auth/signup' || url.pathname === '/api/auth/signin')) return authRoute(request, env, url.pathname); const user = await currentUser(request, env.DB); if (!user) return response({ error: 'Authentication required.' }, 401); if (user.account_status === 'suspended') return response({ error: 'Account suspended.' }, 403); if (request.method === 'GET' && url.pathname === '/api/me') return response({ user: profile(user) }); if (request.method === 'POST' && ['/api/auth/profile', '/api/auth/password', '/api/auth/signout'].includes(url.pathname)) return sessionRoute(request, env, user, url.pathname); if (request.method === 'POST' && url.pathname === '/api/data') return databaseRoute(request, env, user); if (url.pathname.startsWith('/api/media/')) return mediaRoute(request, env, user, url); if (request.method === 'POST' && url.pathname === '/api/admin') return adminRoute(request, env, user); return response({ error: 'Not found.' }, 404); } catch { return response({ error: 'The workspace service could not complete this request.' }, 500); } } } satisfies ExportedHandler<Env>;
