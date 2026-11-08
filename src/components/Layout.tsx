@@ -232,7 +232,7 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
 
         <main className="workspace-main p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto animate-fade-in pb-24 lg:pb-8">
           <div className="workspace-context mb-6 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted"><span className="workspace-status-dot" /> YOUNG MONEY / WORKSPACE <ChevronRight size={13} /> <span className="text-secondary">{current.replaceAll('-', ' ')}</span></div>
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted"><span className="workspace-status-dot" /> YOUNG MONEY / WORKSPACE <ChevronRight size={13} /> <span className="text-secondary">{current.replace(/-/g, ' ')}</span></div>
             <button type="button" onClick={() => setSearchOpen(true)} className="hidden sm:flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-muted hover:text-primary hover:bg-secondary"><Search size={14} /> Jump to anything <kbd className="rounded border border-themed px-1.5 py-0.5">⌘K</kbd></button>
           </div>
           <DataRecoveryNotice />
