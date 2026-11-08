@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { TrendingUp, Mail, Lock, User, Eye, EyeOff, AlertCircle, Loader2, BarChart3, Users, BookOpen, Sparkles, Shield, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { ColorPaletteControl } from '@/components/ColorPaletteControl';
 
 export function AuthPage({ onBack }: { onBack?: () => void }) {
   const { signIn, signUp } = useAuth();
@@ -45,9 +46,9 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
 
   const features = [
     { icon: BarChart3, title: 'Deep Analytics', desc: 'Track every dimension of your trading performance' },
-    { icon: Users, title: 'Shared Accountability', desc: 'See each other\'s trades. Stay honest. Grow together.' },
-    { icon: BookOpen, title: 'Smart Journaling', desc: 'Checklists, reviews, mood tracking & AI-powered insights' },
-    { icon: Sparkles, title: 'AI Pattern Detection', desc: 'Automatic analysis of your habits and edge' },
+    { icon: Users, title: 'Private Workspace', desc: 'Keep your own trades, notes and reflections together' },
+    { icon: BookOpen, title: 'Structured Journaling', desc: 'Trade notes, checklists, reviews and mood tracking' },
+    { icon: Sparkles, title: 'Pattern Insights', desc: 'Rule-based observations from your trading history' },
   ];
 
   return (
@@ -96,7 +97,7 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
 
           <div className="flex items-center gap-2 text-xs text-white/40">
             <Shield size={14} />
-            Private & secure. Your data is encrypted and protected.
+            Your trading journal is private to your account.
           </div>
         </div>
       </div>
@@ -109,6 +110,7 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
         </div>
 
         <div className="relative w-full max-w-md">
+          <div className="mb-4 flex justify-end"><ColorPaletteControl compact /></div>
           {onBack && (
             <button onClick={onBack} className="btn-ghost mb-6 -ml-2 text-sm">
               <ArrowLeft size={16} /> Back to home

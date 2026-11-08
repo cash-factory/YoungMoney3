@@ -25,7 +25,7 @@ export async function selectRecords(db:D1Database, owner:unknown, input:Query) {
   if(input.head) return {data:[],count:total};
   const page=input.page ?? 0;
   if(!Number.isSafeInteger(page)||page<0) throw Error('Invalid page.');
-  const size=200, wanted=input.limit ?? total;
+  const size=200, wanted=input.limit === undefined ? total : Math.min(input.limit,1000);
   const limit=Math.min(size,Math.max(0,wanted-page*size));
   const sort=column(input.order?.column || 'created_at'), dir=input.order?.ascending===false||!input.order?' DESC':' ASC';
   const rows=await db.prepare('SELECT id,payload,created_at,updated_at'+where+' ORDER BY '+sort+dir+',id'+dir+' LIMIT ? OFFSET ?').bind(...args,limit,page*size).all<{id:string;payload:string;created_at:string;updated_at:string}>();

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { LayoutDashboard, CandlestickChart, Calendar, BarChart3, BookOpen, Sparkles, Menu, X, TrendingUp, Plus, LogOut, ChevronDown, ChevronRight, ClipboardList, Target, FlaskConical, Shield, CalendarClock, LayoutTemplate, BookMarked, StickyNote, GraduationCap, CreditCard, ClipboardCheck, MoreHorizontal, Archive, Settings } from 'lucide-react';
+import { LayoutDashboard, CandlestickChart, Calendar, BarChart3, BookOpen, Sparkles, Menu, X, TrendingUp, Plus, LogOut, ChevronDown, ChevronRight, ClipboardList, Target, FlaskConical, Shield, CalendarClock, LayoutTemplate, BookMarked, StickyNote, GraduationCap, CreditCard, ClipboardCheck, MoreHorizontal, Archive, Settings, Search } from 'lucide-react';
+import { CommandPalette } from '@/components/CommandPalette';
 import { ColorPaletteControl } from '@/components/ColorPaletteControl';
 import { DataBackupModal } from '@/components/DataBackupModal';
 import { DataRecoveryNotice } from '@/components/ui/DataRecoveryNotice';
@@ -54,6 +55,18 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setSearchOpen(open => !open);
+      }
+    };
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, []);
   const currentSection = NAV_SECTIONS.find(section => section.items.some(item => item.id === current))?.id || 'home';
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ home: true });
 
@@ -95,6 +108,17 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
             <X size={18} />
           </button>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setSearchOpen(true)}
+          className="mx-3 mt-3 flex items-center gap-2.5 rounded-xl border border-themed bg-secondary px-3 py-2.5 text-xs text-secondary transition-colors hover:text-primary"
+          aria-label="Quick find — search pages and actions"
+        >
+          <Search size={15} />
+          <span className="flex-1 text-left">Quick find</span>
+          <kbd className="rounded-md border border-themed px-1.5 py-0.5 text-[10px] text-muted">Ctrl K</kbd>
+        </button>
 
         <nav aria-label="Main navigation" className="relative flex-1 px-3 py-4 overflow-y-auto">
           <div className="space-y-1">
@@ -225,6 +249,7 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
           <Plus size={26} />
         </button>
       </div>
+      <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} onNavigate={handleNav} onQuickAdd={onQuickAdd} />
       <DataBackupModal open={backupOpen} onClose={() => setBackupOpen(false)} />
     </div>
   );
