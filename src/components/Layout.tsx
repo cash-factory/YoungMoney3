@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { LayoutDashboard, CandlestickChart, Calendar, BarChart3, BookOpen, Sparkles, Menu, X, TrendingUp, Plus, LogOut, ChevronDown, ChevronRight, ClipboardList, Target, FlaskConical, Shield, CalendarClock, LayoutTemplate, BookMarked, StickyNote, GraduationCap, CreditCard, ClipboardCheck, MoreHorizontal, Archive, Settings } from 'lucide-react';
+import { LayoutDashboard, CandlestickChart, Calendar, BarChart3, BookOpen, Sparkles, Menu, X, TrendingUp, Plus, LogOut, ChevronDown, ChevronRight, ClipboardList, Target, FlaskConical, Shield, CalendarClock, LayoutTemplate, BookMarked, StickyNote, GraduationCap, CreditCard, ClipboardCheck, MoreHorizontal, Archive, Settings, Search, Command } from 'lucide-react';
+import { CommandPalette } from '@/components/CommandPalette';
 import { ColorPaletteControl } from '@/components/ColorPaletteControl';
 import { DataBackupModal } from '@/components/DataBackupModal';
 import { DataRecoveryNotice } from '@/components/ui/DataRecoveryNotice';
@@ -54,6 +55,18 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const openSearch = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setSearchOpen(open => !open);
+      }
+    };
+    window.addEventListener('keydown', openSearch);
+    return () => window.removeEventListener('keydown', openSearch);
+  }, []);
   const currentSection = NAV_SECTIONS.find(section => section.items.some(item => item.id === current))?.id || 'home';
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ home: true });
 
@@ -93,6 +106,12 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
           </div>
           <button onClick={() => setMobileOpen(false)} className="ml-auto lg:hidden btn-ghost p-1">
             <X size={18} />
+          </button>
+        </div>
+
+        <div className="px-3 pt-4">
+          <button type="button" onClick={() => setSearchOpen(true)} className="workspace-search-trigger flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs text-secondary" aria-label="Search workspace">
+            <Search size={16} /><span className="flex-1">Search workspace</span><kbd className="flex items-center gap-0.5 rounded-md border border-themed px-1.5 py-0.5 text-[10px]"><Command size={11} />K</kbd>
           </button>
         </div>
 
@@ -211,7 +230,11 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
           </div>
         </div>
 
-        <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto animate-fade-in pb-24 lg:pb-8">
+        <main className="workspace-main p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto animate-fade-in pb-24 lg:pb-8">
+          <div className="workspace-context mb-6 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted"><span className="workspace-status-dot" /> YOUNG MONEY / WORKSPACE <ChevronRight size={13} /> <span className="text-secondary">{current.replaceAll('-', ' ')}</span></div>
+            <button type="button" onClick={() => setSearchOpen(true)} className="hidden sm:flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-muted hover:text-primary hover:bg-secondary"><Search size={14} /> Jump to anything <kbd className="rounded border border-themed px-1.5 py-0.5">⌘K</kbd></button>
+          </div>
           <DataRecoveryNotice />
           {children}
         </main>
@@ -225,6 +248,7 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
           <Plus size={26} />
         </button>
       </div>
+      <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} onNavigate={handleNav} onQuickAdd={onQuickAdd} />
       <DataBackupModal open={backupOpen} onClose={() => setBackupOpen(false)} />
     </div>
   );
