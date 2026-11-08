@@ -40,25 +40,39 @@ export function ColorPaletteControl({ compact = false }: { compact?: boolean }) 
           {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           Switch to {theme === 'dark' ? 'light' : 'dark'} mode
         </button>
-        <p className="border-t border-themed px-2 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-muted">Signature color collections</p><p className="px-2 pb-2 text-[11px] text-secondary">Your choice applies across the entire experience and is saved on this device.</p>
-        <div className="grid gap-1">
-          {COLOR_PALETTES.map(option => <button
-            key={option.id}
-            type="button"
-            aria-pressed={palette === option.id}
-            onClick={() => {
-              setPalette(option.id);
-              if (controlRef.current) controlRef.current.open = false;
-            }}
-            className={`flex items-center gap-2.5 rounded-xl px-2 py-2.5 text-left transition-colors ${palette === option.id ? 'bg-secondary' : 'hover:bg-secondary'}`}
-          >
-            <span aria-hidden="true" className="flex h-8 w-14 shrink-0 items-center overflow-hidden rounded-lg border border-themed shadow-inner">
-              {(option.accents || [option.swatch, option.swatch, option.swatch]).map((color, i) => <span key={i} className="h-full flex-1" style={{ background: color }} />)}
-            </span>
-            <span className="min-w-0 flex-1"><span className="block text-xs font-medium leading-tight">{option.name}</span><span className="block truncate text-[10px] text-muted">{option.detail}</span></span>
-            {palette === option.id && <span className="text-[10px] font-semibold" style={{ color: 'var(--brand)' }}>Selected</span>}
-          </button>)}
-        </div>
+        <p className="border-t border-themed px-2 pb-2 pt-3 text-xs font-semibold text-secondary">Choose your colours</p>
+        <p className="px-2 pb-3 text-[11px] leading-relaxed text-muted">Every palette works in light and dark mode. Your selection is saved on this device.</p>
+        {[
+          { title: 'Original collection', options: COLOR_PALETTES.filter(option => ['original', 'true-pink', 'tiffany', 'charcoal-violet', 'cyprus', 'turmeric'].includes(option.id)) },
+          { title: 'Signature collection', options: COLOR_PALETTES.filter(option => !['original', 'true-pink', 'tiffany', 'charcoal-violet', 'cyprus', 'turmeric'].includes(option.id)) },
+        ].map(group => (
+          <section key={group.title} className="mb-2">
+            <p className="px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-muted">{group.title}</p>
+            <div className="grid gap-0.5">
+              {group.options.map(option => (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={palette === option.id}
+                  onClick={() => {
+                    setPalette(option.id);
+                    if (controlRef.current) controlRef.current.open = false;
+                  }}
+                  className={`flex items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors ${palette === option.id ? 'bg-secondary' : 'hover:bg-secondary'}`}
+                >
+                  <span aria-hidden="true" className="flex h-7 w-12 shrink-0 items-center overflow-hidden rounded-md border border-themed shadow-sm">
+                    {(option.accents || [option.swatch, option.swatch, option.swatch]).map((color, index) => <span key={index} className="h-full flex-1" style={{ background: color }} />)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-semibold leading-tight">{option.name}</span>
+                    <span className="block truncate text-[10px] text-muted">{option.detail}</span>
+                  </span>
+                  {palette === option.id && <span className="text-[10px] font-semibold" style={{ color: 'var(--brand-text)' }}>Active</span>}
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
     </details>
   );
