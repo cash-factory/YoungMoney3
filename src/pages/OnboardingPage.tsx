@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, Plus, X, Target, ArrowRight, Check, Sparkles, Brain, Zap, BookOpen, Wallet, ListChecks, Trash2, ChevronRight, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { ColorPaletteControl } from '@/components/ColorPaletteControl';
 import { useStrategies, useStrategyChecklist, useRiskSettings } from '@/hooks/useData';
 import type { AccountType } from '@/lib/types';
 
@@ -144,6 +145,7 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
       </div>
 
       <div className="relative w-full max-w-2xl">
+        <div className="mb-5 flex justify-end"><ColorPaletteControl compact /></div>
         <div className="text-center mb-8">
           <div className="inline-flex p-3 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-700 text-white mb-3 shadow-lg shadow-orange-500/20">
             <TrendingUp size={32} />
