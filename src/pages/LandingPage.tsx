@@ -137,7 +137,7 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
   ];
 
   return (
-    <div ref={pageRef} className="min-h-screen bg-primary overflow-x-hidden">
+    <div ref={pageRef} className="signature-landing min-h-screen bg-primary overflow-x-hidden">
       {/* ─── NAV ─── */}
       <nav className="fixed top-0 left-0 right-0 z-50 px-4 sm:px-6 py-3 transition-all duration-300"
         style={{

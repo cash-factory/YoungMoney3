@@ -1,8 +1,13 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 type Theme = 'dark' | 'light';
-export type ColorPalette = 'original' | 'true-pink' | 'tiffany' | 'charcoal-violet' | 'cyprus' | 'turmeric';
-export const COLOR_PALETTES: { id: ColorPalette; name: string; detail: string; swatch: string }[] = [
+export type ColorPalette = 'obsidian' | 'sapphire-night' | 'black-opal' | 'royal-amethyst' | 'champagne-noir' | 'original' | 'true-pink' | 'tiffany' | 'charcoal-violet' | 'cyprus' | 'turmeric';
+export const COLOR_PALETTES: { id: ColorPalette; name: string; detail: string; swatch: string; accents?: [string, string, string] }[] = [
+  { id: 'obsidian', name: 'Obsidian Terminal', detail: 'Petrol black · spectral teal · ice blue', swatch: '#2dd4bf', accents: ['#08141d','#2dd4bf','#79b8ff'] },
+  { id: 'sapphire-night', name: 'Sapphire Night', detail: 'Deep cobalt · cornflower · frost', swatch: '#648bfa', accents: ['#0b1434','#648bfa','#afd5ff'] },
+  { id: 'black-opal', name: 'Black Opal', detail: 'Ink · jade · antique brass', swatch: '#69c6a1', accents: ['#101d1a','#69c6a1','#dfbc78'] },
+  { id: 'royal-amethyst', name: 'Royal Amethyst', detail: 'Aubergine · lilac · glacier', swatch: '#bb9cfb', accents: ['#21172e','#bb9cfb','#96d9e9'] },
+  { id: 'champagne-noir', name: 'Champagne Noir', detail: 'Onyx · champagne · rose quartz', swatch: '#dfbd86', accents: ['#201b1c','#dfbd86','#e9aeb3'] },
   { id: 'original', name: 'Original Ember', detail: 'Orange · gold', swatch: '#f97316' },
   { id: 'true-pink', name: 'True Pink', detail: 'Chill white · dark gray', swatch: '#e74791' },
   { id: 'tiffany', name: 'Tiffany', detail: 'Tiffany blue · dark gray', swatch: '#0ab7b2' },
@@ -12,7 +17,7 @@ export const COLOR_PALETTES: { id: ColorPalette; name: string; detail: string; s
 ];
 interface ThemeCtx { theme: Theme; palette: ColorPalette; toggle: () => void; setPalette: (palette: ColorPalette) => void; }
 
-const ThemeContext = createContext<ThemeCtx>({ theme: 'dark', palette: 'original', toggle: () => {}, setPalette: () => {} });
+const ThemeContext = createContext<ThemeCtx>({ theme: 'dark', palette: 'obsidian', toggle: () => {}, setPalette: () => {} });
 
 const isPalette = (value: string | null): value is ColorPalette => COLOR_PALETTES.some(palette => palette.id === value);
 
@@ -23,7 +28,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   });
   const [palette, setPalette] = useState<ColorPalette>(() => {
     const saved = localStorage.getItem('journal-palette');
-    return isPalette(saved) ? saved : 'original';
+    return isPalette(saved) ? saved : 'obsidian';
   });
 
   useEffect(() => {
