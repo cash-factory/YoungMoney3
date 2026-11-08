@@ -16,16 +16,16 @@ export function StatCard({ label, value, sublabel, icon, trend, trendValue, acce
   const isNumeric = !Number.isNaN(numericValue) && Number.isFinite(numericValue);
 
   return (
-    <div className={`card premium-stat-card metric-accent-${accent} relative overflow-hidden p-5`}>
+    <div className={`card editorial-stat metric-accent-${accent} relative p-5`}>
       <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-muted">{label}</p>
-          <p className="mt-3 break-words font-mono text-2xl font-bold tracking-tight tabular-nums sm:text-[1.75rem]">
+          <p className="text-[11px] font-semibold tracking-[0.025em] text-secondary">{label}</p>
+          <p className="mt-3 break-words font-mono text-2xl font-semibold tracking-tight tabular-nums sm:text-[1.65rem]">
             {isNumeric ? <AnimatedCounter value={numericValue} /> : value}
           </p>
           {sublabel && <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted">{sublabel}</p>}
         </div>
-        {icon && <div className="premium-stat-icon grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-themed">
+        {icon && <div className="editorial-stat-icon grid h-9 w-9 shrink-0 place-items-center rounded-md">
           {icon}
         </div>}
       </div>
