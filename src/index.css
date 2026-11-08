@@ -443,3 +443,57 @@
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
   pointer-events: none;
 }
+
+
+/* Young Money Workstation — a quieter, dimensional enterprise shell. */
+.workspace-main { position: relative; isolation: isolate; }
+.workspace-main::before {
+  content: ''; pointer-events: none; position: absolute; inset: 0 0 auto;
+  height: 320px; z-index: -1;
+  background: radial-gradient(ellipse 65% 65% at 70% 0%, color-mix(in srgb, var(--brand) 9%, transparent), transparent 75%);
+}
+.workspace-context { min-height: 34px; }
+.workspace-status-dot {
+  width: 7px; height: 7px; flex: none; border-radius: 999px;
+  background: #10b981; box-shadow: 0 0 0 4px rgba(16,185,129,.10);
+}
+.workspace-search-trigger {
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-elevated) 85%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+  transition: border-color .2s ease, transform .2s ease, background .2s ease;
+}
+.workspace-search-trigger:hover {
+  border-color: var(--brand); background: var(--bg-secondary); transform: translateY(-1px);
+}
+.workspace-main .card {
+  border-radius: 18px;
+  box-shadow: 0 2px 5px hsl(var(--shadow-color) / .035), 0 14px 40px hsl(var(--shadow-color) / .03);
+}
+.workspace-main .card:hover { border-color: color-mix(in srgb, var(--border-strong) 85%, var(--brand)); }
+.workspace-main .card :is(h2, h3) { letter-spacing: -0.02em; }
+.workspace-main .card .font-mono { font-variant-numeric: tabular-nums; }
+.workspace-main :is(button, a, select, input, textarea):focus-visible {
+  outline: 2px solid var(--brand); outline-offset: 3px;
+}
+.command-palette {
+  background: var(--bg-card);
+  box-shadow: 0 32px 100px rgba(0,0,0,.28), 0 0 0 1px color-mix(in srgb, var(--brand) 10%, transparent);
+  animation: workstation-palette-enter 180ms cubic-bezier(.2,.75,.3,1) both;
+}
+.command-result { transition: background .14s ease; }
+.command-result:hover, .command-result[data-selected="true"] { background: var(--bg-secondary); }
+.command-result[data-selected="true"] { box-shadow: inset 3px 0 0 var(--brand); }
+.command-result-icon {
+  width: 36px; height: 36px; display: grid; place-items: center; flex: none;
+  border-radius: 11px; color: var(--brand-text);
+  background: color-mix(in srgb, var(--brand) 10%, var(--bg-secondary));
+}
+@keyframes workstation-palette-enter {
+  from { opacity: 0; transform: translateY(-9px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .command-palette { animation: none; }
+  .workspace-search-trigger { transition: none; }
+}
