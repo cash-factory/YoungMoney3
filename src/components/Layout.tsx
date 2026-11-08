@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { LayoutDashboard, CandlestickChart, Calendar, BarChart3, BookOpen, Sparkles, Menu, X, TrendingUp, Plus, LogOut, ChevronDown, ChevronRight, ClipboardList, Target, FlaskConical, Shield, CalendarClock, LayoutTemplate, BookMarked, StickyNote, GraduationCap, CreditCard, ClipboardCheck, MoreHorizontal, Archive, Settings, Search, Command } from 'lucide-react';
+import { LayoutDashboard, CandlestickChart, Calendar, BarChart3, BookOpen, Sparkles, Menu, X, TrendingUp, Plus, LogOut, ChevronDown, ChevronRight, ClipboardList, Target, FlaskConical, Shield, CalendarClock, LayoutTemplate, BookMarked, StickyNote, GraduationCap, CreditCard, ClipboardCheck, MoreHorizontal, Archive, Settings, Search } from 'lucide-react';
 import { CommandPalette } from '@/components/CommandPalette';
 import { ColorPaletteControl } from '@/components/ColorPaletteControl';
 import { DataBackupModal } from '@/components/DataBackupModal';
@@ -58,14 +58,14 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
   const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
-    const openSearch = (event: KeyboardEvent) => {
+    const handleShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
         setSearchOpen(open => !open);
       }
     };
-    window.addEventListener('keydown', openSearch);
-    return () => window.removeEventListener('keydown', openSearch);
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
   }, []);
   const currentSection = NAV_SECTIONS.find(section => section.items.some(item => item.id === current))?.id || 'home';
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ home: true });
@@ -109,11 +109,16 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
           </button>
         </div>
 
-        <div className="px-3 pt-4">
-          <button type="button" onClick={() => setSearchOpen(true)} className="workspace-search-trigger flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs text-secondary" aria-label="Search workspace">
-            <Search size={16} /><span className="flex-1">Search workspace</span><kbd className="flex items-center gap-0.5 rounded-md border border-themed px-1.5 py-0.5 text-[10px]"><Command size={11} />K</kbd>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setSearchOpen(true)}
+          className="mx-3 mt-3 flex items-center gap-2.5 rounded-xl border border-themed bg-secondary px-3 py-2.5 text-xs text-secondary transition-colors hover:text-primary"
+          aria-label="Quick find — search pages and actions"
+        >
+          <Search size={15} />
+          <span className="flex-1 text-left">Quick find</span>
+          <kbd className="rounded-md border border-themed px-1.5 py-0.5 text-[10px] text-muted">Ctrl K</kbd>
+        </button>
 
         <nav aria-label="Main navigation" className="relative flex-1 px-3 py-4 overflow-y-auto">
           <div className="space-y-1">
@@ -230,11 +235,7 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
           </div>
         </div>
 
-        <main className="workspace-main p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto animate-fade-in pb-24 lg:pb-8">
-          <div className="workspace-context mb-6 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted"><span className="workspace-status-dot" /> YOUNG MONEY / WORKSPACE <ChevronRight size={13} /> <span className="text-secondary">{current.replace(/-/g, ' ')}</span></div>
-            <button type="button" onClick={() => setSearchOpen(true)} className="hidden sm:flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-muted hover:text-primary hover:bg-secondary"><Search size={14} /> Jump to anything <kbd className="rounded border border-themed px-1.5 py-0.5">⌘K</kbd></button>
-          </div>
+        <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto animate-fade-in pb-24 lg:pb-8">
           <DataRecoveryNotice />
           {children}
         </main>
