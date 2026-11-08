@@ -1,3 +1,4 @@
+import { accountLedger, settlement, validateTradeTimes } from '@/lib/tradeFinance';
 import { useState, useEffect } from 'react';
 import { Save, X, Calculator, TrendingUp, TrendingDown, Zap, ChevronRight, ChevronLeft, CheckCircle2, Target, Brain, AlertTriangle, Clock, CheckCircle, ListChecks, Camera, Lock, Star } from 'lucide-react';
 import type { Trade, TradeInput, TradeDirection, TradeSession, AccountType, EmotionalState, TradeStatus, TradeChecklistSnapshot, TradeCalculationSnapshot } from '@/lib/types';
@@ -12,7 +13,7 @@ import { PreTradeChecklist } from './PreTradeChecklist';
 import { EntitySelect } from './EntitySelect';
 import { InstrumentPicker } from './InstrumentPicker';
 import { TradingViewChart } from './TradingViewChart';
-import { calculatePositionSize, createTradeCalculationSnapshot, defaultTradeLevels, distancePresets, examplePriceIsUnconfirmed, instrumentDistanceLabel, instrumentPnl, instrumentPnlFromSnapshot, priceAtDistance, SIZE_PRESETS } from '@/lib/instrumentMath';
+import { calculatePositionSize, createTradeCalculationSnapshot, defaultTradeLevels, distancePresets, examplePriceIsUnconfirmed, instrumentDistanceLabel, instrumentPnl, instrumentPnlFromSnapshot, priceAtDistance, quantityStep, validQuantity, SIZE_PRESETS } from '@/lib/instrumentMath';
 import { setupQualityFromChecklist } from '@/lib/setupQuality';
 
 interface TradeFormProps {
@@ -52,6 +53,8 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
   const { adjustments } = useTradingAccountAdjustments(user?.id);
   const { settings: userRiskSettings } = useRiskSettings(user?.id);
 
+  const [calculatedAt] = useState(() => new Date().toISOString());
+  const [draftId] = useState(() => crypto.randomUUID());
   const [form, setForm] = useState<TradeInput>(() => initial ? { ...initial } : {
     pair: '', direction: 'long', entry_price: null, exit_price: null, take_profit: null,
     lot_size: null, outcome: null, status: 'open', pnl: 0, pips: 0,
@@ -201,7 +204,10 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
   const effectiveRiskPercent = configuredRiskLimits.length ? Math.min(...configuredRiskLimits) : null;
   const isExamplePrice = examplePriceIsUnconfirmed(form.entry_price, selectedInstrument);
   const sizePresets = selectedInstrument ? SIZE_PRESETS[selectedInstrument.asset_class] || SIZE_PRESETS.custom : SIZE_PRESETS.fx;
-  const effectiveBalance = selectedAccount ? selectedAccount.balance + accountTrades.filter(t => t.account_id === selectedAccount.id && t.status === 'closed').reduce((sum, t) => sum + t.pnl, 0) + adjustments.filter(a => a.account_id === selectedAccount.id).reduce((sum, a) => sum + a.amount, 0) : 0;
+  const currentBalance = selectedAccount ? accountLedger(selectedAccount, accountTrades, adjustments).balance : 0;
+  // Legacy edits retain their recorded risk when the entry capital is unknown.
+  const entryCapital = initial && form.account_id === initial.account_id ? initial.risk_capital_at_entry ?? null : currentBalance;
+  const effectiveBalance = entryCapital ?? 0;
   const suggestedSize = selectedInstrument && selectedAccount && effectiveRiskPercent != null && form.entry_price && stopLoss && Number(stopLoss) && conversionRate > 0
     ? calculatePositionSize(selectedInstrument, effectiveBalance, effectiveRiskPercent, form.entry_price, Number(stopLoss), conversionRate, Math.max(0, Number(form.fees) || 0))
     : null;
@@ -316,8 +322,15 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
       setSaving(false);
       return;
     }
-    if (!form.lot_size) {
+    if (!form.lot_size || !Number.isFinite(form.lot_size) || form.lot_size <= 0) {
       setError('Please enter a lot size.');
+      setSaving(false);
+      return;
+    }
+    const timeError = validateTradeTimes(form.entry_time, form.exit_time, form.exit_price != null);
+    const invalidSize = selectedInstrument && !validQuantity(selectedInstrument, form.lot_size);
+    if (timeError || invalidSize || !Number.isFinite(liveCalc.pnl) || !Number.isFinite(form.entry_price) || form.entry_price <= 0 || (form.exit_price != null && (!Number.isFinite(form.exit_price) || form.exit_price <= 0))) {
+      setError(timeError || (invalidSize ? `Use a supported size in increments of ${quantityStep(selectedInstrument!)}.` : 'Enter valid prices and calculation inputs.'));
       setSaving(false);
       return;
     }
@@ -345,8 +358,8 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
 
     const autoStatus: TradeStatus = form.exit_price != null ? 'closed' : 'open';
     const autoPips = liveCalc.pips;
-    const autoPnl = liveCalc.pnl;
-    const autoOutcome = liveCalc.outcome;
+    const currency = selectedAccount?.base_currency || selectedInstrument?.quote_currency || 'USD';
+    const posted = settlement(liveCalc.pnl, currency);
     const autoRr = liveCalc.rr;
 
     const allRequiredChecked = applicableChecklistItems.length > 0 && applicableChecklistItems.filter(i => i.is_required).every(item =>
@@ -355,13 +368,20 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
 
     const finalData: TradeInput = {
       ...form,
+      ...posted,
+      trade_source: 'manual',
+      settlement_currency: currency,
+      planned_r: liveCalc.potentialRr,
+      risk_capital_at_entry: entryCapital,
+      client_request_id: initial ? undefined : draftId,
+      expected_revision: initial?.updated_at,
       instrument_id: selectedInstrument && !selectedInstrument.id.startsWith('seed:') && !selectedInstrument.id.startsWith('custom-local:') ? selectedInstrument.id : null,
       stop_loss: stopLoss ? Number(stopLoss) : null,
       conversion_rate: needsConversion ? conversionRate : 1,
       fees: Math.max(0, Number(form.fees) || 0),
         risk_override_reason: riskLimitExceeded ? riskOverrideReason.trim() || null : null,
       calculation_snapshot: reusableCalculationSnapshot || (selectedInstrument && selectedAccount
-        ? createTradeCalculationSnapshot(selectedInstrument, selectedAccount.base_currency, conversionRate || 1)
+        ? createTradeCalculationSnapshot(selectedInstrument, selectedAccount.base_currency, conversionRate || 1, calculatedAt)
         : null),
       example_values_confirmed: true,
       capture_mode: form.capture_mode || 'live',
@@ -371,11 +391,10 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
         : form.risk_percent,
       status: autoStatus,
       pips: parseFloat(autoPips.toFixed(1)),
-      pnl: parseFloat(autoPnl.toFixed(2)),
-      outcome: autoStatus === 'open' ? null : autoOutcome,
+      outcome: autoStatus === 'open' ? null : posted.outcome,
       risk_reward_ratio: autoRr != null ? parseFloat(autoRr.toFixed(2)) : form.risk_reward_ratio,
       entry_time: new Date(form.entry_time).toISOString(),
-      exit_time: form.exit_time ? new Date(form.exit_time).toISOString() : null,
+      exit_time: autoStatus === 'closed' && form.exit_time ? new Date(form.exit_time).toISOString() : null,
       screenshot_url: form.screenshot_url || form.entry_screenshot_url,
       voice_note_url: form.voice_note_url || form.entry_voice_note_url,
       checklist_items: checklistSnapshot.length > 0 ? checklistSnapshot : null,
@@ -431,6 +450,26 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
 
   const closureStepUnlocked = isClosedTrade;
   const lastStep = STEPS.length - 1;
+
+  if (initial?.trade_source === 'mt5') {
+    const saveAnnotations = async () => {
+      setSaving(true);
+      try {
+        await onSubmit({ ...initial, notes: form.notes, lessons: form.lessons, expected_revision: initial.updated_at });
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'Could not save the notes.');
+      } finally {
+        setSaving(false);
+      }
+    };
+    return <div className="space-y-4">
+      <p className="text-sm text-secondary">MT5 supplies the fills and realized P&amp;L. You can edit your journal notes here.</p>
+      <label className={labelCls}>Notes<textarea className={inputCls} value={form.notes || ''} onChange={event => update('notes', event.target.value)} /></label>
+      <label className={labelCls}>Lessons<textarea className={inputCls} value={form.lessons || ''} onChange={event => update('lessons', event.target.value)} /></label>
+      {error && <p role="alert">{error}</p>}
+      <button type="button" className="btn-primary" disabled={saving} onClick={saveAnnotations}>Save notes</button>
+    </div>;
+  }
 
   return (
     <div className="space-y-5">

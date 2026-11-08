@@ -1,42 +1,13 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import type { Session, User } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
-
-export interface TraderProfile {
-  id: string;
-  display_name: string;
-  avatar_url: string | null;
-  bio: string | null;
-  trading_style: string | null;
-  is_public: boolean;
-  username?: string | null;
-  role?: 'member' | 'admin';
-  account_status?: 'active' | 'suspended';
-  suspended_at?: string | null;
-  suspension_expires_at?: string | null;
-  created_at: string;
-}
-
-interface AuthContextValue {
-  session: Session | null;
-  user: User | null;
-  profile: TraderProfile | null;
-  loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, displayName: string, inviteCode: string) => Promise<{ error: string | null }>;
-  signOut: () => Promise<void>;
-  updateProfile: (updates: Partial<TraderProfile>) => Promise<{ error: string | null }>;
-  refreshProfile: () => Promise<void>;
-  updatePassword: (password: string) => Promise<{ error: string | null }>;
-}
-
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-
+import {useEffect, useState, type ReactNode} from 'react';
+import {AuthContext,type TraderProfile} from './AuthContext';
+import type {Session} from '@supabase/supabase-js';
+import {supabase} from '@/lib/supabase';
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<TraderProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [unavailable,setUnavailable]=useState(false);
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
       .from('profiles')
@@ -45,21 +16,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .maybeSingle();
     if (!error && data) {
       setProfile(data as TraderProfile);
-    } else if (error || !data) {
-      // Profile might not exist yet — create a minimal one
-      const { data: newProfile, error: insertError } = await supabase
-        .from('profiles')
-        .insert({ id: userId, display_name: userId.slice(0, 8), username: `trader_${userId.slice(0, 8)}` })
-        .select('*')
-        .maybeSingle();
-      if (!insertError && newProfile) {
-        setProfile(newProfile as TraderProfile);
-      }
     }
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }: { data: { session: Session | null };error?:unknown }) => {
+      if(error){setUnavailable(true);setLoading(false);return;}
       setSession(session);
       if (session?.user) {
         fetchProfile(session.user.id).finally(() => setLoading(false));
@@ -122,9 +84,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error?.message || null };
   };
 
-  const updatePassword = async (password: string) => {
+  const updatePassword = async (password: string, currentPassword: string) => {
     if (!session?.user) return { error: 'Not authenticated' };
-    const { error } = await supabase.auth.updateUser({ password });
+    const { error } = await supabase.auth.updateUser({ password, current_password: currentPassword });
     return { error: error?.message || null };
   };
 
@@ -132,6 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (session?.user) await fetchProfile(session.user.id);
   };
 
+  if (unavailable) return <main role="alert" className="card p-5">Session verification unavailable. <button onClick={()=>window.location.reload()}>Retry</button></main>;
   return (
     <AuthContext.Provider value={{ session, user: session?.user ?? null, profile, loading, signIn, signUp, signOut, updateProfile, refreshProfile, updatePassword }}>
       {children}
@@ -139,8 +102,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
-}

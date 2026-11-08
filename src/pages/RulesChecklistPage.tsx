@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollText, Plus, Trash2, Save, AlertTriangle, Shield, Zap, BookOpen, Newspaper, Scale, XCircle } from 'lucide-react';
+import { ScrollText, Plus, Trash2, Save, AlertTriangle, Shield, Zap, Newspaper, Scale, XCircle } from 'lucide-react';
 import { useTradingRules, useChecklist } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
 import { SectionHeader } from '@/components/ui/SectionHeader';

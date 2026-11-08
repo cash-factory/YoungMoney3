@@ -13,7 +13,6 @@ import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { Modal } from '@/components/ui/Modal';
 import { StatCard } from '@/components/ui/StatCard';
 import type { ForwardTrade, ForwardTradeInput, ForwardTradeStatus, EmotionalState } from '@/lib/types';
-import { format, parseISO } from 'date-fns';
 import { formatCurrency } from '@/lib/utils';
 
 const EMOTIONAL_STATES: EmotionalState[] = ['calm', 'confident', 'rushed', 'frustrated', 'focused', 'anxious', 'greedy', 'fearful'];

@@ -3,7 +3,7 @@ import {
   computeDashboardStats, groupByPair, groupByDayOfWeek, groupByDirection, groupBySession, groupByStrategy,
   formatCurrency, formatPercent,
 } from './utils';
-import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 
 export interface AIResult {
   summary: string;
@@ -227,9 +227,9 @@ function detectPatterns(trades: Trade[]): PatternInsight[] {
 
 function buildComparison(current: DashboardStats, previous: DashboardStats): ComparisonData {
   const deltas: Record<string, number> = {};
-  ['totalPnl', 'totalTrades', 'winRate', 'avgWin', 'avgLoss', 'profitFactor', 'expectancy'].forEach(key => {
-    const cur = (current as any)[key] as number;
-    const prev = (previous as any)[key] as number;
+  (['totalPnl', 'totalTrades', 'winRate', 'avgWin', 'avgLoss', 'profitFactor', 'expectancy'] as const).forEach(key => {
+    const cur = current[key];
+    const prev = previous[key];
     deltas[key] = cur - prev;
   });
 

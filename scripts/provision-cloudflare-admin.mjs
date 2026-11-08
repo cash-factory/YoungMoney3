@@ -39,7 +39,7 @@ const passwordHash = Buffer.from(passwordBits).toString('base64');
 const statements = [
   `INSERT INTO users (id,email,username,display_name,password_hash,password_salt,role,account_status,created_at,updated_at)
    VALUES (${sql(userId)},${sql(email)},'young_money','young_money',${sql(passwordHash)},${sql(salt)},'admin','active',${sql(timestamp)},${sql(timestamp)})
-   ON CONFLICT(email) DO UPDATE SET username='young_money',display_name='young_money',role='admin',account_status='active',suspended_at=NULL,suspension_expires_at=NULL,updated_at=excluded.updated_at;`,
+   ON CONFLICT(id) DO NOTHING;`,
 ];
 
 seedPlaybook({
@@ -77,15 +77,10 @@ try {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   if (result.status !== 0) throw new Error(`D1 provisioning failed: ${(result.stderr || result.stdout).trim()}`);
-  const verify = await fetch('https://ym-fx.ethical-hacker263.workers.dev/api/auth/signin', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!verify.ok) throw new Error('Admin credential verification failed after provisioning.');
-  const authenticated = await verify.json();
-  if (authenticated.user?.username !== 'young_money' || authenticated.user?.role !== 'admin') {
-    throw new Error('Provisioned account did not receive administrator access.');
+  const query = `SELECT id,role FROM users WHERE id=${sql(userId)} AND email=${sql(email)} AND role='admin' AND account_status='active'`;
+  const verify = spawnSync('npx', ['wrangler', 'd1', 'execute', 'trade-journal-pro', '--remote', '--json', '--command', query], { encoding: 'utf8' });
+  if (verify.status !== 0 || !JSON.parse(verify.stdout).some(batch => batch.results?.some(row => row.id === userId && row.role === 'admin'))) {
+    throw new Error('D1 administrator verification failed.');
   }
   console.log('Provisioned and verified the administrator account with its Young-Money-Fx and Young Money 2.0 playbooks.');
 } finally {

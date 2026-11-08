@@ -1,3 +1,4 @@
+import { accountLedger, settlement, validateTradeTimes } from '@/lib/tradeFinance';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, CandlestickChart, FlaskConical, Save, Plus, Star } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
@@ -7,7 +8,7 @@ import { TradingViewChart } from '@/components/TradingViewChart';
 import { InstrumentPicker } from '@/components/InstrumentPicker';
 import { useAuth } from '@/context/AuthContext';
 import { useChecklist, useInstrumentFavorites, useJournalEntries, useMarketInstruments, useSetups, useStrategies, useStrategyChecklist, useStrategyEntryModels, useTradingPlans, useTestSessions, useTestTrades, useTradingAccounts, useTrades, useTradingAccountAdjustments } from '@/hooks/useData';
-import { calculatePositionSize, defaultTradeLevels, distancePresets, examplePriceIsUnconfirmed, instrumentDistanceLabel, instrumentPnl, priceAtDistance, SIZE_PRESETS } from '@/lib/instrumentMath';
+import { calculatePositionSize, createTradeCalculationSnapshot, quantityStep, validQuantity, defaultTradeLevels, distancePresets, examplePriceIsUnconfirmed, instrumentDistanceLabel, instrumentPnl, priceAtDistance, SIZE_PRESETS } from '@/lib/instrumentMath';
 import type { InstrumentAssetClass, MarketInstrumentInput, TestTradeOutcome } from '@/lib/types';
 import { PreTradeChecklist } from '@/components/PreTradeChecklist';
 import { setupQualityFromChecklist } from '@/lib/setupQuality';
@@ -78,6 +79,10 @@ export function QuickCaptureModal({ open, onClose }: { open: boolean; onClose: (
   const [customUnit, setCustomUnit] = useState('units');
   const [customExample, setCustomExample] = useState('');
   const [customSize, setCustomSize] = useState('1');
+  const initialized = useRef(false);
+  const appliedSymbol = useRef('');
+  const calculatedAt = useRef(new Date().toISOString());
+  const draftId = useRef('');
   const instrumentPreferenceApplied = useRef(false);
   const { models: entryModels } = useStrategyEntryModels(strategyId || null);
   const { items: strategyChecklistItems } = useStrategyChecklist(strategyId || null, entryModelId || null);
@@ -89,7 +94,7 @@ export function QuickCaptureModal({ open, onClose }: { open: boolean; onClose: (
 
   const selectedInstrument = useMemo(() => instruments.find(i => i.symbol.toUpperCase() === symbol.trim().toUpperCase()) || null, [instruments, symbol]);
   const strategiesForPlan = strategies.filter(s => s.plan_id === planId);
-  const selectedAccount = accounts.find(a => a.id === accountId) || accounts.find(a => a.is_active) || null;
+  const selectedAccount = accounts.find(a => a.id === accountId) || null;
   const selectedSession = sessions.find(s => s.id === sessionId) || null;
   const needsConversion = !!selectedInstrument && !!selectedAccount && selectedInstrument.quote_currency !== selectedAccount.base_currency;
   const rate = needsConversion ? Number(conversionRate) : 1;
@@ -98,7 +103,7 @@ export function QuickCaptureModal({ open, onClose }: { open: boolean; onClose: (
   const exitValue = Number(exit);
   const quantityValue = Number(quantity);
   const isExample = examplePriceIsUnconfirmed(entryValue || null, selectedInstrument);
-  const effectiveBalance = selectedAccount ? selectedAccount.balance + accountTrades.filter(t => t.account_id === selectedAccount.id && t.status === 'closed').reduce((sum, t) => sum + t.pnl, 0) + adjustments.filter(a => a.account_id === selectedAccount.id).reduce((sum, a) => sum + a.amount, 0) : 0;
+  const effectiveBalance = selectedAccount ? accountLedger(selectedAccount, accountTrades, adjustments).balance : 0;
   const suggestedSize = selectedInstrument && selectedAccount && entryValue > 0 && stopValue > 0 && rate > 0
     ? calculatePositionSize(selectedInstrument, effectiveBalance, selectedAccount.risk_per_trade_pct, entryValue, stopValue, rate)
     : null;
@@ -123,7 +128,10 @@ export function QuickCaptureModal({ open, onClose }: { open: boolean; onClose: (
   };
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) { initialized.current=false; appliedSymbol.current=''; return; }
+    if (initialized.current) return;
+    initialized.current=true;
+    draftId.current = crypto.randomUUID();
     instrumentPreferenceApplied.current = false;
     setCaptureType('trade'); setSymbol('');
     setDirection('long'); setExit(''); setStop(''); setTarget(''); setStrategyId(''); setSetupId('');
@@ -137,7 +145,7 @@ export function QuickCaptureModal({ open, onClose }: { open: boolean; onClose: (
     setPlanId(defaultAccount?.default_plan_id || '');
     if (defaultAccount?.default_strategy_id && strategies.some(s => s.id === defaultAccount.default_strategy_id && s.plan_id === defaultAccount.default_plan_id)) setStrategyId(defaultAccount.default_strategy_id);
     setEnteredAt(localDateTime()); setJournalText(''); setCustomOpen(false);
-  }, [open]);
+  }, [open, accounts, strategies]);
 
   useEffect(() => {
     if (!open || instrumentPreferenceApplied.current || !instruments.length || favoritesLoading) return;
@@ -152,7 +160,8 @@ export function QuickCaptureModal({ open, onClose }: { open: boolean; onClose: (
   }, [open, instruments, favoriteIds, favoritesLoading, userId]);
 
   useEffect(() => {
-    if (!selectedInstrument) return;
+    if (!selectedInstrument || appliedSymbol.current===selectedInstrument.id) return;
+    appliedSymbol.current=selectedInstrument.id;
     setEntry(selectedInstrument.example_price?.toString() || '');
     setQuantity(selectedInstrument.example_size?.toString() || '');
     const initialPrice = selectedInstrument.example_price;
@@ -163,7 +172,7 @@ export function QuickCaptureModal({ open, onClose }: { open: boolean; onClose: (
     }
     setConversionRate(selectedInstrument.quote_currency === selectedAccount?.base_currency ? '1' : '');
     setExampleConfirmed(false); setActualFillConfirmed(false);
-  }, [selectedInstrument?.id]);
+  }, [selectedInstrument, direction, selectedAccount?.base_currency]);
 
   useEffect(() => {
     if (selectedSession) {
@@ -173,7 +182,7 @@ export function QuickCaptureModal({ open, onClose }: { open: boolean; onClose: (
       setChecklistSnapshot([]); setChecklistOverrideReason(null);
       if (selectedSession.instrument) setSymbol(selectedSession.instrument);
     }
-  }, [selectedSession?.id]);
+  }, [selectedSession]);
 
   const handleSave = async () => {
     setError('');
@@ -195,6 +204,13 @@ export function QuickCaptureModal({ open, onClose }: { open: boolean; onClose: (
     }
 
     if (!symbol.trim() || !entryValue || !quantityValue) { setError('Enter an instrument, entry price, and size.'); return; }
+    if (!selectedInstrument || !validQuantity(selectedInstrument, quantityValue) || !Number.isFinite(entryValue) || entryValue <= 0 || (exit && (!Number.isFinite(exitValue) || exitValue <= 0))) {
+      setError(selectedInstrument ? `Enter positive prices and a supported quantity in increments of ${quantityStep(selectedInstrument)}.` : 'Select an instrument before saving.');
+      return;
+    }
+    const closedAt = captureType === 'test' ? exitedAt || localDateTime() : exitedAt;
+    const timeError = validateTradeTimes(enteredAt, closedAt, !!exit);
+    if (timeError) { setError(timeError); return; }
     if (captureType === 'trade' && tradeCaptureMode === 'live' && !actualFillConfirmed) { setError('Confirm that this is the actual broker fill before saving it to your live account.'); return; }
     if ((captureType === 'test' || tradeCaptureMode === 'historical') && isExample && !exampleConfirmed) { setError('Confirm that you checked this example price against the actual trade data.'); return; }
     if (needsConversion && !(rate > 0)) { setError(`Enter a conversion rate from ${selectedInstrument?.quote_currency} to ${selectedAccount?.base_currency}.`); return; }
@@ -208,19 +224,26 @@ export function QuickCaptureModal({ open, onClose }: { open: boolean; onClose: (
         const calculatedPnl = exitValue && selectedInstrument ? instrumentPnl(selectedInstrument, direction, entryValue, exitValue, quantityValue, rate || 1) : 0;
         const calculatedPips = exitValue && selectedInstrument ? (direction === 'long' ? exitValue - entryValue : entryValue - exitValue) / (selectedInstrument.asset_class === 'fx' && selectedInstrument.pip_size ? selectedInstrument.pip_size : selectedInstrument.price_increment) : 0;
         const riskAmount = stopValue && selectedInstrument ? Math.abs(instrumentPnl(selectedInstrument, direction, entryValue, stopValue, quantityValue, rate || 1)) : 0;
+        const currency = selectedAccount?.base_currency || selectedInstrument.quote_currency;
+        const posted = settlement(calculatedPnl, currency);
         await addTrade({
+          ...posted,
+          client_request_id: draftId.current, trade_source: 'manual', settlement_currency: currency,
+          calculation_snapshot: createTradeCalculationSnapshot(selectedInstrument, currency, rate, calculatedAt.current),
+          risk_capital_at_entry: selectedAccount ? effectiveBalance : null,
+          planned_r: riskAmount && target ? instrumentPnl(selectedInstrument, direction, entryValue, Number(target), quantityValue, rate) / riskAmount : null,
           pair: symbol.trim().toUpperCase(), direction, entry_price: entryValue, exit_price: exitValue || null,
           stop_loss: stopValue || null, take_profit: Number(target) || null, lot_size: quantityValue,
-          outcome: exitValue ? calculatedPnl > 0 ? 'win' : calculatedPnl < 0 ? 'loss' : 'breakeven' : null,
-          status: exitValue ? 'closed' : 'open', pnl: calculatedPnl, pips: calculatedPips,
+          outcome: exitValue ? posted.outcome : null,
+          status: exitValue ? 'closed' : 'open', pips: calculatedPips,
           strategy: strategies.find(s => s.id === strategyId)?.name || null, strategy_id: strategyId || null, entry_model_id: entryModelId || null,
           setup_id: setupId || null, account_id: accountId || null, instrument_id: selectedInstrument && !selectedInstrument.id.startsWith('seed:') && !selectedInstrument.id.startsWith('custom-local:') ? selectedInstrument.id : null, plan_id: planId || null,
           conversion_rate: needsConversion ? rate : 1, example_values_confirmed: true,
           capture_mode: tradeCaptureMode, entry_price_confirmed_actual: tradeCaptureMode === 'live' ? actualFillConfirmed : false,
           session: null, broker: null, account_type: null,
-          entry_time: new Date(enteredAt).toISOString(), exit_time: exitValue ? new Date(exitedAt || localDateTime()).toISOString() : null,
-          risk_percent: selectedAccount && riskAmount ? riskAmount / effectiveBalance * 100 : null,
-          risk_reward_ratio: stopValue && target ? Math.abs(Number(target) - entryValue) / Math.abs(entryValue - stopValue) : null,
+          entry_time: new Date(enteredAt).toISOString(), exit_time: exitValue ? new Date(closedAt).toISOString() : null,
+          risk_percent: selectedAccount && riskAmount && effectiveBalance > 0 ? riskAmount / effectiveBalance * 100 : null,
+          risk_reward_ratio: exitValue && riskAmount ? posted.pnl / riskAmount : null,
           emotional_state: null, setup_quality: setupQualityFromChecklist(checklistSnapshot), mistakes: [], lessons: '', notes: notes || '',
           screenshot_url: image || null, voice_note_url: voice || null, entry_screenshot_url: image || null,
           entry_voice_note_url: voice || null, closure_screenshot_url: null, closure_voice_note_url: null,
@@ -236,7 +259,7 @@ export function QuickCaptureModal({ open, onClose }: { open: boolean; onClose: (
           session_id: sessionId, direction, entry_price: entryValue, exit_price: exitValue,
           stop_loss: stopValue || null, take_profit: Number(target) || null, position_size: quantityValue,
           pnl: calculatedPnl, r_multiple: rMultiple, outcome,
-          entry_time: new Date(enteredAt).toISOString(), exit_time: new Date().toISOString(), notes: notes || null,
+          entry_time: new Date(enteredAt).toISOString(), exit_time: new Date(closedAt).toISOString(), notes: notes || null,
           screenshot_url: image || null, account_id: accountId || null, instrument_id: selectedInstrument && !selectedInstrument.id.startsWith('seed:') && !selectedInstrument.id.startsWith('custom-local:') ? selectedInstrument.id : null,
           conversion_rate: needsConversion ? rate : 1, voice_note_url: voice || null, entry_model_id: entryModelId || null, plan_id: planId || null,
           checklist_items: checklistSnapshot.length ? checklistSnapshot : null,

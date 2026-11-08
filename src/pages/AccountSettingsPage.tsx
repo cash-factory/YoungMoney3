@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyRound, Loader2, Search, ShieldCheck, Trash2, UserRoundCheck, UserRoundX } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -16,6 +16,7 @@ export function AccountSettingsPage() {
   const [bio, setBio] = useState(profile?.bio || '');
   const [tradingStyle, setTradingStyle] = useState(profile?.trading_style || '');
   const [profileState, setProfileState] = useState<{ error?: string; success?: string }>({});
+  const [currentPassword, setCurrentPassword] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [passwordState, setPasswordState] = useState<{ error?: string; success?: string }>({});
@@ -37,8 +38,8 @@ export function AccountSettingsPage() {
     event.preventDefault(); setPasswordState({});
     if (password.length < 8) return setPasswordState({ error: 'Use at least 8 characters.' });
     if (password !== passwordConfirm) return setPasswordState({ error: 'Passwords do not match.' });
-    const { error } = await updatePassword(password);
-    if (error) setPasswordState({ error }); else { setPassword(''); setPasswordConfirm(''); setPasswordState({ success: 'Password updated.' }); }
+    const { error } = await updatePassword(password, currentPassword);
+    if (error) setPasswordState({ error }); else { setCurrentPassword(''); setPassword(''); setPasswordConfirm(''); setPasswordState({ success: 'Password updated.' }); }
   };
 
   return <div className="space-y-6">
@@ -54,6 +55,7 @@ export function AccountSettingsPage() {
       </form>
       <div className="space-y-6">
         <form className="card space-y-4 p-5" onSubmit={savePassword}><div className="flex items-center gap-2"><KeyRound size={18} className="text-orange-500" /><h2 className="font-bold">Security</h2></div>
+          <label className="block text-sm font-medium">Current password<input required type="password" className="input-field mt-1.5" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} autoComplete="current-password" /></label>
           <label className="block text-sm font-medium">New password<input type="password" className="input-field mt-1.5" value={password} onChange={event => setPassword(event.target.value)} autoComplete="new-password" /></label>
           <label className="block text-sm font-medium">Confirm new password<input type="password" className="input-field mt-1.5" value={passwordConfirm} onChange={event => setPasswordConfirm(event.target.value)} autoComplete="new-password" /></label>
           <Status state={passwordState} /><button className="btn-primary" type="submit">Update password</button>
@@ -83,8 +85,8 @@ function AdminConsole() {
     if (data.error) throw new Error(String(data.error));
     return data;
   };
-  const load = async () => { setLoading(true); try { const [memberResult, auditResult] = await Promise.all([invoke({ action: 'list' }), invoke({ action: 'audit' })]); setMembers(Array.isArray(memberResult.members) ? memberResult.members as Member[] : []); setAudit(Array.isArray(auditResult.entries) ? auditResult.entries as AuditEntry[] : []); } catch (error) { setMessage({ text: error instanceof Error ? error.message : 'Could not load administration data.', kind: 'error' }); } finally { setLoading(false); } };
-  useEffect(() => { load(); }, []);
+  const load = useCallback(async () => { setLoading(true); try { const [memberResult, auditResult] = await Promise.all([invoke({ action: 'list' }), invoke({ action: 'audit' })]); setMembers(Array.isArray(memberResult.members) ? memberResult.members as Member[] : []); setAudit(Array.isArray(auditResult.entries) ? auditResult.entries as AuditEntry[] : []); } catch (error) { setMessage({ text: error instanceof Error ? error.message : 'Could not load administration data.', kind: 'error' }); } finally { setLoading(false); } }, []);
+  useEffect(() => { load(); }, [load]);
   const visibleMembers = useMemo(() => members.filter(member => [member.email, member.username, member.display_name].some(value => value?.toLowerCase().includes(query.toLowerCase()))), [members, query]);
   const act = async (action: 'suspend' | 'restore' | 'delete', member: Member) => {
     if (action === 'delete' && !confirm(`Permanently delete ${member.username || member.email}, including their private records and uploads? This cannot be undone.`)) return;

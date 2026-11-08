@@ -176,8 +176,8 @@ export function computeDashboardStats(trades: Trade[]): DashboardStats {
   const grossLoss = Math.abs(losses.reduce((s, t) => s + t.pnl, 0));
   const profitFactor = grossLoss === 0 ? (grossProfit > 0 ? Infinity : 0) : grossProfit / grossLoss;
   const expectancy = closed.length ? totalPnl / closed.length : 0;
-  const rrTrades = closed.filter(t => t.risk_reward_ratio != null);
-  const avgRiskReward = rrTrades.length ? rrTrades.reduce((s, t) => s + (t.risk_reward_ratio || 0), 0) / rrTrades.length : 0;
+  const rrTrades = closed.filter(t => t.realized_r != null);
+  const avgRiskReward = rrTrades.length ? rrTrades.reduce((s, t) => s + (t.realized_r || 0), 0) / rrTrades.length : 0;
 
   return {
     totalPnl, totalTrades: closed.length, winRate,

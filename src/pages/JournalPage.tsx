@@ -3,7 +3,7 @@ import { BookOpen, Plus, Trash2, Save, Target, Eye, CheckSquare, FileText, Calen
 import { ScreenshotUpload } from '@/components/ScreenshotUpload';
 import { useJournalEntries, useTrades, useStrategies, useSetups, useMarketInstruments, useTradingAccounts } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
-import { formatCurrency, formatPercent } from '@/lib/utils';
+import { formatPercent } from '@/lib/utils';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { Modal } from '@/components/ui/Modal';
@@ -33,6 +33,12 @@ const DEFAULT_PROMPTS: ReviewPrompt[] = [
 
 export function JournalPage() {
   const { user } = useAuth();
+  const [source, setSource] = useState('all');
+  const sourceFilter = <label className="mb-4 block max-w-sm text-xs font-semibold text-secondary">Trade source
+    <select className="input-field mt-1.5" value={source} onChange={event => setSource(event.target.value)}>
+      <option value="all">All sources</option><option value="manual">Manual</option><option value="mt5">MT5</option>
+    </select>
+  </label>;
   const { entries, loading, upsertEntry, deleteEntry } = useJournalEntries(user?.id);
   const { trades } = useTrades(user?.id);
   const { strategies } = useStrategies(user?.id);
@@ -43,9 +49,11 @@ export function JournalPage() {
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
   const [filterType, setFilterType] = useState<JournalType | ''>('');
 
+  const [accountFilter, setAccountFilter] = useState('all');
+  const visibleTrades = useMemo(() => trades.filter(t => (source === 'all' || (t.trade_source ?? 'manual') === source) && (accountFilter === 'all' || (t.account_id || 'unassigned') === accountFilter)), [trades, source, accountFilter]);
   const filtered = useMemo(() => {
-    return filterType ? entries.filter(e => e.entry_type === filterType) : entries;
-  }, [entries, filterType]);
+    return entries.filter(entry => (!filterType || entry.entry_type === filterType) && (accountFilter === 'all' || (entry.account_id || 'unassigned') === accountFilter));
+  }, [entries, filterType, accountFilter]);
 
   const handleSave = async (data: JournalInput, id?: string) => {
     await upsertEntry(data, id);
@@ -71,7 +79,13 @@ export function JournalPage() {
         }
       />
 
-      {/* Filter */}
+      {sourceFilter}
+      <label className="mb-4 block max-w-sm text-xs font-semibold text-secondary">Journal account
+        <select className="input-field mt-1.5" value={accountFilter} onChange={event => setAccountFilter(event.target.value)}>
+          <option value="all">All accounts</option><option value="unassigned">Unassigned</option>
+          {accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}
+        </select>
+      </label>
       <div className="flex gap-2 mb-4">
         {(['', 'daily', 'weekly', 'monthly'] as const).map(t => (
           <button
@@ -93,31 +107,38 @@ export function JournalPage() {
       ) : (
         <div className="space-y-4">
           {filtered.map(entry => (
-            <JournalCard key={entry.id} entry={entry} trades={trades} onEdit={() => { setEditingEntry(entry); setShowForm(true); }} onDelete={() => handleDelete(entry.id)} />
+            <JournalCard key={entry.id} entry={entry} trades={visibleTrades} accounts={accounts} onEdit={() => { setEditingEntry(entry); setShowForm(true); }} onDelete={() => handleDelete(entry.id)} />
           ))}
         </div>
       )}
 
       <Modal open={showForm} onClose={() => { setShowForm(false); setEditingEntry(null); }} title={editingEntry ? 'Edit Journal Entry' : 'New Journal Entry'} size="lg">
-        <JournalForm initial={editingEntry} trades={trades} strategies={strategies} setups={setups} instruments={instruments} accounts={accounts} onSave={handleSave} onCancel={() => { setShowForm(false); setEditingEntry(null); }} />
+        <JournalForm initial={editingEntry} trades={visibleTrades} strategies={strategies} setups={setups} instruments={instruments} accounts={accounts} onSave={handleSave} onCancel={() => { setShowForm(false); setEditingEntry(null); }} />
       </Modal>
     </div>
   );
 }
 
-function JournalCard({ entry, trades, onEdit, onDelete }: { entry: JournalEntry; trades: any[]; onEdit: () => void; onDelete: () => void }) {
+function JournalCard({ entry, trades, accounts, onEdit, onDelete }: { entry: JournalEntry; trades: Trade[]; accounts: {id: string; base_currency: string}[]; onEdit: () => void; onDelete: () => void }) {
   const entryTrades = useMemo(() => {
     const d = parseISO(entry.entry_date);
     return trades.filter(t => {
-      const td = parseISO(t.entry_time);
+      if (t.status !== 'closed' || (entry.account_id && t.account_id !== entry.account_id)) return false;
+      if (entry.linked_trade_ids?.length) return entry.linked_trade_ids.includes(t.id);
+      const td = parseISO(t.exit_time || t.entry_time);
       if (entry.entry_type === 'daily') return format(td, 'yyyy-MM-dd') === format(d, 'yyyy-MM-dd');
       if (entry.entry_type === 'weekly') return format(td, 'yyyy-ww') === format(d, 'yyyy-ww');
       return format(td, 'yyyy-MM') === format(d, 'yyyy-MM');
     });
   }, [entry, trades]);
 
-  const pnl = entryTrades.reduce((s, t) => s + t.pnl, 0);
-  const wins = entryTrades.filter((t: any) => t.outcome === 'win').length;
+  const totals = new Map<string, number>();
+  for (const trade of entryTrades) {
+    const currency = accounts.find(account => account.id === trade.account_id)?.base_currency ?? 'Unassigned';
+    totals.set(currency, (totals.get(currency) ?? 0) + trade.pnl);
+  }
+  const pnl = [...totals].map(([currency, value]) => currency === 'Unassigned' ? value.toFixed(2) + ' (currency unknown)' : new Intl.NumberFormat(undefined, {style: 'currency', currency}).format(value)).join(' · ');
+  const wins = entryTrades.filter(t => t.outcome === 'win').length;
   const winRate = entryTrades.length ? (wins / entryTrades.length) * 100 : 0;
   const checkedCount = (entry.trading_plan_checklist || []).filter(c => c.checked).length;
   const checklistTotal = (entry.trading_plan_checklist || []).length;
@@ -135,7 +156,7 @@ function JournalCard({ entry, trades, onEdit, onDelete }: { entry: JournalEntry;
             <span className="text-sm font-semibold">{format(parseISO(entry.entry_date), 'MMM d, yyyy')}</span>
           </div>
           {entryTrades.length > 0 && (
-            <p className="text-xs text-muted">{entryTrades.length} trades · {formatCurrency(pnl)} · {formatPercent(winRate)} WR</p>
+            <p className="text-xs text-muted">{entryTrades.length} trades · {pnl} · {formatPercent(winRate)} WR</p>
           )}
         </div>
         <div className="flex gap-1">
@@ -225,6 +246,7 @@ function JournalForm({ initial, trades, strategies, setups, instruments, account
   const [accountId, setAccountId] = useState(initial?.account_id || '');
   const [linkedTradeIds, setLinkedTradeIds] = useState<string[]>(initial?.linked_trade_ids || []);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const toggleChecklist = (i: number) => {
     setChecklist(c => c.map((item, idx) => idx === i ? { ...item, checked: !item.checked } : item));
@@ -236,7 +258,8 @@ function JournalForm({ initial, trades, strategies, setups, instruments, account
 
   const handleSave = async () => {
     setSaving(true);
-    await onSave({
+    setSaveError('');
+    try { await onSave({
       entry_date: date,
       entry_type: type,
       daily_goals: dailyGoals || null,
@@ -255,7 +278,8 @@ function JournalForm({ initial, trades, strategies, setups, instruments, account
       account_id: accountId || null,
       linked_trade_ids: linkedTradeIds,
     }, initial?.id);
-    setSaving(false);
+    } catch (error) { setSaveError(error instanceof Error ? error.message : 'Could not save journal entry.'); }
+    finally { setSaving(false); }
   };
 
   const inputCls = 'input-field';
@@ -263,6 +287,7 @@ function JournalForm({ initial, trades, strategies, setups, instruments, account
 
   return (
     <div className="space-y-5">
+      {saveError && <p role="alert">{saveError}</p>}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className={labelCls}>Date</label>

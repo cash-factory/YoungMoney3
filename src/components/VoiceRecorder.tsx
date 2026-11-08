@@ -17,6 +17,8 @@ export function VoiceRecorder({ onUpload, existingUrl, onUploadingChange }: Voic
   const [duration, setDuration] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  const mounted = useRef(false);
+  const starting = useRef(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
@@ -24,7 +26,15 @@ export function VoiceRecorder({ onUpload, existingUrl, onUploadingChange }: Voic
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
+    mounted.current = true;
     return () => {
+      mounted.current = false;
+      const recorder = mediaRecorderRef.current;
+      if (recorder) {
+        recorder.onstop = null;
+        recorder.ondataavailable = null;
+        if (recorder.state !== 'inactive') recorder.stop();
+      }
       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
       if (timerRef.current) clearInterval(timerRef.current);
     };
@@ -46,11 +56,14 @@ export function VoiceRecorder({ onUpload, existingUrl, onUploadingChange }: Voic
   }, [existingUrl]);
 
   const startRecording = async () => {
+    if (starting.current || recording) return;
+    starting.current = true;
     setError(null);
     setAudioUrl(null);
     setSaved(false);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!mounted.current) { stream.getTracks().forEach(track => track.stop()); return; }
       streamRef.current = stream;
       const recorder = new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
@@ -72,7 +85,10 @@ export function VoiceRecorder({ onUpload, existingUrl, onUploadingChange }: Voic
       setDuration(0);
       timerRef.current = setInterval(() => setDuration(d => d + 1), 1000);
     } catch {
-      setError('Microphone access denied. Please allow microphone permissions in your browser.');
+      streamRef.current?.getTracks().forEach(track => track.stop());
+      if (mounted.current) setError('Could not start recording. Check your microphone permissions and retry.');
+    } finally {
+      starting.current = false;
     }
   };
 

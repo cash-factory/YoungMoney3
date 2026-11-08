@@ -46,7 +46,6 @@ export function StudyMaterialPage() {
   }, [materials, filterType]);
 
   const completed = materials.filter(m => m.status === 'completed').length;
-  const inProgress = materials.filter(m => m.status === 'in_progress').length;
   const avgProgress = materials.length ? Math.round(materials.reduce((s, m) => s + m.progress, 0) / materials.length) : 0;
 
   const handleSave = async (data: StudyMaterialInput, id?: string) => {

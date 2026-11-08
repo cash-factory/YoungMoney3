@@ -78,3 +78,11 @@ Restore adds missing rows and attachments; it does not replace existing rows or 
 - Cloudflare Free limits apply. Requests can fail once a daily D1 allowance is reached. Monitor usage and export records regularly.
 - The application currently has no automated email verification, password-reset flow, or operational alerting. Participants should use unique passwords and contact the workspace owner if they lose access.
 - Supabase Auth, Edge Functions, and the provider-source checker are not part of this pilot deployment; Supabase is used for private object storage only.
+
+## Journal and MT5 rollout
+
+Run the unit suite, Worker integration tests (`npm run test:worker`), lint, both typechecks and production build. Apply the new D1 migrations before deploying the corresponding UI and Worker together. Existing browser sessions require a fresh sign-in after the cookie migration.
+
+Start with the default demo-only configuration. In Account settings, download the Windows connector, pair the PC, and open **Connect MT5 account** on desktop or mobile. Choose an existing journal account with the same currency and login or create a new one. The Windows setup and terminal requirements are in [the connector guide](../connector/README.md). Existing journal accounts retain their opening balances and manual entries. Broker-reported cash balance and equity appear separately in Account settings.
+
+For acceptance, use two demo accounts in separate dedicated portable terminal installations. Open a position, change its stop and target, partially close, restart the connector, and close the remainder. Compare each deal ticket, quantity, fee, swap and net result against MT5. Check mobile capture while the PC is online, switch portfolio/source filters, match a manual entry, and verify that replaying the history leaves counts unchanged. Keep live import disabled until the demo broker statement reconciles. Set the Worker variable MT5_ALLOW_LIVE to the string true only after this acceptance test. Revoking a PC disables its device token and retains its journal records.

@@ -158,6 +158,7 @@ export function RiskGuardian({ trades, settings, account, plan, onConfigure }: R
             {riskData.todayTradeCount}
             <span className="text-xs text-muted"> / {riskData.maxDailyTrades}</span>
           </p>
+          {riskData.undatedCloseCount > 0 && <p role="alert" className="text-xs text-warning-500">{riskData.undatedCloseCount} closed trades need an exit time before daily risk is complete.</p>}
           <p className="text-[10px] text-muted">{riskData.openTradeCount} currently open</p>
           <div className="h-1 rounded-full bg-secondary mt-2 overflow-hidden">
             <div

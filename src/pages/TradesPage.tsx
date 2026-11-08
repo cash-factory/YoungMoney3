@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Plus, Search, Edit2, Trash2, ChevronDown, ChevronUp, Star, Download, Filter, X, Clock, CheckCircle } from 'lucide-react';
-import { useTrades } from '@/hooks/useData';
+import { useTrades, useTradingAccounts } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
 import { formatCurrency, formatPips, formatDateTime, exportToCSV, downloadFile } from '@/lib/utils';
 import { SectionHeader } from '@/components/ui/SectionHeader';
@@ -9,7 +9,7 @@ import { Modal } from '@/components/ui/Modal';
 import { TradeForm } from '@/components/TradeForm';
 import { TradeAttachments } from '@/components/TradeAttachments';
 import type { Trade, TradeInput, TradeDirection, TradeStatus } from '@/lib/types';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 
 type SortField = 'entry_time' | 'pnl' | 'pair';
 type SortDir = 'asc' | 'desc';
@@ -17,6 +17,8 @@ type SortDir = 'asc' | 'desc';
 export function TradesPage() {
   const { user } = useAuth();
   const { trades, loading, addTrade, updateTrade, deleteTrade } = useTrades(user?.id);
+  const { accounts } = useTradingAccounts(user?.id);
+  const [origin,setOrigin] = useState('all');
   const [showAdd, setShowAdd] = useState(false);
   const [editTrade, setEditTrade] = useState<Trade | null>(null);
   const [search, setSearch] = useState('');
@@ -33,7 +35,7 @@ export function TradesPage() {
   const pairs = useMemo(() => [...new Set(trades.map(t => t.pair))].sort(), [trades]);
 
   const filtered = useMemo(() => {
-    let result = trades;
+    let result = trades.filter(t => origin === 'all' || (t.trade_source || 'manual') === origin);
     if (statusFilter !== 'all') result = result.filter(t => t.status === statusFilter);
     if (search) {
       const q = search.toLowerCase();
@@ -48,7 +50,7 @@ export function TradesPage() {
     if (filterPair) result = result.filter(t => t.pair === filterPair);
     if (filterOutcome) result = result.filter(t => t.outcome === filterOutcome);
     if (filterDirection) result = result.filter(t => t.direction === filterDirection);
-    if (filterAccount) result = result.filter(t => t.account_type === filterAccount);
+    if (filterAccount) result = result.filter(t => t.account_id === filterAccount);
 
     result = [...result].sort((a, b) => {
       let cmp = 0;
@@ -58,7 +60,7 @@ export function TradesPage() {
       return sortDir === 'desc' ? -cmp : cmp;
     });
     return result;
-  }, [trades, statusFilter, search, filterPair, filterOutcome, filterDirection, filterAccount, sortField, sortDir]);
+  }, [trades, origin, statusFilter, search, filterPair, filterOutcome, filterDirection, filterAccount, sortField, sortDir]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -89,10 +91,10 @@ export function TradesPage() {
   };
 
   const clearFilters = () => {
-    setSearch(''); setFilterPair(''); setFilterOutcome(''); setFilterDirection(''); setFilterAccount('');
+    setOrigin('all'); setSearch(''); setFilterPair(''); setFilterOutcome(''); setFilterDirection(''); setFilterAccount('');
   };
 
-  const hasFilters = search || filterPair || filterOutcome || filterDirection || filterAccount;
+  const hasFilters = origin !== 'all' || search || filterPair || filterOutcome || filterDirection || filterAccount;
   const openCount = trades.filter(t => t.status === 'open').length;
   const closedCount = trades.filter(t => t.status === 'closed').length;
 
@@ -188,11 +190,11 @@ export function TradesPage() {
               <label className="block text-xs font-semibold text-secondary mb-1.5">Account</label>
               <select className="input-field" value={filterAccount} onChange={e => setFilterAccount(e.target.value)}>
                 <option value="">All accounts</option>
-                <option value="personal">Personal</option>
-                <option value="propfirm">Prop Firm</option>
+                {accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </div>
           </div>
+          <label>Trade source <select value={origin} onChange={e=>setOrigin(e.target.value)}><option value="all">All trades</option><option value="manual">Manual</option><option value="mt5">MT5</option></select></label>
           {hasFilters && (
             <button onClick={clearFilters} className="mt-3 text-xs text-brand-500 hover:underline flex items-center gap-1">
               <X size={14} /> Clear all filters
@@ -282,7 +284,7 @@ export function TradesPage() {
                   <button onClick={() => setEditTrade(t)} className="btn-ghost p-1.5">
                     <Edit2 size={16} />
                   </button>
-                  <button onClick={() => handleDelete(t.id)} className="btn-ghost p-1.5 text-error-500 hover:bg-error-500/10">
+                  <button disabled={t.trade_source === 'mt5'} onClick={() => handleDelete(t.id)} className="btn-ghost p-1.5 text-error-500 hover:bg-error-500/10">
                     <Trash2 size={16} />
                   </button>
                   <button onClick={() => setExpandedId(expandedId === t.id ? null : t.id)} className="btn-ghost p-1.5">

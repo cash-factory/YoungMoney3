@@ -6,7 +6,7 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { StatCard } from '@/components/ui/StatCard';
 import type { RiskSettingsInput } from '@/lib/types';
-import { formatCurrency, formatPercent } from '@/lib/utils';
+import { formatCurrency } from '@/lib/utils';
 import { format, parseISO, subDays, isAfter } from 'date-fns';
 
 export function RiskManagementPage() {
