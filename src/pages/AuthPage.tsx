@@ -54,7 +54,7 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
   return (
     <div className="min-h-screen flex">
       {/* Left showcase panel */}
-      <div className="auth-showcase hidden lg:flex lg:w-1/2 relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-orange-700 via-orange-900 to-black">
         <div className="absolute inset-0 opacity-[0.07]" style={{
           backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
           backgroundSize: '48px 48px',
@@ -97,7 +97,7 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
 
           <div className="flex items-center gap-2 text-xs text-white/40">
             <Shield size={14} />
-            Private & secure. Your journal is private to your account.
+            Private & secure. Your data is encrypted and protected.
           </div>
         </div>
       </div>
@@ -110,7 +110,7 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
         </div>
 
         <div className="relative w-full max-w-md">
-          <div className="mb-5 flex justify-end"><ColorPaletteControl compact /></div>
+          <div className="mb-4 flex justify-end"><ColorPaletteControl compact /></div>
           {onBack && (
             <button onClick={onBack} className="btn-ghost mb-6 -ml-2 text-sm">
               <ArrowLeft size={16} /> Back to home
