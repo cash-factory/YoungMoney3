@@ -5,7 +5,7 @@ import { useAllTestTrades, useBacktests, useForwardTrades, useTestSessions, useT
 import { useAuth } from '@/context/AuthContext';
 import { computeDashboardStats, equityCurveData, dailyPnlData, formatCurrency, formatPercent, formatDateTime, groupByPair } from '@/lib/utils';
 import { StatCard } from '@/components/ui/StatCard';
-import { ColorPaletteControl } from '@/components/ColorPaletteControl';
+import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { Modal } from '@/components/ui/Modal';
 import { TradeForm } from '@/components/TradeForm';
@@ -122,25 +122,22 @@ export function DashboardPage() {
   if (loading) return <LoadingSpinner label="Loading your dashboard..." />;
 
   return (
-    <div className="premium-dashboard">
-      <header className="editorial-header mb-7">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="editorial-overline">WORKSPACE / OVERVIEW</p>
-            <h1 className="editorial-title">Trading overview</h1>
-            <p className="mt-2 text-sm text-secondary">Your accounts, performance and trading activity in one place.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <ColorPaletteControl compact />
-            <button onClick={() => setShowAdd(true)} className="btn-primary"><Plus size={17} /> Add trade</button>
-          </div>
-        </div>
-        <div className="editorial-toolbar mt-7 flex flex-wrap items-end gap-3">
-          <div className="min-w-[180px] flex-1"><label htmlFor="cockpit-account" className="mb-1.5 block text-xs font-semibold text-secondary">Account</label><select id="cockpit-account" className="input-field" value={accountFilter} onChange={e => setAccountFilter(e.target.value)}><option value="all">All accounts</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name} · {a.base_currency}</option>)}</select></div>
-          <div className="min-w-[180px] flex-1"><label htmlFor="cockpit-source" className="mb-1.5 block text-xs font-semibold text-secondary">Data source</label><select id="cockpit-source" className="input-field" value={source} onChange={e => setSource(e.target.value as 'live' | 'backtest' | 'forward')}><option value="live">Live trades</option><option value="backtest">Backtesting</option><option value="forward">Forward testing</option></select></div>
-          <div className="editorial-context text-xs text-muted">{source === 'live' ? 'Live journal data' : 'Testing results are separate from live equity'}</div>
-        </div>
-      </header>
+    <div>
+      <SectionHeader
+        title="Dashboard"
+        subtitle="Your trading performance at a glance"
+        action={
+          <button onClick={() => setShowAdd(true)} className="btn-primary">
+            <Plus size={18} /> Add Trade
+          </button>
+        }
+      />
+
+      <div className="card p-4 mb-6 flex flex-col sm:flex-row sm:items-end gap-3">
+        <div className="flex-1"><label className="block text-xs font-semibold text-secondary mb-1.5">View account</label><select className="input-field" value={accountFilter} onChange={e => setAccountFilter(e.target.value)}><option value="all">All accounts</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name} · {a.base_currency}</option>)}</select></div>
+        <div className="flex-1"><label className="block text-xs font-semibold text-secondary mb-1.5">Performance source</label><select className="input-field" value={source} onChange={e => setSource(e.target.value as 'live'|'backtest'|'forward')}><option value="live">Live trades</option><option value="backtest">Backtest logs</option><option value="forward">Forward test logs</option></select></div>
+        {source !== 'live' && <p className="text-xs text-muted sm:max-w-56">Simulated performance is shown separately from live account equity.</p>}
+      </div>
 
       {source === 'live' && <div className="card p-4 mb-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
         {account ? <><span className="text-secondary">Current balance</span><strong className="font-mono">{formatAccountMoney(currentBalance || 0, account.base_currency)}</strong><span className="text-xs text-muted">Opening balance plus closed trade P&amp;L</span></> : accounts.length ? <><span className="text-secondary">Balances by currency</span>{Array.from(balancesByCurrency).map(([currency, value]) => <strong key={currency} className="font-mono">{formatAccountMoney(value, currency)}</strong>)}</> : <span className="text-muted">Add a trading account to track account balance here.</span>}
@@ -163,7 +160,6 @@ export function DashboardPage() {
 
       {mixedCurrencyView && <div className="card px-4 py-3 mb-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs"><span className="font-semibold text-secondary">Closed P&amp;L by currency</span>{currencyTotals.length ? currencyTotals.map(([currency, pnl]) => <strong key={currency} className={`font-mono ${pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>{currency} {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}</strong>) : <span className="text-muted">No closed trades in this view.</span>}</div>}
 
-      <div className="cockpit-section-label">PERFORMANCE</div>
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard
@@ -225,7 +221,6 @@ export function DashboardPage() {
         />
       </div>
 
-      <div className="cockpit-section-label">RISK & EXECUTION</div>
       {/* Risk Guardian */}
       {source === 'live' && <div className="mb-6">
         <RiskGuardian trades={trades} settings={settings} account={account} plan={accountPlan} onConfigure={() => setShowRiskSettings(true)} />
@@ -236,7 +231,6 @@ export function DashboardPage() {
         <TradeCalculator />
       </div>
 
-      <div className="cockpit-section-label">TRENDS & ANALYTICS</div>
       {/* Equity curve + Daily P&L */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         <div className="card p-5 lg:col-span-2">
@@ -349,7 +343,6 @@ export function DashboardPage() {
         </div>
       </div>
 
-      <div className="cockpit-section-label">CONSISTENCY</div>
       {/* Activity Heatmap */}
       <div className="mb-6">
         <ActivityHeatmap trades={trades} />
@@ -366,7 +359,6 @@ export function DashboardPage() {
         <StrategyEdgeScore trades={trades} />
       </div>
 
-      <div className="cockpit-section-label">RECENT ACTIVITY</div>
       {/* Recent trades */}
       <div className="card p-5">
         <h3 className="text-sm font-semibold mb-4">Recent Trades</h3>
