@@ -632,3 +632,15 @@
 @media(prefers-reduced-motion:reduce) {
   .signature-landing [data-reveal] {opacity:1;filter:none;transform:none;}
 }
+
+/* Reusable performance tiles — quiet surfaces, differentiated semantic accent rails. */
+.premium-stat-card{--tile-accent:var(--brand);min-height:145px;}
+.premium-stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--tile-accent),transparent 85%);}
+.premium-stat-card::after{content:'';position:absolute;width:130px;height:130px;right:-62px;top:-70px;border-radius:50%;background:color-mix(in srgb,var(--tile-accent) 11%,transparent);pointer-events:none;}
+.premium-stat-card .premium-stat-icon{background:color-mix(in srgb,var(--tile-accent) 8%,var(--bg-secondary));}
+.metric-accent-blue{--tile-accent:var(--brand);}
+.metric-accent-emerald{--tile-accent:var(--success-text);}
+.metric-accent-amber{--tile-accent:var(--accent);}
+.metric-accent-rose{--tile-accent:var(--error-text);}
+@media(hover:hover){.premium-stat-card:hover{transform:translateY(-2px);box-shadow:0 18px 50px hsl(var(--shadow-color)/.12);}}
+@media(prefers-reduced-motion:reduce){.premium-stat-card:hover{transform:none;}}
