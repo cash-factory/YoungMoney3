@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Sparkles, TrendingUp, Lightbulb, AlertTriangle, CheckCircle, BarChart2, RefreshCw, ArrowUp, ArrowDown, Minus } from 'lucide-react';
-import { useTrades } from '@/hooks/useData';
+import { useTrades, useTradingAccounts } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
 import { generateAISummary, getPeriodTrades } from '@/lib/ai';
-import { formatCurrency, formatPercent } from '@/lib/utils';
+import { formatPercent } from '@/lib/utils';
+import { tradeCurrency } from '@/lib/tradeFinance';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import type { JournalType } from '@/lib/types';
@@ -11,13 +12,17 @@ import { format, subDays, subWeeks, startOfWeek, endOfWeek } from 'date-fns';
 
 export function AIInsightsPage() {
   const { user } = useAuth();
-  const { trades, loading } = useTrades(user?.id);
+  const { trades, loading, fetchTrades } = useTrades(user?.id);
+  const { accounts, loading: accountsLoading } = useTradingAccounts(user?.id);
+  const [accountFilter, setAccountFilter] = useState('all');
+  const filteredTrades = useMemo(() => accountFilter === 'all' ? trades
+    : trades.filter(trade => trade.account_id === accountFilter), [trades, accountFilter]);
   const [period, setPeriod] = useState<JournalType>('weekly');
   const [refDate, setRefDate] = useState(new Date());
   const [generating, setGenerating] = useState(false);
 
   const { currentTrades, previousTrades, periodLabel, prevLabel } = useMemo(() => {
-    const { current, previous } = getPeriodTrades(trades, refDate, period);
+    const { current, previous } = getPeriodTrades(filteredTrades, refDate, period);
     let label = '', prev = '';
     if (period === 'daily') {
       label = format(refDate, 'MMM d, yyyy');
@@ -32,16 +37,26 @@ export function AIInsightsPage() {
       prev = format(prevDate, 'MMMM yyyy');
     }
     return { currentTrades: current, previousTrades: previous, periodLabel: label, prevLabel: prev };
-  }, [trades, refDate, period]);
+  }, [filteredTrades, refDate, period]);
 
+  const currencies = [...new Set([...currentTrades, ...previousTrades].map(trade => tradeCurrency(trade, accounts)))];
+  const mixedCurrencies = currencies.length > 1 || currencies.some(currency => !/^[A-Z]{3}$/.test(currency));
+  const currency = currencies[0] || 'USD';
+  const money = (amount: number) => new Intl.NumberFormat(undefined, {
+    style: 'currency', currency: /^[A-Z]{3}$/.test(currency) ? currency : 'USD',
+  }).format(amount);
   const aiResult = useMemo(() => {
-    if (currentTrades.length === 0 && previousTrades.length === 0) return null;
-    return generateAISummary(currentTrades, previousTrades, period);
-  }, [currentTrades, previousTrades, period]);
+    if (mixedCurrencies || (currentTrades.length === 0 && previousTrades.length === 0)) return null;
+    return generateAISummary(currentTrades, previousTrades, period, currency);
+  }, [currentTrades, previousTrades, period, currency, mixedCurrencies]);
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setGenerating(true);
-    setTimeout(() => setGenerating(false), 600);
+    try {
+      await fetchTrades();
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const shiftPeriod = (dir: number) => {
@@ -52,7 +67,7 @@ export function AIInsightsPage() {
     setRefDate(d);
   };
 
-  if (loading) return <LoadingSpinner label="Loading insights..." />;
+  if (loading || accountsLoading) return <LoadingSpinner label="Loading insights..." />;
 
   return (
     <div>
@@ -61,10 +76,20 @@ export function AIInsightsPage() {
         subtitle="Rule-based analysis of your recorded trading patterns and performance"
         action={
           <button onClick={handleGenerate} disabled={generating} className="btn-primary">
-            <RefreshCw size={18} className={generating ? 'animate-spin' : ''} /> {generating ? 'Analyzing...' : 'Refresh Analysis'}
+            <RefreshCw size={18} className={generating ? 'animate-spin' : ''} /> {generating ? 'Refreshing...' : 'Refresh Analysis'}
           </button>
         }
       />
+
+      <div className="card p-4 mb-5">
+        <label className="block max-w-sm text-xs font-semibold text-secondary">Account
+          <select className="input-field mt-1.5" value={accountFilter} onChange={event => setAccountFilter(event.target.value)}>
+            <option value="all">All accounts (one currency at a time)</option>
+            {accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}
+          </select>
+        </label>
+        <p className="mt-2 text-xs text-muted">Insights describe closed trades by their close date. Results and comparisons are kept separate by settlement currency.</p>
+      </div>
 
       {/* Period selector */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-6">
@@ -88,8 +113,12 @@ export function AIInsightsPage() {
         </div>
       </div>
 
-      {generating ? (
-        <LoadingSpinner label="Analyzing your trading data..." />
+      {mixedCurrencies ? (
+        <div className="card p-8 text-sm text-secondary" role="status">
+          The selected period contains different settlement currencies or trades with an unknown currency. Select one account to view comparable performance insights without combining incompatible amounts.
+        </div>
+      ) : generating ? (
+        <LoadingSpinner label="Refreshing your trading data..." />
       ) : !aiResult ? (
         <div className="card p-8">
           <EmptyState icon={<Sparkles size={40} />} title="No data for this period" message="Add trades for this period to receive rule-based insights and suggestions." />
@@ -127,7 +156,7 @@ export function AIInsightsPage() {
                     const prevVal = aiResult.comparison.previous[key];
                     let actualDelta: number | null = null;
                     const metricMap: Record<string, string> = {
-                      'NetPL': 'totalPnl', 'Trades': 'totalTrades', 'WinRate': 'winRate',
+                      'NetP&L': 'totalPnl', 'Trades': 'totalTrades', 'WinRate': 'winRate',
                       'AvgWin': 'avgWin', 'AvgLoss': 'avgLoss', 'ProfitFactor': 'profitFactor',
                       'Expectancy': 'expectancy',
                     };
@@ -145,7 +174,7 @@ export function AIInsightsPage() {
                               actualDelta > 0 ? 'text-success-500' : actualDelta < 0 ? 'text-error-500' : 'text-muted'
                             }`}>
                               {actualDelta > 0 ? <ArrowUp size={12} /> : actualDelta < 0 ? <ArrowDown size={12} /> : <Minus size={12} />}
-                              {key === 'Win Rate' ? formatPercent(Math.abs(actualDelta)) : key === 'Trades' ? Math.abs(actualDelta) : formatCurrency(Math.abs(actualDelta))}
+                              {key === 'Win Rate' ? formatPercent(Math.abs(actualDelta)) : key === 'Trades' ? Math.abs(actualDelta) : key === 'Profit Factor' ? Math.abs(actualDelta).toFixed(2) : money(Math.abs(actualDelta))}
                             </span>
                           ) : (
                             <span className="text-muted text-xs">—</span>
