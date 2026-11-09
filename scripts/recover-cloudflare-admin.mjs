@@ -21,8 +21,11 @@ const config=JSON.parse(await readFile(resolve('wrangler.jsonc'),'utf8'));
 const db=config.d1_databases?.find(row=>row.binding==='DB');
 if(config.name!=='ym-fx' || db?.database_name!=='trade-journal-pro')
   throw Error('This operator tool only works with the explicit production Worker/D1 config.');
+const childEnv={...process.env};
+delete childEnv.OWNER_RECOVERY_PASSWORD;
+delete childEnv.OWNER_RECOVERY_CONFIRM;
 const invoke=command=>{
-  const result=spawnSync('npx',['wrangler','d1','execute',db.database_name,'--remote','--json','--command',command],{encoding:'utf8'});
+  const result=spawnSync('npx',['wrangler','d1','execute',db.database_name,'--remote','--json','--command',command],{encoding:'utf8',env:childEnv});
   if(result.status!==0)throw Error('Cloudflare query failed. Verify Wrangler credentials and D1 access.');
   const response=JSON.parse(result.stdout);
   return response.flatMap(item=>item.results||[]);
@@ -40,7 +43,7 @@ const folder=await mkdtemp(join(tmpdir(),'ym3-owner-recovery-'));
 try {
   const file=join(folder,'recovery.sql');
   await writeFile(file,statements,{mode:0o600});
-  const result=spawnSync('npx',['wrangler','d1','execute',db.database_name,'--remote','--file',file],{encoding:'utf8',stdio:['ignore','pipe','pipe']});
+  const result=spawnSync('npx',['wrangler','d1','execute',db.database_name,'--remote','--file',file],{encoding:'utf8',stdio:['ignore','pipe','pipe'],env:childEnv});
   if(result.status!==0)throw Error('Owner recovery write failed; inspect D1 audit and retry from a verified backup if needed.');
   const verify=invoke("SELECT password_hash,(SELECT COUNT(*) FROM sessions s WHERE s.user_id=u.id) AS sessions FROM users u WHERE id="+sql(userId)+" AND role='admin'");
   if(verify.length!==1 || verify[0].password_hash!==hash || Number(verify[0].sessions)!==0)
