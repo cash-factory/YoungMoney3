@@ -113,12 +113,33 @@ try {
   }})).status,400);
   await call('mt5/history-request',{link,days:30});
   const history=(await (await device('sync',{link,events:[]})).json()).history;
-  const older={...row,entry_time:'2026-01-01T00:00:00Z',exit_time:'2026-01-02T00:00:00Z'};
-  assert.equal((await device('sync',{link,events:[{kind:'history',key:'history:'+history.id+':close-99',fields:older}],history_done:history.id})).status,200);
+  const older={...row,entry_time:new Date(Date.now()-9*86400000).toISOString(),
+    exit_time:new Date(Date.now()-8*86400000).toISOString()};
+  const outside={...older,entry_time:new Date(Date.now()-50*86400000).toISOString(),
+    exit_time:new Date(Date.now()-45*86400000).toISOString()};
+  assert.equal((await call('mt5/history-preview',{link})).status,409,'Do not preview unfinished scans');
+  assert.equal((await device('sync',{link,events:[{kind:'history',key:'history:'+history.id+':close-outside',fields:outside}]})).status,200);
+  const keys=Array.from({length:102},(_,i)=>'history:'+history.id+':close-'+(1000+i));
+  for(let i=0;i<keys.length;i+=30) {
+    const events=keys.slice(i,i+30).map(key=>({kind:'history',key,fields:older}));
+    assert.equal((await device('sync',{link,events,history_done:i+30>=keys.length?history.id:undefined})).status,200);
+  }
   assert.equal((await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json()).count,1);
-  assert.equal((await (await call('mt5/history-preview',{link})).json()).rows.length,1);
-  for(let i=0;i<2;i++) assert.equal((await call('mt5/history-import',{link,request:history.id})).status,200);
-  assert.equal((await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json()).count,2);
+  const page1=(await (await call('mt5/history-preview',{link,offset:0})).json());
+  assert.equal(page1.rows.length,100);
+  assert.equal(page1.more,true);
+  const page2=(await (await call('mt5/history-preview',{link,offset:100})).json());
+  assert.equal(page2.rows.length,2);
+  assert.equal(page2.more,false);
+  assert.equal((await call('mt5/history-import',{link,request:history.id,expected_count:100})).status,409);
+  let more=true;
+  while(more) {
+    const result=await call('mt5/history-import',{link,request:history.id,expected_count:102});
+    assert.equal(result.status,200);
+    more=(await result.json()).more;
+  }
+  assert.equal((await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json()).count,103);
+  assert.equal((await (await call('mt5/history-import',{link,request:history.id,expected_count:102})).json()).added,0);
   await db.prepare("UPDATE users SET account_status='suspended'").run();
   assert.equal((await call('data',insert)).status,401);
   assert.equal((await device('sync',batch)).status,403);

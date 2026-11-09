@@ -26,7 +26,7 @@ export function Mt5Connections() {
   const [imported,setImported] = useState('');
   const [historyLink,setHistoryLink]=useState('');
   const [historyDays,setHistoryDays]=useState('30');
-  const [preview,setPreview]=useState<{rows:Record<string,unknown>[];more:boolean;status:string}|null>(null);
+  const [preview,setPreview]=useState<{rows:Record<string,unknown>[];more:boolean;status:string;nextOffset:number}|null>(null);
   const [historyBusy,setHistoryBusy]=useState(false);
   const [manual,setManual] = useState('');
   const refresh = useCallback(async () => {
@@ -64,12 +64,17 @@ export function Mt5Connections() {
     </label>
     {links.map(l=><div key={l.id} className="space-y-2"><p className="rounded-xl bg-secondary p-4 text-sm" key={l.id}>{l.company || 'Account'} {l.login} · {['pending','verifying'].includes(l.status) && l.expires<Date.now()?'expired':l.status} {l.broker_balance!=null && '· Broker balance '+l.broker_balance+' '+l.currency+' · Equity '+l.broker_equity+' '+l.currency} {l.last_error} {l.last_sync && '· Last sync '+new Date(l.last_sync).toLocaleString()} {l.gap ? '· Offline interval: intermediate stop changes may be missing.' : ''}</p>
       {l.status==='connected' && <div className="flex flex-wrap gap-2"><button className="btn-secondary" disabled={historyBusy || l.history_status==='requested'} onClick={()=>run(async()=>{await action('history-request',{link:l.id,days:Number(historyDays)});setPreview(null);})}>Find earlier trades</button>
-      {l.history_status==='requested' && <span role="status" className="text-sm">Scanning on your PC. Keep the connector running.</span>}
-      {['ready','imported'].includes(l.history_status || '') && <button className="btn-secondary" onClick={()=>run(async()=>{setHistoryLink(l.id);setPreview(await action('history-preview',{link:l.id}));})}>Review earlier trades</button>}</div>}
+      {l.history_status==='requested' && <><span role="status" className="text-sm">Scanning on your PC. Keep the connector running.</span>
+        <button className="btn-secondary" onClick={()=>run(async()=>{await action('history-decline',{link:l.id,request:l.history_id});setPreview(null);})}>Cancel scan</button></>}
+      {['ready','imported'].includes(l.history_status || '') && <button className="btn-secondary" onClick={()=>run(async()=>{setHistoryLink(l.id);setPreview(await action('history-preview',{link:l.id,offset:0}));})}>Review earlier trades</button>}</div>}
     </div>)}
-    {preview && <section className="rounded-xl border border-themed p-4 space-y-3"><h3 className="font-semibold">Load these earlier trades for analysis?</h3><p className="text-sm text-secondary">Previewing {preview.rows.length}{preview.more?' of many':''} broker fills. Import adds missing broker tickets. Review possible manual matches afterward. Your broker balance remains the latest reported balance.</p>
+    {preview && <section className="rounded-xl border border-themed p-4 space-y-3"><h3 className="font-semibold">Load these earlier trades for analysis?</h3><p className="text-sm text-secondary">Previewed {preview.rows.length} broker fills{preview.more?' (more pages remain)':''}. Open every page before importing; only the reviewed request will be imported. Review possible manual matches afterward. Your broker balance remains the latest reported balance.</p>
       <div className="overflow-auto max-h-64"><table className="w-full text-sm text-left"><thead><tr><th>Asset</th><th>Closed</th><th>Lots</th><th>Net P&amp;L</th></tr></thead><tbody>{preview.rows.map((r,i)=><tr key={i}><td>{String(r.pair)}</td><td>{String(r.exit_time)}</td><td>{String(r.lot_size)}</td><td>{String(r.pnl)}</td></tr>)}</tbody></table></div>
-      <button disabled={historyBusy} className="btn-primary" onClick={()=>{setHistoryBusy(true);void run(async()=>{const link=links.find(l=>l.id===historyLink);let more=true;while(more){more=(await action('history-import',{link:historyLink,request:link?.history_id})).more;}setPreview(null);await fetchTrades();}).finally(()=>setHistoryBusy(false));}}>Import earlier trades</button>
+      {preview.more && <button disabled={historyBusy} className="btn-secondary" onClick={()=>{setHistoryBusy(true);void run(async()=>{
+        const next=await action('history-preview',{link:historyLink,offset:preview.nextOffset});
+        setPreview(previous=>previous?{...next,rows:[...previous.rows,...next.rows]}:next);
+      }).finally(()=>setHistoryBusy(false));}}>Review next 100 fills</button>}
+      <button disabled={historyBusy || preview.more} className="btn-primary" onClick={()=>{setHistoryBusy(true);void run(async()=>{const link=links.find(l=>l.id===historyLink);let more=true;while(more){more=(await action('history-import',{link:historyLink,request:link?.history_id,expected_count:preview.rows.length})).more;}setPreview(null);await fetchTrades();}).finally(()=>setHistoryBusy(false));}}>Import {preview.rows.length} reviewed fills</button>
       <button disabled={historyBusy} className="btn-secondary" onClick={()=>run(async()=>{await action('history-decline',{link:historyLink,request:links.find(l=>l.id===historyLink)?.history_id});setPreview(null);})}>Skip import</button>
     </section>}
     </section>
