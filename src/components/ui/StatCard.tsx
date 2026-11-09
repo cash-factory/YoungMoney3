@@ -14,6 +14,7 @@ interface StatCardProps {
 export function StatCard({ label, value, sublabel, icon, trend, trendValue, accent = 'blue' }: StatCardProps) {
   const isNumeric = /^-?\d+(?:\.\d+)?$/.test(value.trim());
   const numericValue = isNumeric ? Number(value) : 0;
+  const decimals = isNumeric && value.includes('.') ? value.split('.')[1].length : 0;
 
   return (
     <section aria-label={label} className="ym-stat-card card relative overflow-hidden p-4 sm:p-5">
@@ -21,7 +22,7 @@ export function StatCard({ label, value, sublabel, icon, trend, trendValue, acce
         <div className="min-w-0">
           <p className="ym-stat-label text-[11px] font-semibold text-secondary uppercase tracking-[0.09em]">{label}</p>
           <p className="ym-stat-value mt-3 text-xl sm:text-2xl font-bold font-mono tracking-tight tabular-nums break-words">
-            {isNumeric ? <AnimatedCounter value={numericValue} /> : value}
+            {isNumeric ? <AnimatedCounter value={numericValue} format={v => decimals ? v.toFixed(decimals) : Math.round(v).toLocaleString()} /> : value}
           </p>
           {sublabel && <p className="mt-2 text-[11px] leading-relaxed text-muted break-words">{sublabel}</p>}
         </div>
