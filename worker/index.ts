@@ -224,7 +224,7 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
     if (input.action === 'update') {
       if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return response({ error: 'Supply a record patch.' }, 400);
       if (table === 'trades' && (
-        (!isFill && 'trade_source' in patch && patch.trade_source !== old.trade_source)
+        (!isFill && 'trade_source' in patch && patch.trade_source !== (old.trade_source ?? 'manual'))
         || (isFill && Object.keys(patch).some(key => !fillReviewFields.has(key)))
       )) {
         return response({ error: 'Trade provenance and broker execution fields are read-only.' }, 403);
