@@ -250,14 +250,15 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
         }
       }
       const normalized = table==='trades' && input.action==='insert' ? await normalizeTrade(item,user.id,env.DB) : item;
+      const cleanRecord: Record<string, unknown> = { ...normalized };
       if (table === 'trading_accounts') {
         // A user-provided backup must never impersonate an authenticated MT5 snapshot.
-        for (const key of ['broker_balance','broker_balance_at','broker_equity','broker_equity_at']) delete normalized[key];
+        for (const key of ['broker_balance','broker_balance_at','broker_equity','broker_equity_at']) delete cleanRecord[key];
       }
       // Backup restores preserve their original financial snapshot but cannot
       // restore dangling or cross-account references.
-      await assertOwnedLinks(table, normalized, user.id, env.DB);
-      const payload = { ...normalized, id: recordId, user_id: user.id };
+      await assertOwnedLinks(table, cleanRecord, user.id, env.DB);
+      const payload = { ...cleanRecord, id: recordId, user_id: user.id };
       const json = JSON.stringify(payload);
       const digest = await sha(json);
       const ignore = input.action === 'upsert' || (table === 'trades' && items.length === 1);
