@@ -7,6 +7,8 @@ const app=read('src/App.tsx'),layout=read('src/components/Layout.tsx');
 const theme=read('src/context/ThemeContext.ts');
 const palette=read('src/components/ColorPaletteControl.tsx');
 const landing=read('src/pages/LandingPage.tsx');
+const admin=read('src/pages/AdminOperationsPage.tsx');
+const connect=read('public/mt5-login.html');
 
 test('landing, login, optional setup and every workspace navigation target remain available',()=>{
   for(const marker of ['<LandingPage','<AuthPage','<OnboardingPage','<DashboardPage','<Mt5Connections']) {
@@ -30,4 +32,11 @@ test('premium palettes use unique identifiers, swatches and accent groups',()=>{
   }
   const triples=entries.map(m=>m.slice(4,7).join('-'));
   assert.equal(new Set(triples).size,triples.length,'Accent collections must be distinct');
+});
+
+test('admin operations stay on their own role-gated route; MT5 login is clearly capture-only',()=>{
+  assert.ok(app.includes("profile?.role === 'admin'"),'Admin page must be gated by role');
+  assert.ok(layout.includes("profile?.role === 'admin'"),'Admin navigation must be hidden for normal members');
+  assert.ok(admin.includes("Issue recovery code") && admin.includes("Revoke sessions") || admin.includes("revoke-sessions"),'Admin operations must offer account recovery and session controls');
+  assert.ok(connect.includes('investor or standard') && connect.includes('Capture only:'),'Broker connection must explain allowed credentials and lack of execution');
 });

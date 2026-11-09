@@ -98,7 +98,7 @@ export function AdminOperationsPage(){
         {recovery && <div className="rounded-xl border border-themed bg-secondary p-3 space-y-2">
           <p className="font-semibold text-sm">One-time code for {recovery.email}</p>
           <code className="block break-all select-all text-xs">{recovery.code}</code>
-          <button type="button" className="btn-secondary" onClick={()=>void navigator.clipboard.writeText(recovery.code).catch(()=>setFeedback({error:'Clipboard unavailable. Select the displayed code to copy it.'}))}><Copy size={14}/> Copy recovery code</button>
+          <button type="button" className="btn-secondary" onClick={()=>{if(navigator.clipboard?.writeText)void navigator.clipboard.writeText(recovery.code).catch(()=>setFeedback({error:'Clipboard unavailable. Select the displayed code to copy it.'}));else setFeedback({error:'Clipboard unavailable. Select the displayed code to copy it.'});}}><Copy size={14}/> Copy recovery code</button>
           <p className="text-xs text-muted">Expires {new Date(recovery.expires_at).toLocaleString()}. Displayed only here; send privately, not in a public issue. No automatic email has been sent.</p>
         </div>}
         <p className="text-xs text-muted">Changing your own administrator password remains in Account Settings. If the owner is locked out, use the secured Cloudflare operator recovery process rather than granting account recovery to anonymous visitors.</p>

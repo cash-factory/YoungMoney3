@@ -2,11 +2,11 @@
 
 Updated: 2026-11-09. **Status: release gates not yet satisfied.** A passing repository CI job proves code checks on fixtures; it does not prove safe operation with real users or an actual broker.
 
-## Scope of stabilization branch
+## Scope of consolidated stabilization and phased rollout
 
 The stabilization pull request corrects manual trade lifecycle validation, financial recalculation on edits, optimistic deletes, linked-record ownership checks, per-account risk policy consistency, daily Insights windows and currency summaries, and sign-out/profile races. It also splits the previously monolithic data hook library into domain modules without replacing page imports or the visual identity.
 
-## Required checks before merge
+## Required checks before deploying phased rollout
 
 - [ ] Full pull request CI green: lint, TypeScript, unit suite, Worker integration suite, Python ledger suite, Windows mocked MT5 terminal suite, production bundle.
 - [ ] Review all changed code, including financial calculations and migration impact; no unreviewed direct production deploy.
@@ -15,9 +15,12 @@ The stabilization pull request corrects manual trade lifecycle validation, finan
 - [ ] Complete browser smoke tests: landing, authentication, optional onboarding, page navigation, trade create/edit/delete, account filters, risk and Insights, backup/restore, admin console, error recovery, all palettes in light and dark modes.
 - [ ] Verify trade finances using broker-specific FX/metal/index/crypto/futures fixtures, fees, currency conversion, long/short, break-even, partial closes and account cash adjustments.
 - [ ] Reconcile two separate **demo** MT5 terminals with broker statements: new position, SL/TP changes, partial close, full close, restart, offline gap, replay, revoke and reconnect. Confirm replay is idempotent and totals match to the cent.
-- [ ] Run a full private media and journal backup **and restore drill** into an isolated environment. The user-facing JSON export is plaintext, not a managed disaster recovery system.
+- [ ] Run a full private media and journal backup **and restore drill** into an isolated environment. User exports now support passphrase encryption, but they are not a managed disaster recovery system.
 - [ ] Confirm monitoring, escalation contact, budget/quotas, D1/storage health, restore procedures and rollback steps.
-- [ ] Obtain approval from the repository owner before merging/deploying and expanding access.
+- [ ] Apply D1 migrations `0006`, `0007` and `0008` to isolated staging before deploying the corresponding Worker; verify admin recovery, account role protection, registration pause and MT5 mode compatibility.
+- [ ] Verify administrator password/one-time recovery code behavior with real staging sessions; test expired/used codes, sessions, owner break-glass recovery runbook and account deletion authorization.
+- [ ] Install GitHub branch rules requiring CI and review. CODEOWNERS alone does not enforce protection.
+- [ ] Obtain approval from the repository owner before deploying or expanding access.
 
 ## External and configuration work still required
 
@@ -37,11 +40,14 @@ npm run typecheck
 npm run lint
 npm test
 npm run test:worker
+npm run test:staging
+npm run test:ui
+node --test scripts/test-owner-recovery.mjs
 npm run build
 python -m unittest discover -s connector -p 'test_ledger.py'
 ```
 
-Run `python -m unittest discover -s connector -p 'test_terminal.py'` on a **Windows** environment with `connector/requirements.txt` installed. Cloudflare tests use synthetic D1 data; the real broker lifecycle requires Windows MT5 and dedicated demo terminals.
+Run `python -m unittest discover -s connector -p 'test_*.py'` on a **Windows** environment with `connector/requirements.txt` installed. Cloudflare tests use synthetic D1 data; the real broker lifecycle requires Windows MT5 and dedicated demo terminals.
 
 ## Pilot acceptance record
 
