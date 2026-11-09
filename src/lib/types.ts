@@ -108,6 +108,7 @@ export interface Trade {
   realized_r?: number | null;
   initial_risk?: number | null;
   planned_r?: number | null;
+  broker_details?: Record<string, string | number | boolean>;
   id: string;
   user_id: string | null;
   pair: string;
@@ -633,6 +634,8 @@ export interface TradingAccount {
   base_currency: string;
   balance: number;
   balance_as_of?: string;
+  broker_balance?: number;
+  broker_balance_at?: string;
   risk_per_trade_pct: number;
   default_strategy_id?: string | null;
   default_plan_id?: string | null;

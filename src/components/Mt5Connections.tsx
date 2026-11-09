@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTrades } from '@/hooks/useData';
 
 type Device = { id: string; last_seen: number };
-type Link = { id: string; company?: string; login?: string; status: string; last_sync?: string; broker_balance?:number;broker_equity?:number;currency?:string; gap?: number; last_error?: string; expires: number };
+type Link = { id: string; company?: string; login?: string; status: string; last_sync?: string; broker_balance?:number;broker_equity?:number;currency?:string; gap?: number; last_error?: string; expires: number;history_id?:string;history_status?:string };
 async function action(name: string, payload: unknown = {}) {
   const result = await fetch('/api/mt5/' + name, {method:'POST', headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
   const data = await result.json();
@@ -24,6 +24,10 @@ export function Mt5Connections() {
   const [error,setError] = useState('');
   const [demo,setDemo] = useState(true);
   const [imported,setImported] = useState('');
+  const [historyLink,setHistoryLink]=useState('');
+  const [historyDays,setHistoryDays]=useState('30');
+  const [preview,setPreview]=useState<{rows:Record<string,unknown>[];more:boolean;status:string}|null>(null);
+  const [historyBusy,setHistoryBusy]=useState(false);
   const [manual,setManual] = useState('');
   const refresh = useCallback(async () => {
     const data = await action('status');
@@ -55,7 +59,19 @@ export function Mt5Connections() {
       <h2 className="flex items-center gap-2 font-bold"><Link2 size={20} className="text-brand-500"/>Linked accounts</h2>
       <p className="text-sm text-secondary">{demo?'Demo accounts only during reconciliation.':'Demo and live accounts supported.'} Capture starts when you link each account.</p>
       {loaded && !links.length && <p className="rounded-xl bg-secondary p-4 text-sm text-secondary">No accounts linked yet.</p>}
-    {links.map(l=><p className="rounded-xl bg-secondary p-4 text-sm" key={l.id}>{l.company || 'Account'} {l.login} · {['pending','verifying'].includes(l.status) && l.expires<Date.now()?'expired':l.status} {l.broker_balance!=null && '· Broker balance '+l.broker_balance+' '+l.currency+' · Equity '+l.broker_equity+' '+l.currency} {l.last_error} {l.last_sync && '· Last sync '+new Date(l.last_sync).toLocaleString()} {l.gap ? '· Offline interval: intermediate stop changes may be missing.' : ''}</p>)}
+    <label className="block text-xs text-secondary">History lookback
+      <select className="input-field mt-1 max-w-xs" value={historyDays} onChange={e=>setHistoryDays(e.target.value)}><option value="30">30 days before linking</option><option value="365">1 year before linking</option><option value="3650">Up to 10 years before linking</option></select>
+    </label>
+    {links.map(l=><div key={l.id} className="space-y-2"><p className="rounded-xl bg-secondary p-4 text-sm" key={l.id}>{l.company || 'Account'} {l.login} · {['pending','verifying'].includes(l.status) && l.expires<Date.now()?'expired':l.status} {l.broker_balance!=null && '· Broker balance '+l.broker_balance+' '+l.currency+' · Equity '+l.broker_equity+' '+l.currency} {l.last_error} {l.last_sync && '· Last sync '+new Date(l.last_sync).toLocaleString()} {l.gap ? '· Offline interval: intermediate stop changes may be missing.' : ''}</p>
+      {l.status==='connected' && <div className="flex flex-wrap gap-2"><button className="btn-secondary" disabled={historyBusy || l.history_status==='requested'} onClick={()=>run(async()=>{await action('history-request',{link:l.id,days:Number(historyDays)});setPreview(null);})}>Find earlier trades</button>
+      {l.history_status==='requested' && <span role="status" className="text-sm">Scanning on your PC. Keep the connector running.</span>}
+      {['ready','imported'].includes(l.history_status || '') && <button className="btn-secondary" onClick={()=>run(async()=>{setHistoryLink(l.id);setPreview(await action('history-preview',{link:l.id}));})}>Review earlier trades</button>}</div>}
+    </div>)}
+    {preview && <section className="rounded-xl border border-themed p-4 space-y-3"><h3 className="font-semibold">Load these earlier trades for analysis?</h3><p className="text-sm text-secondary">Previewing {preview.rows.length}{preview.more?' of many':''} broker fills. Import adds missing broker tickets. Review possible manual matches afterward. Your broker balance remains the latest reported balance.</p>
+      <div className="overflow-auto max-h-64"><table className="w-full text-sm text-left"><thead><tr><th>Asset</th><th>Closed</th><th>Lots</th><th>Net P&amp;L</th></tr></thead><tbody>{preview.rows.map((r,i)=><tr key={i}><td>{String(r.pair)}</td><td>{String(r.exit_time)}</td><td>{String(r.lot_size)}</td><td>{String(r.pnl)}</td></tr>)}</tbody></table></div>
+      <button disabled={historyBusy} className="btn-primary" onClick={()=>{setHistoryBusy(true);void run(async()=>{const link=links.find(l=>l.id===historyLink);let more=true;while(more){more=(await action('history-import',{link:historyLink,request:link?.history_id})).more;}setPreview(null);await fetchTrades();}).finally(()=>setHistoryBusy(false));}}>Import earlier trades</button>
+      <button disabled={historyBusy} className="btn-secondary" onClick={()=>run(async()=>{await action('history-decline',{link:historyLink,request:links.find(l=>l.id===historyLink)?.history_id});setPreview(null);})}>Skip import</button>
+    </section>}
     </section>
     <dialog ref={dialog} aria-labelledby="mt5-dialog-title" className="mt5-dialog" onClose={()=>{setDevice('');void refresh().catch(e=>setError(e.message));}}>
       <header className="flex items-center justify-between border-b border-themed px-5 py-4"><h2 id="mt5-dialog-title" className="font-bold">Connect MT5 account</h2><button className="btn-ghost p-2" aria-label="Close login" onClick={()=>dialog.current?.close()}><X size={18}/></button></header>

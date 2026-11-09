@@ -127,11 +127,30 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
         with db: db.execute("UPDATE links SET verified=NULL WHERE link=?",(link,))
     account=terminal_account(slot,int(login),server,keyring.get_password(service,link),verify_password=False)
     end=int(time.time()*1000)
+    prior_clock=db.execute("SELECT offset FROM broker_clock WHERE link=?",(link,)).fetchone()
+    offset=prior_clock[0] if prior_clock else 0
+    candidates=records(mt5.positions_get())
+    symbols=[p["symbol"] for p in candidates]
+    if not symbols:
+        recent=records(mt5.history_deals_get(utc(end-86400000),utc(end+86400000)))
+        symbols=list(dict.fromkeys(d["symbol"] for d in recent if d["symbol"]))[-10:]
+    for symbol in symbols:
+        tick=mt5.symbol_info_tick(symbol)
+        if tick:
+            delta=tick.time_msc-end
+            rounded=round(delta/900000)*900000
+            if abs(delta-rounded)<30000 and abs(rounded)<=14*3600000:
+                offset=rounded
+                with db: db.execute("INSERT OR REPLACE INTO broker_clock VALUES(?,?)",(link,offset))
+                break
+    def normalize(rows):
+        return [{k:(v-offset if k.endswith("_msc") and v else v) for k,v in row.items()} for row in rows]
+
     # Advance a bounded history window on every cycle while catching up.
     until=min(end,cursor+86400000)
-    since=max(start,cursor-300000)
-    deals=records(mt5.history_deals_get(utc(since-1000),utc(until+1000)))
-    orders=records(mt5.history_orders_get(utc(since-1000),utc(until+1000)))
+    since=max(start,cursor-86400000)
+    deals=normalize(records(mt5.history_deals_get(utc(since+offset-1000),utc(until+offset+1000))))
+    orders=normalize(records(mt5.history_orders_get(utc(since+offset-1000),utc(until+offset+1000))))
     positions=records(mt5.positions_get())
     gap=bool(gap_pending or (last and end-last>60000))
     with db:
@@ -144,8 +163,13 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
         exits={d["position_id"] for d in deals if d["entry"] in (1,2,3) and d["type"] in (0,1) and start<=d["time_msc"]<=until}
         for pid in exits:
             position_orders={o["ticket"]:o for o in records(mt5.history_orders_get(position=pid))}
-            position_deals=records(mt5.history_deals_get(position=pid))
+            position_deals=normalize(records(mt5.history_deals_get(position=pid)))
             for leg in closed_legs(position_deals,start,position_orders):
+                previous_open=db.execute("SELECT payload FROM latest WHERE link=? AND key=?",(link,"open-"+str(pid))).fetchone()
+                if previous_open:
+                    previous_fields=json.loads(previous_open[0])["fields"]
+                    for level in ("stop_loss","take_profit"):
+                        leg["fields"][level]=leg["fields"].get(level) or previous_fields.get(level)
                 enqueue(link,leg["kind"],leg["key"],leg["fields"])
         previous={row[0] for row in db.execute("SELECT key FROM latest WHERE link=? AND key LIKE 'open-%' AND json_extract(payload,'$.kind')='trade'",(link,))}
         for p in positions:
@@ -153,7 +177,7 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
             key="open-"+ident
             previous.discard(key)
             fields={"pair":p["symbol"],"direction":"long" if p["type"]==0 else "short","status":"open",
-                    "entry_time":iso(p["time_msc"]),"entry_price":p["price_open"],"exit_price":None,"exit_time":None,
+                    "entry_time":iso(p["time_msc"]-offset),"entry_price":p["price_open"],"exit_price":None,"exit_time":None,
                     "pnl":0,"lot_size":p["volume"],"stop_loss":p["sl"] or None,"take_profit":p["tp"] or None,
                     "broker_details":{"position_id":ident,"ticket":str(p["ticket"]),"initial_risk_known":False}}
             prior=db.execute("SELECT payload FROM latest WHERE link=? AND key=?",(link,key)).fetchone()
@@ -168,8 +192,8 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
     # Acknowledged rows only. On restart, replay with unchanged broker ticket keys.
     for _ in range(5):
         page=db.execute("SELECT seq,payload FROM outbox WHERE link=? ORDER BY seq LIMIT 24",(link,)).fetchall()
-        if not page and not gap and end-heartbeats.get(link,0)<60000: break
-        post("sync",{"link":link,"events":[json.loads(row[1]) for row in page],"balance":account.balance,"equity":account.equity,"gap":gap},token)
+        if not page and not gap and end-heartbeats.get(link,0)<15000: break
+        response=post("sync",{"link":link,"events":[json.loads(row[1]) for row in page],"balance":account.balance,"equity":account.equity,"gap":gap},token)
         heartbeats[link]=end
         with db:
             if page: db.execute("DELETE FROM outbox WHERE link=? AND seq<=?",(link,page[-1][0]))
@@ -177,11 +201,36 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
         gap=False
         if len(page)<24: break
 
+    request=response.get("history") if "response" in locals() else None
+    if request and request["status"]=="requested":
+        request_id=str(request["id"])
+        work=db.execute("SELECT pid FROM history_work WHERE link=? AND request=? AND done=0 LIMIT 5",(link,request_id)).fetchall()
+        seeded=db.execute("SELECT 1 FROM history_seed WHERE link=? AND request=?",(link,request_id)).fetchone()
+        if not seeded:
+            history=normalize(records(mt5.history_deals_get(utc(request["since"]+offset-1000),utc(start+offset+1000))))
+            pids={d["position_id"] for d in history if d["type"] in (0,1) and d["entry"] in (1,2,3) and request["since"]<=d["time_msc"]<start}
+            with db:
+                db.executemany("INSERT OR IGNORE INTO history_work VALUES(?,?,?,0)",[(link,request_id,str(pid)) for pid in pids])
+                db.execute("INSERT INTO history_seed VALUES(?,?)",(link,request_id))
+            work=[(str(pid),) for pid in list(pids)[:5]]
+        for (pid,) in work:
+            history=normalize(records(mt5.history_deals_get(position=int(pid))))
+            orders={o["ticket"]:o for o in records(mt5.history_orders_get(position=int(pid)))}
+            with db:
+                for leg in closed_legs(history,0,orders):
+                    if request["since"]<=int(datetime.fromisoformat(leg["fields"]["exit_time"]).timestamp()*1000)<start:
+                        leg["fields"]["historical_import"]=True
+                        enqueue(link,"history","history:"+request_id+":"+leg["key"],leg["fields"])
+                db.execute("UPDATE history_work SET done=1 WHERE link=? AND request=? AND pid=?",(link,request_id,pid))
+        if not db.execute("SELECT 1 FROM history_work WHERE link=? AND request=? AND done=0",(link,request_id)).fetchone() and not db.execute("SELECT 1 FROM outbox WHERE link=?",(link,)).fetchone():
+            post("sync",{"link":link,"events":[],"history_done":request_id},token)
+
 if __name__=="__main__":
     parser=argparse.ArgumentParser()
     parser.add_argument("origin",help="HTTPS origin of your dashboard")
     parser.add_argument("slots",nargs="+",help="Full paths to dedicated portable MT5 terminal64.exe copies")
     parser.add_argument("--pair",action="store_true")
+    parser.add_argument("--sync-once",action="store_true",help="Reconcile saved accounts once, then exit")
     args=parser.parse_args()
     origin=args.origin.rstrip("/")
     parsed=urlsplit(origin)
@@ -220,6 +269,9 @@ if __name__=="__main__":
     db=sqlite3.connect(folder/"capture.db")
     db.executescript("""
         CREATE TABLE IF NOT EXISTS links(link TEXT PRIMARY KEY,slot TEXT UNIQUE,login TEXT,server TEXT,start INTEGER,cursor INTEGER,last INTEGER,verified TEXT,gap INTEGER);
+        CREATE TABLE IF NOT EXISTS broker_clock(link TEXT PRIMARY KEY,offset INTEGER);
+        CREATE TABLE IF NOT EXISTS history_seed(link TEXT,request TEXT,PRIMARY KEY(link,request));
+        CREATE TABLE IF NOT EXISTS history_work(link TEXT,request TEXT,pid TEXT,done INTEGER,PRIMARY KEY(link,request,pid));
         CREATE TABLE IF NOT EXISTS latest(link TEXT,key TEXT,payload TEXT,PRIMARY KEY(link,key));
         CREATE TABLE IF NOT EXISTS outbox(seq INTEGER PRIMARY KEY,link TEXT,payload TEXT);
         CREATE INDEX IF NOT EXISTS outbox_link ON outbox(link,seq);
@@ -232,7 +284,7 @@ if __name__=="__main__":
         while True:
             failed=False
             try:
-                if time.monotonic()>=next_poll:
+                if not args.sync_once and time.monotonic()>=next_poll:
                     job=post("poll",{},token)["job"]
                     if job: verify(job)
                     next_poll=time.monotonic()+20
@@ -245,7 +297,11 @@ if __name__=="__main__":
                     failed=True
                     print("Sync pending:",row[0][:8],type(exc).__name__,flush=True)
                 finally: mt5.shutdown()
+            if args.sync_once:
+                if failed: sys.exit(1)
+                break
             failures=min(failures+1,5) if failed else 0
             time.sleep(min(60,2**(failures+1)))
     except KeyboardInterrupt:
         mt5.shutdown()
+

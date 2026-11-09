@@ -63,6 +63,14 @@ try {
   const batch={link,events:[{kind:'trade',key:'close-42',fields:row}]};
   for(let i=0;i<2;i++) assert.equal((await device('sync',batch)).status,200);
   assert.equal((await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json()).count,1);
+  await call('mt5/history-request',{link,days:30});
+  const history=(await (await device('sync',{link,events:[]})).json()).history;
+  const older={...row,entry_time:'2026-01-01T00:00:00Z',exit_time:'2026-01-02T00:00:00Z'};
+  assert.equal((await device('sync',{link,events:[{kind:'history',key:'history:'+history.id+':close-99',fields:older}],history_done:history.id})).status,200);
+  assert.equal((await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json()).count,1);
+  assert.equal((await (await call('mt5/history-preview',{link})).json()).rows.length,1);
+  for(let i=0;i<2;i++) assert.equal((await call('mt5/history-import',{link,request:history.id})).status,200);
+  assert.equal((await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json()).count,2);
   await db.prepare("UPDATE users SET account_status='suspended'").run();
   assert.equal((await call('data',insert)).status,401);
   assert.equal((await device('sync',batch)).status,403);
