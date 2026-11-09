@@ -50,6 +50,37 @@ try {
   assert.equal((await call('data',patch)).status,409);
   const stats=await mf.dispatchFetch('https://journal.example/api/account-summaries',{headers:{cookie}});
   assert.equal((await stats.json()).rows[0].profit,'-5');
+
+  // A corrected manual trade must be recalculated at the Worker boundary, not trusted
+  // because a browser has submitted stale P&L or a changed trade direction.
+  const calculation={
+    price_increment:1,tick_value:1,conversion_rate:1,account_currency:'USD',
+    quantity_unit:'contracts',asset_class:'future',
+  };
+  const calculated={...row,id:'calculated-trade',calculation_snapshot:calculation,pnl:500};
+  assert.equal((await call('data',{action:'insert',table:'trades',payload:calculated})).status,200);
+  const before=(await (await call('data',{action:'select',table:'trades',filters:{id:calculated.id}})).json()).data[0];
+  assert.equal(before.pnl,-5);
+  const recalculated=await call('data',{action:'update',table:'trades',id:calculated.id,
+    filters:{updated_at:before.updated_at},payload:{direction:'short',pnl:-999}});
+  assert.equal(recalculated.status,200);
+  const after=(await recalculated.json()).data;
+  assert.equal(after.pnl,5);
+  assert.equal(after.outcome,'win');
+  assert.equal((await call('data',{action:'delete',table:'trades',id:calculated.id})).status,428);
+  assert.equal((await call('data',{action:'delete',table:'trades',id:calculated.id,
+    filters:{updated_at:before.updated_at}})).status,409);
+  assert.equal((await call('data',{action:'delete',table:'trades',id:calculated.id,
+    filters:{updated_at:after.updated_at}})).status,200);
+  assert.equal((await call('data',{action:'insert',table:'trades',payload:{
+    ...row,id:'invalid-lifecycle',status:'open',pnl:0,
+  }})).status,400);
+
+  // Legacy trades may not have an explicit source field: that still means manual.
+  const legacy=await call('data',{action:'update',table:'trades',id:row.id,
+    filters:{updated_at:(await (await call('data',{action:'select',table:'trades',filters:{id:row.id}})).json()).data[0].updated_at},
+    payload:{trade_source:'manual',notes:'Reviewed historical entry'}});
+  assert.equal(legacy.status,200);
   const code=(await (await call('mt5/pair',{})).json()).code;
   const claim={code,publicKey:'ZmFrZQ=='};
   const token=(await (await call('mt5/device/claim',claim)).json()).token;
