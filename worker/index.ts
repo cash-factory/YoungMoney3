@@ -223,8 +223,10 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
     if (input.action === 'delete' && isFill) return response({ error: 'Broker fills cannot be deleted from the journal.' }, 403);
     if (input.action === 'update') {
       if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return response({ error: 'Supply a record patch.' }, 400);
-      if (table === 'trades' && ((!isFill && 'trade_source' in patch && patch.trade_source !== old.trade_source)
-        || (isFill && Object.keys(patch).some(key => !fillReviewFields.has(key)))) {
+      if (table === 'trades' && (
+        (!isFill && 'trade_source' in patch && patch.trade_source !== old.trade_source)
+        || (isFill && Object.keys(patch).some(key => !fillReviewFields.has(key)))
+      )) {
         return response({ error: 'Trade provenance and broker execution fields are read-only.' }, 403);
       }
       if (table === 'trades' && !filters.updated_at) return response({ error: 'Refresh the trade before editing.' }, 428);
