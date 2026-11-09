@@ -35,7 +35,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if (owner) {
     if (action === 'status') {
       const devices = await q('SELECT id,public_key,last_seen FROM mt5_devices WHERE owner=? AND revoked=0 AND public_key IS NOT NULL', owner).all();
-      const links = await q('SELECT l.id,l.account_id,l.status,l.company,l.server,l.login,l.history_id,l.history_status,l.history_since,l.last_sync,l.broker_balance,l.broker_equity,l.currency,l.gap,l.last_error,l.expires FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND d.revoked=0', owner).all();
+      const links = await q('SELECT l.id,l.account_id,l.status,l.company,l.server,l.login,l.access_level,l.trade_mode,l.history_id,l.history_status,l.history_since,l.last_sync,l.broker_balance,l.broker_equity,l.currency,l.gap,l.last_error,l.expires FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND d.revoked=0', owner).all();
       const accounts=await q("SELECT id,json_extract(payload,'$.name') AS name FROM workspace_records WHERE user_id=? AND table_name='trading_accounts' ORDER BY created_at",owner).all();
       return json({ accounts:accounts.results, devices: devices.results, links: links.results, demoOnly: env.MT5_ALLOW_LIVE !== 'true' });
     }
@@ -147,24 +147,24 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if (action==='device/verified') {
     if (link.status==='connected') return json({ok:true});
     if (link.status!=='verifying' || link.expires<=unix) return fail('Login expired.',409);
-    if (!input.ok || (env.MT5_ALLOW_LIVE!=='true' && input.mode!==0)) {
+    if (!input.ok || (env.MT5_ALLOW_LIVE!=='true' && input.mode===2)) {
       const reasons: Record<string,string> = {
         terminal_start:'Could not attach to the dedicated terminal. Open its terminal64.exe with /portable, finish startup, then retry.',
         wrong_terminal:'MT5 opened a different data folder. Close the dedicated copy and open it with /portable.',
-        broker_rejected:'MT5 rejected authorization. Check the login ID, investor password and exact assigned server.',
+        broker_rejected:'MT5 rejected authorization. Check the account number, investor or standard password, and exact assigned server.',
         broker_login:'MT5 could not log in to this server. In the dedicated terminal use File → Open an Account, find your broker and select its assigned server, then retry.',
-        trading_access:'MT5 authenticated with trading permissions. Use the read-only investor password for this account.',
         disconnected:'MT5 did not establish a broker connection. Check the dedicated terminal’s Journal.',
         identity_mismatch:'The connected login or broker server differs from the requested account.',
         no_slot:'All configured terminals are in use. Add a separate portable installation for this account.',
         invalid_job:'The PC could not read this login request. Reopen the login form and retry.'
       };
-      const reason=Object.hasOwn(reasons,String(input.reason)) ? reasons[String(input.reason)] : 'Login failed. Check server, investor access and dedicated terminal availability.';
+      const reason=Object.hasOwn(reasons,String(input.reason)) ? reasons[String(input.reason)] : 'Login failed. Check server, account credentials and dedicated terminal availability.';
       const detail=Number.isSafeInteger(input.api_code) ? ' (MT5 code '+input.api_code+')' : '';
-      await q("UPDATE mt5_links SET status='failed',last_error=? WHERE id=?",input.ok?'Demo accounts only during verification.':reason+detail,link.id).run();
+      await q("UPDATE mt5_links SET status='failed',last_error=? WHERE id=?",input.ok?'Real accounts require an explicitly approved capture-only rollout. Demo and contest accounts can be linked.':reason+detail,link.id).run();
       return input.ok ? fail('Could not enable account.',409) : json({ok:true});
     }
     if (!limited(input.login,24)||!/^\d+$/.test(input.login)||!limited(input.server,128)||!limited(input.company,128)||!limited(input.currency,12)||typeof input.balance!=='number'||!Number.isFinite(input.balance)) return fail('Invalid account metadata.');
+    if(![0,1,2].includes(Number(input.mode))) return fail('Unsupported MT5 trading account mode.');
     const duplicate=await q("SELECT 1 FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND l.login=? AND l.server=? AND l.status='connected' AND d.revoked=0",device.owner,input.login,input.server).first();
     if(duplicate) return fail('Account already linked.',409);
     const prior=await q("SELECT payload FROM workspace_records WHERE id=? AND user_id=? AND table_name='trading_accounts'",link.account_id,device.owner).first<{payload:string}>();
@@ -176,7 +176,8 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       }
     }
     const time=now(), account={name:input.company+' · '+input.login,account_number:input.login,broker_name:input.company,base_currency:input.currency,balance:input.balance,balance_as_of:time,is_active:true,risk_per_trade_pct:1,user_id:device.owner};
-    await db.batch([q("UPDATE mt5_links SET status='connected',login=?,server=?,company=?,currency=?,linked_at=? WHERE id=?",input.login,input.server,input.company,input.currency,time,link.id),
+    const accessLevel=typeof input.trade_access==='boolean' ? (input.trade_access?'trading-enabled':'trading-restricted') : 'unknown';
+    await db.batch([q("UPDATE mt5_links SET status='connected',login=?,server=?,company=?,currency=?,linked_at=?,trade_mode=?,access_level=? WHERE id=?",input.login,input.server,input.company,input.currency,time,input.mode,accessLevel,link.id),
       q("INSERT INTO workspace_records(id,user_id,table_name,payload,created_at,updated_at) VALUES(?,?,'trading_accounts',?,?,?) ON CONFLICT(id) DO UPDATE SET payload=json_patch(workspace_records.payload,?),updated_at=excluded.updated_at WHERE workspace_records.user_id=excluded.user_id AND workspace_records.table_name='trading_accounts'",link.account_id,device.owner,JSON.stringify(account),time,time,JSON.stringify({broker_name:input.company,account_number:input.login}))]);
     return json({ok:true});
   }
