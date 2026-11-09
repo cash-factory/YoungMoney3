@@ -96,7 +96,33 @@ async function authRoute(request: Request, env: Env, path: string) {
   if (!emailKey || emailKey.length > 254) return response({ error: 'Valid email required.' }, 400);
   if (!await withinAuthBudget(env.DB, 'email:' + emailKey, 15)) return throttled();
   await env.DB.prepare('DELETE FROM auth_attempts WHERE window < ?').bind(Math.floor(Date.now() / 600000) - 1).run();
+  if (path === '/api/auth/recover') {
+    const email=input.email?.trim().toLowerCase() || '';
+    const code=input.code || '';
+    const password=input.password || '';
+    if(!/^[a-zA-Z0-9_-]{43}$/.test(code) || password.length<12 || password.length>256)
+      return response({error:'Invalid recovery code or password. Use at least 12 characters.'},400);
+    if(!await withinAuthBudget(env.DB,'recovery:'+email,5))return throttled();
+    const secured=await hashPassword(password);
+    const key=await sha(code);
+    const claimed=now(), nonce=id();
+    const results=await env.DB.batch([
+      env.DB.prepare("UPDATE recovery_codes SET used_at=?,used_nonce=? WHERE token_hash=? AND used_at IS NULL AND expires_at>? AND EXISTS(SELECT 1 FROM users u WHERE u.id=recovery_codes.user_id AND u.email=? AND u.account_status='active')")
+        .bind(claimed,nonce,key,claimed,email),
+      env.DB.prepare("UPDATE users SET password_hash=?,password_salt=?,updated_at=? WHERE id=(SELECT user_id FROM recovery_codes WHERE token_hash=? AND used_nonce=?) AND account_status='active'")
+        .bind(secured.hash,secured.salt,claimed,key,nonce),
+      env.DB.prepare("DELETE FROM sessions WHERE user_id=(SELECT user_id FROM recovery_codes WHERE token_hash=? AND used_nonce=?)")
+        .bind(key,nonce),
+    ]);
+    if(!results[0].meta.changes || !results[1].meta.changes)
+      return response({error:'Recovery code is invalid, expired or already used.'},400);
+    const redeemed=await env.DB.prepare('SELECT user_id FROM recovery_codes WHERE token_hash=? AND used_nonce=?').bind(key,nonce).first<{user_id:string}>();
+    if(redeemed)await audit(env.DB,null,redeemed.user_id,'account-recovered','success');
+    return response({ok:true,message:'Password changed. Sign in with the new password.'});
+  }
   if (path === '/api/auth/signup') {
+    const gate=await env.DB.prepare("SELECT value FROM site_settings WHERE key='signup_paused'").first<{value:string}>();
+    if(gate?.value==='true') return response({error:'Registration is temporarily paused by the workspace administrator.'},403);
     if (!env.PILOT_INVITE_CODE) return response({ error: 'Workspace sign-up has not been configured.' }, 503);
     if (!input.invite_code || input.invite_code.trim().toLowerCase() !== env.PILOT_INVITE_CODE.trim().toLowerCase()) return response({ error: 'Invalid pilot invite code.' }, 403);
     const accountCount = await env.DB.prepare('SELECT COUNT(*) AS total FROM users').first<{ total: number }>();
@@ -595,7 +621,29 @@ async function cleanupMemberMedia(env: Env, ownerId: string): Promise<void> {
 
 async function adminRoute(request: Request, env: Env, user: Record<string, unknown>) {
   if (user.role !== 'admin' || user.account_status !== 'active') return response({ error: 'Administrator access required.' }, 403);
-  const input = await jsonObject<{ action: string; targetUserId?: string }>(request);
+  const input = await jsonObject<{ action: string; targetUserId?: string; paused?: boolean; currentPassword?: string }>(request);
+  if(input.action==='overview') {
+    const users=await env.DB.prepare("SELECT COUNT(*) AS total,SUM(CASE WHEN role='member' THEN 1 ELSE 0 END) AS members,SUM(CASE WHEN account_status='suspended' THEN 1 ELSE 0 END) AS suspended FROM users").first();
+    const devices=await env.DB.prepare("SELECT COUNT(*) AS total,SUM(CASE WHEN revoked=0 THEN 1 ELSE 0 END) AS active FROM mt5_devices").first();
+    const links=await env.DB.prepare("SELECT COUNT(*) AS total,SUM(CASE WHEN status='connected' THEN 1 ELSE 0 END) AS connected FROM mt5_links").first();
+    const setting=await env.DB.prepare("SELECT value FROM site_settings WHERE key='signup_paused'").first<{value:string}>();
+    return response({users,devices,links,signupPaused:setting?.value==='true',database:'connected',backupAutomation:'external-configuration-required'});
+  }
+  if(input.action==='set-signups') {
+    if(typeof input.paused!=='boolean') return response({error:'Supply a boolean pause setting.'},400);
+    await env.DB.prepare("INSERT INTO site_settings(key,value,updated_at) VALUES('signup_paused',?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at")
+      .bind(input.paused?'true':'false',now()).run();
+    await audit(env.DB,String(user.id),null,'registration-gate','success',{paused:input.paused});
+    return response({ok:true,signupPaused:input.paused});
+  }
+  if(input.action==='revoke-own-other-sessions') {
+    const current=cookieToken(request);
+    if(!current) return response({error:'Current session missing.'},401);
+    const result=await env.DB.prepare('DELETE FROM sessions WHERE user_id=? AND token_hash<>?')
+      .bind(user.id,await sha(current)).run();
+    await audit(env.DB,String(user.id),String(user.id),'revoke-own-other-sessions','success',{count:result.meta.changes});
+    return response({ok:true,revoked:result.meta.changes});
+  }
   if (input.action === 'list') {
     const result = await env.DB.prepare(`
       SELECT u.id,u.email,u.username,u.display_name,u.role,u.account_status,u.created_at,u.suspended_at,u.suspension_expires_at,
@@ -612,9 +660,36 @@ async function adminRoute(request: Request, env: Env, user: Record<string, unkno
   if (!input.targetUserId || input.targetUserId === user.id) return response({ error: 'Choose another member; administrators cannot change their own access here.' }, 400);
   const target = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(input.targetUserId).first<Record<string, unknown>>();
   if (!target || target.role === 'admin') return response({ error: 'Member not found or protected.' }, 404);
+  if (input.action === 'revoke-sessions') {
+    const revoked=await env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(target.id).run();
+    await audit(env.DB,String(user.id),String(target.id),'revoke-sessions','success',{count:revoked.meta.changes});
+    return response({ok:true,revoked:revoked.meta.changes});
+  }
+  if (input.action === 'issue-recovery') {
+    if(target.account_status!=='active')return response({error:'Restore this member before issuing a recovery code.'},409);
+    if(!input.currentPassword)return response({error:'Confirm your administrator password.'},400);
+    const proof=await hashPassword(input.currentPassword,String(user.password_salt));
+    if(proof.hash!==user.password_hash)return response({error:'Administrator password verification failed.'},403);
+    if(!await withinAuthBudget(env.DB,'admin-recovery:'+String(target.id),3))return throttled();
+    const code=b64(crypto.getRandomValues(new Uint8Array(32))).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
+    const issued=now(), expiry=new Date(Date.now()+15*60*1000).toISOString();
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM recovery_codes WHERE user_id=?').bind(target.id),
+      env.DB.prepare('INSERT INTO recovery_codes(token_hash,user_id,issued_by,created_at,expires_at) VALUES(?,?,?,?,?)')
+        .bind(await sha(code),target.id,user.id,issued,expiry),
+    ]);
+    await audit(env.DB,String(user.id),String(target.id),'issue-recovery','success',{expires_at:expiry});
+    return response({code,expires_at:expiry,email:target.email});
+  }
+  if (input.action === 'revoke-recovery') {
+    const dropped=await env.DB.prepare('DELETE FROM recovery_codes WHERE user_id=? AND used_at IS NULL').bind(target.id).run();
+    await audit(env.DB,String(user.id),String(target.id),'revoke-recovery','success',{count:dropped.meta.changes});
+    return response({ok:true,revoked:dropped.meta.changes});
+  }
   if (input.action === 'suspend' || input.action === 'delete') {
     const suspendedAt = now();
     await env.DB.batch([
+      env.DB.prepare('DELETE FROM recovery_codes WHERE user_id=?').bind(target.id),
       env.DB.prepare("UPDATE users SET account_status='suspended',suspended_at=?,suspension_expires_at=NULL,updated_at=? WHERE id=?").bind(suspendedAt, suspendedAt, target.id),
       env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(target.id),
     ]);
@@ -667,7 +742,7 @@ export default {
         return ready?.ready === 1 ? response({ status: 'ok', database: 'connected' }) : response({ status: 'unavailable' }, 503);
       }
       if (request.method === 'POST' && pathname.startsWith('/api/mt5/device/')) return await mt5Route(request, env, null);
-      if (request.method === 'POST' && ['/api/auth/signup', '/api/auth/signin'].includes(pathname)) return await authRoute(request, env, pathname);
+      if (request.method === 'POST' && ['/api/auth/signup', '/api/auth/signin', '/api/auth/recover'].includes(pathname)) return await authRoute(request, env, pathname);
       const user = await currentUser(request, env.DB);
       if (!user) return response({ error: 'Authentication required.' }, 401);
       if(request.method==='GET' && pathname==='/api/account-summaries') return response({rows:await accountSummaries(env.DB,user.id)});
