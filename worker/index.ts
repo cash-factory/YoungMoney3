@@ -139,6 +139,59 @@ async function sessionRoute(request: Request, env: Env, user: Record<string, unk
   return response({ error: 'Unknown session action.' }, 404);
 }
 
+// Keep user-created entity links within the same private workspace.
+// Provider/catalog identifiers and seeded instrument IDs are deliberately not included.
+const workspaceLinks: Record<string, Record<string, string>> = {
+  trader_strategies: { plan_id: 'trading_plans' },
+  strategy_entry_models: { strategy_id: 'trader_strategies' },
+  strategy_checklist_items: { strategy_id: 'trader_strategies', entry_model_id: 'strategy_entry_models' },
+  pre_trade_checklist: { plan_id: 'trading_plans' },
+  trading_rules: { plan_id: 'trading_plans' },
+  trading_accounts: { broker_id: 'brokers', default_strategy_id: 'trader_strategies', default_plan_id: 'trading_plans' },
+  trading_account_adjustments: { account_id: 'trading_accounts' },
+  journal_entries: {
+    strategy_id: 'trader_strategies', plan_id: 'trading_plans',
+    setup_id: 'trading_setups', entry_model_id: 'strategy_entry_models',
+    account_id: 'trading_accounts',
+  },
+  backtest_results: {
+    strategy_id: 'trader_strategies', setup_id: 'trading_setups',
+    plan_id: 'trading_plans', entry_model_id: 'strategy_entry_models',
+    account_id: 'trading_accounts',
+  },
+  forward_trades: {
+    strategy_id: 'trader_strategies', setup_id: 'trading_setups',
+    plan_id: 'trading_plans', entry_model_id: 'strategy_entry_models',
+    account_id: 'trading_accounts',
+  },
+  strategy_test_sessions: {
+    strategy_id: 'trader_strategies', plan_id: 'trading_plans',
+    entry_model_id: 'strategy_entry_models', account_id: 'trading_accounts',
+    setup_id: 'trading_setups',
+  },
+  strategy_test_trades: {
+    session_id: 'strategy_test_sessions', account_id: 'trading_accounts',
+    setup_id: 'trading_setups', plan_id: 'trading_plans',
+    entry_model_id: 'strategy_entry_models',
+  },
+  weekly_reviews: {
+    strategy_id: 'trader_strategies', plan_id: 'trading_plans',
+    entry_model_id: 'strategy_entry_models', setup_id: 'trading_setups',
+    account_id: 'trading_accounts',
+  },
+};
+async function assertOwnedLinks(table: string, record: Record<string, unknown>, owner: unknown, db: D1Database) {
+  for (const [field, linkedTable] of Object.entries(workspaceLinks[table] || {})) {
+    const reference = record[field];
+    if (reference == null || reference === '') continue;
+    if (typeof reference !== 'string' || !await db.prepare(
+      'SELECT 1 FROM workspace_records WHERE user_id=? AND table_name=? AND id=?',
+    ).bind(owner, linkedTable, reference).first()) {
+      throw new RequestError(400, 'Invalid linked record: ' + field);
+    }
+  }
+}
+
 const fillReviewFields = new Set(['notes','lessons','mistakes','emotional_state','setup_quality','observations','what_went_wrong','strategy_id','setup_id','entry_model_id','plan_id','entry_screenshot_url','entry_voice_note_url','closure_screenshot_url','closure_voice_note_url','screenshot_url','voice_note_url','checklist_items','checklist_completed','checklist_override_reason']);
 // Financial or relationship edits must pass the same validation and settlement as new trades.
 // Annotation-only edits remain available for older imported journal records.
@@ -190,6 +243,7 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
         }
       }
       const normalized = table==='trades' && input.action==='insert' ? await normalizeTrade(item,user.id,env.DB) : item;
+      if (table !== 'trades') await assertOwnedLinks(table, normalized, user.id, env.DB);
       const payload = { ...normalized, id: recordId, user_id: user.id };
       const json = JSON.stringify(payload);
       const digest = await sha(json);
@@ -242,6 +296,11 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
       return result.meta.changes ? response({ data: null }) : response({ error: 'This record changed. Refresh before deleting.' }, 409);
     }
     const merged = { ...old, ...patch, user_id: user.id, id: input.id };
+    if (table !== 'trades') {
+      const changedLinks = Object.fromEntries(Object.entries(patch || {}).filter(([field, value]) =>
+        field in (workspaceLinks[table] || {}) && value !== old[field]));
+      await assertOwnedLinks(table, changedLinks, user.id, env.DB);
+    }
     const needsTradeRecalculation = table === 'trades' && !isFill
       && Object.keys(patch || {}).some(key => tradeRecalculationFields.has(key) && merged[key] !== old[key]);
     const payload = needsTradeRecalculation

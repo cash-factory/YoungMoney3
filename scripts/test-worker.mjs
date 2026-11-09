@@ -81,6 +81,17 @@ try {
     filters:{updated_at:(await (await call('data',{action:'select',table:'trades',filters:{id:row.id}})).json()).data[0].updated_at},
     payload:{trade_source:'manual',notes:'Reviewed historical entry'}});
   assert.equal(legacy.status,200);
+  // Non-trade relationships are owner-scoped too (including restore/upsert writes).
+  const accountId='owned-account';
+  assert.equal((await call('data',{action:'insert',table:'trading_accounts',
+    payload:{id:accountId,name:'Demo',base_currency:'USD',balance:100}})).status,200);
+  assert.equal((await call('data',{action:'insert',table:'trading_account_adjustments',
+    payload:{account_id:'missing-account',amount:10,reason:'Deposit'}})).status,400);
+  assert.equal((await call('data',{action:'upsert',table:'trading_account_adjustments',
+    payload:{id:'invalid-adjustment',account_id:'missing-account',amount:10,reason:'Deposit'}})).status,400);
+  assert.equal((await call('data',{action:'insert',table:'trading_account_adjustments',
+    payload:{id:'valid-adjustment',account_id:accountId,amount:10,reason:'Deposit'}})).status,200);
+
   const code=(await (await call('mt5/pair',{})).json()).code;
   const claim={code,publicKey:'ZmFrZQ=='};
   const token=(await (await call('mt5/device/claim',claim)).json()).token;
