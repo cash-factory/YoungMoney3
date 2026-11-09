@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 
 const source=readFileSync('public/mt5-brokers.js','utf8');
-const {normalizeBrokerName,buildBrokerRegistry,getBrokerMatches}=runInNewContext(
-  source+'\n({normalizeBrokerName,buildBrokerRegistry,getBrokerMatches})'
+const {normalizeBrokerName,buildBrokerRegistry,getBrokerMatches,getServerSuggestions,suggestServerFormats}=runInNewContext(
+  source+'\n({normalizeBrokerName,buildBrokerRegistry,getBrokerMatches,getServerSuggestions,suggestServerFormats})'
 );
 
 test('Just Markets, JustMarkets and spacing/punctuation variants find the same broker',()=>{
@@ -49,4 +49,50 @@ test('UI requires confirmed server and exposes accessible broker suggestions',()
   assert.match(source,/Select(ed)? broker|Selected broker/);
   assert.match(html,/not MT5's live global directory/);
   assert.match(html,/Capture only:/);
+});
+
+test('known MT5 servers match spaced or hyphenated user input without changing the stored server',()=>{
+  const links=[
+    {company:'Exness',server:'Exness-Real-9',status:'connected',trade_mode:0},
+    {company:'Exness',server:'Exness-MT5Real11',status:'connected',trade_mode:0},
+  ];
+  const registry=buildBrokerRegistry(links,true);
+  const one=getServerSuggestions('Exness Real 9',registry,'Exness',true);
+  assert.equal(one[0].name,'Exness-Real-9');
+  assert.equal(one[0].origin,'linked');
+  const two=getServerSuggestions('Exness Real 11',registry,'Exness',true);
+  assert.equal(two[0].name,'Exness-MT5Real11');
+  assert.equal(two[0].origin,'linked');
+});
+test('unknown server formatting candidates are always explicitly unverified',()=>{
+  const registry=buildBrokerRegistry([],true);
+  const matches=getServerSuggestions('Exness Real 9',registry,'Exness',true);
+  assert.ok(matches.some(item=>item.name==='Exness-Real-9'));
+  assert.ok(matches.some(item=>item.name==='Exness-MT5Real9'));
+  assert.ok(matches.every(item=>item.origin==='format'));
+  assert.equal(suggestServerFormats('WrongBroker Real 9','Exness').length,0);
+  assert.equal(getServerSuggestions('NoSuchBroker Real 9',registry,'',true).length,0);
+});
+test('live-account links never enter the trusted staging suggestions',()=>{
+  const registry=buildBrokerRegistry([
+    {company:'Exness',server:'Exness-MT5Real9',status:'connected',trade_mode:2},
+  ],true);
+  const matches=getServerSuggestions('Exness Real 9',registry,'Exness',true);
+  assert.ok(matches.length>0);
+  assert.ok(matches.every(item=>item.origin==='format'));
+  const allowed=buildBrokerRegistry([
+    {company:'Exness',server:'Exness-MT5Real9',status:'connected',trade_mode:2},
+  ],false);
+  const exact=getServerSuggestions('Exness Real 9',allowed,'Exness',false);
+  assert.equal(exact[0].name,'Exness-MT5Real9');
+  assert.equal(exact[0].origin,'linked');
+});
+test('server search is keyboard accessible and submit uses the literal selected server',()=>{
+  const html=readFileSync('public/mt5-login.html','utf8');
+  const login=readFileSync('public/mt5-login.js','utf8');
+  assert.match(html,/id="server-results" role="listbox"/);
+  assert.match(html,/id="server"[^>]*aria-autocomplete="list"/);
+  assert.match(source,/serverActive/);
+  assert.match(login,/byId\('server-choice'\)\.value \|\| byId\('server'\)\.value\.trim\(\)/);
+  assert.match(source,/NOT a verified server/);
 });
