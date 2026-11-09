@@ -25,6 +25,7 @@ import { BrokersChartingPage } from '@/pages/BrokersChartingPage';
 import { WeeklyReviewsPage } from '@/pages/WeeklyReviewsPage';
 import { StrategyLibraryPage } from '@/pages/StrategyLibraryPage';
 import { AccountSettingsPage } from '@/pages/AccountSettingsPage';
+import { AdminOperationsPage } from '@/pages/AdminOperationsPage';
 import { LoadingSpinner } from '@/components/ui/Feedback';
 import { supabase } from '@/lib/supabase';
 import { QuickCaptureModal } from '@/components/QuickCaptureModal';
@@ -36,7 +37,7 @@ const PAGE_IDS: PageId[] = [
   'dashboard', 'trades', 'calendar', 'analytics', 'journal', 'ai',
   'trading-plan', 'goals', 'risk-management', 'market-sessions', 'setups', 'strategy-testing',
   'strategies', 'resources', 'notes', 'study-material', 'brokers-charting', 'weekly-reviews',
-  'account-settings', 'mt5', 'workspace-setup',
+  'account-settings', 'admin-operations', 'mt5', 'workspace-setup',
 ];
 
 function pageFromLocation(): PageId {
@@ -141,6 +142,7 @@ function AppContent() {
         {page === 'weekly-reviews' && <WeeklyReviewsPage />}
         {page === 'mt5' && <Mt5Connections />}
         {page === 'account-settings' && <AccountSettingsPage />}
+        {page === 'admin-operations' && (profile?.role === 'admin' && profile.account_status === 'active' ? <AdminOperationsPage /> : <p role="alert" className="card p-4">This area is reserved for the workspace administrator.</p>)}
       </div>
       {quickAdd && <QuickCaptureModal open onClose={() => setQuickAdd(false)} />}
     </Layout>

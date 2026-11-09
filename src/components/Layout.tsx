@@ -6,7 +6,7 @@ import { DataBackupModal } from '@/components/DataBackupModal';
 import { DataRecoveryNotice } from '@/components/ui/DataRecoveryNotice';
 import { useAuth } from '@/context/AuthContext';
 
-export type PageId = 'dashboard' | 'trades' | 'calendar' | 'analytics' | 'journal' | 'ai' | 'trading-plan' | 'goals' | 'risk-management' | 'market-sessions' | 'setups' | 'strategy-testing' | 'strategies' | 'resources' | 'notes' | 'study-material' | 'brokers-charting' | 'weekly-reviews' | 'account-settings' | 'mt5' | 'workspace-setup';
+export type PageId = 'dashboard' | 'trades' | 'calendar' | 'analytics' | 'journal' | 'ai' | 'trading-plan' | 'goals' | 'risk-management' | 'market-sessions' | 'setups' | 'strategy-testing' | 'strategies' | 'resources' | 'notes' | 'study-material' | 'brokers-charting' | 'weekly-reviews' | 'account-settings' | 'admin-operations' | 'mt5' | 'workspace-setup';
 
 interface LayoutProps {
   current: PageId;
@@ -136,6 +136,12 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
               <Settings size={18} className={current === 'account-settings' ? 'text-orange-500' : ''} />
               Account Settings
             </button>
+            {profile?.role === 'admin' && profile.account_status === 'active' && <button type="button"
+              aria-current={current === 'admin-operations' ? 'page' : undefined}
+              onClick={() => handleNav('admin-operations')}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold ${current === 'admin-operations' ? 'bg-brand-500/10 text-brand-500' : 'text-secondary hover:bg-secondary hover:text-primary'}`}>
+              <Shield size={18} /> Admin Operations
+            </button>}
             <button type="button" aria-current={current === 'mt5' ? 'page' : undefined}
               onClick={() => handleNav('mt5')}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold ${current === 'mt5' ? 'bg-brand-500/10 text-brand-500' : 'text-secondary hover:bg-secondary hover:text-primary'}`}>
@@ -212,6 +218,7 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
                   <button onClick={() => { handleNav('account-settings'); setProfileMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-secondary hover:bg-secondary hover:text-primary transition-colors">
                     <Settings size={16} /> Account Settings
                   </button>
+                  {profile?.role === 'admin' && profile.account_status === 'active' && <button onClick={() => { handleNav('admin-operations'); setProfileMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-secondary hover:bg-secondary hover:text-primary transition-colors"><Shield size={16} /> Admin Operations</button>}
                   <button onClick={() => { setBackupOpen(true); setProfileMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-secondary hover:bg-secondary hover:text-primary transition-colors">
                     <Archive size={16} /> Data Backup & Restore
                   </button>
