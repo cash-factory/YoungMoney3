@@ -9,7 +9,7 @@ function closed(id: string, entry: Date, exit: Date, pnl: number): Trade {
     entry_time: entry.toISOString(), exit_time: exit.toISOString(), pnl,
     outcome: pnl > 0 ? 'win' : pnl < 0 ? 'loss' : 'breakeven',
     mistakes: [],
-  } as Trade;
+  } as unknown as Trade;
 }
 
 test('daily period includes the full close date and previous local calendar day', () => {
