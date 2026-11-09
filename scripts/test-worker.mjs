@@ -104,7 +104,13 @@ try {
   assert.equal((await device('verified',{link,ok:true,mode:0,login:'42',server:'Demo',company:'Fixtures',currency:'USD',balance:100})).status,200);
   const batch={link,events:[{kind:'trade',key:'close-42',fields:row}]};
   for(let i=0;i<2;i++) assert.equal((await device('sync',batch)).status,200);
-  assert.equal((await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json()).count,1);
+  const imported=(await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json());
+  assert.equal(imported.count,1);
+  assert.equal((await call('data',{action:'update',table:'trades',id:imported.data[0].id,
+    filters:{updated_at:imported.data[0].updated_at},payload:{strategy_id:'foreign-strategy'}})).status,400);
+  assert.equal((await call('data',{action:'upsert',table:'trades',payload:{
+    ...row,id:'forged-restore',account_id:'foreign-account',
+  }})).status,400);
   await db.prepare("UPDATE users SET account_status='suspended'").run();
   assert.equal((await call('data',insert)).status,401);
   assert.equal((await device('sync',batch)).status,403);

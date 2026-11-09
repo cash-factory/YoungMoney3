@@ -3,9 +3,7 @@ import {selectRecords} from './selectRecords';
 import { settleManualTrade } from '../src/lib/settleManualTrade';
 import type { TradeInput } from '../src/lib/types';
 async function normalizeTrade(item: Record<string,unknown>, owner: unknown, db: D1Database) {
-  for (const [field, table] of Object.entries({account_id:'trading_accounts', strategy_id:'trader_strategies', plan_id:'trading_plans', setup_id:'trading_setups', instrument_id:'market_instruments', entry_model_id:'strategy_entry_models'})) {
-    if (item[field] != null && !await db.prepare('SELECT id FROM workspace_records WHERE user_id=? AND table_name=? AND id=?').bind(owner,table,item[field]).first()) throw new RequestError(400,'Invalid linked record: '+field);
-  }
+  await assertOwnedLinks('trades', item, owner, db);
   try { return settleManualTrade(item as unknown as TradeInput); }
   catch (e) { throw new RequestError(400,e instanceof Error ? e.message : 'Invalid trade.'); }
 }
@@ -142,6 +140,15 @@ async function sessionRoute(request: Request, env: Env, user: Record<string, unk
 // Keep user-created entity links within the same private workspace.
 // Provider/catalog identifiers and seeded instrument IDs are deliberately not included.
 const workspaceLinks: Record<string, Record<string, string>> = {
+  trades: {
+    account_id: 'trading_accounts', strategy_id: 'trader_strategies',
+    plan_id: 'trading_plans', setup_id: 'trading_setups',
+    instrument_id: 'market_instruments', entry_model_id: 'strategy_entry_models',
+  },
+  mt5_review: {
+    strategy_id: 'trader_strategies', plan_id: 'trading_plans',
+    setup_id: 'trading_setups', entry_model_id: 'strategy_entry_models',
+  },
   trader_strategies: { plan_id: 'trading_plans' },
   strategy_entry_models: { strategy_id: 'trader_strategies' },
   strategy_checklist_items: { strategy_id: 'trader_strategies', entry_model_id: 'strategy_entry_models' },
@@ -243,7 +250,9 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
         }
       }
       const normalized = table==='trades' && input.action==='insert' ? await normalizeTrade(item,user.id,env.DB) : item;
-      if (table !== 'trades') await assertOwnedLinks(table, normalized, user.id, env.DB);
+      // Backup restores preserve their original financial snapshot but cannot
+      // restore dangling or cross-account references.
+      await assertOwnedLinks(table, normalized, user.id, env.DB);
       const payload = { ...normalized, id: recordId, user_id: user.id };
       const json = JSON.stringify(payload);
       const digest = await sha(json);
@@ -296,10 +305,11 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
       return result.meta.changes ? response({ data: null }) : response({ error: 'This record changed. Refresh before deleting.' }, 409);
     }
     const merged = { ...old, ...patch, user_id: user.id, id: input.id };
-    if (table !== 'trades') {
+    if (table !== 'trades' || isFill) {
+      const linkTable = isFill ? 'mt5_review' : table;
       const changedLinks = Object.fromEntries(Object.entries(patch || {}).filter(([field, value]) =>
-        field in (workspaceLinks[table] || {}) && value !== old[field]));
-      await assertOwnedLinks(table, changedLinks, user.id, env.DB);
+        field in (workspaceLinks[linkTable] || {}) && value !== old[field]));
+      await assertOwnedLinks(linkTable, changedLinks, user.id, env.DB);
     }
     const needsTradeRecalculation = table === 'trades' && !isFill
       && Object.keys(patch || {}).some(key => tradeRecalculationFields.has(key) && merged[key] !== old[key]);
