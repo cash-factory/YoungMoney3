@@ -151,7 +151,7 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
             <div className="p-2 rounded-xl bg-gradient-to-br from-orange-500 to-orange-700 text-white shadow-lg shadow-orange-500/20">
               <TrendingUp size={22} />
             </div>
-            <span className="font-bold text-base tracking-tight">Young-Money-Fx</span>
+            <span className="font-bold text-base tracking-tight hidden sm:inline">Young-Money-Fx</span><span className="font-bold text-sm tracking-tight sm:hidden">YM / FX</span>
           </div>
           <div className="hidden md:flex items-center gap-1">
             <a href="#platform" className="btn-ghost text-sm">Platform</a>
@@ -162,7 +162,8 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
           <div className="flex items-center gap-2">
             <ColorPaletteControl compact />
             <button onClick={onEnter} className="btn-primary text-sm">
-              {session ? 'Open Dashboard' : 'Get Started'}
+              <span className="hidden sm:inline">{session ? 'Open Dashboard' : 'Get Started'}</span>
+              <span className="sm:hidden">{session ? 'Open' : 'Enter'}</span>
               <ArrowRight size={16} />
             </button>
           </div>
@@ -194,7 +195,7 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
           </div>
 
           {/* Headline */}
-          <h1 className="text-5xl sm:text-6xl lg:text-[4.5rem] font-extrabold tracking-tight leading-[1.02] animate-slide-up" style={{ animationDelay: '0.05s' }}>
+          <h1 className="text-[2.75rem] sm:text-6xl lg:text-[4.5rem] font-extrabold tracking-[-0.05em] leading-[1.04] animate-slide-up" style={{ animationDelay: '0.05s' }}>
             Make every trade
             <br />
             <span className="text-gradient animate-gradient-shift" style={{ backgroundSize: '200% auto' }}>teach you something.</span>
