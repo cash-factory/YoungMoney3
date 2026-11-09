@@ -2,7 +2,7 @@ import type { Trade, PatternInsight, ComparisonData, DashboardStats } from './ty
 import {
   computeDashboardStats, groupByPair, groupByDayOfWeek, groupByDirection, groupBySession, groupByStrategy,
   formatPercent,
-} from './utils';
+} from './utils.ts';
 import { parseISO, startOfDay, endOfDay, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 
 type MoneyFormatter = (amount: number) => string;
