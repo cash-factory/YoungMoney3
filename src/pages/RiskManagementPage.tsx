@@ -1,22 +1,28 @@
 import { useState } from 'react';
 import { Shield, Save, AlertTriangle, TrendingDown, Wallet, Percent, Gauge } from 'lucide-react';
-import { useRiskSettings, useTrades } from '@/hooks/useData';
+import { useRiskSettings, useTrades, useTradingAccounts, useTradingPlans } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { StatCard } from '@/components/ui/StatCard';
 import type { RiskSettingsInput } from '@/lib/types';
 import { formatCurrency } from '@/lib/utils';
-import { format, parseISO, subDays, isAfter } from 'date-fns';
+import { accountRiskOptions } from '@/lib/riskPolicy';
+import { calculateRiskMetrics } from '@/lib/riskMetrics';
+import { parseISO, subDays, isAfter } from 'date-fns';
 
 export function RiskManagementPage() {
   const { user } = useAuth();
   const { settings, loading, saveSettings } = useRiskSettings(user?.id);
   const { trades } = useTrades(user?.id);
+  const { accounts, loading: accountsLoading } = useTradingAccounts(user?.id);
+  const { plans } = useTradingPlans(user?.id);
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [form, setForm] = useState<RiskSettingsInput | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
-  if (loading) return <LoadingSpinner label="Loading risk settings..." />;
+  if (loading || accountsLoading) return <LoadingSpinner label="Loading risk settings..." />;
 
   const current = form || (settings ? {
     max_daily_loss_pct: settings.max_daily_loss_pct,
@@ -34,36 +40,39 @@ export function RiskManagementPage() {
     daily_loss_limit_amount: null,
   });
 
-  // Today's P&L and risk metrics
-  const today = format(new Date(), 'yyyy-MM-dd');
-  const todayTrades = trades.filter(t => t.status === 'closed' && format(parseISO(t.entry_time), 'yyyy-MM-dd') === today);
-  const todayPnl = todayTrades.reduce((s, t) => s + t.pnl, 0);
-  const todayLoss = -Math.min(0, todayPnl);
-  const dailyLossLimit = current.daily_loss_limit_amount || (current.account_balance * current.max_daily_loss_pct / 100);
-  const dailyLossPct = dailyLossLimit > 0 ? (todayLoss / dailyLossLimit) * 100 : 0;
+  // Use the same account limits, close-date and reset-timezone rules as Risk Guardian.
+  // Portfolio-wide totals are intentionally not combined across settlement currencies.
+  const account = accounts.find(item => item.id === selectedAccountId) || accounts[0] || null;
+  const plan = plans.find(item => item.id === account?.default_plan_id) || null;
+  const metrics = account ? calculateRiskMetrics(trades, accountRiskOptions(account, current, plan)) : null;
+  const accountTrades = account ? trades.filter(trade => trade.account_id === account.id) : [];
+  const todayPnl = metrics?.todayPnl ?? 0;
+  const todayLoss = metrics?.dailyLossUsed ?? 0;
+  const dailyLossLimit = metrics?.dailyLossLimitAmount ?? 0;
+  const dailyLossPct = metrics?.dailyLossPctUsed ?? 0;
+  const maxDD = metrics?.maxDrawdown ?? 0;
+  const formatMoney = (value: number) => new Intl.NumberFormat(undefined, {
+    style: 'currency', currency: account?.base_currency || 'USD', maximumFractionDigits: 2,
+  }).format(value);
 
-  // 7-day rolling stats
   const sevenDaysAgo = subDays(new Date(), 7);
-  const weekTrades = trades.filter(t => t.status === 'closed' && isAfter(parseISO(t.entry_time), sevenDaysAgo));
-  const weekPnl = weekTrades.reduce((s, t) => s + t.pnl, 0);
-  const weekLosses = weekTrades.filter(t => t.outcome === 'loss');
-  const avgLoss = weekLosses.length ? Math.abs(weekLosses.reduce((s, t) => s + t.pnl, 0) / weekLosses.length) : 0;
-
-  // Max drawdown calc
-  let peak = 0, maxDD = 0, running = 0;
-  const sortedClosed = [...trades].filter(t => t.status === 'closed').sort((a, b) => new Date(a.entry_time).getTime() - new Date(b.entry_time).getTime());
-  sortedClosed.forEach(t => {
-    running += t.pnl;
-    if (running > peak) peak = running;
-    const dd = peak - running;
-    if (dd > maxDD) maxDD = dd;
-  });
+  const weekTrades = accountTrades.filter(trade => trade.status === 'closed'
+    && !!trade.exit_time && isAfter(parseISO(trade.exit_time), sevenDaysAgo));
+  const weekPnl = weekTrades.reduce((sum, trade) => sum + trade.pnl, 0);
+  const weekLosses = weekTrades.filter(trade => trade.outcome === 'loss');
+  const avgLoss = weekLosses.length ? Math.abs(weekLosses.reduce((sum, trade) => sum + trade.pnl, 0) / weekLosses.length) : 0;
 
   const handleSave = async () => {
     setSaving(true);
-    await saveSettings(current);
-    setForm(null);
-    setSaving(false);
+    setSaveError('');
+    try {
+      await saveSettings(current);
+      setForm(null);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Could not save risk settings.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const update = (field: keyof RiskSettingsInput, value: number | null) => {
@@ -85,11 +94,22 @@ export function RiskManagementPage() {
         }
       />
 
+      <div className="card p-4 mb-6">
+        <label className="block max-w-sm text-xs font-semibold text-secondary">Risk view by account
+          <select className="input-field mt-1.5" value={account?.id || ''} onChange={event => setSelectedAccountId(event.target.value)}>
+            {accounts.length === 0 && <option value="">No accounts configured</option>}
+            {accounts.map(item => <option key={item.id} value={item.id}>{item.name} · {item.base_currency}</option>)}
+          </select>
+        </label>
+        <p className="mt-2 text-xs text-muted">Realized results use the selected account's close date and reset timezone. Global settings are defaults; account and plan limits can be stricter.</p>
+      </div>
+      {saveError && <p className="mb-4 text-sm text-error-500" role="alert">{saveError}</p>}
+      {account ? <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Today's P&L" value={formatCurrency(todayPnl)} icon={<Wallet size={20} />} accent={todayPnl >= 0 ? 'emerald' : 'rose'} trend={todayPnl >= 0 ? 'up' : 'down'} trendValue={formatCurrency(Math.abs(todayPnl))} />
-        <StatCard label="Daily Loss Used" value={`${dailyLossPct.toFixed(1)}%`} icon={<AlertTriangle size={20} />} accent={dailyLossPct > 80 ? 'rose' : 'amber'} sublabel={`Limit: ${formatCurrency(dailyLossLimit)}`} />
-        <StatCard label="Max Drawdown" value={formatCurrency(maxDD)} icon={<TrendingDown size={20} />} accent="rose" sublabel={`Limit: ${current.max_drawdown_pct}%`} />
-        <StatCard label="7-Day P&L" value={formatCurrency(weekPnl)} icon={<Gauge size={20} />} accent={weekPnl >= 0 ? 'emerald' : 'amber'} sublabel={`${weekTrades.length} trades`} />
+        <StatCard label="Today's P&L" value={formatMoney(todayPnl)} icon={<Wallet size={20} />} accent={todayPnl >= 0 ? 'emerald' : 'rose'} trend={todayPnl >= 0 ? 'up' : 'down'} trendValue={formatMoney(Math.abs(todayPnl))} />
+        <StatCard label="Daily Loss Used" value={`${dailyLossPct.toFixed(1)}%`} icon={<AlertTriangle size={20} />} accent={dailyLossPct > 80 ? 'rose' : 'amber'} sublabel={`Limit: ${formatMoney(dailyLossLimit)}`} />
+        <StatCard label="Max Drawdown" value={formatMoney(maxDD)} icon={<TrendingDown size={20} />} accent="rose" sublabel={`Limit: ${current.max_drawdown_pct}%`} />
+        <StatCard label="7-Day P&L" value={formatMoney(weekPnl)} icon={<Gauge size={20} />} accent={weekPnl >= 0 ? 'emerald' : 'amber'} sublabel={`${weekTrades.length} trades`} />
       </div>
 
       {/* Daily loss progress bar */}
@@ -101,7 +121,7 @@ export function RiskManagementPage() {
               Daily Loss Limit
             </p>
             <span className={`text-sm font-mono ${dailyLossPct > 80 ? 'text-error-500' : 'text-secondary'}`}>
-              {formatCurrency(todayLoss)} / {formatCurrency(dailyLossLimit)}
+              {formatMoney(todayLoss)} / {formatMoney(dailyLossLimit)}
             </span>
           </div>
           <div className="h-3 rounded-full bg-secondary overflow-hidden">
@@ -116,13 +136,15 @@ export function RiskManagementPage() {
         </div>
       )}
 
+      </> : <div className="card p-4 mb-6 text-sm text-secondary">Add a trading account to see currency-specific daily loss and drawdown metrics.</div>}
+
       {/* Risk Settings Form */}
       <div className="card p-6">
-        <h2 className="text-base font-bold mb-4 flex items-center gap-2"><Shield size={18} className="text-brand-500" /> Risk Parameters</h2>
+        <h2 className="text-base font-bold mb-4 flex items-center gap-2"><Shield size={18} className="text-brand-500" /> Workspace Risk Defaults</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
-            <label className={labelCls}>Account Balance ($)</label>
+            <label className={labelCls}>Reference Balance (USD)</label>
             <input type="number" className={inputCls} value={current.account_balance} onChange={e => update('account_balance', parseFloat(e.target.value) || 0)} />
           </div>
           <div>
@@ -142,21 +164,21 @@ export function RiskManagementPage() {
             <input type="number" step="0.1" className={inputCls} value={current.max_drawdown_pct} onChange={e => update('max_drawdown_pct', parseFloat(e.target.value) || 0)} />
           </div>
           <div>
-            <label className={labelCls}>Daily Loss Limit ($)</label>
+            <label className={labelCls}>Daily Loss Limit (USD)</label>
             <input type="number" className={inputCls} value={current.daily_loss_limit_amount ?? ''} onChange={e => update('daily_loss_limit_amount', e.target.value ? parseFloat(e.target.value) : null)} placeholder="Optional override" />
           </div>
         </div>
 
-        {/* Calculated values */}
+        <p className="mt-3 text-xs text-muted">Reference balance and USD amount are workspace-level settings; the selected account's actual balance, currency, and stricter limits determine its risk readout.</p>
         <div className="mt-6 pt-4 border-t border-themed grid grid-cols-2 md:grid-cols-4 gap-4">
-          <CalcBox label="Risk per Trade ($)" value={formatCurrency(current.account_balance * current.max_risk_per_trade_pct / 100)} icon={<Percent size={14} />} />
-          <CalcBox label="Daily Loss Limit ($)" value={formatCurrency(current.daily_loss_limit_amount || current.account_balance * current.max_daily_loss_pct / 100)} icon={<AlertTriangle size={14} />} />
-          <CalcBox label="Max Drawdown ($)" value={formatCurrency(current.account_balance * current.max_drawdown_pct / 100)} icon={<TrendingDown size={14} />} />
-          <CalcBox label="Avg Loss (7d)" value={formatCurrency(avgLoss)} icon={<Gauge size={14} />} />
+          <CalcBox label="Risk per Trade" value={account && metrics ? formatMoney(account.balance * metrics.maxRiskPerTradePct / 100) : formatCurrency(current.account_balance * current.max_risk_per_trade_pct / 100)} icon={<Percent size={14} />} />
+          <CalcBox label="Daily Loss Limit" value={account ? formatMoney(dailyLossLimit) : formatCurrency(current.daily_loss_limit_amount ?? current.account_balance * current.max_daily_loss_pct / 100)} icon={<AlertTriangle size={14} />} />
+          <CalcBox label="Max Drawdown Limit" value={account && metrics ? formatMoney(account.balance * metrics.maxDrawdownPctLimit / 100) : formatCurrency(current.account_balance * current.max_drawdown_pct / 100)} icon={<TrendingDown size={14} />} />
+          <CalcBox label="Avg Loss (7d)" value={account ? formatMoney(avgLoss) : 'Select account'} icon={<Gauge size={14} />} />
         </div>
       </div>
 
-      {trades.length === 0 && (
+      {account && accountTrades.length === 0 && (
         <div className="mt-6">
           <div className="card p-6">
             <EmptyState icon={<Wallet size={36} />} title="No trade data yet" message="Once you start logging trades, your risk dashboard will show daily exposure, drawdown, and loss tracking." />
