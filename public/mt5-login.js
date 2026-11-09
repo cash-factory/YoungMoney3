@@ -36,7 +36,7 @@ document.querySelector('form').addEventListener('submit',async event=>{
     const wrapped=await crypto.subtle.wrapKey('raw',key,pub,'RSA-OAEP');
     const result=await api('connect',{device:device.id,account:byId('account').value,envelope:{iv:base64(iv),data:base64(data),wrapped:base64(wrapped)}});
     status.textContent='Waiting for your PC to verify the account…';
-    for (let attempt=0;attempt<24;attempt++) {
+    for (let attempt=0;attempt<32;attempt++) {
       await new Promise(resolve=>setTimeout(resolve,4000));
       const link=(await api('status',{})).links.find(l=>l.id===result.id);
       if(link?.status==='connected'){status.textContent='Connected to '+link.company+' · '+link.login+'. View sync status in MT5 Connections.'; return;}

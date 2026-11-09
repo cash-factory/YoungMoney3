@@ -54,6 +54,37 @@ def enqueue(link, kind, key, fields):
     db.execute("INSERT OR REPLACE INTO latest VALUES(?,?,?)",(link,key,payload))
     db.execute("INSERT INTO outbox(link,payload) VALUES(?,?)",(link,payload))
 
+class LoginFailure(Exception):
+    def __init__(self, reason, api_code=None):
+        super().__init__(reason)
+        self.reason = reason
+        self.api_code = api_code
+
+
+def terminal_account(slot, login, server, password, verify_password):
+    """Attach to this portable terminal; authenticate with its broker server directory."""
+    if not mt5.initialize(slot, portable=True, timeout=30000):
+        raise LoginFailure("terminal_start", mt5.last_error()[0])
+    terminal = mt5.terminal_info()
+    if not terminal or Path(terminal.data_path).resolve() != Path(slot).resolve().parent:
+        raise LoginFailure("wrong_terminal")
+    info = mt5.account_info()
+    matches = info and info.login == login and info.server.casefold() == server.casefold()
+    if verify_password or not terminal.connected or not matches or info.trade_allowed:
+        if not mt5.login(login, password=password, server=server, timeout=30000):
+            code = mt5.last_error()[0]
+            raise LoginFailure("broker_rejected" if code == -6 else "broker_login", code)
+    info = mt5.account_info()
+    terminal = mt5.terminal_info()
+    if not info or not terminal or not terminal.connected:
+        raise LoginFailure("disconnected")
+    if info.login != login or info.server.casefold() != server.casefold():
+        raise LoginFailure("identity_mismatch")
+    if info.trade_allowed:
+        raise LoginFailure("trading_access")
+    return info
+
+
 def verify(job):
     from binascii import Error as Base64Error
     key=serialization.load_der_private_key(base64.b64decode(keyring.get_password(service,"private-a")+keyring.get_password(service,"private-b")),None)
@@ -64,15 +95,19 @@ def verify(job):
         settings=json.loads(AESGCM(aes).decrypt(base64.b64decode(env["iv"]),base64.b64decode(env["data"]),None))
         login, server = int(settings["login"]),settings["server"]
         used={r[0] for r in db.execute("SELECT slot FROM links")}
-        slot=next(s for s in slots if s not in used)
-        if not mt5.initialize(slot, portable=True,timeout=15000,login=login,password=settings["password"],server=server):
-            raise ValueError("Authentication failed")
-        info=mt5.account_info()
-        if not info or info.login!=login or info.server!=server or info.trade_allowed:
-            raise ValueError("Read-only verification failed")
-    except (ValueError,TypeError,KeyError,StopIteration,Base64Error):
-        post("verified",{"link":job["id"],"ok":False},token)
+        slot=next((s for s in slots if s not in used),None)
+        if slot is None:
+            raise LoginFailure("no_slot")
+        info=terminal_account(slot,login,server,settings["password"],verify_password=True)
+        server=info.server
+    except (ValueError,TypeError,KeyError,Base64Error,LoginFailure) as error:
+        reason = error.reason if isinstance(error, LoginFailure) else "invalid_job"
+        code = error.api_code if isinstance(error, LoginFailure) else None
+        print("MT5 verification failed:", reason, code if code is not None else "", flush=True)
+        post("verified",{"link":job["id"],"ok":False,"reason":reason,"api_code":code},token)
         return
+    finally:
+        mt5.shutdown()
     start=int(time.time()*1000)
     # Persist link details before acknowledgement so an ambiguous network failure can be retried.
     msg={"link":job["id"],"ok":True,"login":str(login),"server":server,"company":info.company,
@@ -91,11 +126,7 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
             keyring.delete_password(service,link)
             return
         with db: db.execute("UPDATE links SET verified=NULL WHERE link=?",(link,))
-    if not mt5.initialize(slot,portable=True,timeout=10000,login=int(login),server=server,password=keyring.get_password(service,link)):
-        raise RuntimeError("MT5 offline")
-    account=mt5.account_info()
-    if not account or str(account.login)!=login or account.server!=server or account.trade_allowed:
-        raise RuntimeError("Read-only account identity changed")
+    account=terminal_account(slot,int(login),server,keyring.get_password(service,link),verify_password=False)
     end=int(time.time()*1000)
     # Advance a bounded history window on every cycle while catching up.
     until=min(end,cursor+86400000)

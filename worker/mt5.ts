@@ -91,7 +91,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     await q("UPDATE mt5_links SET envelope=NULL,status='expired' WHERE device=? AND status IN ('pending','verifying') AND expires<=?",device.id,unix).run();
     const job=await q("SELECT id,envelope FROM mt5_links WHERE device=? AND status='pending' AND expires>? ORDER BY expires LIMIT 1",device.id,unix).first<{id:string;envelope:string}>();
     if (!job) return json({job:null});
-    const claimed=await q("UPDATE mt5_links SET status='verifying',envelope=NULL WHERE id=? AND status='pending'",job.id).run();
+    const claimed=await q("UPDATE mt5_links SET status='verifying',envelope=NULL,expires=? WHERE id=? AND status='pending'",unix+90000,job.id).run();
     return json({ job: claimed.meta.changes ? {id:job.id,envelope:JSON.parse(job.envelope)} : null });
   }
   if (!limited(input.link,64)) return fail('Missing link.');
@@ -101,8 +101,21 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     if (link.status==='connected') return json({ok:true});
     if (link.status!=='verifying' || link.expires<=unix) return fail('Login expired.',409);
     if (!input.ok || (env.MT5_ALLOW_LIVE!=='true' && input.mode!==0)) {
-      await q("UPDATE mt5_links SET status='failed',last_error=? WHERE id=?",input.ok?'Demo accounts only during verification.':'Login failed. Check server, investor access and dedicated terminal availability.',link.id).run();
-      return fail('Could not enable account.',409);
+      const reasons: Record<string,string> = {
+        terminal_start:'Could not attach to the dedicated terminal. Open its terminal64.exe with /portable, finish startup, then retry.',
+        wrong_terminal:'MT5 opened a different data folder. Close the dedicated copy and open it with /portable.',
+        broker_rejected:'MT5 rejected authorization. Check the login ID, investor password and exact assigned server.',
+        broker_login:'MT5 could not log in to this server. In the dedicated terminal use File → Open an Account, find your broker and select its assigned server, then retry.',
+        trading_access:'MT5 authenticated with trading permissions. Use the read-only investor password for this account.',
+        disconnected:'MT5 did not establish a broker connection. Check the dedicated terminal’s Journal.',
+        identity_mismatch:'The connected login or broker server differs from the requested account.',
+        no_slot:'All configured terminals are in use. Add a separate portable installation for this account.',
+        invalid_job:'The PC could not read this login request. Reopen the login form and retry.'
+      };
+      const reason=Object.hasOwn(reasons,String(input.reason)) ? reasons[String(input.reason)] : 'Login failed. Check server, investor access and dedicated terminal availability.';
+      const detail=Number.isSafeInteger(input.api_code) ? ' (MT5 code '+input.api_code+')' : '';
+      await q("UPDATE mt5_links SET status='failed',last_error=? WHERE id=?",input.ok?'Demo accounts only during verification.':reason+detail,link.id).run();
+      return input.ok ? fail('Could not enable account.',409) : json({ok:true});
     }
     if (!limited(input.login,24)||!/^\d+$/.test(input.login)||!limited(input.server,128)||!limited(input.company,128)||!limited(input.currency,12)||typeof input.balance!=='number'||!Number.isFinite(input.balance)) return fail('Invalid account metadata.');
     const duplicate=await q("SELECT 1 FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND l.login=? AND l.server=? AND l.status='connected' AND d.revoked=0",device.owner,input.login,input.server).first();

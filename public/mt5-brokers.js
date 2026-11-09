@@ -4,6 +4,8 @@
 // https://community.deriv.com/t/deriv-mt5-login-error-authorization-failed-invalid-account-error-message/50035
 // https://www.mql5.com/en/docs/python_metatrader5/mt5login_py
 const mt5Directory = [
+  // https://help.fundednext.com/en/articles/10725745-how-do-i-log-in-to-the-mt5-platform-pc
+  {broker:'FundedNext',demo:['FundedNext-Server 3'],live:[]},
   {broker:'Deriv', demo:['Deriv-Demo'], live:['DerivBVI-Server','DerivBVI-Server-02','DerivBVI-Server-03']},
   {broker:'OANDA Global Markets Limited',demo:['OANDA_Global-Demo-1'],live:['OANDA_Global-Live-1']},
   {broker:'MetaQuotes',demo:['MetaQuotes-Demo'],live:[]}
