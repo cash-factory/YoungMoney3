@@ -4,7 +4,11 @@
 :root{--bg-card:#181311;--bg-secondary:#211b16;--text-primary:#f5f0eb;--text-secondary:#c5b8ae;--border:#584738;--brand:#fb923c;color-scheme:dark}
 *{box-sizing:border-box}body{max-width:32rem;margin:0 auto;padding:1.25rem 1.5rem;font:15px/1.45 system-ui;color:var(--text-primary);background:var(--bg-card)}p{color:var(--text-secondary);margin:0 0 1rem}h1{font-size:1.4rem}form{display:grid;gap:.85rem}label{font-weight:600;font-size:.86rem}select,input,button{width:100%;padding:.68rem .8rem;border-radius:.65rem;font:inherit}select,input{margin-top:.3rem;background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border)}:focus-visible{outline:2px solid var(--brand);outline-offset:2px}button{cursor:pointer;background:var(--text-primary);color:var(--bg-card);border:0;font-weight:700}button:disabled{opacity:.65}a{color:var(--brand)}#status{margin-top:1rem}.embedded a,.embedded h1{display:none}
 </style></head>
-<body><a href="/#mt5">MT5 Connections</a><h1>Connect MT5 account</h1><p>Enter the broker server exactly as shown in MT5. Use the investor password for read-only access.</p>
-<form><label>Journal account<select id="account"><option value="">Create a new journal account</option></select></label><label>Account number<input id="login" inputmode="numeric" pattern="[0-9]{1,20}" maxlength="20" required></label><label>Broker server<input id="server" maxlength="128" required></label>
+<body><a href="/#mt5">MT5 Connections</a><h1>Connect MT5 account</h1><p>Search for your broker, then select the server assigned to your account in MT5.</p>
+<form><label>Broker<input id="broker" type="search" list="broker-options" placeholder="Search brokers" autocomplete="off" maxlength="128"></label>
+<datalist id="broker-options"></datalist>
+<label>Trading server<select id="server-choice"><option value="">Enter server manually</option></select></label>
+<label id="manual-server">Broker server<input id="server" maxlength="128" placeholder="Exact name shown in MT5" required></label>
+<label>Journal account<select id="account"><option value="">Create a new journal account</option></select></label><label>Account number<input id="login" inputmode="numeric" pattern="[0-9]{1,20}" maxlength="20" required></label>
 <label>Investor password<input id="password" type="password" maxlength="128" autocomplete="off" required></label><button>Verify with my PC</button></form><p role="status" id="status"></p>
-<script src="/mt5-login.js" defer></script></body></html>
+<script src="/mt5-brokers.js" defer></script><script src="/mt5-login.js" defer></script></body></html>

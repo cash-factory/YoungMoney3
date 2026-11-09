@@ -17,7 +17,7 @@ const api = async (action, data) => {
   if (!result.ok) throw Error(value.error || 'Connection failed.');
   return value;
 };
-api('status',{}).then(result=>{for(const account of result.accounts) byId('account').add(new Option(account.name,account.id));}).catch(()=>{byId('status').textContent='Sign in to your dashboard to link an account.';});
+api('status',{}).then(result=>{populateMt5Brokers(result);for(const account of result.accounts) byId('account').add(new Option(account.name,account.id));}).catch(()=>{byId('status').textContent='Sign in to your dashboard to link an account.';});
 document.querySelector('form').addEventListener('submit',async event=>{
   event.preventDefault();
   const button=event.currentTarget.querySelector('button');
@@ -29,7 +29,7 @@ document.querySelector('form').addEventListener('submit',async event=>{
     const pub=await crypto.subtle.importKey('spki',Uint8Array.from(atob(device.public_key),c=>c.charCodeAt(0)),{name:'RSA-OAEP',hash:'SHA-256'},false,['wrapKey']);
     const key=await crypto.subtle.generateKey({name:'AES-GCM',length:256},true,['encrypt']);
     const iv=crypto.getRandomValues(new Uint8Array(12));
-    const bytes=new TextEncoder().encode(JSON.stringify({login:byId('login').value,server:byId('server').value.trim(),password:byId('password').value}));
+    const bytes=new TextEncoder().encode(JSON.stringify({login:byId('login').value,server:byId('server-choice').value || byId('server').value.trim(),password:byId('password').value}));
     byId('password').value='';
     const data=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,bytes);
     bytes.fill(0);
