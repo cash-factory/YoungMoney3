@@ -9,6 +9,7 @@ interface Destination {
   keywords?: string;
 }
 const destinations: Destination[] = [
+  { id: 'mt5', label: 'MT5 Connections', section: 'Workspace', keywords: 'pair PC MetaTrader broker login' },
   { id: 'dashboard', label: 'Overview', section: 'Workspace', keywords: 'home performance' },
   { id: 'trades', label: 'Trade ledger', section: 'Journal', keywords: 'transactions capture' },
   { id: 'journal', label: 'Journal', section: 'Journal', keywords: 'reflection' },

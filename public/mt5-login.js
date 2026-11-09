@@ -1,3 +1,14 @@
+if (window.parent !== window && window.parent.location.origin === location.origin) {
+  document.body.classList.add('embedded');
+  const theme = getComputedStyle(window.parent.document.documentElement);
+  for (const key of ['--bg-card','--bg-secondary','--text-primary','--text-secondary','--border','--brand']) {
+    document.documentElement.style.setProperty(key, theme.getPropertyValue(key));
+  }
+  document.documentElement.style.colorScheme = window.parent.document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+  window.addEventListener('keydown', event => {
+    if (event.key === 'Escape') window.frameElement?.closest('dialog')?.close();
+  });
+}
 const byId = id => document.getElementById(id);
 const base64 = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes)));
 const api = async (action, data) => {
@@ -28,9 +39,9 @@ document.querySelector('form').addEventListener('submit',async event=>{
     for (let attempt=0;attempt<24;attempt++) {
       await new Promise(resolve=>setTimeout(resolve,4000));
       const link=(await api('status',{})).links.find(l=>l.id===result.id);
-      if(link?.status==='connected'){status.textContent='Connected to '+link.company+' · '+link.login+'. Return to Account settings to view sync status.'; return;}
+      if(link?.status==='connected'){status.textContent='Connected to '+link.company+' · '+link.login+'. View sync status in MT5 Connections.'; return;}
       if(link && ['failed','expired','revoked'].includes(link.status)) throw Error(link.last_error || 'Login expired. Retry with the connector online.');
     }
-    throw Error('Verification timed out. Check Account settings for the latest result.');
+    throw Error('Verification timed out. Check MT5 Connections for the latest result.');
   } catch(e){status.textContent=e.message;} finally{button.disabled=false;}
 });

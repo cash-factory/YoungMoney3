@@ -1,12 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { LayoutDashboard, CandlestickChart, Calendar, BarChart3, BookOpen, Sparkles, Menu, X, TrendingUp, Plus, LogOut, ChevronDown, ChevronRight, ClipboardList, Target, FlaskConical, Shield, CalendarClock, LayoutTemplate, BookMarked, StickyNote, GraduationCap, CreditCard, ClipboardCheck, MoreHorizontal, Archive, Settings, Search } from 'lucide-react';
+import { LayoutDashboard, CandlestickChart, Calendar, BarChart3, BookOpen, Sparkles, Menu, X, TrendingUp, Plus, LogOut, ChevronDown, ChevronRight, ClipboardList, Target, FlaskConical, Shield, CalendarClock, LayoutTemplate, BookMarked, StickyNote, GraduationCap, CreditCard, ClipboardCheck, MoreHorizontal, Archive, Settings, Search, Monitor } from 'lucide-react';
 import { CommandPalette } from '@/components/CommandPalette';
 import { ColorPaletteControl } from '@/components/ColorPaletteControl';
 import { DataBackupModal } from '@/components/DataBackupModal';
 import { DataRecoveryNotice } from '@/components/ui/DataRecoveryNotice';
 import { useAuth } from '@/context/AuthContext';
 
-export type PageId = 'dashboard' | 'trades' | 'calendar' | 'analytics' | 'journal' | 'ai' | 'trading-plan' | 'goals' | 'risk-management' | 'market-sessions' | 'setups' | 'strategy-testing' | 'strategies' | 'resources' | 'notes' | 'study-material' | 'brokers-charting' | 'weekly-reviews' | 'account-settings';
+export type PageId = 'dashboard' | 'trades' | 'calendar' | 'analytics' | 'journal' | 'ai' | 'trading-plan' | 'goals' | 'risk-management' | 'market-sessions' | 'setups' | 'strategy-testing' | 'strategies' | 'resources' | 'notes' | 'study-material' | 'brokers-charting' | 'weekly-reviews' | 'account-settings' | 'mt5';
 
 interface LayoutProps {
   current: PageId;
@@ -134,6 +134,11 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
             >
               <Settings size={18} className={current === 'account-settings' ? 'text-orange-500' : ''} />
               Account Settings
+            </button>
+            <button type="button" aria-current={current === 'mt5' ? 'page' : undefined}
+              onClick={() => handleNav('mt5')}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold ${current === 'mt5' ? 'bg-brand-500/10 text-brand-500' : 'text-secondary hover:bg-secondary hover:text-primary'}`}>
+              <Monitor size={18} /> MT5 Connections
             </button>
             {NAV_SECTIONS.map(section => {
               const isExpanded = !!expanded[section.id];

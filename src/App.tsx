@@ -37,7 +37,7 @@ const PAGE_IDS: PageId[] = [
   'dashboard', 'trades', 'calendar', 'analytics', 'journal', 'ai',
   'trading-plan', 'goals', 'risk-management', 'market-sessions', 'setups', 'strategy-testing',
   'strategies', 'resources', 'notes', 'study-material', 'brokers-charting', 'weekly-reviews',
-  'account-settings',
+  'account-settings', 'mt5',
 ];
 
 function pageFromLocation(): PageId {
@@ -153,7 +153,8 @@ function AppContent() {
         {page === 'study-material' && <StudyMaterialPage />}
         {page === 'brokers-charting' && <BrokersChartingPage />}
         {page === 'weekly-reviews' && <WeeklyReviewsPage />}
-        {page === 'account-settings' && <><AccountSettingsPage /><Mt5Connections /></>}
+        {page === 'mt5' && <Mt5Connections />}
+        {page === 'account-settings' && <AccountSettingsPage />}
       </div>
       {quickAdd && <QuickCaptureModal open onClose={() => setQuickAdd(false)} />}
     </Layout>

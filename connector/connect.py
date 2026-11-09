@@ -27,7 +27,7 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 def post(action, data, token=None):
-    headers = {"Content-Type":"application/json"}
+    headers = {"Content-Type":"application/json", "User-Agent":"YoungMoney3-MT5-Connector/1.0 (Python; Windows)"}
     if token:
         headers["Authorization"] = "Bearer " + token
     req = urllib.request.Request(origin+"/api/mt5/device/"+action, json.dumps(data).encode(), headers)
@@ -166,7 +166,18 @@ if __name__=="__main__":
     if args.pair:
         private=rsa.generate_private_key(public_exponent=65537,key_size=2048)
         pub=private.public_key().public_bytes(serialization.Encoding.DER,serialization.PublicFormat.SubjectPublicKeyInfo)
-        result=post("claim",{"code":getpass.getpass("Website pairing code: ").strip(),"publicKey":base64.b64encode(pub).decode()})
+        code=getpass.getpass("Website pairing code: ").strip().lower()
+        if len(code)!=32 or any(c not in "0123456789abcdef" for c in code):
+            sys.exit("Copy the full 32-character code from Account settings > Pair a PC.")
+        try:
+            result=post("claim",{"code":code,"publicKey":base64.b64encode(pub).decode()})
+        except urllib.error.HTTPError as error:
+            message=error.read(1024)
+            if b"1010" in message:
+                sys.exit("Cloudflare rejected the connector before the pairing request reached the dashboard (1010).")
+            if error.code==403 and b"Pairing code expired or already used." in message:
+                sys.exit("Pairing code did not match an active code. Click Pair a PC and copy the new code within five minutes.")
+            sys.exit(f"Dashboard pairing failed (HTTP {error.code}).")
         # Store DER in base64 to fit Windows Credential Manager's blob size.
         encoded=base64.b64encode(private.private_bytes(serialization.Encoding.DER,serialization.PrivateFormat.PKCS8,serialization.NoEncryption())).decode()
         keyring.set_password(service,"private-a",encoded[:850])
