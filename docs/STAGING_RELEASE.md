@@ -81,3 +81,9 @@ To bootstrap the **first staging administrator only**, an authorized Cloudflare 
 5. Sign out of the staging website and sign in again. **Admin Operations** should appear in the sidebar. If the staging user already has an admin, do not bypass it; use an authorized existing-admin recovery workflow.
 
 Do not place passwords, Cloudflare API tokens or broker credentials in D1 Console SQL, logs, screenshots or chat. These instructions **do not** promote any production user and **are not** an automatic privilege escalation feature.
+
+## Broker discovery UX acceptance
+
+The broker field now normalizes case, spaces and punctuation, ranks aliases and tolerates small typos, so `Just Markets` finds `JustMarkets`. It suggests known demo servers, but does **not** replace MetaTrader's live broker/server lookup. Selecting an accurate MT5 server remains mandatory; unknown brokers always have manual exact-server fallback. Never use a similarly named company or server as proof of authorization. The trading account's identity is verified locally by the dedicated MT5 Windows terminal; this website remains capture-only.
+
+Test with `Just Markets` and `JustMarkets` (same broker result), keyboard selection, JustMarkets demo server list and manual fallback for a broker not in the local shortlist. Confirm no live server is suggested when MT5 live capture is disabled. Then test with two dedicated demo terminals. Real-broker verification and API health remain independent release gates.
