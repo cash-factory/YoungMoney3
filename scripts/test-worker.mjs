@@ -114,6 +114,8 @@ try {
   const accountAfter=(await (await call('data',{action:'select',table:'trading_accounts',filters:{id:linkedAccount}})).json()).data[0];
   assert.equal(accountAfter.broker_balance,165.5);
   assert.equal(accountAfter.broker_equity,178.25);
+  assert.equal((await device('sync',{link,events:[{kind:'trade',key:'close-765',fields:{...row,lot_size:-1}}]})).status,400);
+  assert.equal((await device('sync',{link,events:[{kind:'trade',key:'arbitrary-777',fields:row}]})).status,400);
   const batch={link,events:[{kind:'trade',key:'close-42',fields:row}]};
   for(let i=0;i<2;i++) assert.equal((await device('sync',batch)).status,200);
   const imported=(await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json());

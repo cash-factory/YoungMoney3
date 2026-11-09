@@ -188,7 +188,14 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     const f=event.fields, time=now();
     statements.push(q('INSERT INTO mt5_events(link,event_key,payload) VALUES(?,?,?) ON CONFLICT(link,event_key) DO UPDATE SET payload=excluded.payload',link.id,event.key,JSON.stringify(f)));
     if(event.kind==='trade' || event.kind==='history') {
+      if(event.kind==='trade' && !/^(?:open|close)-\d+$/.test(event.key)) return fail('Invalid broker event key.');
       if(!limited(f.pair,80)||!['long','short'].includes(String(f.direction))||!['open','closed'].includes(String(f.status))||!timestamp(f.entry_time)||typeof f.pnl!=='number'||!Number.isFinite(f.pnl)||(f.status==='closed'&&!timestamp(f.exit_time))) return fail('Invalid trade.');
+      const positive = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value > 0;
+      const validLevel = (value: unknown) => value == null || positive(value);
+      if(!positive(f.entry_price) || !positive(f.lot_size)
+        || (f.status==='closed' && (!positive(f.exit_price) || Date.parse(String(f.exit_time))<Date.parse(String(f.entry_time))))
+        || !validLevel(f.stop_loss) || !validLevel(f.take_profit)
+        || (f.fees != null && (typeof f.fees!=='number'||!Number.isFinite(f.fees)))) return fail('Invalid broker fill price, size or costs.');
       const allowed=['pair','direction','entry_price','exit_price','stop_loss','take_profit','lot_size','status','pnl','entry_time','exit_time','fees','broker_details','initial_risk'];
       const data=Object.fromEntries(allowed.filter(k=>k in f).map(k=>[k,f[k]]));
       Object.assign(data,{trade_source:'mt5',capture_mode:'live',account_id:link.account_id,user_id:device.owner,settlement_currency:link.currency,broker:link.company,outcome:f.status==='open'?null:f.pnl>0?'win':f.pnl<0?'loss':'breakeven'});
