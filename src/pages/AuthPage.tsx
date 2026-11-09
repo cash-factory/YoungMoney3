@@ -70,7 +70,7 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
   return (
     <div className="min-h-screen flex">
       {/* Left showcase panel */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-orange-700 via-orange-900 to-black">
+      <div className="ym-auth-showcase hidden lg:flex lg:w-1/2 relative overflow-hidden">
         <div className="absolute inset-0 opacity-[0.07]" style={{
           backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
           backgroundSize: '48px 48px',
@@ -119,7 +119,7 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
       </div>
 
       {/* Right auth form */}
-      <div className="flex-1 flex items-center justify-center p-4 sm:p-8 bg-primary relative overflow-hidden">
+      <div className="ym-auth-form flex-1 flex items-center justify-center p-5 sm:p-8 bg-primary relative overflow-hidden">
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute top-1/4 right-1/4 w-64 h-64 rounded-full bg-orange-500/5 blur-3xl" />
           <div className="absolute bottom-1/4 left-1/4 w-64 h-64 rounded-full bg-amber-500/5 blur-3xl" />

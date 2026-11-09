@@ -40,3 +40,37 @@ test('admin operations stay on their own role-gated route; MT5 login is clearly 
   assert.ok(admin.includes("Issue recovery code") && admin.includes("Revoke sessions") || admin.includes("revoke-sessions"),'Admin operations must offer account recovery and session controls');
   assert.ok(connect.includes('investor or standard') && connect.includes('Capture only:'),'Broker connection must explain allowed credentials and lack of execution');
 });
+
+
+test('the original workspace hierarchy gains contextual desktop navigation and a usable phone dock',()=>{
+  const css=read('src/index.css');
+  for(const id of ['dashboard','trades','journal','analytics']) {
+    assert.ok(layout.includes("current === '"+id+"'"),'Mobile dock missing '+id);
+  }
+  assert.ok(layout.includes('ym-workspace-topbar'),'Missing desktop page-context header');
+  assert.ok(layout.includes('ym-mobile-dock lg:hidden'),'Missing mobile dock');
+  assert.ok(layout.includes('ym-sidebar-nav'),'Original grouped sidebar must remain');
+  assert.ok(layout.includes('onQuickAdd'),'Quick add must remain wired');
+  assert.ok(layout.includes('aria-current={active ?'), 'Sidebar should identify current page');
+  for(const selector of ['.ym-nav-item[data-active="true"]','.ym-mobile-dock','.ym-stat-card','.ym-auth-showcase','.ym-palette-choice']) {
+    assert.ok(css.includes(selector),'Missing responsive theme-aware rule: '+selector);
+  }
+  assert.ok(css.includes('env(safe-area-inset-bottom)'), 'Mobile dock should honor phone safe area');
+  assert.ok(css.includes('prefers-reduced-motion'), 'Motion preferences must remain respected');
+});
+test('all eleven themes retain independent light/dark surfaces and recognizable preview swatches',()=>{
+  const css=read('src/index.css');
+  const paletteComponent=read('src/components/ColorPaletteControl.tsx');
+  for(const id of ['true-pink','tiffany','charcoal-violet','cyprus','turmeric','obsidian','sapphire-night','black-opal','royal-amethyst','champagne-noir']) {
+    assert.ok(css.includes(':root[data-palette="'+id+'"]'),id+' missing light theme');
+    assert.ok(css.includes('.dark[data-palette="'+id+'"]'),id+' missing dark theme');
+  }
+  assert.ok(paletteComponent.includes('aria-pressed={theme'), 'Light/dark controls should be accessible');
+  assert.ok(paletteComponent.includes('activePalette.accents'), 'Palette previews should show distinct colour triples');
+});
+test('performance cards preserve currency, percent and decimal formatting',()=>{
+  const cards=read('src/components/ui/StatCard.tsx');
+  assert.ok(cards.includes('const isNumeric = /^-?'), 'Numeric detection must not parse currency tokens as plain numbers');
+  assert.ok(cards.includes("value.includes('.')"),'Must retain numerical precision when animating');
+  assert.ok(cards.includes(' : value}'),'Formatted P&L, percentages and mixed currency states must stay legible');
+});

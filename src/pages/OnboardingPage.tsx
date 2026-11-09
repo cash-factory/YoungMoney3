@@ -171,7 +171,7 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
           })}
         </div>
 
-        <div className="card card-glass p-8 shadow-xl">
+        <div className="card card-glass p-5 sm:p-8 shadow-xl">
           {error && (
             <div className="mb-4 p-3 rounded-lg bg-error-500/10 border border-error-500/20 text-sm text-error-500">
               {error}
