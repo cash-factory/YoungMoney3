@@ -646,7 +646,7 @@
 .ym-mobile-logo-icon { color:var(--brand); }
 .ym-mobile-topbar { min-height:58px; }
 .ym-mobile-dock {
-  position:fixed;bottom:0;left:0;right:0;z-index:35;
+  position:fixed;bottom:0;left:0;right:0;z-index:20;
   display:grid;grid-template-columns:repeat(5,minmax(0,1fr));
   gap:2px;align-items:center;
   padding:8px 8px max(8px,env(safe-area-inset-bottom));
