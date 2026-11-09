@@ -103,7 +103,7 @@ async function authRoute(request: Request, env: Env, path: string) {
     const accountCount = await env.DB.prepare('SELECT COUNT(*) AS total FROM users').first<{ total: number }>();
     if ((accountCount?.total || 0) >= 10) return response({ error: 'This pilot has reached its 10-account limit.' }, 403);
     const email = input.email?.trim().toLowerCase(); const username = input.username?.trim().toLowerCase(); const password = input.password || ''; const displayName = input.display_name?.trim() || username;
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !username || !/^[a-z0-9_]{3,32}$/.test(username) || password.length < 8) return response({ error: 'Use a valid email, 3–32 character username, and password of at least 8 characters.' }, 400);
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !username || !/^[a-z0-9_]{3,32}$/.test(username) || password.length < 8) return response({ error: 'Use a valid email, 3â€“32 character username, and password of at least 8 characters.' }, 400);
     const existing = await env.DB.prepare('SELECT id FROM users WHERE email=? OR username=?').bind(email, username).first(); if (existing) return response({ error: 'Email or username is already in use.' }, 409);
     const secured = await hashPassword(password); const userId = id(); const timestamp = now(); const created = await env.DB.prepare('INSERT OR IGNORE INTO users (id,email,username,display_name,password_hash,password_salt,created_at,updated_at) SELECT ?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM users)<10').bind(userId, email, username, displayName, secured.hash, secured.salt, timestamp, timestamp).run(); if (!created.meta.changes) return response({ error: 'Account unavailable or pilot full.' }, 409); const user = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(userId).first<Record<string, unknown>>(); return issueSession(env.DB, user!);
   }
@@ -116,7 +116,7 @@ async function sessionRoute(request: Request, env: Env, user: Record<string, unk
   const input = await stringFields(request);
   if (path === '/api/auth/profile') {
     const username = input.username?.trim().toLowerCase();
-    if (username && !/^[a-z0-9_]{3,32}$/.test(username)) return response({ error: 'Username must be 3–32 letters, numbers, or underscores.' }, 400);
+    if (username && !/^[a-z0-9_]{3,32}$/.test(username)) return response({ error: 'Username must be 3â€“32 letters, numbers, or underscores.' }, 400);
     if (username) { const existing = await env.DB.prepare('SELECT id FROM users WHERE username=? AND id<>?').bind(username, user.id).first(); if (existing) return response({ error: 'Username is already in use.' }, 409); }
     await env.DB.prepare('UPDATE users SET username=COALESCE(?,username),display_name=COALESCE(?,display_name),bio=COALESCE(?,bio),trading_style=COALESCE(?,trading_style),updated_at=? WHERE id=?').bind(username || null, input.display_name?.trim() || null, input.bio?.trim() || null, input.trading_style?.trim() || null, now(), user.id).run();
     const updated = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(user.id).first<Record<string, unknown>>(); return response({ user: profile(updated!) });
@@ -140,6 +140,15 @@ async function sessionRoute(request: Request, env: Env, user: Record<string, unk
 }
 
 const fillReviewFields = new Set(['notes','lessons','mistakes','emotional_state','setup_quality','observations','what_went_wrong','strategy_id','setup_id','entry_model_id','plan_id','entry_screenshot_url','entry_voice_note_url','closure_screenshot_url','closure_voice_note_url','screenshot_url','voice_note_url','checklist_items','checklist_completed','checklist_override_reason']);
+// Financial or relationship edits must pass the same validation and settlement as new trades.
+// Annotation-only edits remain available for older imported journal records.
+const tradeRecalculationFields = new Set([
+  'pair', 'direction', 'status', 'entry_price', 'exit_price', 'entry_time', 'exit_time',
+  'lot_size', 'fees', 'stop_loss', 'take_profit', 'account_id', 'strategy_id',
+  'plan_id', 'setup_id', 'instrument_id', 'entry_model_id', 'calculation_snapshot',
+  'settlement_currency', 'conversion_rate', 'pnl', 'pnl_decimal', 'outcome',
+  'initial_risk', 'planned_r', 'realized_r', 'risk_reward_ratio',
+]);
 
 async function databaseRoute(request: Request, env: Env, user: Record<string, unknown>) {
   const input = await jsonObject<{
@@ -163,7 +172,7 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
   if (input.action === 'insert' || input.action === 'upsert') {
     const items = Array.isArray(input.payload) ? input.payload : [input.payload];
     if (!items.length || items.length > 250 || items.some(item => !item || typeof item !== 'object' || Array.isArray(item))) {
-      return response({ error: 'Supply 1�250 records.' }, 400);
+      return response({ error: 'Supply 1–250 records.' }, 400);
     }
     if (input.action!=='upsert' && table === 'trades' && items.some(item => item?.trade_source === 'mt5')) {
       return response({ error: 'Broker fills must be synchronized by the linked terminal.' }, 403);
@@ -214,10 +223,14 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
     if (input.action === 'delete' && isFill) return response({ error: 'Broker fills cannot be deleted from the journal.' }, 403);
     if (input.action === 'update') {
       if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return response({ error: 'Supply a record patch.' }, 400);
-      if (table === 'trades' && ((!isFill && patch.trade_source === 'mt5') || (isFill && Object.keys(patch).some(key => !fillReviewFields.has(key))))) {
-        return response({ error: 'Broker execution fields are read-only.' }, 403);
+      if (table === 'trades' && ((!isFill && 'trade_source' in patch && patch.trade_source !== old.trade_source)
+        || (isFill && Object.keys(patch).some(key => !fillReviewFields.has(key)))) {
+        return response({ error: 'Trade provenance and broker execution fields are read-only.' }, 403);
       }
       if (table === 'trades' && !filters.updated_at) return response({ error: 'Refresh the trade before editing.' }, 428);
+    }
+    if (table === 'trades' && input.action === 'delete' && !filters.updated_at) {
+      return response({ error: 'Refresh the trade before deleting it.' }, 428);
     }
     const revision = filters.updated_at ?? found.updated_at;
     if (revision !== found.updated_at) return response({ error: 'This record changed. Refresh before saving.' }, 409);
@@ -227,7 +240,11 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
       return result.meta.changes ? response({ data: null }) : response({ error: 'This record changed. Refresh before deleting.' }, 409);
     }
     const merged = { ...old, ...patch, user_id: user.id, id: input.id };
-    const payload = table==='trades' && !isFill && Object.keys(patch || {}).some(k=>['entry_price','exit_price','lot_size','fees','stop_loss','take_profit','status','account_id','pnl'].includes(k) && merged[k] !== old[k]) ? {...merged,...await normalizeTrade(merged,user.id,env.DB)} : merged;
+    const needsTradeRecalculation = table === 'trades' && !isFill
+      && Object.keys(patch || {}).some(key => tradeRecalculationFields.has(key) && merged[key] !== old[key]);
+    const payload = needsTradeRecalculation
+      ? { ...merged, ...await normalizeTrade(merged, user.id, env.DB) }
+      : merged;
     const timestamp = new Date(Math.max(Date.now(), Date.parse(found.updated_at) + 1)).toISOString();
     const changed = await env.DB.prepare('UPDATE workspace_records SET payload=?,updated_at=? WHERE id=? AND user_id=? AND table_name=? AND updated_at=?')
       .bind(JSON.stringify(payload), timestamp, input.id, user.id, table, revision).run();

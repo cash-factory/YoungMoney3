@@ -18,6 +18,13 @@ test('settlement rejects invalid grids and chronology and rounds before classify
   assert.throws(()=>settleManualTrade({...input,exit_time:null}));
   assert.equal(settleManualTrade({...input,exit_price:100.004}).outcome,'breakeven');
 });
+test('manual settlement validates price and lifecycle invariants', () => {
+  assert.throws(() => settleManualTrade({ ...input, entry_price: -100 }), /positive fill prices/);
+  assert.throws(() => settleManualTrade({ ...input, exit_price: 0 }), /positive fill prices/);
+  assert.throws(() => settleManualTrade({ ...input, stop_loss: Number.NaN }), /Stop and target/);
+  assert.throws(() => settleManualTrade({ ...input, status: 'open' }), /open trade cannot retain/);
+  assert.equal(settleManualTrade({ ...input, status: 'open', exit_price: null, exit_time: null }).outcome, null);
+});
 test('deposits change balance independently of realized trading profit',()=>{
   const result=accountLedger({id:'a',base_currency:'USD',balance:100} as TradingAccount,[],[{account_id:'a',amount:40} as TradingAccountAdjustment]);
   assert.deepEqual(result,{profit:0,balance:140});

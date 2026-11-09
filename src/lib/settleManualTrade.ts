@@ -17,7 +17,16 @@ export function settleManualTrade(trade: TradeInput): TradeInput {
   if (!Number.isFinite(fees) || fees < 0) throw new Error('Invalid fees.');
   if (snap && !validQuantity(snap as unknown as MarketInstrument, trade.lot_size!)) throw new Error('Size is outside the contract quantity grid.');
   const entry = trade.entry_price, exit = trade.exit_price;
-  if (entry == null || !Number.isFinite(entry) || (closed && (exit == null || !Number.isFinite(exit)))) throw new Error('Missing fill price.');
+  if (entry == null || !Number.isFinite(entry) || entry <= 0
+    || (closed && (exit == null || !Number.isFinite(exit) || exit <= 0))) {
+    throw new Error('Enter valid positive fill prices.');
+  }
+  if (!closed && (exit != null || trade.exit_time != null)) {
+    throw new Error('An open trade cannot retain a closing price or time.');
+  }
+  if ([trade.stop_loss, trade.take_profit].some(price => price != null && (!Number.isFinite(price) || price <= 0))) {
+    throw new Error('Stop and target prices must be positive finite numbers.');
+  }
   const at = (price: number) => instrumentPnlFromSnapshot(snap!,trade.direction,entry,price,trade.lot_size!);
   const risk = snap && trade.stop_loss != null && trade.stop_loss !== entry
     ? new Decimal(at(trade.stop_loss)).abs().plus(fees) : null;
