@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTrades } from '@/hooks/useData';
 
 type Device = { id: string; last_seen: number };
-type Link = { id: string; company?: string; login?: string; status: string; last_sync?: string; broker_balance?:number;broker_equity?:number;currency?:string; gap?: number; last_error?: string; expires: number;history_id?:string;history_status?:string };
+type Link = { id: string; company?: string; login?: string; server?: string; trade_mode?: number; access_level?: string; status: string; last_sync?: string; broker_balance?:number;broker_equity?:number;currency?:string; gap?: number; last_error?: string; expires: number;history_id?:string;history_status?:string };
 async function action(name: string, payload: unknown = {}) {
   const result = await fetch('/api/mt5/' + name, {method:'POST', headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
   const data = await result.json();
@@ -57,12 +57,12 @@ export function Mt5Connections() {
     </section>
     <section className="card p-5 sm:p-6 space-y-3">
       <h2 className="flex items-center gap-2 font-bold"><Link2 size={20} className="text-brand-500"/>Linked accounts</h2>
-      <p className="text-sm text-secondary">{demo?'Demo accounts only during reconciliation.':'Demo and live accounts supported.'} Capture starts when you link each account.</p>
+      <p className="text-sm text-secondary">{demo?'Demo and contest accounts are available. Real-account capture remains disabled until independently approved.':'Demo, contest and real accounts available.'} Connect multiple accounts using a dedicated portable MT5 terminal for each. YoungMoney3 captures trades and balances only; it cannot place, change, or close orders.</p>
       {loaded && !links.length && <p className="rounded-xl bg-secondary p-4 text-sm text-secondary">No accounts linked yet.</p>}
     <label className="block text-xs text-secondary">History lookback
       <select className="input-field mt-1 max-w-xs" value={historyDays} onChange={e=>setHistoryDays(e.target.value)}><option value="30">30 days before linking</option><option value="365">1 year before linking</option><option value="3650">Up to 10 years before linking</option></select>
     </label>
-    {links.map(l=><div key={l.id} className="space-y-2"><p className="rounded-xl bg-secondary p-4 text-sm" key={l.id}>{l.company || 'Account'} {l.login} · {['pending','verifying'].includes(l.status) && l.expires<Date.now()?'expired':l.status} {l.broker_balance!=null && '· Last reported balance '+l.broker_balance+' '+l.currency+' · Equity '+l.broker_equity+' '+l.currency} {l.last_sync && Date.now()-Date.parse(l.last_sync)>120000 ? ' · Snapshot may be stale; verify the connector is running.' : ''} {l.last_error} {l.last_sync && '· Last sync '+new Date(l.last_sync).toLocaleString()} {l.gap ? '· Offline interval: intermediate stop changes may be missing.' : ''}</p>
+    {links.map(l=><div key={l.id} className="space-y-2"><p className="rounded-xl bg-secondary p-4 text-sm" key={l.id}>{l.company || 'Account'} {l.login} {l.server ? '· '+l.server : ''} {l.trade_mode === 2 ? '· REAL' : l.trade_mode === 1 ? '· CONTEST' : l.trade_mode === 0 ? '· DEMO' : ''} {l.access_level === 'trading-enabled' ? '· External trading permission (capture-only here)' : l.access_level === 'trading-restricted' ? '· Broker trading disabled externally' : ''} {demo && l.trade_mode===2 ? ' · Real-account capture paused' : ''} · {['pending','verifying'].includes(l.status) && l.expires<Date.now()?'expired':l.status} {l.broker_balance!=null && '· Last reported balance '+l.broker_balance+' '+l.currency+' · Equity '+l.broker_equity+' '+l.currency} {l.last_sync && Date.now()-Date.parse(l.last_sync)>120000 ? ' · Snapshot may be stale; verify the connector is running.' : ''} {l.last_error} {l.last_sync && '· Last sync '+new Date(l.last_sync).toLocaleString()} {l.gap ? '· Offline interval: intermediate stop changes may be missing.' : ''}</p>
       {l.status==='connected' && <div className="flex flex-wrap gap-2"><button className="btn-secondary" disabled={historyBusy || l.history_status==='requested'} onClick={()=>run(async()=>{await action('history-request',{link:l.id,days:Number(historyDays)});setPreview(null);})}>Find earlier trades</button>
       {l.history_status==='requested' && <><span role="status" className="text-sm">Scanning on your PC. Keep the connector running.</span>
         <button className="btn-secondary" onClick={()=>run(async()=>{await action('history-decline',{link:l.id,request:l.history_id});setPreview(null);})}>Cancel scan</button></>}
@@ -80,7 +80,7 @@ export function Mt5Connections() {
     </section>
     <dialog ref={dialog} aria-labelledby="mt5-dialog-title" className="mt5-dialog" onClose={()=>{setDevice('');void refresh().catch(e=>setError(e.message));}}>
       <header className="flex items-center justify-between border-b border-themed px-5 py-4"><h2 id="mt5-dialog-title" className="font-bold">Connect MT5 account</h2><button className="btn-ghost p-2" aria-label="Close login" onClick={()=>dialog.current?.close()}><X size={18}/></button></header>
-      {device && <iframe title="MT5 investor login" className="w-full border-0" style={{height:'min(530px,70dvh)'}} src={'/mt5-login.html#'+encodeURIComponent(device)}/>}
+      {device && <iframe title="MT5 broker account login" className="w-full border-0" style={{height:'min(530px,70dvh)'}} src={'/mt5-login.html#'+encodeURIComponent(device)}/>}
     </dialog>
     {trades.some(t=>source(t)==='mt5') && <details className="card p-5 space-y-3"><summary>Review manual and imported trade matches</summary>
       <label>Broker trade <select value={imported} onChange={e=>{setImported(e.target.value);setManual('');}}><option value="">Choose a trade</option>{trades.filter(t=>source(t)==='mt5' && t.status==='closed').map(t=><option key={t.id} value={t.id}>{t.pair} · {t.direction} · {t.entry_time} · {t.pnl}</option>)}</select></label>

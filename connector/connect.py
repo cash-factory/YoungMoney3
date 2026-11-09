@@ -79,8 +79,8 @@ def terminal_account(slot, login, server, password, verify_password):
         raise LoginFailure("disconnected")
     if info.login != login or info.server.casefold() != server.casefold():
         raise LoginFailure("identity_mismatch")
-    if info.trade_allowed:
-        raise LoginFailure("trading_access")
+    # Standard broker credentials are permitted for observation only.
+    # Trading permissions in the local MT5 terminal remain outside this app.
     return info
 
 
@@ -110,7 +110,8 @@ def verify(job):
     start=int(time.time()*1000)
     # Persist link details before acknowledgement so an ambiguous network failure can be retried.
     msg={"link":job["id"],"ok":True,"login":str(login),"server":server,"company":info.company,
-         "currency":info.currency,"balance":info.balance,"mode":info.trade_mode}
+         "currency":info.currency,"balance":info.balance,"mode":info.trade_mode,
+         "trade_access":bool(info.trade_allowed)}
     keyring.set_password(service,job["id"],settings["password"])
     with db:
         db.execute("INSERT INTO links VALUES(?,?,?,?,?,?,?,?,?)",(job["id"],slot,str(login),server,start,start,0,json.dumps(msg),0))

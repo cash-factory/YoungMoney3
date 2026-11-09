@@ -1,4 +1,5 @@
 from pathlib import Path
+import ast
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -21,9 +22,20 @@ class TerminalLoginTests(unittest.TestCase):
     def test_existing_investor_session_can_sync_without_reauthenticating(self):
         self.verify(False)
         self.api.login.assert_not_called()
-    def test_trading_password_is_distinguished_from_bad_login(self):
+    def test_standard_password_with_trading_permission_allows_capture(self):
         self.account.trade_allowed=True
-        with self.assertRaisesRegex(connect.LoginFailure,'trading_access'): self.verify()
+        self.assertEqual(self.verify(),self.account)
+        self.api.order_send.assert_not_called()
+        self.api.order_check.assert_not_called()
+    def test_investor_password_still_works(self):
+        self.account.trade_allowed=False
+        self.assertEqual(self.verify(),self.account)
+    def test_connector_does_not_call_order_execution_apis(self):
+        tree=ast.parse(Path(connect.__file__).read_text(encoding='utf-8'))
+        forbidden={'order_send','order_check','positions_close','TRADE_ACTION_DEAL','TRADE_ACTION_PENDING'}
+        for node in ast.walk(tree):
+            if isinstance(node,ast.Attribute) and node.attr in forbidden:
+                self.fail('Capture-only connector must never reference MT5 trade execution API: '+node.attr)
     def test_wrong_terminal_never_receives_password(self):
         self.api.terminal_info.return_value.data_path=str(Path.cwd())
         with self.assertRaisesRegex(connect.LoginFailure,'wrong_terminal'): self.verify()

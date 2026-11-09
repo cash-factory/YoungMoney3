@@ -39,7 +39,7 @@ export function Modal({ open, onClose, title, children, size = 'md' }: ModalProp
           <div className="absolute inset-x-0 top-0 h-0.5 rounded-t-2xl bg-gradient-to-r from-orange-400 via-orange-500 to-amber-500" />
           <div className="flex items-center justify-between border-b border-themed px-4 py-3 sm:px-6 sm:py-4 shrink-0">
             <h2 className="text-lg font-bold tracking-tight">{title}</h2>
-            <button onClick={onClose} className="btn-ghost p-1.5 rounded-lg transition-transform duration-300 hover:rotate-90">
+            <button type="button" aria-label="Close dialog" onClick={onClose} className="btn-ghost p-1.5 rounded-lg transition-transform duration-300 hover:rotate-90">
               <X size={20} />
             </button>
           </div>

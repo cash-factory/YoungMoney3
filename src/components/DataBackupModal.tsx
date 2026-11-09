@@ -4,6 +4,7 @@ import { Modal } from '@/components/ui/Modal';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { RESTORE_ORDER, WORKSPACE_TABLES } from '@/lib/workspaceTables';
+import { encryptBackup, decryptBackup, isEncryptedBackup, type EncryptedBackup } from '@/lib/backupEncryption';
 
 const BACKUP_FORMAT = 'trade-journal-pro-backup';
 const BACKUP_VERSION = 1;
@@ -57,13 +58,13 @@ function decodeBase64(base64: string): Uint8Array {
   return bytes;
 }
 
-function downloadJson(payload: TradingBackup) {
+function downloadJson(payload: TradingBackup | EncryptedBackup, encrypted: boolean) {
   const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
   if (blob.size > MAX_BACKUP_BYTES) throw new Error(backupTooLarge);
   const href = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = href;
-  anchor.download = `trade-journal-backup-${payload.exportedAt.slice(0, 10)}.json`;
+  anchor.download = `trade-journal-backup-${new Date().toISOString().slice(0, 10)}${encrypted ? '.encrypted' : ''}.json`;
   anchor.click();
   URL.revokeObjectURL(href);
 }
@@ -90,6 +91,11 @@ export function DataBackupModal({ open, onClose }: DataBackupModalProps) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [backup, setBackup] = useState<TradingBackup | null>(null);
+  const [lockedBackup,setLockedBackup]=useState<EncryptedBackup | null>(null);
+  const [encryptExport,setEncryptExport]=useState(true);
+  const [backupPassword,setBackupPassword]=useState('');
+  const [confirmPassword,setConfirmPassword]=useState('');
+  const [unlockPassword,setUnlockPassword]=useState('');
   const [acceptPartialRestore, setAcceptPartialRestore] = useState(false);
 
   const currentProject = useMemo(projectHost, []);
@@ -103,6 +109,7 @@ export function DataBackupModal({ open, onClose }: DataBackupModalProps) {
     if (!user || busy) return;
     setBusy(true); setError(''); setMessage(''); setProgress('Preparing your records…');
     try {
+      if(encryptExport && (backupPassword.length<12 || backupPassword!==confirmPassword)) throw new Error('Enter matching backup passphrases of at least 12 characters. They cannot be recovered.');
       const data: TradingBackup['data'] = {};
       const unavailableTables: string[] = [];
       let strategyIds: string[] = [];
@@ -176,9 +183,10 @@ export function DataBackupModal({ open, onClose }: DataBackupModalProps) {
         media,
         unavailableTables,
       };
-      downloadJson(payload);
+      downloadJson(encryptExport ? await encryptBackup(JSON.stringify(payload),backupPassword) : payload,encryptExport);
+      setBackupPassword(''); setConfirmPassword('');
       const records = Object.entries(data).filter(([table]) => table !== 'profiles').reduce((count, [, rows]) => count + rows.length, 0);
-      setMessage(`Backup downloaded with ${records} records and ${media.length} private attachments.${unavailableTables.length ? ` Some tables were unavailable: ${unavailableTables.join(', ')}.` : ''}`);
+      setMessage(`${encryptExport ? 'Encrypted' : 'Plaintext'} backup downloaded with ${records} records and ${media.length} private attachments.${unavailableTables.length ? ` Some tables were unavailable: ${unavailableTables.join(', ')}.` : ''}`);
       setProgress('');
     } catch (exportError) {
       setError(exportError instanceof Error ? exportError.message : 'Backup could not be completed.');
@@ -187,17 +195,29 @@ export function DataBackupModal({ open, onClose }: DataBackupModalProps) {
   };
 
   const handleFile = async (file?: File) => {
-    setBackup(null); setError(''); setMessage('');
+    setBackup(null); setLockedBackup(null); setError(''); setMessage('');
     setAcceptPartialRestore(false);
     if (!file) return;
     try {
       if (file.size > MAX_BACKUP_BYTES) throw new Error(backupTooLarge);
       const parsed: unknown = JSON.parse(await file.text());
+      if(isEncryptedBackup(parsed)){setLockedBackup(parsed);return;}
       if (!isBackup(parsed)) throw new Error('This file is not a supported Young-Money-Fx backup.');
       setBackup(parsed);
     } catch (fileError) {
       setError(fileError instanceof Error ? fileError.message : 'Could not read this backup file.');
     }
+  };
+
+  const unlockBackup=async()=>{
+    if(!lockedBackup || !unlockPassword || busy) return;
+    setBusy(true);setError('');
+    try{
+      const parsed: unknown=JSON.parse(await decryptBackup(lockedBackup,unlockPassword));
+      if(!isBackup(parsed))throw Error('Encrypted file contains an unsupported backup.');
+      setBackup(parsed);setLockedBackup(null);setUnlockPassword('');
+    }catch(e){setError(e instanceof Error?e.message:'Could not decrypt the backup.');}
+    finally{setBusy(false);}
   };
 
   const handleRestore = async () => {
@@ -275,7 +295,13 @@ export function DataBackupModal({ open, onClose }: DataBackupModalProps) {
 
         <section className="rounded-xl border border-themed p-4">
           <h3 className="text-sm font-bold">Create a backup</h3>
-          <p className="mt-1 text-xs text-muted">Exports your plans, rules, strategies, trades, accounts, tests, reviews, notes, profile, and uploaded media into one versioned JSON file.</p>
+          <p className="mt-1 text-xs text-muted">Exports your plans, trades, accounts and private media. Encryption protects the downloaded archive with a passphrase known only to you.</p>
+          <label className="mt-3 flex items-start gap-2 text-xs text-secondary"><input type="checkbox" checked={encryptExport} onChange={e=>setEncryptExport(e.target.checked)}/><span>Encrypt the backup before downloading (recommended)</span></label>
+          {encryptExport ? <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label className="text-xs font-semibold">Backup passphrase<input type="password" className="input-field mt-1" autoComplete="new-password" value={backupPassword} onChange={e=>setBackupPassword(e.target.value)} placeholder="12 characters minimum"/></label>
+            <label className="text-xs font-semibold">Confirm passphrase<input type="password" className="input-field mt-1" autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)}/></label>
+          </div> : <p role="status" className="mt-2 text-xs text-amber-600">Warning: plaintext exports contain readable private notes, account details, and media.</p>}
+          {encryptExport && <p className="mt-2 text-xs text-muted">Store the passphrase separately. It cannot be reset if lost.</p>}
           <button type="button" onClick={handleExport} disabled={busy || !user} className="btn-primary mt-3"><Download size={15} /> Download backup</button>
         </section>
 
@@ -283,6 +309,11 @@ export function DataBackupModal({ open, onClose }: DataBackupModalProps) {
           <h3 className="text-sm font-bold">Restore a backup</h3>
           <p className="mt-1 text-xs text-muted">Choose a backup file to inspect its account, database, record count, and included attachments before restoring.</p>
           <label className="btn-secondary mt-3 inline-flex cursor-pointer"><FileUp size={15} /> Choose backup file<input type="file" accept="application/json,.json" className="sr-only" onChange={event => { void handleFile(event.target.files?.[0]); event.currentTarget.value = ''; }} /></label>
+          {lockedBackup && <div className="mt-3 space-y-3 rounded-lg bg-secondary/50 p-3">
+            <p className="text-xs text-secondary">Encrypted archive: enter the original passphrase to inspect and restore its records.</p>
+            <label className="block text-xs font-semibold">Backup passphrase<input type="password" autoComplete="off" className="input-field mt-1" value={unlockPassword} onChange={e=>setUnlockPassword(e.target.value)}/></label>
+            <button className="btn-secondary" type="button" disabled={busy || !unlockPassword} onClick={()=>void unlockBackup()}>Unlock encrypted backup</button>
+          </div>}
           {backup && <div className="mt-4 rounded-lg bg-secondary/50 p-3 text-xs">
             <p className="font-semibold">Backup from {new Date(backup.exportedAt).toLocaleString()}</p>
             <p className="mt-1 text-secondary">{recordCount} records · {backup.media.length} private attachments</p>

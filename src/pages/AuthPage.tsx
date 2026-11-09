@@ -5,11 +5,14 @@ import { ColorPaletteControl } from '@/components/ColorPaletteControl';
 
 export function AuthPage({ onBack }: { onBack?: () => void }) {
   const { signIn, signUp } = useAuth();
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [mode, setMode] = useState<'signin' | 'signup' | 'recover'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
+  const [recoveryCode,setRecoveryCode]=useState('');
+  const [confirmPassword,setConfirmPassword]=useState('');
+  const [success,setSuccess]=useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -17,8 +20,21 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccess('');
     setLoading(true);
 
+    if(mode==='recover'){
+      try {
+        if(password.length<12 || password!==confirmPassword)throw Error('Use a matching new password of at least 12 characters.');
+        const res=await fetch('/api/auth/recover',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:email.trim(),code:recoveryCode.trim(),password})});
+        const data=await res.json() as {error?:string;message?:string};
+        if(!res.ok)throw Error(data.error || 'Recovery failed.');
+        setSuccess('Password recovered. You can now sign in with the new password.');
+        setRecoveryCode('');setPassword('');setConfirmPassword('');
+      }catch(e){setError(e instanceof Error?e.message:'Recovery failed.');}
+      finally{setLoading(false);}
+      return;
+    }
     if (mode === 'signup') {
       if (!displayName.trim()) {
         setError('Please enter your display name.');
@@ -126,16 +142,16 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
 
           <div className="mb-8">
             <h2 className="text-2xl font-bold tracking-tight">
-              {mode === 'signin' ? 'Welcome back' : 'Create your account'}
+              {mode === 'signin' ? 'Welcome back' : mode === 'signup' ? 'Create your account' : 'Recover your account'}
             </h2>
             <p className="text-sm text-muted mt-1">
               {mode === 'signin'
                 ? 'Sign in with your account email and password. The pilot invite code is only for account creation.'
-                : 'Start journaling your trades with accountability'}
+                : mode === 'signup' ? 'Start journaling your trades with accountability' : 'Enter the one-time code provided by your workspace administrator.'}
             </p>
           </div>
 
-          <div className="flex gap-1 p-1 rounded-xl bg-secondary mb-6">
+          {mode!=='recover' && <div className="flex gap-1 p-1 rounded-xl bg-secondary mb-6">
             <button
               onClick={() => { setMode('signin'); setError(null); }}
               className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${mode === 'signin' ? 'bg-card text-primary shadow-sm' : 'text-muted hover:text-secondary'}`}
@@ -148,7 +164,7 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
             >
               Create Account
             </button>
-          </div>
+          </div>}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'signup' && (
@@ -200,8 +216,9 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
               </div>
             </div>
 
+            {mode==='recover' && <label className="block text-xs font-semibold text-secondary">One-time recovery code<input className="input-field mt-1.5" value={recoveryCode} onChange={e=>setRecoveryCode(e.target.value)} autoComplete="off" placeholder="Enter the code provided by your administrator" required /></label>}
             <div>
-              <label className="block text-xs font-semibold text-secondary mb-1.5 uppercase tracking-wide">Password</label>
+              <label className="block text-xs font-semibold text-secondary mb-1.5 uppercase tracking-wide">{mode==='recover'?'New password':'Password'}</label>
               <div className="relative">
                 <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
                 <input
@@ -223,6 +240,8 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
               </div>
             </div>
 
+            {mode==='recover' && <label className="block text-xs font-semibold text-secondary">Confirm new password<input type="password" className="input-field mt-1.5" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} autoComplete="new-password" required /></label>}
+            {success && <p role="status" className="rounded-lg border border-themed bg-secondary p-3 text-sm text-secondary">{success}</p>}
             {error && (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-error-500/10 border border-error-500/20 text-sm text-error-500 animate-slide-up">
                 <AlertCircle size={16} className="flex-shrink-0" />
@@ -231,14 +250,15 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
             )}
 
             <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-2.5">
-              {loading ? <><Loader2 size={18} className="animate-spin" /> Please wait...</> : mode === 'signin' ? 'Sign In' : 'Create Account'}
+              {loading ? <><Loader2 size={18} className="animate-spin" /> Please wait...</> : mode === 'signin' ? 'Sign In' : mode === 'signup' ? 'Create Account' : 'Reset password'}
             </button>
           </form>
 
+          {mode==='signin' && <button type="button" onClick={()=>{setMode('recover');setError(null);setSuccess('');setPassword('');}} className="mt-4 block w-full text-center text-xs font-semibold text-orange-500 hover:underline">Have a recovery code?</button>}
           <p className="text-xs text-muted text-center mt-5">
-            {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
+            {mode === 'signin' ? "Don't have an account? " : mode==='signup' ? 'Already have an account? ' : 'Ready to sign in? '}
             <button
-              onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(null); }}
+              onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(null); setSuccess(''); setPassword(''); }}
               className="text-orange-500 hover:underline font-medium"
             >
               {mode === 'signin' ? 'Sign up' : 'Sign in'}

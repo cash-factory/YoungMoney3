@@ -32,16 +32,24 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   const input = await body(request);
   if (!input) return fail('Invalid connector request.');
   const unix = Date.now();
+  const capturePaused = async () => {
+    const setting=await q("SELECT value FROM site_settings WHERE key='mt5_capture_paused'").first<{value:string}>();
+    return setting?.value==='true';
+  };
   if (owner) {
     if (action === 'status') {
       const devices = await q('SELECT id,public_key,last_seen FROM mt5_devices WHERE owner=? AND revoked=0 AND public_key IS NOT NULL', owner).all();
-      const links = await q('SELECT l.id,l.account_id,l.status,l.company,l.server,l.login,l.history_id,l.history_status,l.history_since,l.last_sync,l.broker_balance,l.broker_equity,l.currency,l.gap,l.last_error,l.expires FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND d.revoked=0', owner).all();
+      const links = await q('SELECT l.id,l.account_id,l.status,l.company,l.server,l.login,l.access_level,l.trade_mode,l.history_id,l.history_status,l.history_since,l.last_sync,l.broker_balance,l.broker_equity,l.currency,l.gap,l.last_error,l.expires FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND d.revoked=0', owner).all();
       const accounts=await q("SELECT id,json_extract(payload,'$.name') AS name FROM workspace_records WHERE user_id=? AND table_name='trading_accounts' ORDER BY created_at",owner).all();
-      return json({ accounts:accounts.results, devices: devices.results, links: links.results, demoOnly: env.MT5_ALLOW_LIVE !== 'true' });
+      return json({ accounts:accounts.results, devices: devices.results, links: links.results, demoOnly: env.MT5_ALLOW_LIVE !== 'true', capturePaused: await capturePaused() });
     }
     if (['history-request','history-preview','history-import','history-decline'].includes(action)) {
-      const link=await q("SELECT l.* FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE l.id=? AND d.owner=? AND d.revoked=0 AND l.status='connected'",input.link,owner).first<{id:string;account_id:string;currency:string;company:string;linked_at:string;history_id:string;history_status:string}>();
+      const link=await q("SELECT l.* FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE l.id=? AND d.owner=? AND d.revoked=0 AND l.status='connected'",input.link,owner).first<{id:string;account_id:string;currency:string;company:string;linked_at:string;history_id:string;history_status:string;trade_mode:number|null}>();
       if(!link) return fail('Linked account unavailable.',404);
+      if(['history-request','history-import'].includes(action) && await capturePaused())
+        return fail('MT5 capture is paused by the administrator.',403);
+      if(link.trade_mode===2 && env.MT5_ALLOW_LIVE!=='true' && ['history-request','history-import'].includes(action))
+        return fail('Real-account capture is paused by the release gate.',403);
       if(action==='history-request') {
         const days=Number(input.days);
         if(!Number.isSafeInteger(days)||days<1||days>3650) return fail('Choose 1–3650 days.');
@@ -87,6 +95,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       return json({added,more:items.results.length===40});
     }
     if (action === 'pair') {
+      if(await capturePaused()) return fail('MT5 pairing is paused by the administrator.',403);
       const code = uuid().replaceAll('-', '');
       await q('INSERT INTO mt5_devices(id,owner,pair_hash,expires) VALUES(?,?,?,?)', uuid(), owner, await hash(code), unix + 300000).run();
       return json({ code });
@@ -97,6 +106,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       return json({ ok: true });
     }
     if (action === 'connect') {
+      if(await capturePaused()) return fail('MT5 capture is paused by the administrator.',403);
       const device = await q('SELECT id FROM mt5_devices WHERE id=? AND owner=? AND revoked=0 AND last_seen>?', input.device, owner, unix - 90000).first();
       if (!device) return fail('Connector offline. Start it on your PC and retry.', 409);
       if (!isObject(input.envelope) || !['wrapped','iv','data'].every(k => limited((input.envelope as Fields)[k],4096))) return fail('Invalid encrypted request.');
@@ -124,6 +134,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     return fail('Unknown action.',404);
   }
   if (action==='device/claim') {
+    if(await capturePaused()) return fail('MT5 pairing is paused by the administrator.',403);
     if (!limited(input.code,64) || !limited(input.publicKey,1024) || !/^[a-zA-Z0-9+/=]+$/.test(input.publicKey)) return fail('Invalid pairing request.');
     const token=uuid()+uuid();
     const result=await q('UPDATE mt5_devices SET pair_hash=NULL,token_hash=?,public_key=?,last_seen=? WHERE pair_hash=? AND expires>? AND revoked=0 RETURNING id',await hash(token),input.publicKey,unix,await hash(input.code),unix).first();
@@ -135,6 +146,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if (!device) return fail('Device access revoked.',403);
   if (action==='device/poll') {
     await q('UPDATE mt5_devices SET last_seen=? WHERE id=?',unix,device.id).run();
+    if(await capturePaused()) return json({job:null,capturePaused:true});
     await q("UPDATE mt5_links SET envelope=NULL,status='expired' WHERE device=? AND status IN ('pending','verifying') AND expires<=?",device.id,unix).run();
     const job=await q("SELECT id,envelope FROM mt5_links WHERE device=? AND status='pending' AND expires>? ORDER BY expires LIMIT 1",device.id,unix).first<{id:string;envelope:string}>();
     if (!job) return json({job:null});
@@ -142,26 +154,28 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     return json({ job: claimed.meta.changes ? {id:job.id,envelope:JSON.parse(job.envelope)} : null });
   }
   if (!limited(input.link,64)) return fail('Missing link.');
-  const link=await q('SELECT * FROM mt5_links WHERE id=? AND device=?',input.link,device.id).first<{id:string;account_id:string;status:string;currency:string;company:string;expires:number}>();
+  const link=await q('SELECT * FROM mt5_links WHERE id=? AND device=?',input.link,device.id).first<{id:string;account_id:string;status:string;currency:string;company:string;expires:number;trade_mode:number|null}>();
   if (!link) return fail('Unknown link.',404);
   if (action==='device/verified') {
+    if(await capturePaused()) return fail('MT5 capture is paused by the administrator.',403);
     if (link.status==='connected') return json({ok:true});
     if (link.status!=='verifying' || link.expires<=unix) return fail('Login expired.',409);
-    if (!input.ok || (env.MT5_ALLOW_LIVE!=='true' && input.mode!==0)) {
+    // Require an actual numeric MT5 mode before testing the real-account release gate.
+    if(input.ok && (typeof input.mode!=='number' || ![0,1,2].includes(input.mode))) return fail('Invalid MT5 account mode.');
+    if (!input.ok || (env.MT5_ALLOW_LIVE!=='true' && input.mode===2)) {
       const reasons: Record<string,string> = {
         terminal_start:'Could not attach to the dedicated terminal. Open its terminal64.exe with /portable, finish startup, then retry.',
         wrong_terminal:'MT5 opened a different data folder. Close the dedicated copy and open it with /portable.',
-        broker_rejected:'MT5 rejected authorization. Check the login ID, investor password and exact assigned server.',
+        broker_rejected:'MT5 rejected authorization. Check the account number, investor or standard password, and exact assigned server.',
         broker_login:'MT5 could not log in to this server. In the dedicated terminal use File → Open an Account, find your broker and select its assigned server, then retry.',
-        trading_access:'MT5 authenticated with trading permissions. Use the read-only investor password for this account.',
         disconnected:'MT5 did not establish a broker connection. Check the dedicated terminal’s Journal.',
         identity_mismatch:'The connected login or broker server differs from the requested account.',
         no_slot:'All configured terminals are in use. Add a separate portable installation for this account.',
         invalid_job:'The PC could not read this login request. Reopen the login form and retry.'
       };
-      const reason=Object.hasOwn(reasons,String(input.reason)) ? reasons[String(input.reason)] : 'Login failed. Check server, investor access and dedicated terminal availability.';
+      const reason=Object.hasOwn(reasons,String(input.reason)) ? reasons[String(input.reason)] : 'Login failed. Check server, account credentials and dedicated terminal availability.';
       const detail=Number.isSafeInteger(input.api_code) ? ' (MT5 code '+input.api_code+')' : '';
-      await q("UPDATE mt5_links SET status='failed',last_error=? WHERE id=?",input.ok?'Demo accounts only during verification.':reason+detail,link.id).run();
+      await q("UPDATE mt5_links SET status='failed',last_error=? WHERE id=?",input.ok?'Real accounts require an explicitly approved capture-only rollout. Demo and contest accounts can be linked.':reason+detail,link.id).run();
       return input.ok ? fail('Could not enable account.',409) : json({ok:true});
     }
     if (!limited(input.login,24)||!/^\d+$/.test(input.login)||!limited(input.server,128)||!limited(input.company,128)||!limited(input.currency,12)||typeof input.balance!=='number'||!Number.isFinite(input.balance)) return fail('Invalid account metadata.');
@@ -176,11 +190,14 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       }
     }
     const time=now(), account={name:input.company+' · '+input.login,account_number:input.login,broker_name:input.company,base_currency:input.currency,balance:input.balance,balance_as_of:time,is_active:true,risk_per_trade_pct:1,user_id:device.owner};
-    await db.batch([q("UPDATE mt5_links SET status='connected',login=?,server=?,company=?,currency=?,linked_at=? WHERE id=?",input.login,input.server,input.company,input.currency,time,link.id),
+    const accessLevel=typeof input.trade_access==='boolean' ? (input.trade_access?'trading-enabled':'trading-restricted') : 'unknown';
+    await db.batch([q("UPDATE mt5_links SET status='connected',login=?,server=?,company=?,currency=?,linked_at=?,trade_mode=?,access_level=? WHERE id=?",input.login,input.server,input.company,input.currency,time,input.mode,accessLevel,link.id),
       q("INSERT INTO workspace_records(id,user_id,table_name,payload,created_at,updated_at) VALUES(?,?,'trading_accounts',?,?,?) ON CONFLICT(id) DO UPDATE SET payload=json_patch(workspace_records.payload,?),updated_at=excluded.updated_at WHERE workspace_records.user_id=excluded.user_id AND workspace_records.table_name='trading_accounts'",link.account_id,device.owner,JSON.stringify(account),time,time,JSON.stringify({broker_name:input.company,account_number:input.login}))]);
     return json({ok:true});
   }
   if(action!=='device/sync'||link.status!=='connected') return fail('Link unavailable.',409);
+  if(await capturePaused()) return fail('MT5 capture is paused by the administrator.',403);
+  if(link.trade_mode===2 && env.MT5_ALLOW_LIVE!=='true') return fail('Real-account capture is paused by the release gate.',403);
   if (!Array.isArray(input.events)||input.events.length>40) return fail('Invalid capture batch.');
   const statements:D1PreparedStatement[]=[];
   for(const event of input.events) {
