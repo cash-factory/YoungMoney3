@@ -25,3 +25,17 @@ Staging is guarded against accidentally selecting the production D1 ID or databa
 ## 3. Production release gate
 
 Production remains untouched until staging and broker reconciliation pass, browser E2E tests pass, automatic off-site encrypted backups have been restored successfully, and an operator explicitly approves a production rollout. Apply the D1 migration before deploying Worker/assets. Live-account capture is a separate explicit opt-in; do **not** enable `MT5_ALLOW_LIVE` globally as a shortcut without passing the real/demo broker test matrix.
+
+
+## Manual GitHub Actions staging release (prepared, not yet executed)
+
+The repository includes [`Deploy staging (manual only)`](../.github/workflows/staging-release.yml), a workflow that **cannot run on push**, requires an exact confirmation input and runs only when manually selected on `main`. It uses the GitHub **staging** environment; configure that environment's required reviewers so deployments require explicit owner approval.
+
+1. In Cloudflare, create a **new D1 database** (recommended name `youngmoney3-staging`) and obtain its UUID. Use a scoped API token permitted to deploy the intended staging Worker and migrate only the intended D1 database, never a broad account API key.
+2. In GitHub repository **Settings → Environments**, create `staging`, add a required reviewer, and add environment variables `YM3_STAGING_D1_ID`, `YM3_STAGING_D1_NAME` and optionally `YM3_STAGING_WORKER_NAME`. Add staging environment secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. Do not paste the API token into chat or Git.
+3. Before staging deployment, configure the staging Worker secret `PILOT_INVITE_CODE` (distinct from production) through Wrangler or Cloudflare Dashboard. For private media QA, use **a different private Supabase project/bucket** and associated Worker secrets, never production media credentials.
+4. In **Actions → Deploy staging (manual only) → Run workflow**, select **main**, enter `DEPLOY-STAGING-ONLY`, and approve the staging environment gate. The job installs dependencies, runs application/Worker regression checks, creates and re-verifies the staging config, applies migrations to **staging D1 only**, verifies migration `0006`–`0008` tables/columns, and deploys **staging only**.
+5. Record the staging URL from deployment output. Test `/api/health`, two disposable users, account isolation, optional onboarding, admin recovery (including invalidation), encrypted backup round-trip, theme/browser behavior and two demo MT5 connections. Do not use a full-access live trading account for first-time acceptance.
+6. Capture evidence before production promotion: URLs and SHA, versioned migration ledger, financial reconciliation, recovery drill and explicit owner approval.
+
+**No connected Cloudflare account was accessible from this coding session.** This workflow is a deploy path, not evidence of an actual staging rollout. Do not claim staging or production validation until the workflow has run with independently configured provider credentials and acceptance checks.
