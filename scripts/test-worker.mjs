@@ -207,9 +207,10 @@ try {
   assert.equal((await call('mt5/history-request',{link,days:30})).status,404,'Other user cannot access source link while capture is paused');
   assert.equal((await call('admin',{action:'overview'}).then(r=>r.json())).mt5CapturePaused,true);
   assert.equal((await call('admin',{action:'set-mt5-capture',paused:false,currentPassword:'local-test-pass'})).status,200);
-  assert.equal((await device('sync',{link,events:[]})).status,200);
+  assert.equal((await device('sync',{link,events:[]})).status,403,'Suspended account stays blocked after global capture resumes');
   assert.equal((await call('admin',{action:'issue-recovery',targetUserId:subject,currentPassword:'local-test-pass'})).status,409,'Suspended accounts cannot be reset');
   assert.equal((await call('admin',{action:'restore',targetUserId:subject})).status,200);
+  assert.equal((await device('sync',{link,events:[]})).status,200,'Restored account can sync when global capture is enabled');
   assert.equal((await call('admin',{action:'issue-recovery',targetUserId:subject,currentPassword:'wrong'})).status,403);
   assert.equal((await call('admin',{action:'issue-recovery',targetUserId:subject})).status,400);
   const grantResponse=await call('admin',{action:'issue-recovery',targetUserId:subject,currentPassword:'local-test-pass'});
