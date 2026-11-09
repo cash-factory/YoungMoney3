@@ -21,7 +21,7 @@
     "cf:staging:migrate": "wrangler d1 migrations apply DB --remote --config wrangler.staging.jsonc",
     "cf:staging:deploy": "npm run build && wrangler deploy --config wrangler.staging.jsonc",
     "test:staging": "node --test scripts/prepare-staging.test.mjs scripts/verify-staging-schema.test.mjs scripts/check-staging-health.test.mjs",
-    "test:ui": "node --test scripts/test-ui-contract.mjs",
+    "test:ui": "node --test scripts/test-ui-contract.mjs scripts/test-mt5-broker-search.mjs",
     "cf:staging:verify": "node scripts/verify-staging-schema.mjs"
   },
   "dependencies": {
