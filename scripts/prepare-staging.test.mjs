@@ -19,6 +19,7 @@ test('staging refuses production DB and Worker identity',()=>{
     const config=JSON.parse(readFileSync(join(folder,'wrangler.staging.jsonc'),'utf8'));
     assert.equal(config.d1_databases[0].database_name,'stage-db');
     assert.equal(config.vars.MT5_ALLOW_LIVE,'false');
+    assert.deepEqual(config.assets.run_worker_first,['/api/*']);
     assert.equal(config.name,'ym-fx-staging');
   }finally{rmSync(folder,{recursive:true,force:true})}
 });

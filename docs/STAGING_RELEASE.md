@@ -39,3 +39,45 @@ The repository includes [`Deploy staging (manual only)`](../.github/workflows/st
 6. Capture evidence before production promotion: URLs and SHA, versioned migration ledger, financial reconciliation, recovery drill and explicit owner approval.
 
 **No connected Cloudflare account was accessible from this coding session.** This workflow is a deploy path, not evidence of an actual staging rollout. Do not claim staging or production validation until the workflow has run with independently configured provider credentials and acceptance checks.
+
+## API routing and staging administrator bootstrap
+
+Cloudflare static-asset SPA navigation may serve `index.html` to a browser opening `/api/health`, even when application `fetch()` requests use the backend. The Worker and staging generator now explicitly select `assets.run_worker_first: ["/api/*"]`. The staging release job checks the deployed `/api/health` with both JSON and browser-like navigation headers; expected JSON: `{"status":"ok","database":"connected"}`. A `?utm_source=...` parameter does not affect the API path.
+
+**Fresh staging D1 does not contain production users.** Registering in staging with the same email creates a distinct identity. All new signups are `member` by default. Neither the first signup nor matching a production owner's email automatically grants admin access.
+
+To bootstrap the **first staging administrator only**, an authorized Cloudflare D1 operator should:
+
+1. Open Cloudflare → D1 → `young-money-staging` (verify the staging database's UUID independently, and ensure this is **not** `trade-journal-pro`) → Console. This is a manual, privileged database operation, not an endpoint exposed to normal users.
+2. Confirm exactly one intended registered user and zero existing administrators with:
+   ```sql
+   SELECT email, role, account_status FROM users;
+   SELECT COUNT(*) AS existing_admins FROM users WHERE role = 'admin';
+   ```
+3. If and **only if** no admin exists, replace the example email below with the precise email of the intended staging owner, then run:
+   ```sql
+   UPDATE users
+   SET role = 'admin', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+   WHERE email = 'owner@example.com'
+     AND role = 'member'
+     AND account_status = 'active'
+     AND NOT EXISTS (SELECT 1 FROM users WHERE role = 'admin');
+   ```
+4. Re-run `SELECT email, role FROM users;` and verify the intended staging identity is the **only** admin. Record the approval and operator/date. To record an auditable bootstrap, run this **only after verifying the role changed on the correct user**:
+   ```sql
+   INSERT INTO admin_audit_log
+      (id, actor_user_id, target_user_id, action, outcome, metadata, created_at)
+   SELECT lower(hex(randomblob(16))), NULL, id,
+      'staging-first-admin-bootstrap', 'success', '{}',
+      strftime('%Y-%m-%dT%H:%M:%fZ','now')
+   FROM users
+   WHERE email = 'owner@example.com' AND role = 'admin'
+     AND NOT EXISTS (
+       SELECT 1 FROM admin_audit_log
+       WHERE action = 'staging-first-admin-bootstrap'
+         AND target_user_id = users.id
+     );
+   ```
+5. Sign out of the staging website and sign in again. **Admin Operations** should appear in the sidebar. If the staging user already has an admin, do not bypass it; use an authorized existing-admin recovery workflow.
+
+Do not place passwords, Cloudflare API tokens or broker credentials in D1 Console SQL, logs, screenshots or chat. These instructions **do not** promote any production user and **are not** an automatic privilege escalation feature.
