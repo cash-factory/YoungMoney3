@@ -82,6 +82,20 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
 
   const toggleSection = (id: string) => setExpanded(previous => ({ ...previous, [id]: !previous[id] }));
 
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const priorOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileOpen(false);
+    };
+    window.addEventListener('keydown', onEscape);
+    return () => {
+      document.body.style.overflow = priorOverflow;
+      window.removeEventListener('keydown', onEscape);
+    };
+  }, [mobileOpen]);
+
   const handleNav = (page: PageId) => {
     onNavigate(page);
     setMobileOpen(false);
@@ -190,7 +204,7 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
           <div className="relative">
             <button
               onClick={() => setProfileMenuOpen(o => !o)}
-              type="button" aria-expanded={profileMenuOpen} aria-haspopup="menu"
+              type="button" aria-expanded={profileMenuOpen}
               className="ym-profile-trigger w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-secondary transition-colors"
             >
               {profile?.avatar_url ? (
