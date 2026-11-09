@@ -193,7 +193,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       const data=Object.fromEntries(allowed.filter(k=>k in f).map(k=>[k,f[k]]));
       Object.assign(data,{trade_source:'mt5',capture_mode:'live',account_id:link.account_id,user_id:device.owner,settlement_currency:link.currency,broker:link.company,outcome:f.status==='open'?null:f.pnl>0?'win':f.pnl<0?'loss':'breakeven'});
       if(event.kind==='history'){
-        const history=await q('SELECT history_id,history_status,linked_at FROM mt5_links WHERE id=?',link.id).first<{history_id:string;history_status:string;linked_at:string;history_since:number}>();
+        const history=await q('SELECT history_id,history_status,linked_at,history_since FROM mt5_links WHERE id=?',link.id).first<{history_id:string;history_status:string;linked_at:string;history_since:number}>();
         if(!history || !event.key.startsWith('history:'+history.history_id+':close-')
           || history.history_status!=='requested' || f.status!=='closed'
           || Date.parse(String(f.exit_time))<history.history_since
