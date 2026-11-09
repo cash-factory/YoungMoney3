@@ -32,16 +32,22 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   const input = await body(request);
   if (!input) return fail('Invalid connector request.');
   const unix = Date.now();
+  const capturePaused = async () => {
+    const setting=await q("SELECT value FROM site_settings WHERE key='mt5_capture_paused'").first<{value:string}>();
+    return setting?.value==='true';
+  };
   if (owner) {
     if (action === 'status') {
       const devices = await q('SELECT id,public_key,last_seen FROM mt5_devices WHERE owner=? AND revoked=0 AND public_key IS NOT NULL', owner).all();
       const links = await q('SELECT l.id,l.account_id,l.status,l.company,l.server,l.login,l.access_level,l.trade_mode,l.history_id,l.history_status,l.history_since,l.last_sync,l.broker_balance,l.broker_equity,l.currency,l.gap,l.last_error,l.expires FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND d.revoked=0', owner).all();
       const accounts=await q("SELECT id,json_extract(payload,'$.name') AS name FROM workspace_records WHERE user_id=? AND table_name='trading_accounts' ORDER BY created_at",owner).all();
-      return json({ accounts:accounts.results, devices: devices.results, links: links.results, demoOnly: env.MT5_ALLOW_LIVE !== 'true' });
+      return json({ accounts:accounts.results, devices: devices.results, links: links.results, demoOnly: env.MT5_ALLOW_LIVE !== 'true', capturePaused: await capturePaused() });
     }
     if (['history-request','history-preview','history-import','history-decline'].includes(action)) {
       const link=await q("SELECT l.* FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE l.id=? AND d.owner=? AND d.revoked=0 AND l.status='connected'",input.link,owner).first<{id:string;account_id:string;currency:string;company:string;linked_at:string;history_id:string;history_status:string;trade_mode:number|null}>();
       if(!link) return fail('Linked account unavailable.',404);
+      if(['history-request','history-import'].includes(action) && await capturePaused())
+        return fail('MT5 capture is paused by the administrator.',403);
       if(link.trade_mode===2 && env.MT5_ALLOW_LIVE!=='true' && ['history-request','history-import'].includes(action))
         return fail('Real-account capture is paused by the release gate.',403);
       if(action==='history-request') {
@@ -89,6 +95,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       return json({added,more:items.results.length===40});
     }
     if (action === 'pair') {
+      if(await capturePaused()) return fail('MT5 pairing is paused by the administrator.',403);
       const code = uuid().replaceAll('-', '');
       await q('INSERT INTO mt5_devices(id,owner,pair_hash,expires) VALUES(?,?,?,?)', uuid(), owner, await hash(code), unix + 300000).run();
       return json({ code });
@@ -99,6 +106,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       return json({ ok: true });
     }
     if (action === 'connect') {
+      if(await capturePaused()) return fail('MT5 capture is paused by the administrator.',403);
       const device = await q('SELECT id FROM mt5_devices WHERE id=? AND owner=? AND revoked=0 AND last_seen>?', input.device, owner, unix - 90000).first();
       if (!device) return fail('Connector offline. Start it on your PC and retry.', 409);
       if (!isObject(input.envelope) || !['wrapped','iv','data'].every(k => limited((input.envelope as Fields)[k],4096))) return fail('Invalid encrypted request.');
@@ -126,6 +134,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     return fail('Unknown action.',404);
   }
   if (action==='device/claim') {
+    if(await capturePaused()) return fail('MT5 pairing is paused by the administrator.',403);
     if (!limited(input.code,64) || !limited(input.publicKey,1024) || !/^[a-zA-Z0-9+/=]+$/.test(input.publicKey)) return fail('Invalid pairing request.');
     const token=uuid()+uuid();
     const result=await q('UPDATE mt5_devices SET pair_hash=NULL,token_hash=?,public_key=?,last_seen=? WHERE pair_hash=? AND expires>? AND revoked=0 RETURNING id',await hash(token),input.publicKey,unix,await hash(input.code),unix).first();
@@ -137,6 +146,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if (!device) return fail('Device access revoked.',403);
   if (action==='device/poll') {
     await q('UPDATE mt5_devices SET last_seen=? WHERE id=?',unix,device.id).run();
+    if(await capturePaused()) return json({job:null,capturePaused:true});
     await q("UPDATE mt5_links SET envelope=NULL,status='expired' WHERE device=? AND status IN ('pending','verifying') AND expires<=?",device.id,unix).run();
     const job=await q("SELECT id,envelope FROM mt5_links WHERE device=? AND status='pending' AND expires>? ORDER BY expires LIMIT 1",device.id,unix).first<{id:string;envelope:string}>();
     if (!job) return json({job:null});
@@ -147,6 +157,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   const link=await q('SELECT * FROM mt5_links WHERE id=? AND device=?',input.link,device.id).first<{id:string;account_id:string;status:string;currency:string;company:string;expires:number;trade_mode:number|null}>();
   if (!link) return fail('Unknown link.',404);
   if (action==='device/verified') {
+    if(await capturePaused()) return fail('MT5 capture is paused by the administrator.',403);
     if (link.status==='connected') return json({ok:true});
     if (link.status!=='verifying' || link.expires<=unix) return fail('Login expired.',409);
     // Require an actual numeric MT5 mode before testing the real-account release gate.
@@ -185,6 +196,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     return json({ok:true});
   }
   if(action!=='device/sync'||link.status!=='connected') return fail('Link unavailable.',409);
+  if(await capturePaused()) return fail('MT5 capture is paused by the administrator.',403);
   if(link.trade_mode===2 && env.MT5_ALLOW_LIVE!=='true') return fail('Real-account capture is paused by the release gate.',403);
   if (!Array.isArray(input.events)||input.events.length>40) return fail('Invalid capture batch.');
   const statements:D1PreparedStatement[]=[];

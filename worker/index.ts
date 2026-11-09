@@ -626,8 +626,10 @@ async function adminRoute(request: Request, env: Env, user: Record<string, unkno
     const users=await env.DB.prepare("SELECT COUNT(*) AS total,SUM(CASE WHEN role='member' THEN 1 ELSE 0 END) AS members,SUM(CASE WHEN account_status='suspended' THEN 1 ELSE 0 END) AS suspended FROM users").first();
     const devices=await env.DB.prepare("SELECT COUNT(*) AS total,SUM(CASE WHEN revoked=0 THEN 1 ELSE 0 END) AS active FROM mt5_devices").first();
     const links=await env.DB.prepare("SELECT COUNT(*) AS total,SUM(CASE WHEN status='connected' THEN 1 ELSE 0 END) AS connected FROM mt5_links").first();
-    const setting=await env.DB.prepare("SELECT value FROM site_settings WHERE key='signup_paused'").first<{value:string}>();
-    return response({users,devices,links,signupPaused:setting?.value==='true',database:'connected',backupAutomation:'external-configuration-required'});
+    const settings=await env.DB.prepare("SELECT key,value FROM site_settings WHERE key IN ('signup_paused','mt5_capture_paused')").all<{key:string;value:string}>();
+    const flags=Object.fromEntries(settings.results.map(setting=>[setting.key,setting.value==='true']));
+    const lastAudit=await env.DB.prepare("SELECT created_at FROM admin_audit_log ORDER BY created_at DESC LIMIT 1").first<{created_at:string}>();
+    return response({users,devices,links,signupPaused:flags.signup_paused===true,mt5CapturePaused:flags.mt5_capture_paused===true,latestAdminActionAt:lastAudit?.created_at??null,database:'connected',backupAutomation:'external-configuration-required'});
   }
   if(input.action==='set-signups') {
     if(typeof input.paused!=='boolean') return response({error:'Supply a boolean pause setting.'},400);
@@ -635,6 +637,17 @@ async function adminRoute(request: Request, env: Env, user: Record<string, unkno
       .bind(input.paused?'true':'false',now()).run();
     await audit(env.DB,String(user.id),null,'registration-gate','success',{paused:input.paused});
     return response({ok:true,signupPaused:input.paused});
+  }
+  if(input.action==='set-mt5-capture') {
+    if(typeof input.paused!=='boolean') return response({error:'Supply a boolean pause setting.'},400);
+    if(!input.currentPassword) return response({error:'Confirm your administrator password.'},400);
+    if(!await withinAuthBudget(env.DB,'admin-mt5-capture:'+String(user.id),10)) return throttled();
+    const proof=await hashPassword(input.currentPassword,String(user.password_salt));
+    if(proof.hash!==user.password_hash) return response({error:'Administrator password verification failed.'},403);
+    await env.DB.prepare("INSERT INTO site_settings(key,value,updated_at) VALUES('mt5_capture_paused',?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at")
+      .bind(input.paused?'true':'false',now()).run();
+    await audit(env.DB,String(user.id),null,'mt5-capture-gate','success',{paused:input.paused});
+    return response({ok:true,mt5CapturePaused:input.paused});
   }
   if(input.action==='revoke-own-other-sessions') {
     const current=cookieToken(request);

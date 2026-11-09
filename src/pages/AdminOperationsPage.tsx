@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 
 type Member={id:string;email:string;username?:string;display_name?:string;role?:string;account_status?:'active'|'suspended';created_at:string;trade_count:number;plan_count:number};
 type Audit={id:string;action:string;outcome:string;target_user_id?:string;created_at:string;metadata?:Record<string,unknown>};
-type Overview={users?:{total:number;members:number;suspended:number};devices?:{total:number;active:number};links?:{total:number;connected:number};signupPaused:boolean;database:string;backupAutomation:string};
+type Overview={users?:{total:number;members:number;suspended:number};devices?:{total:number;active:number};links?:{total:number;connected:number};signupPaused:boolean;mt5CapturePaused:boolean;latestAdminActionAt?:string|null;database:string;backupAutomation:string};
 type Recovery={code:string;email:string;expires_at:string};
 async function adminCall(payload:Record<string,unknown>):Promise<Record<string,unknown>> {
   const response=await fetch('/api/admin',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
@@ -20,6 +20,7 @@ export function AdminOperationsPage(){
   const [overview,setOverview]=useState<Overview|null>(null);
   const [query,setQuery]=useState('');
   const [password,setPassword]=useState('');
+  const [mt5Password,setMt5Password]=useState('');
   const [recovery,setRecovery]=useState<Recovery|null>(null);
   const [busy,setBusy]=useState<string|null>(null);
   const [loading,setLoading]=useState(true);
@@ -87,6 +88,19 @@ export function AdminOperationsPage(){
             const paused=!overview?.signupPaused;
             if(window.confirm(paused?'Pause all new workspace registrations?':'Resume invited registration?'))void act('set-signups',undefined,{paused});
           }}>{overview?.signupPaused?'Resume registration':'Pause registration'}</button>
+        </div>
+        <div className="rounded-xl border border-themed p-3 space-y-3">
+          <div>
+            <p className="font-semibold text-sm">MT5 capture emergency stop</p>
+            <p className="mt-1 text-xs text-muted">{overview?.mt5CapturePaused ? 'Capture paused for all accounts. Existing records are retained.' : 'Connector synchronization is enabled, subject to the real-account release gate.'}</p>
+          </div>
+          <label className="block text-xs font-semibold text-secondary">Administrator password<input className="input-field mt-1.5" type="password" autoComplete="current-password" value={mt5Password} onChange={event=>setMt5Password(event.target.value)}/></label>
+          <button className="btn-secondary" type="button" disabled={!!busy||!overview||!mt5Password} onClick={()=>{
+            const paused=!overview?.mt5CapturePaused;
+            const question=paused?'Pause all MT5 pairing, imports and syncing? No trades will be deleted.':'Resume MT5 imports and syncing? Confirm staging and broker health first.';
+            if(window.confirm(question)){ void act('set-mt5-capture',undefined,{paused,currentPassword:mt5Password}).finally(()=>setMt5Password('')); }
+          }}>{overview?.mt5CapturePaused?'Resume MT5 capture':'Pause MT5 capture'}</button>
+          <p className="text-xs text-muted">This controls journal capture only. It does not stop or control trades in MetaTrader or at your broker.</p>
         </div>
         <button className="btn-secondary" type="button" disabled={!!busy} onClick={()=>{if(window.confirm('Revoke every other session signed into your administrator account?'))void act('revoke-own-other-sessions');}}>Sign out my other sessions</button>
         <p className="text-xs text-muted">Automated off-site backup, email delivery, Worker metrics and deployment approval require provider setup; they are not controlled by the journal database.</p>

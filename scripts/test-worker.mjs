@@ -199,6 +199,15 @@ try {
   assert.equal((await call('admin',{action:'set-signups',paused:true})).status,200);
   assert.equal((await call('auth/signup',{email:'blocked@example.test',username:'third',password:'local-test-pass',invite_code:'integration'})).status,403);
   assert.equal((await call('admin',{action:'set-signups',paused:false})).status,200);
+  assert.equal((await call('admin',{action:'set-mt5-capture',paused:true})).status,400);
+  assert.equal((await call('admin',{action:'set-mt5-capture',paused:true,currentPassword:'wrong'})).status,403);
+  assert.equal((await call('admin',{action:'set-mt5-capture',paused:true,currentPassword:'local-test-pass'})).status,200);
+  assert.equal((await device('sync',{link,events:[]})).status,403);
+  assert.equal((await call('mt5/pair',{})).status,403);
+  assert.equal((await call('mt5/history-request',{link,days:30})).status,404,'Other user cannot access source link while capture is paused');
+  assert.equal((await call('admin',{action:'overview'}).then(r=>r.json())).mt5CapturePaused,true);
+  assert.equal((await call('admin',{action:'set-mt5-capture',paused:false,currentPassword:'local-test-pass'})).status,200);
+  assert.equal((await device('sync',{link,events:[]})).status,200);
   assert.equal((await call('admin',{action:'issue-recovery',targetUserId:subject,currentPassword:'local-test-pass'})).status,409,'Suspended accounts cannot be reset');
   assert.equal((await call('admin',{action:'restore',targetUserId:subject})).status,200);
   assert.equal((await call('admin',{action:'issue-recovery',targetUserId:subject,currentPassword:'wrong'})).status,403);
