@@ -8,7 +8,6 @@ export function useTradingAccounts(userId?: string | null) {
   const [loading, setLoading] = useState(true);
   const fetchAccounts = useCallback(async () => {
     if (!userId) { setAccounts([]); setLoading(false); return; }
-    setLoading(true);
     const { data, error } = await supabase.from('trading_accounts').select('*').eq('user_id', userId)
       .order('created_at', { ascending: true });
     if (error) reportDataError('Failed to fetch trading accounts:', error);
@@ -16,6 +15,12 @@ export function useTradingAccounts(userId?: string | null) {
     setLoading(false);
   }, [userId]);
   useEffect(() => { fetchAccounts(); }, [fetchAccounts]);
+  useEffect(() => {
+    const refresh = () => { if (!document.hidden) void fetchAccounts(); };
+    const timer = window.setInterval(refresh, 15000);
+    window.addEventListener('focus', refresh);
+    return () => { clearInterval(timer); window.removeEventListener('focus', refresh); };
+  }, [fetchAccounts]);
   const upsertAccount = async (input: TradingAccountInput, id?: string) => {
     if (!userId) throw new Error('Not authenticated');
     const query = id

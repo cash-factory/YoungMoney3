@@ -15,6 +15,7 @@ def closed_legs(deals, start_ms, orders=None):
     orders = orders or {}
     quantity = basis = costs = ZERO
     entry_ms = None
+    entry_order = {}
     for d in sorted(deals, key=lambda x: (x["time_msc"], int(x["ticket"]))):
         if d["type"] not in (0, 1):
             continue
@@ -36,7 +37,7 @@ def closed_legs(deals, start_ms, orders=None):
                 yield {"kind":"trade","key":"close-"+str(d["ticket"]), "fields":{
                     "pair":d["symbol"], "direction":"long" if quantity>0 else "short",
                     "status":"closed","entry_time":iso(entry_ms), "exit_time":iso(d["time_msc"]),
-                    "stop_loss":closing_order.get("sl") or None,"take_profit":closing_order.get("tp") or None,
+                    "stop_loss":closing_order.get("sl") or entry_order.get("sl") or None,"take_profit":closing_order.get("tp") or entry_order.get("tp") or None,
                     "entry_price":float(basis),"exit_price":float(price),"lot_size":float(closed),
                     "fees":float(-exit_costs-prior_costs), "pnl":float(net),
                     "broker_details":{"deal_ticket":str(d["ticket"]), "position_id":str(d["position_id"]),
@@ -47,6 +48,7 @@ def closed_legs(deals, start_ms, orders=None):
         if remaining:
             if not quantity:
                 entry_ms = d["time_msc"]
+                entry_order = orders.get(d.get("order"),{})
                 basis = costs = ZERO
             basis = (abs(quantity)*basis + remaining*price)/(abs(quantity)+remaining)
             quantity += remaining if change>0 else -remaining

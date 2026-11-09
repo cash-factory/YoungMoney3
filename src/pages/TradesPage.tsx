@@ -301,6 +301,12 @@ export function TradesPage() {
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <DetailItem label="Entry Price" value={t.entry_price?.toString() || '—'} />
                         <DetailItem label="Exit Price" value={t.exit_price?.toString() || '—'} />
+                        <DetailItem label="Stop Loss" value={t.stop_loss?.toString() || '—'} />
+                        <DetailItem label="Fees" value={t.fees?.toString() || '—'} />
+                        <DetailItem label="Deal Ticket" value={String(t.broker_details?.deal_ticket || '—')} />
+                        <DetailItem label="Position ID" value={String(t.broker_details?.position_id || '—')} />
+                        <DetailItem label="Swap" value={String(t.broker_details?.swap ?? '—')} />
+                        <DetailItem label="Closed At" value={t.exit_time ? formatDateTime(t.exit_time) : '—'} />
                         <DetailItem label="Take Profit" value={t.take_profit?.toString() || '—'} />
                         <DetailItem label="Lot Size" value={t.lot_size?.toString() || '—'} />
                         <DetailItem label="Risk %" value={t.risk_percent?.toString() || '—'} />

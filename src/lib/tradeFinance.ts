@@ -20,7 +20,7 @@ export function accountLedger(account: TradingAccount, trades: Trade[], adjustme
       ? sum.plus(trade.pnl_decimal ?? trade.pnl) : sum, new Decimal(0));
   const balance = adjustments.reduce((sum, adjustment) =>
     adjustment.account_id === account.id ? sum.plus(adjustment.amount) : sum, profit.plus(account.balance));
-  return { profit: profit.toNumber(), balance: balance.toNumber() };
+  return { profit: profit.toNumber(), balance: account.broker_balance ?? balance.toNumber() };
 }
 
 export function validateTradeTimes(entry: string, exit: string | null, closed: boolean): string | null {
