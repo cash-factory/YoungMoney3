@@ -146,7 +146,7 @@ export function DashboardPage() {
 
   if (loadError && !asOf) return <p role="alert">Trade history unavailable. Risk figures will appear after the next successful refresh.</p>;
   return (
-    <div>
+    <div className="ym-dashboard">
       {loadError && <p role="alert">Trade history unavailable. Showing figures last refreshed {new Date(asOf!).toLocaleString()}.</p>}
       {trades.some(t=>t.status==='closed' && (!t.exit_time || tradeCurrency(t,accounts)==='Unknown' || t.realized_r == null)) && <p className="card p-3 text-sm" role="status">Some closed trades need review for close time, currency or initial risk. Daily risk and R statistics may be incomplete.</p>}
       {account?.broker_balance != null && (!account.broker_balance_at || Date.now()-Date.parse(account.broker_balance_at)>120000) && <p role="status" className="card p-3 text-xs text-secondary">Broker balance is a last-known snapshot, not a live quote. Check MT5 Connections for its latest sync before making trading decisions.</p>}
@@ -160,7 +160,7 @@ export function DashboardPage() {
         }
       />
 
-      <div className="card p-4 mb-6 flex flex-col sm:flex-row sm:items-end gap-3">
+      <div className="ym-dashboard-filters card p-4 sm:p-5 mb-6 flex flex-col sm:flex-row sm:items-end gap-3">
         <div className="flex-1"><label className="block text-xs font-semibold text-secondary mb-1.5">View account</label><select className="input-field" value={accountFilter} onChange={e => setAccountFilter(e.target.value)}><option value="all">All accounts</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name} · {a.base_currency}</option>)}</select></div>
         <div className="flex-1"><label className="block text-xs font-semibold text-secondary mb-1.5">Performance source</label><select className="input-field" value={source} onChange={e => setSource(e.target.value as 'live'|'backtest'|'forward')}><option value="live">Live trades</option><option value="backtest">Backtest logs</option><option value="forward">Forward test logs</option></select></div>
         {source === 'live' && <label className="flex-1 text-xs font-semibold text-secondary">Journal source
@@ -193,7 +193,7 @@ export function DashboardPage() {
       {mixedCurrencyView && <div className="card px-4 py-3 mb-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs"><span className="font-semibold text-secondary">Closed P&amp;L by currency</span>{currencyTotals.length ? currencyTotals.map(([currency, pnl]) => <strong key={currency} className={`font-mono ${pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>{currency} {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}</strong>) : <span className="text-muted">No closed trades in this view.</span>}</div>}
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <StatCard
           label="Net P&L"
           value={mixedCurrencyView ? 'Grouped' : formatCurrency(stats.totalPnl)}
@@ -226,7 +226,7 @@ export function DashboardPage() {
       </div>
 
       {/* Streak + consecutive */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <StatCard
           label="Current Streak"
           value={stats.currentStreak.type === 'none' ? '—' : `${stats.currentStreak.count} ${stats.currentStreak.type === 'win' ? 'Wins' : 'Losses'}`}
