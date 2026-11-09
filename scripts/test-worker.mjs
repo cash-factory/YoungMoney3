@@ -102,6 +102,18 @@ try {
   assert.equal((await (await device('poll',{})).json()).job.id,link);
   assert.equal((await (await device('poll',{})).json()).job,null);
   assert.equal((await device('verified',{link,ok:true,mode:0,login:'42',server:'Demo',company:'Fixtures',currency:'USD',balance:100})).status,200);
+  const liveBalance=await device('sync',{link,events:[],balance:165.5,equity:178.25});
+  assert.equal(liveBalance.status,200);
+  const linkedAccount=(await (await call('mt5/status',{})).json()).links[0].account_id;
+  const accountBefore=(await (await call('data',{action:'select',table:'trading_accounts',filters:{id:linkedAccount}})).json()).data[0];
+  assert.equal(accountBefore.broker_balance,165.5);
+  assert.equal(accountBefore.broker_equity,178.25);
+  assert.ok(accountBefore.broker_balance_at);
+  assert.equal((await call('data',{action:'update',table:'trading_accounts',id:linkedAccount,
+    payload:{broker_balance:999999,broker_equity:0}})).status,200);
+  const accountAfter=(await (await call('data',{action:'select',table:'trading_accounts',filters:{id:linkedAccount}})).json()).data[0];
+  assert.equal(accountAfter.broker_balance,165.5);
+  assert.equal(accountAfter.broker_equity,178.25);
   const batch={link,events:[{kind:'trade',key:'close-42',fields:row}]};
   for(let i=0;i<2;i++) assert.equal((await device('sync',batch)).status,200);
   const imported=(await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json());

@@ -250,6 +250,10 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
         }
       }
       const normalized = table==='trades' && input.action==='insert' ? await normalizeTrade(item,user.id,env.DB) : item;
+      if (table === 'trading_accounts') {
+        // A user-provided backup must never impersonate an authenticated MT5 snapshot.
+        for (const key of ['broker_balance','broker_balance_at','broker_equity','broker_equity_at']) delete normalized[key];
+      }
       // Backup restores preserve their original financial snapshot but cannot
       // restore dangling or cross-account references.
       await assertOwnedLinks(table, normalized, user.id, env.DB);
@@ -305,6 +309,12 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
       return result.meta.changes ? response({ data: null }) : response({ error: 'This record changed. Refresh before deleting.' }, 409);
     }
     const merged = { ...old, ...patch, user_id: user.id, id: input.id };
+    if (table === 'trading_accounts') {
+      for (const key of ['broker_balance','broker_balance_at','broker_equity','broker_equity_at']) {
+        if (key in old) merged[key] = old[key];
+        else delete merged[key];
+      }
+    }
     if (table !== 'trades' || isFill) {
       const linkTable = isFill ? 'mt5_review' : table;
       const changedLinks = Object.fromEntries(Object.entries(patch || {}).filter(([field, value]) =>

@@ -213,7 +213,13 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   const balance = typeof input.balance === 'number' && Number.isFinite(input.balance) ? input.balance : null;
   const equity = typeof input.equity === 'number' && Number.isFinite(input.equity) ? input.equity : null;
   statements.push(q('UPDATE mt5_links SET last_sync=?,gap=MAX(gap,?),broker_balance=COALESCE(?,broker_balance),broker_equity=COALESCE(?,broker_equity) WHERE id=?',now(),input.gap===true?1:0,balance,equity,link.id));
-  if(balance!==null) statements.push(q("UPDATE workspace_records SET payload=json_set(payload,'$.broker_balance',?,'$.broker_balance_at',?),updated_at=? WHERE id=? AND user_id=? AND table_name='trading_accounts'",balance,now(),now(),link.account_id,device.owner));
+  if(balance!==null || equity!==null) {
+    const snapshot: Fields = {};
+    if(balance!==null) { snapshot.broker_balance=balance; snapshot.broker_balance_at=now(); }
+    if(equity!==null) { snapshot.broker_equity=equity; snapshot.broker_equity_at=now(); }
+    const patch=JSON.stringify(snapshot);
+    statements.push(q("UPDATE workspace_records SET payload=json_patch(payload,?),updated_at=? WHERE id=? AND user_id=? AND table_name='trading_accounts'",patch,now(),link.account_id,device.owner));
+  }
   if(input.history_done) statements.push(q("UPDATE mt5_links SET history_status='ready' WHERE id=? AND history_id=? AND history_status='requested'",link.id,input.history_done));
   await db.batch(statements);
   const history=await q('SELECT history_id AS id,history_since AS since,history_status AS status FROM mt5_links WHERE id=?',link.id).first();

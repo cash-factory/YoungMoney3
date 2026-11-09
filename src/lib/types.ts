@@ -636,6 +636,8 @@ export interface TradingAccount {
   balance_as_of?: string;
   broker_balance?: number;
   broker_balance_at?: string;
+  broker_equity?: number;
+  broker_equity_at?: string;
   risk_per_trade_pct: number;
   default_strategy_id?: string | null;
   default_plan_id?: string | null;
