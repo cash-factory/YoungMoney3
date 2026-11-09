@@ -257,7 +257,6 @@ function populateMt5Brokers({links=[],demoOnly=true}) {
     } else {
       serverHelp.textContent='Selected '+item.name+'. Check that this is your account’s exact assigned server; a known name alone does not confirm account access.';
     }
-    exact.focus();
   }
   function renderServerSuggestions(){
     serverMatches=getServerSuggestions(exact.value,registry,broker.value,demoOnly);
