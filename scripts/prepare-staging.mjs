@@ -25,7 +25,8 @@ const stage={
   name:workerName,
   main:production.main,
   compatibility_date:production.compatibility_date,
-  assets:production.assets,
+  // Force API routes to reach the backend even on browser navigation.
+  assets:{...production.assets,run_worker_first:['/api/*']},
   d1_databases:[{binding:'DB',database_name:name,database_id:id}],
   vars:{MT5_ALLOW_LIVE:'false'},
 };

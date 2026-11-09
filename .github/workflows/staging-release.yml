@@ -59,7 +59,20 @@ jobs:
       - name: Require MT5 and admin schema readiness
         run: npm run cf:staging:verify
       - name: Deploy staging Worker and frontend only
-        run: npx wrangler deploy --config wrangler.staging.jsonc
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config wrangler.staging.jsonc | tee "$RUNNER_TEMP/ym3-staging-deploy.log"
+      - name: Verify public API health and browser navigation
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEPLOYED_URL="$(grep -Eo 'https://[a-zA-Z0-9-]+[.][a-zA-Z0-9-]+[.]workers[.]dev' "$RUNNER_TEMP/ym3-staging-deploy.log" | tail -n 1 || true)"
+          if [[ -z "$DEPLOYED_URL" ]]; then
+            echo "Wrangler did not print a staging workers.dev URL; cannot verify deployed API."
+            exit 1
+          fi
+          YM3_STAGING_URL="$DEPLOYED_URL" node scripts/check-staging-health.mjs
       - name: Release evidence
         shell: bash
         run: |
