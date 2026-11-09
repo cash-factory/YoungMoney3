@@ -63,17 +63,16 @@ class LoginFailure(Exception):
 
 def terminal_account(slot, login, server, password, verify_password):
     """Attach to this portable terminal; authenticate with its broker server directory."""
-    if not mt5.initialize(slot, portable=True, timeout=30000):
-        raise LoginFailure("terminal_start", mt5.last_error()[0])
+    # MT5 can wait for a broker session before completing its Python IPC handshake.
+    # Supply the requested identity during startup, including on an empty terminal profile.
+    mt5.shutdown()
+    if not mt5.initialize(slot, portable=True, timeout=60000,
+                          login=login, password=password, server=server):
+        code = mt5.last_error()[0]
+        raise LoginFailure("broker_rejected" if code == -6 else "terminal_start", code)
     terminal = mt5.terminal_info()
     if not terminal or Path(terminal.data_path).resolve() != Path(slot).resolve().parent:
         raise LoginFailure("wrong_terminal")
-    info = mt5.account_info()
-    matches = info and info.login == login and info.server.casefold() == server.casefold()
-    if verify_password or not terminal.connected or not matches or info.trade_allowed:
-        if not mt5.login(login, password=password, server=server, timeout=30000):
-            code = mt5.last_error()[0]
-            raise LoginFailure("broker_rejected" if code == -6 else "broker_login", code)
     info = mt5.account_info()
     terminal = mt5.terminal_info()
     if not info or not terminal or not terminal.connected:

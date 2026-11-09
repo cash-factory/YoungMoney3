@@ -17,7 +17,7 @@ class TerminalLoginTests(unittest.TestCase):
         return connect.terminal_account(str(self.slot),42,'FundedNext-Server 3','fixture',new)
     def test_new_request_authenticates_even_if_terminal_already_connected(self):
         self.assertEqual(self.verify(),self.account)
-        self.api.login.assert_called_once_with(42,password='fixture',server='FundedNext-Server 3',timeout=30000)
+        self.api.initialize.assert_called_once_with(str(self.slot), portable=True, timeout=60000, login=42, password='fixture', server='FundedNext-Server 3')
     def test_existing_investor_session_can_sync_without_reauthenticating(self):
         self.verify(False)
         self.api.login.assert_not_called()
@@ -29,7 +29,7 @@ class TerminalLoginTests(unittest.TestCase):
         with self.assertRaisesRegex(connect.LoginFailure,'wrong_terminal'): self.verify()
         self.api.login.assert_not_called()
     def test_preserves_broker_failure_code(self):
-        self.api.login.return_value=False
+        self.api.initialize.return_value=False
         self.api.last_error.return_value=(-6,'Authorization failed')
         with self.assertRaisesRegex(connect.LoginFailure,'broker_rejected') as caught: self.verify()
         self.assertEqual(caught.exception.api_code,-6)
