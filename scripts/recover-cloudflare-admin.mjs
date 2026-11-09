@@ -30,6 +30,8 @@ const invoke=command=>{
   const response=JSON.parse(result.stdout);
   return response.flatMap(item=>item.results||[]);
 };
+const schema=invoke("SELECT name FROM sqlite_master WHERE type='table' AND name='recovery_codes'");
+if(schema.length!==1) throw Error('Required admin recovery migration 0008 is missing. No account was changed.');
 const matching=invoke("SELECT id,role FROM users WHERE email="+sql(email)+" AND role='admin'");
 if(matching.length!==1)throw Error('Exactly one existing administrator must match. No account was changed.');
 const userId=matching[0].id;
