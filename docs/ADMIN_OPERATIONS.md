@@ -1,6 +1,6 @@
 # Administrator Operations and recovery
 
-The **Admin Operations** page is a separate route (visible only to active administrators). The Worker checks the admin role on every operation, not just when displaying the menu. It provides member status management, audit history, one-time recovery code issuance/revocation, session invalidation, a registration pause switch, and aggregate account/connector health.
+The **Admin Operations** page is a separate route (visible only to active administrators). The Worker checks the admin role on every operation, not just when displaying the menu. It provides member status management, audit history, one-time recovery code issuance/revocation, session invalidation, a registration pause switch, an emergency MT5 capture pause/resume switch, and aggregate account/connector health.
 
 ## Member recovery
 1. Confirm the member's identity **out of band** before issuing a reset code. A recovery code is equivalent to password-reset authority and must not be posted publicly.
@@ -22,3 +22,12 @@ The script looks up exactly one existing admin, updates only that account's pass
 
 ## Safeguards
 An admin can view user email, username, status and aggregate counts, **not** read another user's private trade journal, broker login secret, or private media. Destructive actions have user confirmation and server-side role checks. Automated off-site backups, Cloudflare secret rotation, MFA, security alerts and email delivery remain provider-level work, not invisible powers granted to the UI.
+
+
+## MT5 emergency stop
+Use **Pause MT5 capture** in Admin Operations when detecting a compromised connector, reconciliation defect or incident. Confirmation requires the currently signed-in administrator's password and writes a timestamped audit event. While paused, new pairing, encrypted login handoffs, broker event uploads and historical imports are blocked for **all** user accounts. The page can still show existing linked accounts; no journal trades are removed.
+
+Stopping capture is **not** a broker-side kill switch: any full-access password still permits normal trading through an external MT5 terminal. For credential compromise, immediately change the broker password with the provider and revoke the affected PC in YoungMoney3. Resume imports only after checking every affected connector and reconciling missed intervals. A capture pause does not replace per-account MT5 token revocation, D1 backups or operator incident response.
+
+## Infrastructure boundaries
+Owner/admin operations intentionally cannot directly edit Cloudflare Worker secrets, read service tokens or private broker passwords, perform D1 point-in-time recovery, or enable production live-account capture through a public browser endpoint. Those actions require independently authenticated provider access and a recorded change/release workflow. Cloudflare-level emergency recovery requires the operator runbook above.
