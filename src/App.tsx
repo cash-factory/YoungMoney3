@@ -31,13 +31,12 @@ import { QuickCaptureModal } from '@/components/QuickCaptureModal';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { reportDataError } from '@/lib/recovery';
 import { Mt5Connections } from '@/components/Mt5Connections';
-import { RefreshCw } from 'lucide-react';
 
 const PAGE_IDS: PageId[] = [
   'dashboard', 'trades', 'calendar', 'analytics', 'journal', 'ai',
   'trading-plan', 'goals', 'risk-management', 'market-sessions', 'setups', 'strategy-testing',
   'strategies', 'resources', 'notes', 'study-material', 'brokers-charting', 'weekly-reviews',
-  'account-settings', 'mt5',
+  'account-settings', 'mt5', 'workspace-setup',
 ];
 
 function pageFromLocation(): PageId {
@@ -116,25 +115,12 @@ function AppContent() {
     return <div className="min-h-screen bg-primary flex items-center justify-center p-5"><section role="alert" className="card max-w-lg p-6 text-center"><h1 className="text-lg font-bold">Account suspended</h1><p className="mt-2 text-sm text-secondary">This account is temporarily unavailable. Contact your administrator if you believe this is an error.</p><button className="btn-primary mt-5" onClick={() => signOut()}>Sign out</button></section></div>;
   }
 
-  if (onboardingError) {
-    return <div className="min-h-screen bg-primary flex items-center justify-center p-5"><section role="alert" className="card max-w-lg p-6"><h1 className="text-lg font-bold">Could not prepare your workspace</h1><p className="mt-2 text-sm text-secondary">The app could not check whether your playbook is ready. Your records have not been changed. Check your connection or database setup, then retry.</p><p className="mt-3 break-all rounded-lg bg-secondary p-3 text-xs text-muted">{onboardingError}</p><button className="btn-primary mt-4" onClick={() => setOnboardingAttempt(value => value + 1)}><RefreshCw size={15} /> Retry</button></section></div>;
-  }
-
-  if (onboardingNeeded === null) {
-    return (
-      <div className="min-h-screen bg-primary flex items-center justify-center">
-        <LoadingSpinner label="Preparing your journal..." />
-      </div>
-    );
-  }
-
-  if (onboardingNeeded) {
-    return <OnboardingPage onComplete={() => setOnboardingNeeded(false)} />;
-  }
-
   return (
     <Layout current={page} onNavigate={navigateToPage} onQuickAdd={() => setQuickAdd(true)}>
+      {onboardingError && <p role="alert" className="card p-3 mb-4 text-sm">Workspace setup could not be checked. <button className="btn-secondary" onClick={()=>setOnboardingAttempt(v=>v+1)}>Retry</button></p>}
+      {onboardingNeeded && page !== 'workspace-setup' && <div className="card p-4 mb-4 flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-secondary">Create your first strategy and risk settings when you’re ready.</p><button className="btn-secondary" onClick={()=>navigateToPage('workspace-setup')}>Set up workspace</button></div>}
       <div key={page} className="animate-fade-in">
+        {page === 'workspace-setup' && <OnboardingPage onComplete={()=>{setOnboardingNeeded(false);navigateToPage('dashboard');}} />}
         {page === 'dashboard' && <DashboardPage />}
         {page === 'trades' && <TradesPage />}
         {page === 'calendar' && <CalendarPage />}

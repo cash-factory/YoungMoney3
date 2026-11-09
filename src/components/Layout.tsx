@@ -6,7 +6,7 @@ import { DataBackupModal } from '@/components/DataBackupModal';
 import { DataRecoveryNotice } from '@/components/ui/DataRecoveryNotice';
 import { useAuth } from '@/context/AuthContext';
 
-export type PageId = 'dashboard' | 'trades' | 'calendar' | 'analytics' | 'journal' | 'ai' | 'trading-plan' | 'goals' | 'risk-management' | 'market-sessions' | 'setups' | 'strategy-testing' | 'strategies' | 'resources' | 'notes' | 'study-material' | 'brokers-charting' | 'weekly-reviews' | 'account-settings' | 'mt5';
+export type PageId = 'dashboard' | 'trades' | 'calendar' | 'analytics' | 'journal' | 'ai' | 'trading-plan' | 'goals' | 'risk-management' | 'market-sessions' | 'setups' | 'strategy-testing' | 'strategies' | 'resources' | 'notes' | 'study-material' | 'brokers-charting' | 'weekly-reviews' | 'account-settings' | 'mt5' | 'workspace-setup';
 
 interface LayoutProps {
   current: PageId;
@@ -17,6 +17,7 @@ interface LayoutProps {
 
 const NAV_SECTIONS: { id: string; label: string; icon: typeof LayoutDashboard; items: { id: PageId; label: string; icon: typeof LayoutDashboard }[] }[] = [
   { id: 'home', label: 'Home', icon: LayoutDashboard, items: [
+    { id: 'workspace-setup', label: 'Workspace setup', icon: ClipboardList },
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   ] },
   { id: 'journal', label: 'Journal', icon: BookOpen, items: [
