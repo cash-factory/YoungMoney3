@@ -1,4 +1,4 @@
-import {useEffect, useState, type ReactNode} from 'react';
+import {useEffect, useRef, useState, type ReactNode} from 'react';
 import {AuthContext,type TraderProfile} from './AuthContext';
 import type {Session} from '@supabase/supabase-js';
 import {supabase} from '@/lib/supabase';
@@ -6,16 +6,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<TraderProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const profileRequest = useRef(0);
 
   const [unavailable,setUnavailable]=useState(false);
   const fetchProfile = async (userId: string) => {
+    const requestNumber = ++profileRequest.current;
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
       .maybeSingle();
-    if (!error && data) {
-      setProfile(data as TraderProfile);
+    if (requestNumber === profileRequest.current) {
+      setProfile(!error && data ? data as TraderProfile : null);
     }
   };
 
@@ -33,10 +35,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: listener } = supabase.auth.onAuthStateChange((_event: string, session: Session | null) => {
       setSession(session);
       if (session?.user) {
-        (async () => {
-          await fetchProfile(session.user.id);
-        })();
+        setProfile(null);
+        void fetchProfile(session.user.id);
       } else {
+        profileRequest.current++;
         setProfile(null);
       }
     });
@@ -67,7 +69,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    const result = await supabase.auth.signOut();
+    if (result?.error) {
+      // Do not pretend to have ended a session if the server could not clear its cookie.
+      setUnavailable(true);
+      return;
+    }
+    profileRequest.current++;
     setProfile(null);
     setSession(null);
   };
@@ -94,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (session?.user) await fetchProfile(session.user.id);
   };
 
-  if (unavailable) return <main role="alert" className="card p-5">Session verification unavailable. <button onClick={()=>window.location.reload()}>Retry</button></main>;
+  if (unavailable) return <main role="alert" className="card p-5">Session verification unavailable. Your account may still be signed in. <button onClick={()=>window.location.reload()}>Retry</button></main>;
   return (
     <AuthContext.Provider value={{ session, user: session?.user ?? null, profile, loading, signIn, signUp, signOut, updateProfile, refreshProfile, updatePassword }}>
       {children}
