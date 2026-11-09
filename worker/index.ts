@@ -3,9 +3,7 @@ import {selectRecords} from './selectRecords';
 import { settleManualTrade } from '../src/lib/settleManualTrade';
 import type { TradeInput } from '../src/lib/types';
 async function normalizeTrade(item: Record<string,unknown>, owner: unknown, db: D1Database) {
-  for (const [field, table] of Object.entries({account_id:'trading_accounts', strategy_id:'trader_strategies', plan_id:'trading_plans', setup_id:'trading_setups', instrument_id:'market_instruments', entry_model_id:'strategy_entry_models'})) {
-    if (item[field] != null && !await db.prepare('SELECT id FROM workspace_records WHERE user_id=? AND table_name=? AND id=?').bind(owner,table,item[field]).first()) throw new RequestError(400,'Invalid linked record: '+field);
-  }
+  await assertOwnedLinks('trades', item, owner, db);
   try { return settleManualTrade(item as unknown as TradeInput); }
   catch (e) { throw new RequestError(400,e instanceof Error ? e.message : 'Invalid trade.'); }
 }
@@ -103,7 +101,7 @@ async function authRoute(request: Request, env: Env, path: string) {
     const accountCount = await env.DB.prepare('SELECT COUNT(*) AS total FROM users').first<{ total: number }>();
     if ((accountCount?.total || 0) >= 10) return response({ error: 'This pilot has reached its 10-account limit.' }, 403);
     const email = input.email?.trim().toLowerCase(); const username = input.username?.trim().toLowerCase(); const password = input.password || ''; const displayName = input.display_name?.trim() || username;
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !username || !/^[a-z0-9_]{3,32}$/.test(username) || password.length < 8) return response({ error: 'Use a valid email, 3–32 character username, and password of at least 8 characters.' }, 400);
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !username || !/^[a-z0-9_]{3,32}$/.test(username) || password.length < 8) return response({ error: 'Use a valid email, 3â€“32 character username, and password of at least 8 characters.' }, 400);
     const existing = await env.DB.prepare('SELECT id FROM users WHERE email=? OR username=?').bind(email, username).first(); if (existing) return response({ error: 'Email or username is already in use.' }, 409);
     const secured = await hashPassword(password); const userId = id(); const timestamp = now(); const created = await env.DB.prepare('INSERT OR IGNORE INTO users (id,email,username,display_name,password_hash,password_salt,created_at,updated_at) SELECT ?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM users)<10').bind(userId, email, username, displayName, secured.hash, secured.salt, timestamp, timestamp).run(); if (!created.meta.changes) return response({ error: 'Account unavailable or pilot full.' }, 409); const user = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(userId).first<Record<string, unknown>>(); return issueSession(env.DB, user!);
   }
@@ -116,7 +114,7 @@ async function sessionRoute(request: Request, env: Env, user: Record<string, unk
   const input = await stringFields(request);
   if (path === '/api/auth/profile') {
     const username = input.username?.trim().toLowerCase();
-    if (username && !/^[a-z0-9_]{3,32}$/.test(username)) return response({ error: 'Username must be 3–32 letters, numbers, or underscores.' }, 400);
+    if (username && !/^[a-z0-9_]{3,32}$/.test(username)) return response({ error: 'Username must be 3â€“32 letters, numbers, or underscores.' }, 400);
     if (username) { const existing = await env.DB.prepare('SELECT id FROM users WHERE username=? AND id<>?').bind(username, user.id).first(); if (existing) return response({ error: 'Username is already in use.' }, 409); }
     await env.DB.prepare('UPDATE users SET username=COALESCE(?,username),display_name=COALESCE(?,display_name),bio=COALESCE(?,bio),trading_style=COALESCE(?,trading_style),updated_at=? WHERE id=?').bind(username || null, input.display_name?.trim() || null, input.bio?.trim() || null, input.trading_style?.trim() || null, now(), user.id).run();
     const updated = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(user.id).first<Record<string, unknown>>(); return response({ user: profile(updated!) });
@@ -139,7 +137,78 @@ async function sessionRoute(request: Request, env: Env, user: Record<string, unk
   return response({ error: 'Unknown session action.' }, 404);
 }
 
+// Keep user-created entity links within the same private workspace.
+// Provider/catalog identifiers and seeded instrument IDs are deliberately not included.
+const workspaceLinks: Record<string, Record<string, string>> = {
+  trades: {
+    account_id: 'trading_accounts', strategy_id: 'trader_strategies',
+    plan_id: 'trading_plans', setup_id: 'trading_setups',
+    instrument_id: 'market_instruments', entry_model_id: 'strategy_entry_models',
+  },
+  mt5_review: {
+    strategy_id: 'trader_strategies', plan_id: 'trading_plans',
+    setup_id: 'trading_setups', entry_model_id: 'strategy_entry_models',
+  },
+  trader_strategies: { plan_id: 'trading_plans' },
+  strategy_entry_models: { strategy_id: 'trader_strategies' },
+  strategy_checklist_items: { strategy_id: 'trader_strategies', entry_model_id: 'strategy_entry_models' },
+  pre_trade_checklist: { plan_id: 'trading_plans' },
+  trading_rules: { plan_id: 'trading_plans' },
+  trading_accounts: { broker_id: 'brokers', default_strategy_id: 'trader_strategies', default_plan_id: 'trading_plans' },
+  trading_account_adjustments: { account_id: 'trading_accounts' },
+  journal_entries: {
+    strategy_id: 'trader_strategies', plan_id: 'trading_plans',
+    setup_id: 'trading_setups', entry_model_id: 'strategy_entry_models',
+    account_id: 'trading_accounts',
+  },
+  backtest_results: {
+    strategy_id: 'trader_strategies', setup_id: 'trading_setups',
+    plan_id: 'trading_plans', entry_model_id: 'strategy_entry_models',
+    account_id: 'trading_accounts',
+  },
+  forward_trades: {
+    strategy_id: 'trader_strategies', setup_id: 'trading_setups',
+    plan_id: 'trading_plans', entry_model_id: 'strategy_entry_models',
+    account_id: 'trading_accounts',
+  },
+  strategy_test_sessions: {
+    strategy_id: 'trader_strategies', plan_id: 'trading_plans',
+    entry_model_id: 'strategy_entry_models', account_id: 'trading_accounts',
+    setup_id: 'trading_setups',
+  },
+  strategy_test_trades: {
+    session_id: 'strategy_test_sessions', account_id: 'trading_accounts',
+    setup_id: 'trading_setups', plan_id: 'trading_plans',
+    entry_model_id: 'strategy_entry_models',
+  },
+  weekly_reviews: {
+    strategy_id: 'trader_strategies', plan_id: 'trading_plans',
+    entry_model_id: 'strategy_entry_models', setup_id: 'trading_setups',
+    account_id: 'trading_accounts',
+  },
+};
+async function assertOwnedLinks(table: string, record: Record<string, unknown>, owner: unknown, db: D1Database) {
+  for (const [field, linkedTable] of Object.entries(workspaceLinks[table] || {})) {
+    const reference = record[field];
+    if (reference == null || reference === '') continue;
+    if (typeof reference !== 'string' || !await db.prepare(
+      'SELECT 1 FROM workspace_records WHERE user_id=? AND table_name=? AND id=?',
+    ).bind(owner, linkedTable, reference).first()) {
+      throw new RequestError(400, 'Invalid linked record: ' + field);
+    }
+  }
+}
+
 const fillReviewFields = new Set(['notes','lessons','mistakes','emotional_state','setup_quality','observations','what_went_wrong','strategy_id','setup_id','entry_model_id','plan_id','entry_screenshot_url','entry_voice_note_url','closure_screenshot_url','closure_voice_note_url','screenshot_url','voice_note_url','checklist_items','checklist_completed','checklist_override_reason']);
+// Financial or relationship edits must pass the same validation and settlement as new trades.
+// Annotation-only edits remain available for older imported journal records.
+const tradeRecalculationFields = new Set([
+  'pair', 'direction', 'status', 'entry_price', 'exit_price', 'entry_time', 'exit_time',
+  'lot_size', 'fees', 'stop_loss', 'take_profit', 'account_id', 'strategy_id',
+  'plan_id', 'setup_id', 'instrument_id', 'entry_model_id', 'calculation_snapshot',
+  'settlement_currency', 'conversion_rate', 'pnl', 'pnl_decimal', 'outcome',
+  'initial_risk', 'planned_r', 'realized_r', 'risk_reward_ratio',
+]);
 
 async function databaseRoute(request: Request, env: Env, user: Record<string, unknown>) {
   const input = await jsonObject<{
@@ -163,7 +232,7 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
   if (input.action === 'insert' || input.action === 'upsert') {
     const items = Array.isArray(input.payload) ? input.payload : [input.payload];
     if (!items.length || items.length > 250 || items.some(item => !item || typeof item !== 'object' || Array.isArray(item))) {
-      return response({ error: 'Supply 1�250 records.' }, 400);
+      return response({ error: 'Supply 1–250 records.' }, 400);
     }
     if (input.action!=='upsert' && table === 'trades' && items.some(item => item?.trade_source === 'mt5')) {
       return response({ error: 'Broker fills must be synchronized by the linked terminal.' }, 403);
@@ -181,7 +250,15 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
         }
       }
       const normalized = table==='trades' && input.action==='insert' ? await normalizeTrade(item,user.id,env.DB) : item;
-      const payload = { ...normalized, id: recordId, user_id: user.id };
+      const cleanRecord: Record<string, unknown> = { ...normalized };
+      if (table === 'trading_accounts') {
+        // A user-provided backup must never impersonate an authenticated MT5 snapshot.
+        for (const key of ['broker_balance','broker_balance_at','broker_equity','broker_equity_at']) delete cleanRecord[key];
+      }
+      // Backup restores preserve their original financial snapshot but cannot
+      // restore dangling or cross-account references.
+      await assertOwnedLinks(table, cleanRecord, user.id, env.DB);
+      const payload = { ...cleanRecord, id: recordId, user_id: user.id };
       const json = JSON.stringify(payload);
       const digest = await sha(json);
       const ignore = input.action === 'upsert' || (table === 'trades' && items.length === 1);
@@ -214,10 +291,16 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
     if (input.action === 'delete' && isFill) return response({ error: 'Broker fills cannot be deleted from the journal.' }, 403);
     if (input.action === 'update') {
       if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return response({ error: 'Supply a record patch.' }, 400);
-      if (table === 'trades' && ((!isFill && patch.trade_source === 'mt5') || (isFill && Object.keys(patch).some(key => !fillReviewFields.has(key))))) {
-        return response({ error: 'Broker execution fields are read-only.' }, 403);
+      if (table === 'trades' && (
+        (!isFill && 'trade_source' in patch && patch.trade_source !== (old.trade_source ?? 'manual'))
+        || (isFill && Object.keys(patch).some(key => !fillReviewFields.has(key)))
+      )) {
+        return response({ error: 'Trade provenance and broker execution fields are read-only.' }, 403);
       }
       if (table === 'trades' && !filters.updated_at) return response({ error: 'Refresh the trade before editing.' }, 428);
+    }
+    if (table === 'trades' && input.action === 'delete' && !filters.updated_at) {
+      return response({ error: 'Refresh the trade before deleting it.' }, 428);
     }
     const revision = filters.updated_at ?? found.updated_at;
     if (revision !== found.updated_at) return response({ error: 'This record changed. Refresh before saving.' }, 409);
@@ -227,7 +310,23 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
       return result.meta.changes ? response({ data: null }) : response({ error: 'This record changed. Refresh before deleting.' }, 409);
     }
     const merged = { ...old, ...patch, user_id: user.id, id: input.id };
-    const payload = table==='trades' && !isFill && Object.keys(patch || {}).some(k=>['entry_price','exit_price','lot_size','fees','stop_loss','take_profit','status','account_id','pnl'].includes(k) && merged[k] !== old[k]) ? {...merged,...await normalizeTrade(merged,user.id,env.DB)} : merged;
+    if (table === 'trading_accounts') {
+      for (const key of ['broker_balance','broker_balance_at','broker_equity','broker_equity_at']) {
+        if (key in old) merged[key] = old[key];
+        else delete merged[key];
+      }
+    }
+    if (table !== 'trades' || isFill) {
+      const linkTable = isFill ? 'mt5_review' : table;
+      const changedLinks = Object.fromEntries(Object.entries(patch || {}).filter(([field, value]) =>
+        field in (workspaceLinks[linkTable] || {}) && value !== old[field]));
+      await assertOwnedLinks(linkTable, changedLinks, user.id, env.DB);
+    }
+    const needsTradeRecalculation = table === 'trades' && !isFill
+      && Object.keys(patch || {}).some(key => tradeRecalculationFields.has(key) && merged[key] !== old[key]);
+    const payload = needsTradeRecalculation
+      ? { ...merged, ...await normalizeTrade(merged, user.id, env.DB) }
+      : merged;
     const timestamp = new Date(Math.max(Date.now(), Date.parse(found.updated_at) + 1)).toISOString();
     const changed = await env.DB.prepare('UPDATE workspace_records SET payload=?,updated_at=? WHERE id=? AND user_id=? AND table_name=? AND updated_at=?')
       .bind(JSON.stringify(payload), timestamp, input.id, user.id, table, revision).run();

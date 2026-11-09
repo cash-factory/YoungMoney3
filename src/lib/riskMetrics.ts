@@ -71,7 +71,7 @@ export function calculateRiskMetrics(trades: Trade[], options: RiskMetricOptions
   const percentageLimit = balance * Math.max(0, options.maxDailyLossPct) / 100;
   const absoluteLimit = options.maxDailyLossAmount;
   const dailyLossLimitAmount = absoluteLimit != null && Number.isFinite(absoluteLimit) && absoluteLimit > 0
-    ? Math.min(percentageLimit, absoluteLimit)
+    ? percentageLimit > 0 ? Math.min(percentageLimit, absoluteLimit) : absoluteLimit
     : percentageLimit;
   const dailyLossUsed = Math.abs(Math.min(todayPnl, 0));
   const dailyLossPctUsed = dailyLossLimitAmount > 0 ? dailyLossUsed / dailyLossLimitAmount * 100 : 0;

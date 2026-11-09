@@ -50,6 +50,48 @@ try {
   assert.equal((await call('data',patch)).status,409);
   const stats=await mf.dispatchFetch('https://journal.example/api/account-summaries',{headers:{cookie}});
   assert.equal((await stats.json()).rows[0].profit,'-5');
+
+  // A corrected manual trade must be recalculated at the Worker boundary, not trusted
+  // because a browser has submitted stale P&L or a changed trade direction.
+  const calculation={
+    price_increment:1,tick_value:1,conversion_rate:1,account_currency:'USD',
+    quantity_unit:'contracts',asset_class:'future',
+  };
+  const calculated={...row,id:'calculated-trade',calculation_snapshot:calculation,pnl:500};
+  assert.equal((await call('data',{action:'insert',table:'trades',payload:calculated})).status,200);
+  const before=(await (await call('data',{action:'select',table:'trades',filters:{id:calculated.id}})).json()).data[0];
+  assert.equal(before.pnl,-5);
+  const recalculated=await call('data',{action:'update',table:'trades',id:calculated.id,
+    filters:{updated_at:before.updated_at},payload:{direction:'short',pnl:-999}});
+  assert.equal(recalculated.status,200);
+  const after=(await recalculated.json()).data;
+  assert.equal(after.pnl,5);
+  assert.equal(after.outcome,'win');
+  assert.equal((await call('data',{action:'delete',table:'trades',id:calculated.id})).status,428);
+  assert.equal((await call('data',{action:'delete',table:'trades',id:calculated.id,
+    filters:{updated_at:before.updated_at}})).status,409);
+  assert.equal((await call('data',{action:'delete',table:'trades',id:calculated.id,
+    filters:{updated_at:after.updated_at}})).status,200);
+  assert.equal((await call('data',{action:'insert',table:'trades',payload:{
+    ...row,id:'invalid-lifecycle',status:'open',pnl:0,
+  }})).status,400);
+
+  // Legacy trades may not have an explicit source field: that still means manual.
+  const legacy=await call('data',{action:'update',table:'trades',id:row.id,
+    filters:{updated_at:(await (await call('data',{action:'select',table:'trades',filters:{id:row.id}})).json()).data[0].updated_at},
+    payload:{trade_source:'manual',notes:'Reviewed historical entry'}});
+  assert.equal(legacy.status,200);
+  // Non-trade relationships are owner-scoped too (including restore/upsert writes).
+  const accountId='owned-account';
+  assert.equal((await call('data',{action:'insert',table:'trading_accounts',
+    payload:{id:accountId,name:'Demo',base_currency:'USD',balance:100}})).status,200);
+  assert.equal((await call('data',{action:'insert',table:'trading_account_adjustments',
+    payload:{account_id:'missing-account',amount:10,reason:'Deposit'}})).status,400);
+  assert.equal((await call('data',{action:'upsert',table:'trading_account_adjustments',
+    payload:{id:'invalid-adjustment',account_id:'missing-account',amount:10,reason:'Deposit'}})).status,400);
+  assert.equal((await call('data',{action:'insert',table:'trading_account_adjustments',
+    payload:{id:'valid-adjustment',account_id:accountId,amount:10,reason:'Deposit'}})).status,200);
+
   const code=(await (await call('mt5/pair',{})).json()).code;
   const claim={code,publicKey:'ZmFrZQ=='};
   const token=(await (await call('mt5/device/claim',claim)).json()).token;
@@ -60,17 +102,58 @@ try {
   assert.equal((await (await device('poll',{})).json()).job.id,link);
   assert.equal((await (await device('poll',{})).json()).job,null);
   assert.equal((await device('verified',{link,ok:true,mode:0,login:'42',server:'Demo',company:'Fixtures',currency:'USD',balance:100})).status,200);
+  const liveBalance=await device('sync',{link,events:[],balance:165.5,equity:178.25});
+  assert.equal(liveBalance.status,200);
+  const linkedAccount=(await (await call('mt5/status',{})).json()).links[0].account_id;
+  const accountBefore=(await (await call('data',{action:'select',table:'trading_accounts',filters:{id:linkedAccount}})).json()).data[0];
+  assert.equal(accountBefore.broker_balance,165.5);
+  assert.equal(accountBefore.broker_equity,178.25);
+  assert.ok(accountBefore.broker_balance_at);
+  assert.equal((await call('data',{action:'update',table:'trading_accounts',id:linkedAccount,
+    payload:{broker_balance:999999,broker_equity:0}})).status,200);
+  const accountAfter=(await (await call('data',{action:'select',table:'trading_accounts',filters:{id:linkedAccount}})).json()).data[0];
+  assert.equal(accountAfter.broker_balance,165.5);
+  assert.equal(accountAfter.broker_equity,178.25);
+  assert.equal((await device('sync',{link,events:[{kind:'trade',key:'close-765',fields:{...row,lot_size:-1}}]})).status,400);
+  assert.equal((await device('sync',{link,events:[{kind:'trade',key:'arbitrary-777',fields:row}]})).status,400);
   const batch={link,events:[{kind:'trade',key:'close-42',fields:row}]};
   for(let i=0;i<2;i++) assert.equal((await device('sync',batch)).status,200);
-  assert.equal((await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json()).count,1);
+  const imported=(await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json());
+  assert.equal(imported.count,1);
+  assert.equal((await call('data',{action:'update',table:'trades',id:imported.data[0].id,
+    filters:{updated_at:imported.data[0].updated_at},payload:{strategy_id:'foreign-strategy'}})).status,400);
+  assert.equal((await call('data',{action:'upsert',table:'trades',payload:{
+    ...row,id:'forged-restore',account_id:'foreign-account',
+  }})).status,400);
   await call('mt5/history-request',{link,days:30});
   const history=(await (await device('sync',{link,events:[]})).json()).history;
-  const older={...row,entry_time:'2026-01-01T00:00:00Z',exit_time:'2026-01-02T00:00:00Z'};
-  assert.equal((await device('sync',{link,events:[{kind:'history',key:'history:'+history.id+':close-99',fields:older}],history_done:history.id})).status,200);
+  const older={...row,entry_time:new Date(Date.now()-9*86400000).toISOString(),
+    exit_time:new Date(Date.now()-8*86400000).toISOString()};
+  const outside={...older,entry_time:new Date(Date.now()-50*86400000).toISOString(),
+    exit_time:new Date(Date.now()-45*86400000).toISOString()};
+  assert.equal((await call('mt5/history-preview',{link})).status,409,'Do not preview unfinished scans');
+  assert.equal((await device('sync',{link,events:[{kind:'history',key:'history:'+history.id+':close-outside',fields:outside}]})).status,200);
+  const keys=Array.from({length:102},(_,i)=>'history:'+history.id+':close-'+(1000+i));
+  for(let i=0;i<keys.length;i+=30) {
+    const events=keys.slice(i,i+30).map(key=>({kind:'history',key,fields:older}));
+    assert.equal((await device('sync',{link,events,history_done:i+30>=keys.length?history.id:undefined})).status,200);
+  }
   assert.equal((await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json()).count,1);
-  assert.equal((await (await call('mt5/history-preview',{link})).json()).rows.length,1);
-  for(let i=0;i<2;i++) assert.equal((await call('mt5/history-import',{link,request:history.id})).status,200);
-  assert.equal((await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json()).count,2);
+  const page1=(await (await call('mt5/history-preview',{link,offset:0})).json());
+  assert.equal(page1.rows.length,100);
+  assert.equal(page1.more,true);
+  const page2=(await (await call('mt5/history-preview',{link,offset:100})).json());
+  assert.equal(page2.rows.length,2);
+  assert.equal(page2.more,false);
+  assert.equal((await call('mt5/history-import',{link,request:history.id,expected_count:100})).status,409);
+  let more=true;
+  while(more) {
+    const result=await call('mt5/history-import',{link,request:history.id,expected_count:102});
+    assert.equal(result.status,200);
+    more=(await result.json()).more;
+  }
+  assert.equal((await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json()).count,103);
+  assert.equal((await (await call('mt5/history-import',{link,request:history.id,expected_count:102})).json()).added,0);
   await db.prepare("UPDATE users SET account_status='suspended'").run();
   assert.equal((await call('data',insert)).status,401);
   assert.equal((await device('sync',batch)).status,403);

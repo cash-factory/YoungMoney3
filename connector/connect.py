@@ -134,10 +134,18 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
     if not symbols:
         recent=records(mt5.history_deals_get(utc(end-86400000),utc(end+86400000)))
         symbols=list(dict.fromkeys(d["symbol"] for d in recent if d["symbol"]))[-10:]
-    for symbol in symbols:
+    # A quote from a closed market can be hours old. Never treat its age as a
+    # broker timezone offset. Only use fresh, advancing quotes to update this
+    # account's inferred clock offset; otherwise preserve the last known value.
+    for symbol in symbols[:8]:
+        earlier=mt5.symbol_info_tick(symbol)
+        if not earlier:
+            continue
+        time.sleep(0.08)
         tick=mt5.symbol_info_tick(symbol)
-        if tick:
-            delta=tick.time_msc-end
+        if tick and tick.time_msc>earlier.time_msc:
+            observed=int(time.time()*1000)
+            delta=tick.time_msc-observed
             rounded=round(delta/900000)*900000
             if abs(delta-rounded)<30000 and abs(rounded)<=14*3600000:
                 offset=rounded
@@ -192,7 +200,8 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
     # Acknowledged rows only. On restart, replay with unchanged broker ticket keys.
     for _ in range(5):
         page=db.execute("SELECT seq,payload FROM outbox WHERE link=? ORDER BY seq LIMIT 24",(link,)).fetchall()
-        if not page and not gap and end-heartbeats.get(link,0)<15000: break
+        active_history=db.execute("SELECT 1 FROM history_progress WHERE link=?",(link,)).fetchone()
+        if not page and not gap and not active_history and end-heartbeats.get(link,0)<15000: break
         response=post("sync",{"link":link,"events":[json.loads(row[1]) for row in page],"balance":account.balance,"equity":account.equity,"gap":gap},token)
         heartbeats[link]=end
         with db:
@@ -204,15 +213,29 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
     request=response.get("history") if "response" in locals() else None
     if request and request["status"]=="requested":
         request_id=str(request["id"])
-        work=db.execute("SELECT pid FROM history_work WHERE link=? AND request=? AND done=0 LIMIT 5",(link,request_id)).fetchall()
-        seeded=db.execute("SELECT 1 FROM history_seed WHERE link=? AND request=?",(link,request_id)).fetchone()
-        if not seeded:
-            history=normalize(records(mt5.history_deals_get(utc(request["since"]+offset-1000),utc(start+offset+1000))))
-            pids={d["position_id"] for d in history if d["type"] in (0,1) and d["entry"] in (1,2,3) and request["since"]<=d["time_msc"]<start}
+        progress=db.execute("SELECT cursor FROM history_progress WHERE link=? AND request=?",(link,request_id)).fetchone()
+        if progress is None:
+            # New request supersedes a completed or cancelled lookback.
             with db:
-                db.executemany("INSERT OR IGNORE INTO history_work VALUES(?,?,?,0)",[(link,request_id,str(pid)) for pid in pids])
-                db.execute("INSERT INTO history_seed VALUES(?,?)",(link,request_id))
-            work=[(str(pid),) for pid in list(pids)[:5]]
+                db.execute("DELETE FROM history_progress WHERE link=?",(link,))
+                db.execute("INSERT INTO history_progress VALUES(?,?,?)",(link,request_id,int(request["since"])))
+            progress=(int(request["since"]),)
+        cursor=progress[0]
+        if cursor < start:
+            # Bound each request to a small UTC window; persist cursor to resume
+            # after a shutdown, HTTP error or disconnected broker.
+            stop=min(start,cursor+7*86400000)
+            deals=normalize(records(mt5.history_deals_get(utc(cursor+offset-1000),utc(stop+offset+1000))))
+            pids={d["position_id"] for d in deals if d["type"] in (0,1) and d["entry"] in (1,2,3)
+                  and cursor<=d["time_msc"]<stop}
+            with db:
+                db.executemany("INSERT OR IGNORE INTO history_work VALUES(?,?,?,0)",
+                               [(link,request_id,str(pid)) for pid in pids])
+                db.execute("UPDATE history_progress SET cursor=? WHERE link=? AND request=?",
+                           (stop,link,request_id))
+            cursor=stop
+        work=db.execute("SELECT pid FROM history_work WHERE link=? AND request=? AND done=0 LIMIT 5",
+                        (link,request_id)).fetchall()
         for (pid,) in work:
             history=normalize(records(mt5.history_deals_get(position=int(pid))))
             orders={o["ticket"]:o for o in records(mt5.history_orders_get(position=int(pid)))}
@@ -221,9 +244,18 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
                     if request["since"]<=int(datetime.fromisoformat(leg["fields"]["exit_time"]).timestamp()*1000)<start:
                         leg["fields"]["historical_import"]=True
                         enqueue(link,"history","history:"+request_id+":"+leg["key"],leg["fields"])
-                db.execute("UPDATE history_work SET done=1 WHERE link=? AND request=? AND pid=?",(link,request_id,pid))
-        if not db.execute("SELECT 1 FROM history_work WHERE link=? AND request=? AND done=0",(link,request_id)).fetchone() and not db.execute("SELECT 1 FROM outbox WHERE link=?",(link,)).fetchone():
-            post("sync",{"link":link,"events":[],"history_done":request_id},token)
+                db.execute("UPDATE history_work SET done=1 WHERE link=? AND request=? AND pid=?",
+                           (link,request_id,pid))
+        pending=db.execute("SELECT 1 FROM history_work WHERE link=? AND request=? AND done=0",
+                           (link,request_id)).fetchone()
+        unsent=db.execute("SELECT 1 FROM outbox WHERE link=?",(link,)).fetchone()
+        if cursor>=start and not pending and not unsent:
+            complete=post("sync",{"link":link,"events":[],"history_done":request_id},token)
+            if complete.get("history",{}).get("status")!="requested":
+                with db: db.execute("DELETE FROM history_progress WHERE link=? AND request=?",(link,request_id))
+    elif request and request.get("status")!="requested":
+        # A declined/imported request must not continue scanning on this PC.
+        with db: db.execute("DELETE FROM history_progress WHERE link=?",(link,))
 
 if __name__=="__main__":
     parser=argparse.ArgumentParser()
@@ -271,6 +303,7 @@ if __name__=="__main__":
         CREATE TABLE IF NOT EXISTS links(link TEXT PRIMARY KEY,slot TEXT UNIQUE,login TEXT,server TEXT,start INTEGER,cursor INTEGER,last INTEGER,verified TEXT,gap INTEGER);
         CREATE TABLE IF NOT EXISTS broker_clock(link TEXT PRIMARY KEY,offset INTEGER);
         CREATE TABLE IF NOT EXISTS history_seed(link TEXT,request TEXT,PRIMARY KEY(link,request));
+        CREATE TABLE IF NOT EXISTS history_progress(link TEXT PRIMARY KEY,request TEXT,cursor INTEGER);
         CREATE TABLE IF NOT EXISTS history_work(link TEXT,request TEXT,pid TEXT,done INTEGER,PRIMARY KEY(link,request,pid));
         CREATE TABLE IF NOT EXISTS latest(link TEXT,key TEXT,payload TEXT,PRIMARY KEY(link,key));
         CREATE TABLE IF NOT EXISTS outbox(seq INTEGER PRIMARY KEY,link TEXT,payload TEXT);

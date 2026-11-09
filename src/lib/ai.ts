@@ -1,9 +1,11 @@
 import type { Trade, PatternInsight, ComparisonData, DashboardStats } from './types';
 import {
   computeDashboardStats, groupByPair, groupByDayOfWeek, groupByDirection, groupBySession, groupByStrategy,
-  formatCurrency, formatPercent,
-} from './utils';
-import { parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+  formatPercent,
+} from './utils.ts';
+import { parseISO, startOfDay, endOfDay, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+
+type MoneyFormatter = (amount: number) => string;
 
 export interface AIResult {
   summary: string;
@@ -15,38 +17,43 @@ export interface AIResult {
 export function generateAISummary(
   currentTrades: Trade[],
   previousTrades: Trade[],
-  periodType: 'daily' | 'weekly' | 'monthly'
+  periodType: 'daily' | 'weekly' | 'monthly',
+  currency = 'USD',
 ): AIResult {
+  const safeCurrency = /^[A-Z]{3}$/.test(currency) ? currency : 'USD';
+  const money: MoneyFormatter = amount => new Intl.NumberFormat(undefined, {
+    style: 'currency', currency: safeCurrency,
+  }).format(amount);
   const stats = computeDashboardStats(currentTrades);
   const prevStats = computeDashboardStats(previousTrades);
 
   // ---- Summary paragraph ----
-  const summary = buildSummary(stats, currentTrades, periodType);
+  const summary = buildSummary(stats, currentTrades, periodType, money);
 
   // ---- Suggestions ----
-  const suggestions = buildSuggestions(currentTrades, stats);
+  const suggestions = buildSuggestions(currentTrades, stats, money);
 
   // ---- Patterns ----
-  const patterns = detectPatterns(currentTrades);
+  const patterns = detectPatterns(currentTrades, money);
 
   // ---- Comparison ----
-  const comparison = buildComparison(stats, prevStats);
+  const comparison = buildComparison(stats, prevStats, money);
 
   return { summary, suggestions, patterns, comparison };
 }
 
-function buildSummary(stats: DashboardStats, trades: Trade[], periodType: string): string {
+function buildSummary(stats: DashboardStats, trades: Trade[], periodType: string, money: MoneyFormatter): string {
   const periodLabel = periodType === 'daily' ? 'today' : periodType === 'weekly' ? 'this week' : 'this month';
   if (trades.length === 0) {
     return `No trades were logged ${periodLabel}. Use this time to review your trading plan and prepare for the next session.`;
   }
 
   const parts: string[] = [];
-  parts.push(`You logged ${stats.totalTrades} trade${stats.totalTrades !== 1 ? 's' : ''} ${periodLabel} with a net result of ${formatCurrency(stats.totalPnl)}.`);
+  parts.push(`You logged ${stats.totalTrades} trade${stats.totalTrades !== 1 ? 's' : ''} ${periodLabel} with a net result of ${money(stats.totalPnl)}.`);
   parts.push(`Your win rate was ${formatPercent(stats.winRate)} (${stats.wins} win${stats.wins !== 1 ? 's' : ''}, ${stats.losses} loss${stats.losses !== 1 ? 'es' : ''}${stats.breakevens ? `, ${stats.breakevens} breakeven` : ''}).`);
 
   if (stats.avgWin > 0 && stats.avgLoss > 0) {
-    parts.push(`Average win: ${formatCurrency(stats.avgWin)}, average loss: ${formatCurrency(stats.avgLoss)}.`);
+    parts.push(`Average win: ${money(stats.avgWin)}, average loss: ${money(stats.avgLoss)}.`);
   }
 
   if (stats.profitFactor !== Infinity && stats.profitFactor > 0) {
@@ -60,13 +67,13 @@ function buildSummary(stats: DashboardStats, trades: Trade[], periodType: string
   }
 
   if (stats.bestDay && stats.worstDay) {
-    parts.push(`Best day: ${formatCurrency(stats.bestDay.pnl)}, worst day: ${formatCurrency(stats.worstDay.pnl)}.`);
+    parts.push(`Best day: ${money(stats.bestDay.pnl)}, worst day: ${money(stats.worstDay.pnl)}.`);
   }
 
   return parts.join(' ');
 }
 
-function buildSuggestions(trades: Trade[], stats: DashboardStats): string[] {
+function buildSuggestions(trades: Trade[], stats: DashboardStats, money: MoneyFormatter): string[] {
   const suggestions: string[] = [];
 
   // Win rate analysis
@@ -92,7 +99,7 @@ function buildSuggestions(trades: Trade[], stats: DashboardStats): string[] {
   });
   emotionMap.forEach((v, emotion) => {
     if (v.count >= 3 && v.pnl < 0) {
-      suggestions.push(`Trades taken while feeling "${emotion}" have lost ${formatCurrency(Math.abs(v.pnl))} across ${v.count} trades. Consider avoiding trading when in this emotional state.`);
+      suggestions.push(`Trades taken while feeling "${emotion}" have lost ${money(Math.abs(v.pnl))} across ${v.count} trades. Consider avoiding trading when in this emotional state.`);
     }
   });
 
@@ -115,7 +122,7 @@ function buildSuggestions(trades: Trade[], stats: DashboardStats): string[] {
   if (lowQualityTrades.length >= 3) {
     const lowQualityPnl = lowQualityTrades.reduce((s, t) => s + t.pnl, 0);
     if (lowQualityPnl < 0) {
-      suggestions.push(`You took ${lowQualityTrades.length} trades rated 1-2 stars, which lost ${formatCurrency(Math.abs(lowQualityPnl))}. Consider only taking 3+ star setups.`);
+      suggestions.push(`You took ${lowQualityTrades.length} trades rated 1-2 stars, which lost ${money(Math.abs(lowQualityPnl))}. Consider only taking 3+ star setups.`);
     }
   }
 
@@ -123,7 +130,7 @@ function buildSuggestions(trades: Trade[], stats: DashboardStats): string[] {
   const sessionData = groupBySession(trades);
   const bestSession = sessionData.filter(s => s.trades >= 3).sort((a, b) => b.pnl - a.pnl)[0];
   if (bestSession && bestSession.pnl > 0) {
-    suggestions.push(`The ${bestSession.session} session is your most profitable (${formatCurrency(bestSession.pnl)} over ${bestSession.trades} trades). Consider focusing more of your activity here.`);
+    suggestions.push(`The ${bestSession.session} session is your most profitable (${money(bestSession.pnl)} over ${bestSession.trades} trades). Consider focusing more of your activity here.`);
   }
 
   // Streak warning
@@ -138,7 +145,7 @@ function buildSuggestions(trades: Trade[], stats: DashboardStats): string[] {
   return suggestions;
 }
 
-function detectPatterns(trades: Trade[]): PatternInsight[] {
+function detectPatterns(trades: Trade[], money: MoneyFormatter): PatternInsight[] {
   const patterns: PatternInsight[] = [];
   if (trades.length < 3) return patterns;
 
@@ -149,14 +156,14 @@ function detectPatterns(trades: Trade[]): PatternInsight[] {
   if (bestPair && bestPair.pnl > 0) {
     patterns.push({
       title: `Best performing pair: ${bestPair.pair}`,
-      detail: `${formatCurrency(bestPair.pnl)} over ${bestPair.trades} trades with a ${formatPercent(bestPair.winRate)} win rate.`,
+      detail: `${money(bestPair.pnl)} over ${bestPair.trades} trades with a ${formatPercent(bestPair.winRate)} win rate.`,
       type: 'positive',
     });
   }
   if (worstPair && worstPair.pnl < 0 && worstPair.pair !== bestPair?.pair) {
     patterns.push({
       title: `Worst performing pair: ${worstPair.pair}`,
-      detail: `${formatCurrency(worstPair.pnl)} over ${worstPair.trades} trades with a ${formatPercent(worstPair.winRate)} win rate. Consider reducing activity on this pair.`,
+      detail: `${money(worstPair.pnl)} over ${worstPair.trades} trades with a ${formatPercent(worstPair.winRate)} win rate. Consider reducing activity on this pair.`,
       type: 'negative',
     });
   }
@@ -168,14 +175,14 @@ function detectPatterns(trades: Trade[]): PatternInsight[] {
   if (bestDay && bestDay.pnl > 0) {
     patterns.push({
       title: `Most profitable day: ${bestDay.day}`,
-      detail: `${formatCurrency(bestDay.pnl)} over ${bestDay.trades} trades.`,
+      detail: `${money(bestDay.pnl)} over ${bestDay.trades} trades.`,
       type: 'positive',
     });
   }
   if (worstDay && worstDay.pnl < 0 && worstDay.day !== bestDay?.day) {
     patterns.push({
       title: `Least profitable day: ${worstDay.day}`,
-      detail: `${formatCurrency(worstDay.pnl)} over ${worstDay.trades} trades. Consider being more selective on this day.`,
+      detail: `${money(worstDay.pnl)} over ${worstDay.trades} trades. Consider being more selective on this day.`,
       type: 'negative',
     });
   }
@@ -188,13 +195,13 @@ function detectPatterns(trades: Trade[]): PatternInsight[] {
     if (longPerf.pnl > shortPerf.pnl + Math.abs(shortPerf.pnl) * 0.5) {
       patterns.push({
         title: 'Long bias detected',
-        detail: `Long trades (${formatCurrency(longPerf.pnl)}) significantly outperform short trades (${formatCurrency(shortPerf.pnl)}). You may have a directional bias to explore.`,
+        detail: `Long trades (${money(longPerf.pnl)}) significantly outperform short trades (${money(shortPerf.pnl)}). You may have a directional bias to explore.`,
         type: 'neutral',
       });
     } else if (shortPerf.pnl > longPerf.pnl + Math.abs(longPerf.pnl) * 0.5) {
       patterns.push({
         title: 'Short bias detected',
-        detail: `Short trades (${formatCurrency(shortPerf.pnl)}) significantly outperform long trades (${formatCurrency(longPerf.pnl)}). You may have a directional bias to explore.`,
+        detail: `Short trades (${money(shortPerf.pnl)}) significantly outperform long trades (${money(longPerf.pnl)}). You may have a directional bias to explore.`,
         type: 'neutral',
       });
     }
@@ -206,7 +213,7 @@ function detectPatterns(trades: Trade[]): PatternInsight[] {
   if (bestStrat && bestStrat.pnl > 0) {
     patterns.push({
       title: `Top strategy: ${bestStrat.strategy}`,
-      detail: `${formatCurrency(bestStrat.pnl)} over ${bestStrat.trades} trades with a ${formatPercent(bestStrat.winRate)} win rate.`,
+      detail: `${money(bestStrat.pnl)} over ${bestStrat.trades} trades with a ${formatPercent(bestStrat.winRate)} win rate.`,
       type: 'positive',
     });
   }
@@ -217,7 +224,7 @@ function detectPatterns(trades: Trade[]): PatternInsight[] {
   if (bestSession && bestSession.pnl > 0) {
     patterns.push({
       title: `Best trading session: ${bestSession.session}`,
-      detail: `${formatCurrency(bestSession.pnl)} over ${bestSession.trades} trades with a ${formatPercent(bestSession.winRate)} win rate.`,
+      detail: `${money(bestSession.pnl)} over ${bestSession.trades} trades with a ${formatPercent(bestSession.winRate)} win rate.`,
       type: 'positive',
     });
   }
@@ -225,7 +232,7 @@ function detectPatterns(trades: Trade[]): PatternInsight[] {
   return patterns;
 }
 
-function buildComparison(current: DashboardStats, previous: DashboardStats): ComparisonData {
+function buildComparison(current: DashboardStats, previous: DashboardStats, money: MoneyFormatter): ComparisonData {
   const deltas: Record<string, number> = {};
   (['totalPnl', 'totalTrades', 'winRate', 'avgWin', 'avgLoss', 'profitFactor', 'expectancy'] as const).forEach(key => {
     const cur = current[key];
@@ -235,22 +242,22 @@ function buildComparison(current: DashboardStats, previous: DashboardStats): Com
 
   return {
     current: {
-      'Net P&L': formatCurrency(current.totalPnl),
+      'Net P&L': money(current.totalPnl),
       'Trades': current.totalTrades,
       'Win Rate': formatPercent(current.winRate),
-      'Avg Win': formatCurrency(current.avgWin),
-      'Avg Loss': formatCurrency(current.avgLoss),
+      'Avg Win': money(current.avgWin),
+      'Avg Loss': money(current.avgLoss),
       'Profit Factor': current.profitFactor === Infinity ? '∞' : current.profitFactor.toFixed(2),
-      'Expectancy': formatCurrency(current.expectancy),
+      'Expectancy': money(current.expectancy),
     },
     previous: {
-      'Net P&L': formatCurrency(previous.totalPnl),
+      'Net P&L': money(previous.totalPnl),
       'Trades': previous.totalTrades,
       'Win Rate': formatPercent(previous.winRate),
-      'Avg Win': formatCurrency(previous.avgWin),
-      'Avg Loss': formatCurrency(previous.avgLoss),
+      'Avg Win': money(previous.avgWin),
+      'Avg Loss': money(previous.avgLoss),
       'Profit Factor': previous.profitFactor === Infinity ? '∞' : previous.profitFactor.toFixed(2),
-      'Expectancy': formatCurrency(previous.expectancy),
+      'Expectancy': money(previous.expectancy),
     },
     deltas,
   };
@@ -264,11 +271,10 @@ export function getPeriodTrades(
   let currentStart: Date, currentEnd: Date, prevStart: Date, prevEnd: Date;
 
   if (periodType === 'daily') {
-    currentStart = date;
-    currentEnd = date;
-    prevStart = new Date(date);
-    prevStart.setDate(prevStart.getDate() - 1);
-    prevEnd = prevStart;
+    currentStart = startOfDay(date);
+    currentEnd = endOfDay(date);
+    prevStart = startOfDay(subDays(date, 1));
+    prevEnd = endOfDay(subDays(date, 1));
   } else if (periodType === 'weekly') {
     currentStart = startOfWeek(date, { weekStartsOn: 1 });
     currentEnd = endOfWeek(date, { weekStartsOn: 1 });
@@ -284,14 +290,15 @@ export function getPeriodTrades(
     prevEnd = endOfMonth(prevStart);
   }
 
-  const current = trades.filter(t => {
-    const d = parseISO(t.entry_time);
-    return isWithinInterval(d, { start: currentStart, end: currentEnd });
-  });
-  const previous = trades.filter(t => {
-    const d = parseISO(t.entry_time);
-    return isWithinInterval(d, { start: prevStart, end: prevEnd });
-  });
+  // Realized performance is attributed to the close day, like Risk Guardian.
+  // Fall back to entry time for older closed records without a recorded close timestamp.
+  const closed = trades.filter(trade => trade.status === 'closed');
+  const current = closed.filter(trade => isWithinInterval(parseISO(trade.exit_time || trade.entry_time), {
+    start: currentStart, end: currentEnd,
+  }));
+  const previous = closed.filter(trade => isWithinInterval(parseISO(trade.exit_time || trade.entry_time), {
+    start: prevStart, end: prevEnd,
+  }));
 
   return { current, previous };
 }

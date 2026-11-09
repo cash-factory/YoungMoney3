@@ -149,6 +149,7 @@ export function DashboardPage() {
     <div>
       {loadError && <p role="alert">Trade history unavailable. Showing figures last refreshed {new Date(asOf!).toLocaleString()}.</p>}
       {trades.some(t=>t.status==='closed' && (!t.exit_time || tradeCurrency(t,accounts)==='Unknown' || t.realized_r == null)) && <p className="card p-3 text-sm" role="status">Some closed trades need review for close time, currency or initial risk. Daily risk and R statistics may be incomplete.</p>}
+      {account?.broker_balance != null && (!account.broker_balance_at || Date.now()-Date.parse(account.broker_balance_at)>120000) && <p role="status" className="card p-3 text-xs text-secondary">Broker balance is a last-known snapshot, not a live quote. Check MT5 Connections for its latest sync before making trading decisions.</p>}
       <SectionHeader
         title="Dashboard"
         subtitle="Your trading performance at a glance"
@@ -171,7 +172,7 @@ export function DashboardPage() {
       </div>
 
       {source === 'live' && <div className="card p-4 mb-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-        {account ? <><span className="text-secondary">Current balance</span><strong className="font-mono">{formatAccountMoney(currentBalance || 0, account.base_currency)}</strong><span className="text-xs text-muted">Opening balance, realized P&amp;L and adjustments</span></> : accounts.length ? <><span className="text-secondary">Balances by currency</span>{Array.from(balancesByCurrency).map(([currency, value]) => <strong key={currency} className="font-mono">{formatAccountMoney(value, currency)}</strong>)}</> : <span className="text-muted">Add a trading account to track account balance here.</span>}
+        {account ? <><span className="text-secondary">Current balance</span><strong className="font-mono">{formatAccountMoney(currentBalance || 0, account.base_currency)}</strong><span className="text-xs text-muted">{account.broker_balance != null ? 'Last broker-reported balance · '+(account.broker_balance_at ? new Date(account.broker_balance_at).toLocaleString() : 'time unknown') : 'Opening balance, realized P&L and adjustments'}</span></> : accounts.length ? <><span className="text-secondary">Balances by currency</span>{Array.from(balancesByCurrency).map(([currency, value]) => <strong key={currency} className="font-mono">{formatAccountMoney(value, currency)}</strong>)}</> : <span className="text-muted">Add a trading account to track account balance here.</span>}
       </div>}
 
       {source === 'live' && account?.account_type === 'propfirm' && <div className="card p-4 mb-6 space-y-3">

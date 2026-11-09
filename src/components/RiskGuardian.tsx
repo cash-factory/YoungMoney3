@@ -3,6 +3,7 @@ import { Shield, AlertTriangle, TrendingDown, Activity, Gauge, Target, Zap, Aler
 import type { Trade, RiskSettings, TradingAccount, TradingPlan } from '@/lib/types';
 import { formatPercent } from '@/lib/utils';
 import { calculateRiskMetrics } from '@/lib/riskMetrics';
+import { accountRiskOptions } from '@/lib/riskPolicy';
 
 interface RiskGuardianProps {
   trades: Trade[];
@@ -15,24 +16,7 @@ interface RiskGuardianProps {
 export function RiskGuardian({ trades, settings, account, plan, onConfigure }: RiskGuardianProps) {
   const riskData = useMemo(() => {
     if (!account) return null;
-    const strictest = (values: (number | null | undefined)[], fallback: number) => {
-      const configured = values.filter((value): value is number => value != null && Number.isFinite(value) && value > 0);
-      return configured.length ? Math.min(...configured) : fallback;
-    };
-    const maxDailyLossPct = strictest([account.daily_loss_limit_pct, plan?.max_daily_loss_pct, settings?.max_daily_loss_pct], 3);
-    const maxRiskPerTradePct = strictest([account.risk_per_trade_pct, plan?.max_risk_per_trade_pct, settings?.max_risk_per_trade_pct], 1);
-    const maxDrawdownPct = strictest([account.max_loss_limit_pct, plan?.max_drawdown_pct, settings?.max_drawdown_pct], 10);
-    const maxDailyLossAmount = account.base_currency === 'USD' ? settings?.daily_loss_limit_amount : null;
-    return calculateRiskMetrics(trades, {
-      accountId: account.id,
-      accountBalance: account.balance,
-      timeZone: account.challenge_reset_timezone || 'UTC',
-      maxDailyLossPct,
-      maxDailyLossAmount,
-      maxDailyTrades: settings?.max_daily_trades ?? 5,
-      maxRiskPerTradePct,
-      maxDrawdownPct,
-    });
+    return calculateRiskMetrics(trades, accountRiskOptions(account, settings, plan));
   }, [trades, settings, account, plan]);
 
   const formatMoney = (value: number) => new Intl.NumberFormat(undefined, {

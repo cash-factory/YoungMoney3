@@ -73,3 +73,11 @@ test('single-trade limit stays safe before the first trade and is dangerous afte
   assert.equal(calculateRiskMetrics([], single).status, 'safe');
   assert.equal(calculateRiskMetrics([makeTrade({ entry_time: '2026-10-20T12:00:00.000Z', pnl: 0 })], single).status, 'danger');
 });
+
+test('an absolute-only daily limit is honored when no percentage cap is configured', () => {
+  const metrics = calculateRiskMetrics([makeTrade({})], {
+    ...options, maxDailyLossPct: 0, maxDailyLossAmount: 75,
+  });
+  assert.equal(metrics.dailyLossLimitAmount, 75);
+  assert.equal(metrics.dailyLossRemaining, 25);
+});

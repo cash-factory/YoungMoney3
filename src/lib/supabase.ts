@@ -157,8 +157,10 @@ export const supabase: any = {
       return { error: null, data: { user: result.data.user, session } };
     },
     async signOut() {
-      await api('/api/auth/signout', {});
+      const result = await api('/api/auth/signout', {});
+      if (result.error) return { error: result.error };
       emit('SIGNED_OUT', null);
+      return { error: null };
     },
     async updateUser({ password, current_password }: { password: string; current_password: string }) {
       const result = await api('/api/auth/password', { password, current_password });

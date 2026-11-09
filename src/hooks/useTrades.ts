@@ -117,7 +117,9 @@ export function useTrades(userId?: string | null) {
   }
   async function deleteTrade(id: string) {
     if (!store) throw new Error('Sign in to delete a trade.');
-    const { error } = await supabase.from('trades').delete().eq('id', id);
+    const revision = snapshot.trades.find(trade => trade.id === id)?.updated_at;
+    if (!revision) throw new Error('Refresh the trade before deleting it.');
+    const { error } = await supabase.from('trades').delete().eq('id', id).eq('updated_at', revision);
     if (error) throw new Error(error.message);
     await store.invalidate();
   }

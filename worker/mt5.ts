@@ -46,29 +46,44 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         const days=Number(input.days);
         if(!Number.isSafeInteger(days)||days<1||days>3650) return fail('Choose 1–3650 days.');
         if(link.history_status==='requested') return fail('History scan already running.',409);
+        if(!timestamp(link.linked_at)) return fail('The linked account has no valid start time.',409);
         const requestId=uuid();
         await q("UPDATE mt5_links SET history_id=?,history_status='requested',history_since=? WHERE id=?",requestId,Date.parse(link.linked_at)-days*86400000,link.id).run();
         return json({ok:true});
       }
       const prefix='history:'+link.history_id+':';
-      const rows=await q("SELECT event_key,payload FROM mt5_events WHERE link=? AND substr(event_key,1,?)=? ORDER BY event_key LIMIT 101",link.id,prefix.length,prefix).all<{event_key:string;payload:string}>();
-      if(action==='history-preview') return json({status:link.history_status,rows:rows.results.slice(0,100).map(r=>JSON.parse(r.payload)),more:rows.results.length>100});
+      if(action==='history-preview') {
+        if(!['ready','imported'].includes(link.history_status)) return fail('Wait for the scan to finish.',409);
+        const offset=Number(input.offset ?? 0);
+        if(!Number.isSafeInteger(offset)||offset<0||offset>1_000_000) return fail('Invalid preview page.');
+        const rows=await q("SELECT event_key,payload FROM mt5_events WHERE link=? AND substr(event_key,1,?)=? ORDER BY event_key LIMIT 101 OFFSET ?",link.id,prefix.length,prefix,offset).all<{event_key:string;payload:string}>();
+        const page=rows.results.slice(0,100);
+        return json({status:link.history_status,rows:page.map(row=>JSON.parse(row.payload)),more:rows.results.length>100,nextOffset:offset+page.length});
+      }
       if(input.request!==link.history_id) return fail('Preview changed. Reload before deciding.',409);
       if(action==='history-decline') {
-        await q("UPDATE mt5_links SET history_status='declined' WHERE id=?",link.id).run();
+        if(!['requested','ready'].includes(link.history_status)) return fail('This scan can no longer be cancelled.',409);
+        await q("UPDATE mt5_links SET history_status='declined' WHERE id=? AND history_id=?",link.id,link.history_id).run();
         return json({ok:true});
       }
       if(!['ready','imported'].includes(link.history_status)) return fail('Wait for the preview to complete.',409);
-      const items=await q("SELECT event_key,payload FROM mt5_events WHERE link=? AND substr(event_key,1,?)=? AND NOT EXISTS(SELECT 1 FROM workspace_records w WHERE w.id=mt5_events.link||'/'||substr(mt5_events.event_key,?)) LIMIT 40",link.id,prefix.length,prefix,prefix.length+1).all<{event_key:string;payload:string}>();
-      // Import in retryable batches. Matched or previously imported ticket IDs are skipped.
+      const expected=Number(input.expected_count);
+      if(!Number.isSafeInteger(expected)||expected<0) return fail('Review all history preview pages before importing.',400);
+      const count=await q("SELECT count(*) AS total FROM mt5_events WHERE link=? AND substr(event_key,1,?)=?",link.id,prefix.length,prefix).first<{total:number}>();
+      if(expected!==count?.total) return fail('History preview has changed. Review all pages again.',409);
+      const items=await q("SELECT event_key,payload FROM mt5_events WHERE link=? AND substr(event_key,1,?)=? AND NOT EXISTS(SELECT 1 FROM workspace_records w WHERE w.id=mt5_events.link||'/'||substr(mt5_events.event_key,?)) ORDER BY event_key LIMIT 40",link.id,prefix.length,prefix,prefix.length+1).all<{event_key:string;payload:string}>();
+      // Import in retryable batches. Broker deal IDs are immutable and deduplicate live fills.
       const statements=items.results.map(row=>{
         const key=row.event_key.slice(prefix.length),id=link.id+'/'+key;
-        const data={...JSON.parse(row.payload),id,user_id:owner,account_id:link.account_id,trade_source:'mt5',broker:link.company,settlement_currency:link.currency,historical_import:true,mistakes:[],pips:0};
+        const data={...JSON.parse(row.payload),id,user_id:owner,account_id:link.account_id,trade_source:'mt5',capture_mode:'history',broker:link.company,settlement_currency:link.currency,historical_import:true,mistakes:[],pips:0};
         return q("INSERT OR IGNORE INTO workspace_records(id,user_id,table_name,payload,created_at,updated_at) VALUES(?,?,'trades',?,?,?)",id,owner,JSON.stringify(data),now(),now());
       });
       let added=0;
-      for(let i=0;i<statements.length;i+=40) for(const result of await db.batch(statements.slice(i,i+40))) added+=result.meta.changes;
-      await q("UPDATE mt5_links SET history_status='imported' WHERE id=?",link.id).run();
+      for(const statement of statements) {
+        const result=await statement.run();
+        added+=result.meta.changes;
+      }
+      await q("UPDATE mt5_links SET history_status='imported' WHERE id=? AND history_id=?",link.id,link.history_id).run();
       return json({added,more:items.results.length===40});
     }
     if (action === 'pair') {
@@ -173,13 +188,26 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     const f=event.fields, time=now();
     statements.push(q('INSERT INTO mt5_events(link,event_key,payload) VALUES(?,?,?) ON CONFLICT(link,event_key) DO UPDATE SET payload=excluded.payload',link.id,event.key,JSON.stringify(f)));
     if(event.kind==='trade' || event.kind==='history') {
+      if(event.kind==='trade' && !/^(?:open|close)-\d+$/.test(event.key)) return fail('Invalid broker event key.');
       if(!limited(f.pair,80)||!['long','short'].includes(String(f.direction))||!['open','closed'].includes(String(f.status))||!timestamp(f.entry_time)||typeof f.pnl!=='number'||!Number.isFinite(f.pnl)||(f.status==='closed'&&!timestamp(f.exit_time))) return fail('Invalid trade.');
+      const positive = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value > 0;
+      const validLevel = (value: unknown) => value == null || positive(value);
+      if(!positive(f.entry_price) || !positive(f.lot_size)
+        || (f.status==='closed' && (!positive(f.exit_price) || Date.parse(String(f.exit_time))<Date.parse(String(f.entry_time))))
+        || !validLevel(f.stop_loss) || !validLevel(f.take_profit)
+        || (f.fees != null && (typeof f.fees!=='number'||!Number.isFinite(f.fees)))) return fail('Invalid broker fill price, size or costs.');
       const allowed=['pair','direction','entry_price','exit_price','stop_loss','take_profit','lot_size','status','pnl','entry_time','exit_time','fees','broker_details','initial_risk'];
       const data=Object.fromEntries(allowed.filter(k=>k in f).map(k=>[k,f[k]]));
       Object.assign(data,{trade_source:'mt5',capture_mode:'live',account_id:link.account_id,user_id:device.owner,settlement_currency:link.currency,broker:link.company,outcome:f.status==='open'?null:f.pnl>0?'win':f.pnl<0?'loss':'breakeven'});
       if(event.kind==='history'){
-        const history=await q('SELECT history_id,history_status,linked_at FROM mt5_links WHERE id=?',link.id).first<{history_id:string;history_status:string;linked_at:string}>();
-        if(!history || !event.key.startsWith('history:'+history.history_id+':close-') || history.history_status!=='requested' || f.status!=='closed' || Date.parse(String(f.exit_time))>=Date.parse(history.linked_at)) { statements.pop(); continue; }
+        const history=await q('SELECT history_id,history_status,linked_at,history_since FROM mt5_links WHERE id=?',link.id).first<{history_id:string;history_status:string;linked_at:string;history_since:number}>();
+        if(!history || !event.key.startsWith('history:'+history.history_id+':close-')
+          || history.history_status!=='requested' || f.status!=='closed'
+          || Date.parse(String(f.exit_time))<history.history_since
+          || Date.parse(String(f.exit_time))>=Date.parse(history.linked_at)
+          || Date.parse(String(f.entry_time))>Date.parse(String(f.exit_time))) {
+          statements.pop(); continue;
+        }
         statements[statements.length-1]=q('INSERT OR REPLACE INTO mt5_events(link,event_key,payload) VALUES(?,?,?)',link.id,event.key,JSON.stringify({...data,historical_import:true,outcome:Number(f.pnl)>0?'win':Number(f.pnl)<0?'loss':'breakeven'}));
         continue;
       }
@@ -192,7 +220,13 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   const balance = typeof input.balance === 'number' && Number.isFinite(input.balance) ? input.balance : null;
   const equity = typeof input.equity === 'number' && Number.isFinite(input.equity) ? input.equity : null;
   statements.push(q('UPDATE mt5_links SET last_sync=?,gap=MAX(gap,?),broker_balance=COALESCE(?,broker_balance),broker_equity=COALESCE(?,broker_equity) WHERE id=?',now(),input.gap===true?1:0,balance,equity,link.id));
-  if(balance!==null) statements.push(q("UPDATE workspace_records SET payload=json_set(payload,'$.broker_balance',?,'$.broker_balance_at',?),updated_at=? WHERE id=? AND user_id=? AND table_name='trading_accounts'",balance,now(),now(),link.account_id,device.owner));
+  if(balance!==null || equity!==null) {
+    const snapshot: Fields = {};
+    if(balance!==null) { snapshot.broker_balance=balance; snapshot.broker_balance_at=now(); }
+    if(equity!==null) { snapshot.broker_equity=equity; snapshot.broker_equity_at=now(); }
+    const patch=JSON.stringify(snapshot);
+    statements.push(q("UPDATE workspace_records SET payload=json_patch(payload,?),updated_at=? WHERE id=? AND user_id=? AND table_name='trading_accounts'",patch,now(),link.account_id,device.owner));
+  }
   if(input.history_done) statements.push(q("UPDATE mt5_links SET history_status='ready' WHERE id=? AND history_id=? AND history_status='requested'",link.id,input.history_done));
   await db.batch(statements);
   const history=await q('SELECT history_id AS id,history_since AS since,history_status AS status FROM mt5_links WHERE id=?',link.id).first();
