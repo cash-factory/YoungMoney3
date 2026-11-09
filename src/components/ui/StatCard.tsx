@@ -12,24 +12,22 @@ interface StatCardProps {
 }
 
 export function StatCard({ label, value, sublabel, icon, trend, trendValue, accent = 'blue' }: StatCardProps) {
-  const numericValue = parseFloat(value);
-  const isNumeric = !isNaN(numericValue) && isFinite(numericValue);
+  const isNumeric = /^-?\d+(?:\.\d+)?$/.test(value.trim());
+  const numericValue = isNumeric ? Number(value) : 0;
 
   return (
-    <div
-      className="card p-5 relative overflow-hidden"
-    >
+    <section aria-label={label} className="ym-stat-card card relative overflow-hidden p-4 sm:p-5">
       <div className="flex items-start justify-between relative">
         <div className="min-w-0">
-          <p className="text-xs font-semibold text-muted uppercase tracking-wider">{label}</p>
-          <p className="mt-2 text-2xl font-bold font-mono tracking-tight">
+          <p className="ym-stat-label text-[11px] font-semibold text-secondary uppercase tracking-[0.09em]">{label}</p>
+          <p className="ym-stat-value mt-3 text-xl sm:text-2xl font-bold font-mono tracking-tight tabular-nums break-words">
             {isNumeric ? <AnimatedCounter value={numericValue} /> : value}
           </p>
-          {sublabel && <p className="mt-1 text-xs text-muted truncate">{sublabel}</p>}
+          {sublabel && <p className="mt-2 text-[11px] leading-relaxed text-muted break-words">{sublabel}</p>}
         </div>
         {icon && (
           <div className="relative">
-            <div className={`p-2.5 rounded-xl border border-themed icon-bg-${accent}`}>
+            <div className={`ym-stat-icon p-2 rounded-lg border border-themed icon-bg-${accent}`}>
               {icon}
             </div>
           </div>
@@ -42,6 +40,6 @@ export function StatCard({ label, value, sublabel, icon, trend, trendValue, acce
           </span>
         </div>
       )}
-    </div>
+    </section>
   );
 }
