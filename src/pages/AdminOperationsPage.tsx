@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, Copy, KeyRound, LockKeyhole, RefreshCw, Search, ShieldCheck, UserRoundCheck, UserRoundX } from 'lucide-react';
+import { Activity, Copy, KeyRound, LockKeyhole, RefreshCw, ShieldCheck, UserRoundCheck, UserRoundX } from 'lucide-react';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { useAuth } from '@/context/AuthContext';
 
