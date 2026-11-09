@@ -40,8 +40,10 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       return json({ accounts:accounts.results, devices: devices.results, links: links.results, demoOnly: env.MT5_ALLOW_LIVE !== 'true' });
     }
     if (['history-request','history-preview','history-import','history-decline'].includes(action)) {
-      const link=await q("SELECT l.* FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE l.id=? AND d.owner=? AND d.revoked=0 AND l.status='connected'",input.link,owner).first<{id:string;account_id:string;currency:string;company:string;linked_at:string;history_id:string;history_status:string}>();
+      const link=await q("SELECT l.* FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE l.id=? AND d.owner=? AND d.revoked=0 AND l.status='connected'",input.link,owner).first<{id:string;account_id:string;currency:string;company:string;linked_at:string;history_id:string;history_status:string;trade_mode:number|null}>();
       if(!link) return fail('Linked account unavailable.',404);
+      if(link.trade_mode===2 && env.MT5_ALLOW_LIVE!=='true' && ['history-request','history-import'].includes(action))
+        return fail('Real-account capture is paused by the release gate.',403);
       if(action==='history-request') {
         const days=Number(input.days);
         if(!Number.isSafeInteger(days)||days<1||days>3650) return fail('Choose 1–3650 days.');
@@ -142,7 +144,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     return json({ job: claimed.meta.changes ? {id:job.id,envelope:JSON.parse(job.envelope)} : null });
   }
   if (!limited(input.link,64)) return fail('Missing link.');
-  const link=await q('SELECT * FROM mt5_links WHERE id=? AND device=?',input.link,device.id).first<{id:string;account_id:string;status:string;currency:string;company:string;expires:number}>();
+  const link=await q('SELECT * FROM mt5_links WHERE id=? AND device=?',input.link,device.id).first<{id:string;account_id:string;status:string;currency:string;company:string;expires:number;trade_mode:number|null}>();
   if (!link) return fail('Unknown link.',404);
   if (action==='device/verified') {
     if (link.status==='connected') return json({ok:true});
@@ -183,6 +185,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     return json({ok:true});
   }
   if(action!=='device/sync'||link.status!=='connected') return fail('Link unavailable.',409);
+  if(link.trade_mode===2 && env.MT5_ALLOW_LIVE!=='true') return fail('Real-account capture is paused by the release gate.',403);
   if (!Array.isArray(input.events)||input.events.length>40) return fail('Invalid capture batch.');
   const statements:D1PreparedStatement[]=[];
   for(const event of input.events) {

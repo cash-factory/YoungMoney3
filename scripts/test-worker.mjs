@@ -167,6 +167,11 @@ try {
   const linked=(await (await call('mt5/status',{})).json()).links;
   assert.equal(linked.filter(l=>l.status==='connected').length,2);
   assert.equal(linked.find(l=>l.id===secondLink).access_level,'trading-restricted');
+  await db.prepare('UPDATE mt5_links SET trade_mode=2 WHERE id=?').bind(secondLink).run();
+  assert.equal((await device('sync',{link:secondLink,events:[]})).status,403,'Pausing real capture blocks existing linked devices');
+  assert.equal((await call('mt5/history-request',{link:secondLink,days:30})).status,403);
+  await db.prepare('UPDATE mt5_links SET trade_mode=1 WHERE id=?').bind(secondLink).run();
+  assert.equal((await device('sync',{link:secondLink,events:[]})).status,200);
   const pendingReal=(await (await call('mt5/connect',{device:devices[0].id,envelope:{wrapped:'g',iv:'h',data:'i'}})).json()).id;
   assert.equal((await (await device('poll',{})).json()).job.id,pendingReal);
   assert.equal((await device('verified',{link:pendingReal,ok:true,mode:'2',trade_access:true,login:'44',server:'Real',company:'Fixtures',currency:'USD',balance:100})).status,400);
