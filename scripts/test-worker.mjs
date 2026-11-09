@@ -38,6 +38,9 @@ try {
   const signup=await call('auth/signup',{email:'member@example.test',username:'member',password:'local-test-pass',invite_code:'integration'});
   assert.equal(signup.status,200);cookie=signup.headers.get('set-cookie').split(';')[0];
   assert.match(signup.headers.get('set-cookie'),/HttpOnly/);
+  assert.match(signup.headers.get('set-cookie'),/SameSite=Strict/);
+  assert.equal((await call('data',{action:'select',table:'trades'}, {'Sec-Fetch-Site':'same-site'})).status,403);
+  assert.equal((await call('data',{action:'select',table:'trades'}, {'Origin':'https://a.journal.example'})).status,403);
   const row={id:'demo-trade',pair:'TEST',settlement_currency:'USD',direction:'long',entry_price:100,exit_price:95,
     lot_size:1,status:'closed',entry_time:'2026-01-01T00:00:00Z',exit_time:'2026-01-02T00:00:00Z',pnl:-5};
   const insert={action:'insert',table:'trades',payload:row};
@@ -162,6 +165,12 @@ try {
   cookie=other.headers.get('set-cookie').split(';')[0];
   assert.deepEqual((await (await call('mt5/status',{})).json()).links,[]);
   assert.equal((await (await call('data',{action:'select',table:'trades'})).json()).count,0);
+  assert.equal((await call('data',{action:'update',table:'trades',id:row.id,
+    filters:{updated_at:records[0].updated_at},payload:{notes:'intrusion'}})).status,404);
+  assert.equal((await call('mt5/history-preview',{link})).status,404);
+  assert.equal((await call('mt5/history-request',{link,days:30})).status,404);
+  assert.equal((await call('data',{action:'insert',table:'trading_account_adjustments',
+    payload:{id:'foreign-adjustment',account_id:linkedAccount,amount:4,reason:'cross-user'}})).status,400);
   await db.prepare("UPDATE users SET role='admin' WHERE username='second'").run();
   objects.add(subject+'/folder/screenshot.png');
   objects.add(subject+'/voice.webm');

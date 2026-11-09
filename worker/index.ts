@@ -24,7 +24,7 @@ const encoder = new TextEncoder();
 const ownedTables = new Set<string>(WORKSPACE_TABLES);
 const publicTables = new Set(['provider_catalog', 'provider_offerings', 'prop_firm_rule_versions', 'provider_change_reviews']);
 
-function response(body: unknown, status = 200) { return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } }); }
+function response(body: unknown, status = 200) { return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' } }); }
 function now() { return new Date().toISOString(); }
 function id() { return crypto.randomUUID(); }
 function b64(bytes: ArrayBuffer) { return btoa(String.fromCharCode(...new Uint8Array(bytes))); }
@@ -653,7 +653,11 @@ export default {
     const { pathname, origin } = new URL(request.url);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204 });
     const requestOrigin = request.headers.get('Origin');
-    if (request.method !== 'GET' && ((requestOrigin && requestOrigin !== origin) || request.headers.get('Sec-Fetch-Site') === 'cross-site')) {
+    const fetchSite = request.headers.get('Sec-Fetch-Site');
+    // A sibling subdomain is same-site but not same-origin. Do not let it
+    // mutate a member's Strict-cookie session or pair their broker.
+    if (request.method !== 'GET' && ((requestOrigin && requestOrigin !== origin)
+      || (fetchSite && fetchSite !== 'same-origin'))) {
       return response({ error: 'Cross-origin mutation rejected.' }, 403);
     }
     try {
