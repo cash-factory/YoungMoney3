@@ -29,9 +29,3 @@ Capture starts at linking. Positions already open and fills from that point forw
 After the connector reports **Connected**, select a lookback range under **MT5 Connections**, then **Find earlier trades**. Scanning occurs locally in resumable seven-day windows; long histories may take multiple sync cycles. Keep the connector running, and use **Cancel scan** to end an unwanted request. Review every page of fills before approving import. A broker deal ticket can only be imported once per linked account; review manual duplicates separately.
 
 Broker balance and equity are snapshots from the last successful sync. If the terminal is offline, values become stale. The connector estimates a clock offset only from advancing quotes; confirm timestamps, fees, partial closes and currency conversions against your broker's demo statement before trusting imported historical figures. For a one-off reconciliation, use the same command with `--sync-once` (without `--pair`).
-
-## Broker name search and exact server
-
-The website's MT5 connection dialog supports case-insensitive broker search with spaces, punctuation and common aliases (for example, `Just Markets` matches `JustMarkets`). This is **not** MetaTrader's live broker discovery service; suggestions are conveniences, not a guarantee that a trading server exists or matches the account. Select the exact **MT5** server assigned in the broker's account portal or open **File → Open an Account** in your dedicated MT5 terminal and search for the company. For brokers without preset suggestions, enter the exact server manually. Don't enter a broker brand name in the server field.
-
-The website cannot discover every broker automatically or bypass a broker-side authorization error. Each simultaneously captured account still requires its own dedicated portable MT5 installation. A broker alias does not resolve local Python/MT5 IPC timeouts such as `-10005`.
