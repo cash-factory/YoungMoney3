@@ -109,7 +109,7 @@ function populateMt5Brokers({links=[],demoOnly=true}) {
       const label=server.name+' · '+server.mode+(server.origin==='linked'?' (previously linked)':' (suggested)');
       choices.add(new Option(label,server.name));
     }
-    choices.hidden=serverList.length===0;
+    choices.closest('label').hidden=serverList.length===0;
     choices.value='';
     exact.value='';
     selectServer();
