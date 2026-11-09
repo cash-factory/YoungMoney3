@@ -169,6 +169,7 @@ try {
   assert.equal(linked.find(l=>l.id===secondLink).access_level,'trading-restricted');
   const pendingReal=(await (await call('mt5/connect',{device:devices[0].id,envelope:{wrapped:'g',iv:'h',data:'i'}})).json()).id;
   assert.equal((await (await device('poll',{})).json()).job.id,pendingReal);
+  assert.equal((await device('verified',{link:pendingReal,ok:true,mode:'2',trade_access:true,login:'44',server:'Real',company:'Fixtures',currency:'USD',balance:100})).status,400);
   assert.equal((await device('verified',{link:pendingReal,ok:true,mode:2,trade_access:true,login:'44',server:'Real',company:'Fixtures',currency:'USD',balance:100})).status,409);
   assert.equal((await (await call('mt5/status',{})).json()).links.find(l=>l.id===pendingReal).status,'failed');
   assert.equal((await call('admin',{action:'overview'})).status,403);

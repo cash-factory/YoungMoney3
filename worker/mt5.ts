@@ -147,6 +147,8 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if (action==='device/verified') {
     if (link.status==='connected') return json({ok:true});
     if (link.status!=='verifying' || link.expires<=unix) return fail('Login expired.',409);
+    // Require an actual numeric MT5 mode before testing the real-account release gate.
+    if(input.ok && (typeof input.mode!=='number' || ![0,1,2].includes(input.mode))) return fail('Invalid MT5 account mode.');
     if (!input.ok || (env.MT5_ALLOW_LIVE!=='true' && input.mode===2)) {
       const reasons: Record<string,string> = {
         terminal_start:'Could not attach to the dedicated terminal. Open its terminal64.exe with /portable, finish startup, then retry.',
@@ -164,7 +166,6 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       return input.ok ? fail('Could not enable account.',409) : json({ok:true});
     }
     if (!limited(input.login,24)||!/^\d+$/.test(input.login)||!limited(input.server,128)||!limited(input.company,128)||!limited(input.currency,12)||typeof input.balance!=='number'||!Number.isFinite(input.balance)) return fail('Invalid account metadata.');
-    if(![0,1,2].includes(Number(input.mode))) return fail('Unsupported MT5 trading account mode.');
     const duplicate=await q("SELECT 1 FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND l.login=? AND l.server=? AND l.status='connected' AND d.revoked=0",device.owner,input.login,input.server).first();
     if(duplicate) return fail('Account already linked.',409);
     const prior=await q("SELECT payload FROM workspace_records WHERE id=? AND user_id=? AND table_name='trading_accounts'",link.account_id,device.owner).first<{payload:string}>();
