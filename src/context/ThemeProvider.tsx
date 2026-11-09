@@ -1,20 +1,21 @@
 import {useEffect, useState, type ReactNode} from 'react';
 import {ThemeContext,isPalette,type Theme,type ColorPalette} from './ThemeContext';
+import { readPreference, savePreference } from '@/lib/browserPreferences';
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('journal-theme') as Theme | null;
-    return saved || 'dark';
+    const saved = readPreference('journal-theme');
+    return saved === 'dark' || saved === 'light' ? saved : 'dark';
   });
   const [palette, setPalette] = useState<ColorPalette>(() => {
-    const saved = localStorage.getItem('journal-palette');
+    const saved = readPreference('journal-palette');
     return isPalette(saved) ? saved : 'original';
   });
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
     document.documentElement.dataset.palette = palette;
-    localStorage.setItem('journal-theme', theme);
-    localStorage.setItem('journal-palette', palette);
+    savePreference('journal-theme', theme);
+    savePreference('journal-palette', palette);
   }, [theme, palette]);
 
   const toggle = () => setTheme(t => (t === 'dark' ? 'light' : 'dark'));

@@ -18,6 +18,8 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+      - run: npm run test:staging
+      - run: npm run test:ui
       - run: npm run test:worker
       - uses: actions/setup-python@v5
         with:
