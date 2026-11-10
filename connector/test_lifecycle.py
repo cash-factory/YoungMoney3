@@ -62,8 +62,8 @@ class LifecycleContractTests(unittest.TestCase):
         x=reconstruct(rows,{1:{"sl":"1.09800","tp":"1.10600"}},obs,SPEC)[0]
         self.assertEqual(x["initial_sl"],"1.09800")
         self.assertEqual(x["initial_sl_provenance"],"executed_open_order")
-        self.assertEqual(x["initial_risk_account"],"200.000")
-        self.assertEqual(x["planned_reward_risk"],"3")
+        self.assertEqual(Decimal(x["initial_risk_account"]),Decimal("200"))
+        self.assertEqual(Decimal(x["planned_reward_risk"]),Decimal("3"))
 
     def test_scale_in_has_independent_risk_and_one_lifecycle(self):
         rows=[deal(1, BASE, 0, "1", "1.10000", 0, commission="-2"),
@@ -72,10 +72,10 @@ class LifecycleContractTests(unittest.TestCase):
         orders={1:{"sl":"1.09800"},2:{"sl":"1.09900"}}
         x=reconstruct(rows,orders,[],SPEC)[0]
         self.assertEqual(len(x["entries"]),2)
-        self.assertEqual(x["initial_risk_account"],"400.000")
-        self.assertEqual(x["net_realized_profit"],"896")
-        self.assertEqual(x["closed_volume"],"2")
-        self.assertEqual(x["final_realized_r"],"2.24")
+        self.assertEqual(Decimal(x["initial_risk_account"]),Decimal("400"))
+        self.assertEqual(Decimal(x["net_realized_profit"]),Decimal("896"))
+        self.assertEqual(Decimal(x["closed_volume"]),Decimal("2"))
+        self.assertEqual(Decimal(x["final_realized_r"]),Decimal("2.24"))
 
     def test_netting_reversal_creates_second_lifecycle(self):
         rows=[deal(1,BASE,0,"1","1.10000",0),
@@ -109,8 +109,8 @@ class LifecycleContractTests(unittest.TestCase):
         rows=[deal(1,BASE,0,"1","5250",0),deal(2,BASE+30000,1,"1","5251",1,profit="50")]
         x=reconstruct(rows,{1:{"sl":"5249"}},[],spec)[0]
         self.assertEqual(x["movement_unit"],"ticks")
-        self.assertEqual(x["movement"],"4")
-        self.assertEqual(x["initial_risk_account"],"50.0")
+        self.assertEqual(Decimal(x["movement"]),Decimal("4"))
+        self.assertEqual(Decimal(x["initial_risk_account"]),Decimal("50"))
 
     def test_dst_sessions_require_explicit_confirmed_conversion(self):
         stamp=lambda iso:int(datetime.fromisoformat(iso).timestamp()*1000)
