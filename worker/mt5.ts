@@ -83,7 +83,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       return json({rows:evidence.results.slice(0,100).map(row=>({...row,payload:JSON.parse(row.payload)})),more:evidence.results.length>100});
     }
     if (['history-request','history-preview','history-import','history-decline'].includes(action)) {
-      const link=await q("SELECT l.* FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE l.id=? AND d.owner=? AND d.revoked=0 AND l.status='connected'",input.link,owner).first<{id:string;account_id:string;currency:string;company:string;linked_at:string;history_id:string;history_status:string;trade_mode:number|null}>();
+      const link=await q("SELECT l.* FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE l.id=? AND d.owner=? AND d.revoked=0 AND l.status='connected'",input.link,owner).first<{id:string;account_id:string;currency:string;company:string;linked_at:string;history_id:string;history_status:string;history_since:number|null;trade_mode:number|null}>();
       if(!link) return fail('Linked account unavailable.',404);
       if(['history-request','history-import'].includes(action) && await capturePaused())
         return fail('MT5 capture is paused by the administrator.',403);
@@ -98,6 +98,13 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         await q("UPDATE mt5_links SET history_id=?,history_status='requested',history_since=? WHERE id=?",requestId,Date.parse(link.linked_at)-days*86400000,link.id).run();
         return json({ok:true});
       }
+      // Previously queued long scans may still exist in staging D1 after
+      // the new 90-day policy. Never preview or approve those older results.
+      // Cancellation remains available so owners can discard them and rescan.
+      if(action!=='history-decline' && link.history_since!=null &&
+         (!timestamp(link.linked_at) || !Number.isSafeInteger(link.history_since) ||
+          link.history_since<Date.parse(link.linked_at)-90*86400000))
+        return fail('This earlier history scan exceeds the 90-day limit. Cancel it if running, then request a new scan.',409);
       const prefix='history:'+link.history_id+':';
       if(action==='history-preview') {
         if(!['ready','imported'].includes(link.history_status)) return fail('Wait for the scan to finish.',409);
