@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="color-scheme" content="dark"/>
+  <title>YoungMoney3 Connector — staging prerelease</title>
+  <style>
+    :root{color-scheme:dark;font-family:Inter,"Segoe UI",system-ui,sans-serif;--bg:#091721;--surface:#102330;--edge:#274151;--ink:#eff7f6;--quiet:#adc0c8;--brand:#4ad6bb}
+    *,*::before,*::after{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);padding:36px 18px;line-height:1.6}
+    main{width:min(760px,100%);margin:35px auto}
+    .eyebrow{color:var(--brand);font-size:.7rem;font-weight:800;letter-spacing:.18em}
+    h1{font-size:clamp(1.9rem,5vw,3rem);letter-spacing:-.05em;margin:.5rem 0 1rem;line-height:1.1}
+    h2{margin-top:0;font-size:1.08rem}
+    .muted,small{color:var(--quiet)}
+    .card{background:var(--surface);border:1px solid var(--edge);border-radius:16px;padding:26px;margin:24px 0}
+    a{color:var(--brand);text-underline-offset:3px}
+    a.button{display:inline-flex;padding:11px 17px;border-radius:8px;background:var(--brand);color:#08201b;font-weight:800;text-decoration:none;margin:8px 10px 8px 0}
+    a.button[hidden]{display:none}
+    code{display:block;word-break:break-all;background:var(--bg);padding:9px 12px;border-radius:7px;color:#c3d9e2;font-family:ui-monospace,Consolas,monospace;font-size:.8rem}
+    ul{padding-left:22px}
+    a:focus-visible{outline:3px solid white;outline-offset:3px}
+    footer{font-size:.8rem;color:var(--quiet);padding-bottom:40px}
+  </style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">YOUNGMONEY3 / STAGING DOWNLOADS</p>
+  <h1>The MT5 connector, without the terminal commands.</h1>
+  <p class="muted">An unsigned Windows x64 prerelease for capturing demo and contest MT5 trading records. It does not place, modify or cancel orders.</p>
+  <section class="card" aria-labelledby="release-heading">
+    <h2 id="release-heading">Latest available staging prerelease</h2>
+    <p id="status" role="status">Looking for a published release…</p>
+    <p id="version" class="muted"></p>
+    <p><a id="download" class="button" hidden>Download YoungMoney3 Connector.exe</a>
+       <a id="checksum" hidden>Download SHA-256 checksum</a></p>
+    <p id="fallback"><a href="https://github.com/cash-factory/YoungMoney3/releases" rel="noopener noreferrer">View verified GitHub releases</a></p>
+    <p class="muted" style="font-size:.8rem">If this page does not show a download, the Windows CI build has not yet been published or the GitHub release is not publicly accessible. Do not download an executable from a third-party mirror.</p>
+  </section>
+  <section class="card">
+    <h2>Setup</h2>
+    <ul>
+      <li>Install MetaTrader 5 on your own Windows PC. Use one isolated portable terminal per concurrently synced account.</li>
+      <li>Open staging, sign in, and use MT5 Connections → Pair a PC.</li>
+      <li>Paste the short-lived code into the app; choose an MT5 terminal and press Start syncing.</li>
+      <li>Stop or close the app to stop capture; queued records remain available for the next launch.</li>
+    </ul>
+    <p class="muted"><strong>Important:</strong> The executable is unsigned and Windows SmartScreen may show a warning. Compare its SHA-256 against the published checksum before launching. Real-account capture remains disabled.</p>
+    <p><a href="/mt5-connector.zip" download>Python-source fallback ZIP</a></p>
+    <p><a href="/">Return to staging dashboard</a></p>
+  </section>
+  <footer>Staging accounts and data are separate from production. Passwords and pairing codes should never be posted to chat or GitHub.</footer>
+</main>
+<script>
+(async function(){
+  const status=document.getElementById('status');
+  try {
+    const response=await fetch('https://api.github.com/repos/cash-factory/YoungMoney3/releases?per_page=30',{headers:{Accept:'application/vnd.github+json'}});
+    if(!response.ok)throw new Error('releases are unavailable');
+    const releases=await response.json();
+    const release=Array.isArray(releases)&&releases.find(row=>row.prerelease && !row.draft && /^staging-connector-v\d/.test(row.tag_name));
+    const assets=release&&Array.isArray(release.assets)?release.assets:[];
+    const base='https://github.com/cash-factory/YoungMoney3/releases/download/';
+    const exe=assets.find(row=>row.name==='YoungMoney3 Connector.exe' && typeof row.browser_download_url==='string' && row.browser_download_url.startsWith(base));
+    const checksum=assets.find(row=>row.name==='YoungMoney3 Connector.exe.sha256' && typeof row.browser_download_url==='string' && row.browser_download_url.startsWith(base));
+    if(!release||!exe||!checksum){
+      status.textContent='No verified staging executable has been published yet.';
+      return;
+    }
+    status.textContent='Staging prerelease is available. Verify the checksum before opening it.';
+    document.getElementById('version').textContent='Version: '+String(release.tag_name);
+    const download=document.getElementById('download');
+    download.href=exe.browser_download_url;download.rel='noopener noreferrer';download.hidden=false;
+    const sum=document.getElementById('checksum');
+    sum.href=checksum.browser_download_url;sum.rel='noopener noreferrer';sum.hidden=false;
+  }catch{
+    status.textContent='Could not verify the latest GitHub prerelease. Use the official releases page below.';
+  }
+})();
+</script>
+</body>
+</html>
