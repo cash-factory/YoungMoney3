@@ -4,6 +4,7 @@ import { ScreenshotUpload } from '@/components/ScreenshotUpload';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line } from 'recharts';
 import { useWeeklyReviews, useTrades, useStrategies, useStrategyEntryModels, useTradingPlans, useTradingAccounts, useSetups, useMarketInstruments } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
+import { useMt5Lifecycles } from '@/hooks/useMt5Lifecycles';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { MediaImage } from '@/components/MediaPreview';
 import { MediaAudioPlayer } from '@/components/MediaPreview';
@@ -18,6 +19,9 @@ export function WeeklyReviewsPage() {
   const { user } = useAuth();
   const { reviews, loading, upsertReview, deleteReview } = useWeeklyReviews(user?.id);
   const { trades } = useTrades(user?.id);
+  const { positions: brokerPositions, error: positionError } = useMt5Lifecycles(user?.id);
+  const { accounts } = useTradingAccounts(user?.id);
+  const [brokerAccount, setBrokerAccount] = useState('all');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<WeeklyReview | null>(null);
 
@@ -33,6 +37,31 @@ export function WeeklyReviewsPage() {
 
   const avgRating = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
   const totalPnl = reviews.reduce((s, r) => s + r.pnl, 0);
+
+  const brokerWeek = useMemo(() => {
+    const end = new Date();
+    const endUtc = Date.UTC(end.getUTCFullYear(),end.getUTCMonth(),end.getUTCDate());
+    const weekday = new Date(endUtc).getUTCDay();
+    const weekStart = endUtc - ((weekday+6)%7)*86400000;
+    const weekEnd = weekStart+7*86400000;
+    const rows = brokerPositions.filter(row => {
+      if(brokerAccount !== 'all' && row.account_id !== brokerAccount)return false;
+      if(row.summary.status !== 'closed' || !row.summary.final_exit_at)return false;
+      const at = Date.parse(row.summary.final_exit_at);
+      return Number.isFinite(at) && at>=weekStart && at<weekEnd;
+    });
+    const currency = new Map<string,{count:number;pnl:number}>();
+    for(const row of rows) {
+      const code=row.summary.settlement_currency || 'Unknown currency';
+      const amount=Number(row.summary.net_realized_profit);
+      const prior=currency.get(code)||{count:0,pnl:0};
+      prior.count++;
+      if(row.summary.net_realized_profit!==null && Number.isFinite(amount))prior.pnl+=amount;
+      currency.set(code,prior);
+    }
+    const eligible=rows.filter(row=>row.summary.final_realized_r!==null).length;
+    return {rows,currency,eligible,weekStart:new Date(weekStart).toISOString().slice(0,10)};
+  },[brokerPositions,brokerAccount]);
 
   const chartData = useMemo(() => [...reviews].reverse().map(r => ({
     week: format(parseISO(r.week_start), 'MMM d'),
@@ -53,6 +82,30 @@ export function WeeklyReviewsPage() {
           </button>
         }
       />
+
+      <section className="card p-4 sm:p-5 mb-6 space-y-3" aria-label="Current week broker lifecycle reconciliation">
+        <div>
+          <p className="text-[10px] text-muted uppercase tracking-wider font-bold">BROKER RECONCILIATION / CURRENT UTC WEEK</p>
+          <h2 className="font-semibold text-base mt-1">Position-based weekly results</h2>
+          <p className="text-xs text-muted mt-1">Each closed MT5 lifecycle counts once. Closing fills, legacy journal rows and user-entered reviews remain separate until exact matching is verified. Broker-local week boundaries require a confirmed timezone conversion.</p>
+        </div>
+        <label className="block max-w-sm text-xs text-secondary font-semibold">Trading account
+          <select className="input-field mt-1" value={brokerAccount} onChange={event=>setBrokerAccount(event.target.value)}>
+            <option value="all">All accounts</option>
+            {accounts.map(item=><option key={item.id} value={item.id}>{item.name} · {item.base_currency}</option>)}
+          </select>
+        </label>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <div className="bg-secondary rounded-lg p-3"><p className="text-xs text-muted">Week beginning (UTC)</p><strong>{brokerWeek.weekStart}</strong></div>
+          <div className="bg-secondary rounded-lg p-3"><p className="text-xs text-muted">Closed positions</p><strong className="font-mono">{brokerWeek.rows.length}</strong></div>
+          <div className="bg-secondary rounded-lg p-3"><p className="text-xs text-muted">Known final R</p><strong className="font-mono">{brokerWeek.eligible} / {brokerWeek.rows.length}</strong></div>
+        </div>
+        {positionError && <p role="status" className="text-xs text-muted">Broker lifecycle summaries are temporarily unavailable. Saved weekly reviews remain accessible.</p>}
+        <div className="flex flex-wrap gap-3 text-xs">
+          {[...brokerWeek.currency].map(([code,group])=><span key={code} className="rounded-lg border border-themed px-3 py-2"><strong>{code}</strong> · {group.count} positions · {group.pnl.toFixed(2)} net</span>)}
+          {!brokerWeek.currency.size && <p className="text-muted">No broker position lifecycles closed this UTC week.</p>}
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <StatCard label="Total Reviews" value={String(reviews.length)} icon={<CalendarCheck size={20} />} accent="blue" />
