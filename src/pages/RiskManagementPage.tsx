@@ -150,7 +150,7 @@ export function RiskManagementPage() {
           </div>)}
         </div>
       </section>}
-      {saveError && <p className="mb-4 text-sm text-error-500" role="alert">{saveError}</p>
+      {saveError && <p className="mb-4 text-sm text-error-500" role="alert">{saveError}</p>}
       {account ? <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard label="Today's P&L" value={formatMoney(todayPnl)} icon={<Wallet size={20} />} accent={todayPnl >= 0 ? 'emerald' : 'rose'} trend={todayPnl >= 0 ? 'up' : 'down'} trendValue={formatMoney(Math.abs(todayPnl))} />
