@@ -256,11 +256,9 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
                     "entry_time":iso(p["time_msc"]-offset),"entry_price":p["price_open"],"exit_price":None,"exit_time":None,
                     "pnl":0,"lot_size":p["volume"],"stop_loss":p["sl"] or None,"take_profit":p["tp"] or None,
                     "broker_details":{"position_id":ident,"ticket":str(p["ticket"]),"initial_risk_known":False}}
-            prior=db.execute("SELECT payload FROM latest WHERE link=? AND key=?",(link,key)).fetchone()
-            if prior:
-                old=json.loads(prior[0])["fields"]
-                if (old.get("stop_loss"),old.get("take_profit"))!=(fields["stop_loss"],fields["take_profit"]):
-                    enqueue(link,"raw",f"stops-{ident}-{end}",{"observed_at":iso(end),"sl":p["sl"],"tp":p["tp"]})
+            # The position_observations entry above is the ONLY stop-event
+            # writer for this poll. Do not overwrite that immutable evidence
+            # using a second payload with the same event key.
             enqueue(link,"trade",key,fields)
         for key in previous:
             enqueue(link,"retire",key,{})
