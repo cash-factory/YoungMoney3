@@ -91,7 +91,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         return fail('Real-account capture is paused by the release gate.',403);
       if(action==='history-request') {
         const days=Number(input.days);
-        if(!Number.isSafeInteger(days)||days<1||days>3650) return fail('Choose 1–3650 days.');
+        if(!Number.isSafeInteger(days)||days<1||days>90) return fail('Choose 1–90 days.');
         if(link.history_status==='requested') return fail('History scan already running.',409);
         if(!timestamp(link.linked_at)) return fail('The linked account has no valid start time.',409);
         const requestId=uuid();
