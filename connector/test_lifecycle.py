@@ -33,16 +33,16 @@ class LifecycleContractTests(unittest.TestCase):
         self.assertEqual(x["status"], "closed")
         self.assertEqual(x["initial_sl_provenance"], "first_observed")
         self.assertEqual(x["initial_sl"], "1.099")
-        self.assertEqual(x["initial_risk_account"], "200.000")
-        self.assertEqual(x["closed_volume_risk_account"], "200.0000")
+        self.assertEqual(Decimal(x["initial_risk_account"]), Decimal("200"))
+        self.assertEqual(Decimal(x["closed_volume_risk_account"]), Decimal("200"))
         self.assertEqual(x["capital_at_entry"]["source"], "equity")
         self.assertEqual(x["capital_at_entry"]["value"], "20000")
-        self.assertEqual(x["net_realized_profit"], "492.000")
-        self.assertEqual(x["final_realized_r"], "2.46")
-        self.assertEqual(x["remaining_volume"], "0.0")
-        self.assertEqual(x["weighted_holding_seconds"], "6300.0")
+        self.assertEqual(Decimal(x["net_realized_profit"]), Decimal("492"))
+        self.assertEqual(Decimal(x["final_realized_r"]), Decimal("2.46"))
+        self.assertEqual(Decimal(x["remaining_volume"]), Decimal("0"))
+        self.assertEqual(Decimal(x["weighted_holding_seconds"]), Decimal("6300"))
         self.assertEqual(x["movement_unit"], "pips")
-        self.assertEqual(x["movement"], "25.0")
+        self.assertEqual(Decimal(x["movement"]), Decimal("25"))
 
     def test_first_observed_beyond_break_even_stays_unavailable(self):
         rows=[deal(1, BASE, 0, "1", "1.10000", 0),
@@ -88,6 +88,14 @@ class LifecycleContractTests(unittest.TestCase):
         self.assertEqual(x[0]["direction"],"long")
         self.assertEqual(x[1]["direction"],"short")
         self.assertEqual(x[1]["status"],"closed")
+
+    def test_stop_first_observed_after_closing_cannot_repair_missing_initial_risk(self):
+        rows=[deal(1,BASE,0,"1","1.10000",0),
+              deal(2,BASE+10000,1,"1","1.10200",1,profit="200")]
+        obs=[{"position_id":"77","time_msc":BASE+60000,"sl":"1.099","tp":"1.105"}]
+        x=reconstruct(rows,{},obs,SPEC)[0]
+        self.assertEqual(x["initial_sl_provenance"],"unavailable")
+        self.assertIsNone(x["final_realized_r"])
 
     def test_unknown_tick_value_keeps_r_null(self):
         rows=[deal(1,BASE,0,"1","1.10000",0),
