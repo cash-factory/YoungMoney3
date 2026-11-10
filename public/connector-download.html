@@ -62,14 +62,14 @@
     const release=Array.isArray(releases)&&releases.find(row=>row.prerelease && !row.draft && /^staging-connector-v\d/.test(row.tag_name));
     const assets=release&&Array.isArray(release.assets)?release.assets:[];
     const base='https://github.com/cash-factory/YoungMoney3/releases/download/';
-    const exe=assets.find(row=>row.name==='YoungMoney3 Connector.exe' && typeof row.browser_download_url==='string' && row.browser_download_url.startsWith(base));
-    const checksum=assets.find(row=>row.name==='YoungMoney3 Connector.exe.sha256' && typeof row.browser_download_url==='string' && row.browser_download_url.startsWith(base));
+    const exe=assets.find(row=>/^YoungMoney3(?:[. -])Connector\.exe$/i.test(row.name) && typeof row.browser_download_url==='string' && row.browser_download_url.startsWith(base));
+    const checksum=assets.find(row=>/^YoungMoney3(?:[. -])Connector\.exe\.sha256$/i.test(row.name) && typeof row.browser_download_url==='string' && row.browser_download_url.startsWith(base));
     if(!release||!exe||!checksum){
       status.textContent='No verified staging executable has been published yet.';
       return;
     }
-    status.textContent='Staging prerelease is available. Verify the checksum before opening it.';
-    document.getElementById('version').textContent='Version: '+String(release.tag_name);
+    status.textContent='Staging prerelease is available. Verify the SHA-256 digest before opening it.';
+    document.getElementById('version').textContent='Version: '+String(release.tag_name)+' · Windows x64 · unsigned';
     const download=document.getElementById('download');
     download.href=exe.browser_download_url;download.rel='noopener noreferrer';download.hidden=false;
     const sum=document.getElementById('checksum');
