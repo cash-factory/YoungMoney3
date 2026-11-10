@@ -282,7 +282,15 @@ def reconstruct(deals, orders, observations, spec, *, capital_samples=(),
                 "frozen_sl": None, "stop_provenance": "unavailable",
                 "stop_observed_at": None, "risk": None, "risk_unavailable_reason": None,
             }
-            initial_stop(tranche)
+            # A stop first seen AFTER a partial/full exit cannot establish the
+            # original risk for volume already closed at that time.
+            next_exits = [int(row["time_msc"]) for row in deals
+                          if int(row["time_msc"]) >= when
+                          and ("long" if row["type"] == 0 else "short") != direction]
+            cutoff = min(next_exits) if next_exits else observed_at_ms
+            if observed_at_ms is not None and cutoff is not None:
+                cutoff = min(cutoff, observed_at_ms)
+            initial_stop(tranche, cutoff)
             current["tranches"].append(tranche)
             current["remaining_volume"] += remaining
             current["entry_volume"] += remaining
@@ -306,6 +314,11 @@ def reconstruct(deals, orders, observations, spec, *, capital_samples=(),
                 current["current_tp"] = D(latest[-1].get("tp"))
 
     if current is not None:
+        latest = [o for o in observations
+                  if observed_at_ms is None or int(o["time_msc"]) <= observed_at_ms]
+        if latest:
+            current["current_stop"] = D(latest[-1].get("sl"))
+            current["current_tp"] = D(latest[-1].get("tp"))
         timeline.append(current)
 
     results = []
@@ -329,7 +342,6 @@ def reconstruct(deals, orders, observations, spec, *, capital_samples=(),
         planned = None
         tp = D(first["order"].get("tp"))
         if tp is not None and first["risk"] and first["original_volume"] > ZERO:
-            reward = stop_risk(first["entry"], tp, "short" if first["direction"] == "long" else "long", first["original_volume"], spec)
             # Reward uses target distance, not stop-direction validation.
             tick = D(spec.get("trade_tick_size"))
             tick_val = D(spec.get("trade_tick_value_profit")) or D(spec.get("trade_tick_value"))
