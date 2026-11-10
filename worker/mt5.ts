@@ -60,13 +60,13 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     if (action === 'positions') {
       const offset=Number(input.offset ?? 0);
       if(!Number.isSafeInteger(offset)||offset<0||offset>10000) return fail('Invalid page.');
-      const rows=await q(\`SELECT latest.link,latest.account_id,latest.lifecycle_id,latest.version,latest.recorded_at,latest.payload
+      const rows=await q(`SELECT latest.link,latest.account_id,latest.lifecycle_id,latest.version,latest.recorded_at,latest.payload
         FROM (
           SELECT v.*,ROW_NUMBER() OVER(PARTITION BY v.link,v.lifecycle_id ORDER BY v.version DESC) AS rn
           FROM mt5_position_versions v
           JOIN mt5_links l ON l.id=v.link JOIN mt5_devices d ON d.id=l.device
           WHERE v.owner=? AND l.owner=? AND d.owner=? AND d.revoked=0
-        ) latest WHERE latest.rn=1 ORDER BY latest.recorded_at DESC LIMIT 101 OFFSET ?\`,
+        ) latest WHERE latest.rn=1 ORDER BY latest.recorded_at DESC LIMIT 101 OFFSET ?`,
         owner,owner,owner,offset).all<{link:string;account_id:string;lifecycle_id:string;version:number;recorded_at:string;payload:string}>();
       const page=rows.results.slice(0,100);
       return json({rows:page.map(row=>({...row,summary:JSON.parse(row.payload),payload:undefined})),
@@ -273,8 +273,8 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       const old=await q('SELECT sha256 FROM mt5_position_versions WHERE link=? AND lifecycle_id=? ORDER BY version DESC LIMIT 1',
         link.id,f.lifecycle_id).first<{sha256:string}>();
       if(!old || old.sha256!==sha) {
-        statements.push(q(\`INSERT OR IGNORE INTO mt5_position_versions(link,owner,account_id,lifecycle_id,version,calculation_version,payload,sha256,recorded_at)
-          VALUES(?,?,?,?,(SELECT COALESCE(MAX(version),0)+1 FROM mt5_position_versions WHERE link=? AND lifecycle_id=?),1,?,?,?)\`,
+        statements.push(q(`INSERT OR IGNORE INTO mt5_position_versions(link,owner,account_id,lifecycle_id,version,calculation_version,payload,sha256,recorded_at)
+          VALUES(?,?,?,?,(SELECT COALESCE(MAX(version),0)+1 FROM mt5_position_versions WHERE link=? AND lifecycle_id=?),1,?,?,?)`,
           link.id,device.owner,link.account_id,f.lifecycle_id,link.id,f.lifecycle_id,payload,sha,time));
       }
       continue;
