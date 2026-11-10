@@ -53,7 +53,7 @@ CI jobs: [source validation](https://github.com/cash-factory/YoungMoney3/actions
 
 ## 3. Known release limitations
 
-- **Historical imports:** 30 days is the default, with 90/180/365/3650-day selections. The legacy fill preview/approval boundary remains; it does not yet prove consolidated historical lifecycle reconciliation.
+- **Historical imports:** 30 days (approximately one month) is the default, with selectable 7/14/30/60/90-day lookbacks and a server-enforced 90-day maximum. Older scans requested before this restriction may already have retained preview data; no automatic deletion or migration is performed. The legacy fill preview/approval boundary remains; it does not yet prove consolidated historical lifecycle reconciliation.
 - **Legacy imports:** Existing fill rows remain intact. No destructive consolidation or approximate automatic match occurs. An explicit audited exact-identity reconciliation path still requires completion.
 - **Financial definitions:** Connector lifecycle projections use Python `Decimal`. The complete shared decimal calculation contract across manual trades, exports and server summaries is **not yet universal**; the existing manual-trade calculation path remains distinct.
 - **Backup coverage:** Existing encrypted workspace backups do not include the new immutable MT5 evidence/version tables in a verified restore process; do not treat those backups as a complete broker-evidence disaster-recovery solution.
