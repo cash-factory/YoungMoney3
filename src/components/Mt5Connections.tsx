@@ -109,7 +109,28 @@ export function Mt5Connections() {
       <option value="Europe/Berlin"/><option value="Asia/Dubai"/>
     </datalist>
     {preview && <section className="rounded-xl border border-themed p-4 space-y-3"><h3 className="font-semibold">Load these earlier trades for analysis?</h3><p className="text-sm text-secondary">Previewed {preview.rows.length} broker fills{preview.more?' (more pages remain)':''}. Open every page before importing; only the reviewed request will be imported. Review possible manual matches afterward. Your broker balance remains the latest reported balance.</p>
-      <div className="overflow-auto max-h-64"><table className="w-full text-sm text-left"><thead><tr><th>Asset</th><th>Closed</th><th>Lots</th><th>Net P&amp;L</th></tr></thead><tbody>{preview.rows.map((r,i)=><tr key={i}><td>{String(r.pair)}</td><td>{String(r.exit_time)}</td><td>{String(r.lot_size)}</td><td>{String(r.pnl)}</td></tr>)}</tbody></table></div>
+      <div className="overflow-auto max-h-80"><table className="w-full min-w-[950px] text-xs text-left border-separate border-spacing-0">
+        <thead><tr className="text-muted uppercase tracking-wide">
+          {['Symbol','Position / deal','Entry / exit UTC','Direction','Volume','Entry / exit price','Original / close SL','Initial risk','Costs / swap','Net P&L'].map(label=><th key={label} className="border-b border-themed px-2 py-3 font-semibold whitespace-nowrap">{label}</th>)}
+        </tr></thead>
+        <tbody>{preview.rows.map((r,i)=>{
+          const broker=(r.broker_details && typeof r.broker_details==='object' ? r.broker_details : {}) as Record<string,unknown>;
+          const value=(key:string)=>r[key]==null?'Unknown':String(r[key]);
+          return <tr key={i} className="align-top hover:bg-secondary">
+            <td className="px-2 py-3 font-semibold">{value('pair')}</td>
+            <td className="px-2 py-3 font-mono">Position {broker.position_id == null?'Unknown':String(broker.position_id)}<div className="text-muted">Deal {broker.deal_ticket == null?'Unknown':String(broker.deal_ticket)}</div></td>
+            <td className="px-2 py-3">{value('entry_time')}<div className="text-muted">{value('exit_time')}</div></td>
+            <td className="px-2 py-3">{value('direction')}</td>
+            <td className="px-2 py-3 font-mono">{value('lot_size')}</td>
+            <td className="px-2 py-3 font-mono">{value('entry_price')}<div className="text-muted">{value('exit_price')}</div></td>
+            <td className="px-2 py-3 font-mono">{r.stop_loss == null?'Not recorded':String(r.stop_loss)}<div className="text-muted">Original SL not proven by legacy fill scan</div></td>
+            <td className="px-2 py-3">Unavailable unless order evidence establishes original risk</td>
+            <td className="px-2 py-3 font-mono">Fees: {value('fees')}<div className="text-muted">Swap: {broker.swap==null?'Unknown':String(broker.swap)}</div></td>
+            <td className="px-2 py-3 font-mono font-semibold">{value('pnl')}</td>
+          </tr>;
+        })}</tbody>
+      </table></div>
+      <p className="text-xs text-muted">This preview shows broker fill-level history, not yet a consolidated lifecycle. Opening order SL, original risk and R remain unverified when the history source cannot prove them. Only reviewed fills can be approved for import.</p>
       {preview.more && <button disabled={historyBusy} className="btn-secondary" onClick={()=>{setHistoryBusy(true);void run(async()=>{
         const next=await action('history-preview',{link:historyLink,offset:preview.nextOffset});
         setPreview(previous=>previous?{...next,rows:[...previous.rows,...next.rows]}:next);
