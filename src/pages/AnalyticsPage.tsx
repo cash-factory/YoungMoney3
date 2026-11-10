@@ -1,3 +1,4 @@
+import { ExecutionSummaryCards, ExecutionSessionSummary, ExecutionAnalytics } from '@/components/ExecutionMetrics';
 import {tradeCurrency} from '@/lib/tradeFinance';
 import { useMemo, useState } from 'react';
 import { BarChart3, TrendingUp, Calendar, Compass, Activity, Layers } from 'lucide-react';
@@ -19,8 +20,8 @@ import { StrategyEdgeScore } from '@/components/StrategyEdgeScore';
 export function AnalyticsPage() {
   const { user } = useAuth();
   const [source, setSource] = useState('all');
-  const sourceFilter = <label className="mb-4 block max-w-sm text-xs font-semibold text-secondary">Trade source
-    <select className="input-field mt-1.5" value={source} onChange={event => setSource(event.target.value)}>
+  const sourceFilter = <label className="block min-w-0 text-xs font-medium text-secondary">Trade source
+    <select className="input-field mt-2" value={source} onChange={event => setSource(event.target.value)}>
       <option value="all">All sources</option><option value="manual">Manual</option><option value="mt5">MT5</option>
     </select>
   </label>;
@@ -43,6 +44,14 @@ export function AnalyticsPage() {
   const strategyData = useMemo(() => groupByStrategy(closedTrades), [closedTrades]);
   const stats = useMemo(() => computeDashboardStats(closedTrades), [closedTrades]);
 
+  const accountSelector = <label className="block min-w-0 text-xs font-medium text-secondary">Account view
+    <select className="input-field mt-2" value={selectedAccountId ?? accountId} onChange={event => setSelectedAccountId(event.target.value || '__unassigned__')}>
+      <option value="all">Whole portfolio</option>
+      {accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}
+      <option value="__unassigned__">Unassigned legacy trades</option>
+    </select>
+  </label>;
+
   const tooltipStyle = {
     background: 'var(--bg-card)',
     border: '1px solid var(--border)',
@@ -55,14 +64,8 @@ export function AnalyticsPage() {
   if (closedTrades.length === 0) {
     return (
       <div>
-        <SectionHeader title="Analytics" subtitle="Deep performance insights across your trading" />
-      {sourceFilter}
-        <label className="mb-5 block max-w-sm text-xs font-semibold text-secondary">Account view
-          <select className="input-field mt-1.5" value={selectedAccountId ?? accountId} onChange={event => setSelectedAccountId(event.target.value || '__unassigned__')}>
-            <option value="all">Whole portfolio</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}
-            <option value="__unassigned__">Unassigned legacy trades</option>
-          </select>
-        </label>
+        <SectionHeader title="Analytics" subtitle="Explore results, execution quality and the patterns behind them." />
+      <div className="ym-toolbar card mb-5 grid gap-4 p-4 sm:max-w-2xl sm:grid-cols-2">{sourceFilter}{accountSelector}</div>
         <div className="card p-8">
           <EmptyState icon={<BarChart3 size={40} />} title="No closed trades in this account" message="Choose another account or close/log trades to see realized performance." />
         </div>
@@ -72,16 +75,12 @@ export function AnalyticsPage() {
 
   return (
     <div>
-      <SectionHeader title="Analytics" subtitle="Deep performance insights across your trading" />
-      {sourceFilter}
-      <label className="mb-5 block max-w-sm text-xs font-semibold text-secondary">Account view
-        <select className="input-field mt-1.5" value={selectedAccountId ?? accountId} onChange={event => setSelectedAccountId(event.target.value || '__unassigned__')}>
-          <option value="all">Whole portfolio</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}
-          <option value="__unassigned__">Unassigned legacy trades</option>
-        </select>
-      </label>
+      <SectionHeader title="Analytics" subtitle="Explore results, execution quality and the patterns behind them." />
+      <div className="ym-toolbar card mb-5 grid gap-4 p-4 sm:max-w-2xl sm:grid-cols-2">{sourceFilter}{accountSelector}</div>
 
-      {groups.length>1 ? <section className="card p-5"><h2>Realized P&amp;L by settlement currency</h2>{groups.map(group=><p key={group}>{group} � {closedTrades.filter(t=>tradeCurrency(t,accounts)===group).reduce((sum,t)=>sum+t.pnl,0).toFixed(2)}</p>)}<p>Select one account to inspect its detailed metrics.</p></section> : <>
+      <div className="mb-5 space-y-4"><ExecutionSummaryCards trades={closedTrades} /><ExecutionSessionSummary trades={closedTrades} /></div>
+      <div className="mb-5"><ExecutionAnalytics trades={closedTrades} /></div>
+      {groups.length>1 ? <section className="card p-5"><h2>Realized P&amp;L by settlement currency</h2>{groups.map(group=><p key={group}>{group} · {closedTrades.filter(t=>tradeCurrency(t,accounts)===group).reduce((sum,t)=>sum+t.pnl,0).toFixed(2)}</p>)}<p>Select one account to inspect its detailed metrics.</p></section> : <>
       {/* Summary stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard label="Total Trades" value={String(stats.totalTrades)} icon={<Activity size={20} className="text-brand-500" />} />

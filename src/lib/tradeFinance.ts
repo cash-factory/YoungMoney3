@@ -1,3 +1,4 @@
+import {realizedExecutionEvents} from './executionMetrics.ts';
 import Decimal from 'decimal.js-light';
 import type { Trade, TradingAccount, TradingAccountAdjustment } from './types.ts';
 
@@ -15,9 +16,9 @@ export function settlement(net: number, currency: string) {
 }
 
 export function accountLedger(account: TradingAccount, trades: Trade[], adjustments: TradingAccountAdjustment[]) {
-  const profit = trades.reduce((sum, trade) =>
-    trade.account_id === account.id && trade.status === 'closed' && tradeCurrency(trade, [account]) === account.base_currency
-      ? sum.plus(trade.pnl_decimal ?? trade.pnl) : sum, new Decimal(0));
+  const profit = realizedExecutionEvents(trades).reduce((sum, {trade,pnl}) =>
+    trade.account_id === account.id && tradeCurrency(trade, [account]) === account.base_currency
+      ? sum.plus(pnl) : sum, new Decimal(0));
   const balance = adjustments.reduce((sum, adjustment) =>
     adjustment.account_id === account.id ? sum.plus(adjustment.amount) : sum, profit.plus(account.balance));
   return { profit: profit.toNumber(), balance: account.broker_balance ?? balance.toNumber() };

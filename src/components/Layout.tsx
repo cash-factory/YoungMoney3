@@ -1,9 +1,10 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { LayoutDashboard, CandlestickChart, Calendar, BarChart3, BookOpen, Sparkles, Menu, X, TrendingUp, Plus, LogOut, ChevronDown, ChevronRight, ClipboardList, Target, FlaskConical, Shield, CalendarClock, LayoutTemplate, BookMarked, StickyNote, GraduationCap, CreditCard, ClipboardCheck, MoreHorizontal, Archive, Settings, Search, Monitor } from 'lucide-react';
 import { CommandPalette } from '@/components/CommandPalette';
 import { ColorPaletteControl } from '@/components/ColorPaletteControl';
 import { DataBackupModal } from '@/components/DataBackupModal';
 import { DataRecoveryNotice } from '@/components/ui/DataRecoveryNotice';
+import { useDialogFocus } from '@/hooks/useDialogFocus';
 import { useAuth } from '@/context/AuthContext';
 
 export type PageId = 'dashboard' | 'trades' | 'calendar' | 'analytics' | 'journal' | 'ai' | 'trading-plan' | 'goals' | 'risk-management' | 'market-sessions' | 'setups' | 'strategy-testing' | 'strategies' | 'resources' | 'notes' | 'study-material' | 'brokers-charting' | 'weekly-reviews' | 'account-settings' | 'admin-operations' | 'mt5' | 'workspace-setup';
@@ -57,6 +58,50 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [desktop, setDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const dockRef = useRef<HTMLElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
+  const profileTriggerRef = useRef<HTMLButtonElement>(null);
+  useDialogFocus(mobileOpen && !desktop, sidebarRef, () => setMobileOpen(false));
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)');
+    const update = () => { setDesktop(media.matches); if (media.matches) setMobileOpen(false); };
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  useEffect(() => {
+    if (sidebarRef.current) sidebarRef.current.inert = !desktop && !mobileOpen;
+    const isDrawerOpen = mobileOpen && !desktop;
+    const stage = stageRef.current;
+    const dock = dockRef.current;
+    if (stage) stage.inert = isDrawerOpen;
+    if (dock) dock.inert = isDrawerOpen;
+    return () => {
+      if (stage) stage.inert = false;
+      if (dock) dock.inert = false;
+    };
+  }, [desktop, mobileOpen]);
+  useEffect(() => {
+    if (!profileMenuOpen) return;
+    const onPointer = (event: PointerEvent) => {
+      if (!profileRef.current?.contains(event.target as Node)) setProfileMenuOpen(false);
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setProfileMenuOpen(false);
+        profileTriggerRef.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onEscape);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('keydown', onEscape);
+    };
+  }, [profileMenuOpen]);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -74,6 +119,11 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
   const pageTitle = activeGroup?.items.find(item => item.id === current)?.label
     || ({ 'account-settings': 'Account Settings', 'admin-operations': 'Admin Operations', mt5: 'MT5 Connections' } as Partial<Record<PageId, string>>)[current]
     || 'Workspace';
+  useEffect(() => {
+    const previousTitle = document.title;
+    document.title = pageTitle + ' · YoungMoney3';
+    return () => { document.title = previousTitle; };
+  }, [pageTitle]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ home: true });
 
   useEffect(() => {
@@ -82,24 +132,15 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
 
   const toggleSection = (id: string) => setExpanded(previous => ({ ...previous, [id]: !previous[id] }));
 
-  useEffect(() => {
-    if (!mobileOpen) return;
-    const priorOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const onEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMobileOpen(false);
-    };
-    window.addEventListener('keydown', onEscape);
-    return () => {
-      document.body.style.overflow = priorOverflow;
-      window.removeEventListener('keydown', onEscape);
-    };
-  }, [mobileOpen]);
 
   const handleNav = (page: PageId) => {
     onNavigate(page);
     setMobileOpen(false);
     setProfileMenuOpen(false);
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      requestAnimationFrame(() => document.getElementById('workspace-content')?.focus({ preventScroll: true }));
+    });
   };
 
   const displayName = profile?.display_name || 'Trader';
@@ -107,7 +148,14 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
 
   return (
     <div className="ym-workspace min-h-screen bg-primary flex">
+      <a className="ym-skip-link" href="#workspace-content">Skip to workspace</a>
       <aside
+        ref={sidebarRef}
+        id="workspace-navigation"
+        tabIndex={-1}
+        aria-label="Workspace navigation"
+        role={mobileOpen && !desktop ? 'dialog' : undefined}
+        aria-modal={mobileOpen && !desktop ? true : undefined}
         className={`ym-sidebar fixed lg:sticky top-0 left-0 h-[100dvh] w-[270px] bg-card border-r border-themed z-40 flex flex-col transition-transform duration-300 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
@@ -115,15 +163,11 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
         <div className="ym-sidebar-brand relative flex items-center gap-3 px-5 py-5 border-b border-themed">
           <div className="ym-brand-mark relative flex items-center justify-center text-white">
             <TrendingUp size={22} />
-            <span className="absolute -top-0.5 -right-0.5">
-              <span className="relative flex h-2 w-2">
-                <span className="relative inline-flex w-2 h-2 rounded-full bg-amber-400 ring-2 ring-card" />
-              </span>
-            </span>
+
           </div>
           <div>
-            <h1 className="font-bold text-[13px] tracking-[-0.025em]">Young-Money-Fx</h1>
-            <p className="ym-brand-caption">THE TRADING WORKSPACE</p>
+            <p className="font-bold text-[15px] tracking-[-0.04em]">YoungMoney3</p>
+            <p className="ym-brand-caption">Trading journal</p>
           </div>
           <button type="button" aria-label="Close navigation" onClick={() => setMobileOpen(false)} className="ml-auto lg:hidden btn-ghost p-1">
             <X size={18} />
@@ -197,20 +241,22 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
               </section>
             )})}
           </div>
-          <div className="sticky bottom-0 left-0 right-0 h-8 -mx-3 -mb-4 pointer-events-none bg-gradient-to-t from-card via-card/90 to-transparent" />
+
         </nav>
 
         <div className="px-3 py-3 border-t border-themed">
-          <div className="relative">
+          <div ref={profileRef} className="relative">
             <button
+              ref={profileTriggerRef}
+              aria-controls="workspace-profile-menu"
               onClick={() => setProfileMenuOpen(o => !o)}
               type="button" aria-expanded={profileMenuOpen}
               className="ym-profile-trigger w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-secondary transition-colors"
             >
               {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt={displayName} className="w-8 h-8 rounded-full object-cover ring-2 ring-orange-500/20" />
+                <img src={profile.avatar_url} alt={displayName} className="w-8 h-8 rounded-full object-cover ring-1 ring-themed" />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center text-white text-xs font-bold shadow-sm">
+                <div className="ym-profile-avatar w-8 h-8 rounded-full bg-secondary border border-themed flex items-center justify-center text-primary text-xs font-bold">
                   {initials}
                 </div>
               )}
@@ -219,8 +265,7 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
             </button>
             {profileMenuOpen && (
               <>
-                <div className="fixed inset-0 z-40" onClick={() => setProfileMenuOpen(false)} />
-                <div className="absolute bottom-full left-0 right-0 mb-2 card border border-themed rounded-xl shadow-xl z-50 animate-scale-in">
+                <div id="workspace-profile-menu" className="ym-profile-popover absolute bottom-full left-0 right-0 mb-2 card border border-themed rounded-xl shadow-xl z-50 animate-scale-in">
                   <div className="border-t border-themed p-3"><ColorPaletteControl /></div>
                   <div className="border-t border-themed" />
                   <button onClick={() => { handleNav('account-settings'); setProfileMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-secondary hover:bg-secondary hover:text-primary transition-colors">
@@ -242,52 +287,44 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
 
       {mobileOpen && <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 lg:hidden" onClick={() => setMobileOpen(false)} />}
 
-      <div className="ym-workspace-stage flex-1 min-w-0">
-        <header className="ym-workspace-topbar hidden lg:flex items-center justify-between gap-4 px-7 xl:px-10">
+      <div ref={stageRef} className="ym-workspace-stage flex-1 min-w-0">
+        <header className="ym-shell-topbar ym-workspace-topbar hidden lg:flex items-center justify-between gap-4 px-7 xl:px-10">
           <div className="min-w-0">
-            <p className="ym-topbar-eyebrow">YOUNGMONEY3 / THE DESK</p>
-            <div className="flex items-center gap-2 text-[13px]">
+            <div className="ym-page-context flex items-center gap-2 text-[13px]">
               <span className="text-muted">{currentSectionLabel}</span>
               <ChevronRight size={13} className="text-muted" />
               <strong className="font-semibold tracking-tight truncate">{pageTitle}</strong>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="ym-workspace-note hidden 2xl:inline">Keep the process. Review the outcome.</span>
             <button type="button" onClick={() => setSearchOpen(true)} aria-label="Search workspace (Ctrl K)" className="ym-topbar-search">
               <Search size={16} /><span>Find anything</span><kbd>Ctrl K</kbd>
             </button>
+            <button type="button" onClick={onQuickAdd} className="ym-topbar-capture btn-primary"><Plus size={15} /> Capture trade</button>
             <ColorPaletteControl compact />
           </div>
         </header>
         <div className="ym-mobile-topbar lg:hidden sticky top-0 z-20 flex items-center justify-between px-4 py-3 bg-card/90 backdrop-blur-md border-b border-themed">
-          <button type="button" onClick={() => setMobileOpen(true)} aria-label="Open navigation menu" aria-expanded={mobileOpen} className="btn-ghost p-1.5">
+          <button type="button" onClick={() => setMobileOpen(true)} aria-label="Open navigation menu" aria-controls="workspace-navigation" aria-expanded={mobileOpen} className="btn-ghost p-1.5">
             <Menu size={20} />
           </button>
           <div className="flex items-center gap-2">
             <TrendingUp size={18} className="ym-mobile-logo-icon" />
-            <span className="font-bold text-sm tracking-tight">YoungMoney3</span>
+            <span className="font-semibold text-sm tracking-tight">{pageTitle}</span>
           </div>
           <button type="button" onClick={() => setSearchOpen(true)} className="btn-ghost p-1.5" aria-label="Search workspace">
             <Search size={20} />
           </button>
         </div>
 
-        <main id="workspace-content" className="ym-main-content p-4 sm:p-6 lg:p-8 xl:px-10 max-w-[1480px] mx-auto animate-fade-in pb-32 lg:pb-12">
+        <main id="workspace-content" tabIndex={-1} className="ym-main-content p-4 sm:p-6 lg:p-8 xl:px-10 max-w-[1480px] mx-auto animate-fade-in pb-32 lg:pb-12">
           <DataRecoveryNotice />
           {children}
         </main>
 
-        <button
-          onClick={onQuickAdd}
-          className="ym-desktop-quick-add fixed bottom-7 right-7 z-30 w-14 h-14 rounded-xl text-white shadow-lg hidden lg:flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-          title="Quick Add"
-          aria-label="Quick Add"
-        >
-          <Plus size={26} />
-        </button>
+
       </div>
-      <nav aria-label="Mobile workspace navigation" className="ym-mobile-dock lg:hidden">
+      <nav ref={dockRef} aria-label="Mobile workspace navigation" className="ym-mobile-dock lg:hidden">
         <button type="button" className="ym-dock-item" data-active={current === 'dashboard'} aria-current={current === 'dashboard' ? 'page' : undefined} onClick={() => handleNav('dashboard')}><LayoutDashboard size={20} /><span>Home</span></button>
         <button type="button" className="ym-dock-item" data-active={current === 'trades'} aria-current={current === 'trades' ? 'page' : undefined} onClick={() => handleNav('trades')}><CandlestickChart size={20} /><span>Trades</span></button>
         <button type="button" className="ym-dock-item ym-dock-add" aria-label="Quick add trade" onClick={onQuickAdd}><Plus size={22} /><span>Add</span></button>

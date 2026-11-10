@@ -92,11 +92,11 @@ test('prop-style dashboard emphasizes account context, performance, risk and rec
   assert.ok(positions.every((index,i)=>i===0||index>positions[i-1]),
     'The primary dashboard sections must appear in reading order');
   assert.ok(dashboard.includes('className="ym-dash-jump"'), 'Dashboard needs quick section navigation');
-  assert.ok(dashboard.includes('Cumulative closed P&amp;L'),
-    'Running closed P&L must not be mislabeled as broker equity');
+  assert.ok(dashboard.includes('Cumulative realized P&amp;L'),
+    'Realized P&L must retain its financial label');
   assert.ok(dashboard.includes('Balances stay separate across currencies'),
     'Multiple-currency balances must not be presented as one total');
-  assert.ok(dashboard.includes('Not a live broker quote.'),
+  assert.ok(dashboard.includes("account.broker_balance != null ? 'Broker reported balance' : 'Journal balance'") && dashboard.includes('Opening balance, realized trades and cash adjustments.'),
     'Derived journal balance must not be presented as live equity');
   assert.ok(dashboard.includes('Current filters'),
     'Performance context must remain visible to the user');

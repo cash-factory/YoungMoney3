@@ -1,8 +1,10 @@
+import { ExecutionMetricsPanel, ExecutionSummaryCards } from '@/components/ExecutionMetrics';
+import { executionMovement } from '@/lib/executionPresentation';
 import { useMemo, useState } from 'react';
 import { Plus, Search, Edit2, Trash2, ChevronDown, ChevronUp, Star, Download, Filter, X, Clock, CheckCircle } from 'lucide-react';
 import { useTrades, useTradingAccounts } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
-import { formatCurrency, formatPips, formatDateTime, exportToCSV, downloadFile } from '@/lib/utils';
+import { formatCurrency, formatDateTime, exportToCSV, downloadFile } from '@/lib/utils';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { Modal } from '@/components/ui/Modal';
@@ -118,7 +120,7 @@ export function TradesPage() {
       />
 
       {/* Status tabs */}
-      <div className="flex items-center gap-2 mb-4">
+      <div className="ym-status-tabs flex items-center gap-1 mb-4 overflow-x-auto" role="group" aria-label="Trade status">
         {([
           { key: 'all', label: 'All', count: trades.length },
           { key: 'open', label: 'Open', count: openCount },
@@ -127,6 +129,7 @@ export function TradesPage() {
           <button
             key={tab.key}
             onClick={() => setStatusFilter(tab.key)}
+            aria-pressed={statusFilter === tab.key}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
               statusFilter === tab.key
                 ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20'
@@ -142,22 +145,24 @@ export function TradesPage() {
       </div>
 
       {/* Search + filter toggle */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+      <div className="ym-toolbar flex flex-col sm:flex-row gap-3 mb-4">
         <div className="relative flex-1">
           <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
           <input
             className="input-field pl-10"
-            placeholder="Search by pair, strategy, notes, broker..."
+            aria-label="Search trades"
+            placeholder="Search trades, notes or broker…"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
         </div>
-        <button onClick={() => setShowFilters(s => !s)} className="btn-secondary">
+        <button onClick={() => setShowFilters(s => !s)} aria-expanded={showFilters} className="btn-secondary">
           <Filter size={18} /> Filters
           {hasFilters && <span className="w-2 h-2 rounded-full bg-brand-500" />}
         </button>
       </div>
 
+      <div className="mb-5"><ExecutionSummaryCards trades={filtered} /></div>
       {/* Filters */}
       {showFilters && (
         <div className="card p-4 mb-4 animate-slide-up">
@@ -194,7 +199,7 @@ export function TradesPage() {
               </select>
             </div>
           </div>
-          <label>Trade source <select value={origin} onChange={e=>setOrigin(e.target.value)}><option value="all">All trades</option><option value="manual">Manual</option><option value="mt5">MT5</option></select></label>
+          <label className="mt-3 block text-xs font-semibold text-secondary">Trade source <select className="input-field mt-1.5 max-w-sm" value={origin} onChange={e=>setOrigin(e.target.value)}><option value="all">All trades</option><option value="manual">Manual</option><option value="mt5">MT5</option></select></label>
           {hasFilters && (
             <button onClick={clearFilters} className="mt-3 text-xs text-brand-500 hover:underline flex items-center gap-1">
               <X size={14} /> Clear all filters
@@ -276,7 +281,7 @@ export function TradesPage() {
                       <span className={t.pnl >= 0 ? 'text-success-500' : 'text-error-500'}>
                         {formatCurrency(t.pnl)}
                       </span>
-                      <span className="block text-xs text-muted">{formatPips(t.pips)}</span>
+                      <span className="block text-xs text-muted">{executionMovement(t)}</span>
                     </>
                   )}
                 </div>
@@ -295,7 +300,8 @@ export function TradesPage() {
 
               {/* Expanded detail */}
               {expandedId === t.id && (
-                <div className="px-4 pb-4 pt-2 bg-secondary/50 animate-slide-up">
+                <div className="px-4 pb-4 pt-2 bg-secondary/50 animate-slide-up space-y-4">
+                  <ExecutionMetricsPanel trade={t} />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-3 text-sm">

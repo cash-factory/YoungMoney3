@@ -6,13 +6,17 @@ interface AnimatedCounterProps {
   duration?: number;
 }
 
-export function AnimatedCounter({ value, format, duration = 800 }: AnimatedCounterProps) {
-  const [display, setDisplay] = useState(0);
+export function AnimatedCounter({ value, format, duration = 450 }: AnimatedCounterProps) {
+  const [display, setDisplay] = useState(value);
   const startRef = useRef<number | null>(null);
   const fromRef = useRef(0);
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || duration <= 0) {
+      setDisplay(value);
+      return;
+    }
     fromRef.current = display;
     startRef.current = null;
 
