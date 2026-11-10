@@ -29,3 +29,34 @@ Capture starts at linking. Positions already open and fills from that point forw
 After the connector reports **Connected**, select a lookback range under **MT5 Connections**, then **Find earlier trades**. Scanning occurs locally in resumable seven-day windows; long histories may take multiple sync cycles. Keep the connector running, and use **Cancel scan** to end an unwanted request. Review every page of fills before approving import. A broker deal ticket can only be imported once per linked account; review manual duplicates separately.
 
 Broker balance and equity are snapshots from the last successful sync. If the terminal is offline, values become stale. The connector estimates a clock offset only from advancing quotes; confirm timestamps, fees, partial closes and currency conversions against your broker's demo statement before trusting imported historical figures. For a one-off reconciliation, use the same command with `--sync-once` (without `--pair`).
+
+
+## Rich capture staging source (Windows x64)
+
+The staging prerelease adds connector_gui.py and lifecycle.py alongside the existing CLI.
+The **versioned, unsigned YoungMoney3 Connector.exe** will be linked from the
+staging dashboard after the manual Windows prerelease workflow succeeds; this
+ZIP is the Python source fallback, **not the executable**.
+
+For a Windows 64-bit Python 3.13 fallback:
+- py -3.13 -m venv .venv
+- .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+- .\.venv\Scripts\python.exe connector_gui.py
+
+Use the GUI's Pair this PC, terminal browser, Start syncing and Pause
+controls. The native GUI and CLI share the same staging origin and Windows
+Credential Manager pairing. The GUI never places trades. Closing it stops
+capture cleanly and leaves the per-user SQLite outbox intact for restart.
+
+Broker server discovery still happens through MetaTrader 5 File → Open an
+Account. A separate writable portable MT5 terminal is required for each
+simultaneously monitored account, even when accounts use the same broker server.
+
+Historical data defaults to 30 days, with longer manual lookback options.
+Timezone labels require the account owner to verify an IANA broker timezone
+and separately attest the historical UTC conversion against broker evidence;
+otherwise historical sessions remain unresolved.
+
+The first standalone binary is unsigned: Windows may warn before opening it.
+Always verify the release SHA256 and use only the staging website/release.
+Staging is invite-only and real-account capture is disabled.
