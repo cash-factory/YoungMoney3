@@ -10,6 +10,9 @@ on:
         description: 'Type RELEASE-STAGING-CONNECTOR'
         type: string
         required: true
+  pull_request:
+    types: [labeled]
+    branches: [main]
 
 permissions:
   contents: write
@@ -20,13 +23,22 @@ concurrency:
 
 jobs:
   connector:
-    if: github.ref == 'refs/heads/feat/rich-capture-staging-20261110' && inputs.confirmation == 'RELEASE-STAGING-CONNECTOR'
+    if: >-
+      (github.event_name == 'workflow_dispatch' &&
+       github.ref == 'refs/heads/feat/rich-capture-staging-20261110' &&
+       inputs.confirmation == 'RELEASE-STAGING-CONNECTOR') ||
+      (github.event_name == 'pull_request' &&
+       github.event.label.name == 'build-staging-connector-rc1' &&
+       github.event.pull_request.draft == false &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.head.ref == 'feat/rich-capture-staging-20261110')
     runs-on: windows-2022
     environment: staging
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
@@ -51,7 +63,7 @@ jobs:
       - name: Generate prerelease checksum
         shell: pwsh
         env:
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ inputs.version || '0.2.0-rc1' }}
         run: |
           if ($env:VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$') { throw 'Use 0.2.0-rc1 format' }
           New-Item -ItemType Directory -Force staging-release | Out-Null
@@ -62,7 +74,7 @@ jobs:
           '{"version":"' + $env:VERSION + '","commit":"' + '${{ github.sha }}' + '","sha256":"' + $digest + '","signed":false,"platform":"windows-x64","environment":"staging"}' | Set-Content -Encoding utf8 'staging-release/build-manifest.json'
       - uses: actions/upload-artifact@v4
         with:
-          name: youngmoney3-connector-staging-${{ inputs.version }}
+          name: youngmoney3-connector-staging-${{ inputs.version || '0.2.0-rc1' }}
           path: staging-release/*
           if-no-files-found: error
           retention-days: 30
@@ -70,7 +82,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ inputs.version || '0.2.0-rc1' }}
         run: |
           $tag='staging-connector-v'+$env:VERSION
           if (gh release view $tag 2>$null) { throw "Staging prerelease $tag already exists; refusing overwrite" }
