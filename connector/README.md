@@ -52,7 +52,7 @@ Broker server discovery still happens through MetaTrader 5 File → Open an
 Account. A separate writable portable MT5 terminal is required for each
 simultaneously monitored account, even when accounts use the same broker server.
 
-Historical data defaults to 30 days, with longer manual lookback options.
+Historical data defaults to 30 days (approximately one month). Users may choose 7, 14, 30, 60 or 90 days before linking. The server rejects lookbacks beyond 90 days, even if requested directly via the API. Historical imports still require explicit preview approval.
 Timezone labels require the account owner to verify an IANA broker timezone
 and separately attest the historical UTC conversion against broker evidence;
 otherwise historical sessions remain unresolved.
