@@ -21,6 +21,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from ledger import closed_legs, iso
+from lifecycle import reconstruct
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args):
@@ -44,7 +45,57 @@ def records(result):
 
 def raw(row):
     # Preserve unsigned 64-bit ticket numbers through JavaScript JSON.
+    # The original MT5 numeric/time fields are never normalized in evidence.
     return {k: str(v) if k in ("order","ticket","identifier","position_id","position_by_id","magic") else v for k,v in row.items()}
+
+def symbol_spec(symbol):
+    info=mt5.symbol_info(symbol)
+    if not info:
+        return {"symbol":symbol,"specification_status":"unknown"}
+    fields=raw(info._asdict())
+    # Explicit MT5 calc modes define FX; never infer FX from symbol spelling.
+    fields["is_forex"]=info.trade_calc_mode in (
+        getattr(mt5,"SYMBOL_CALC_MODE_FOREX",0),
+        getattr(mt5,"SYMBOL_CALC_MODE_FOREX_NO_LEVERAGE",5))
+    return fields
+
+def lifecycle_projection(link,pid,end,start,timezone_settings):
+    """Replay one complete broker position on the single capture worker thread."""
+    history=records(mt5.history_deals_get(position=int(pid)))
+    if not history:
+        return
+    orders=records(mt5.history_orders_get(position=int(pid)))
+    # Preserve raw immutable broker evidence, including openings before linking
+    # if they belong to an active/closing lifecycle. Do not import unrelated
+    # historical positions before their explicit preview approval.
+    for deal in history:
+        enqueue(link,"raw","deal-"+str(deal["ticket"]),raw(deal))
+    for order in orders:
+        enqueue(link,"raw","order-"+str(order["ticket"]),raw(order))
+    symbol=next((d["symbol"] for d in history if d.get("symbol")),"")
+    if not symbol:
+        return
+    spec=symbol_spec(symbol)
+    spec_key="spec-"+hashlib.sha256(json.dumps(spec,sort_keys=True,default=str).encode()).hexdigest()[:28]
+    enqueue(link,"raw",spec_key,{"position_id":str(pid),**spec})
+    observed=[{"position_id":str(pid),"time_msc":row[0],"sl":row[1],"tp":row[2]}
+              for row in db.execute("SELECT at_ms,sl,tp FROM position_observations WHERE link=? AND position_id=? ORDER BY at_ms",(link,str(pid)))]
+    capital=[{"at_ms":row[0],"equity":row[1],"balance":row[2]}
+             for row in db.execute("SELECT at_ms,equity,balance FROM capital_snapshots WHERE link=? ORDER BY at_ms",(link,))]
+    settings=timezone_settings or {}
+    for record in reconstruct(history,{o["ticket"]:o for o in orders},observed,spec,
+                              capital_samples=capital,
+                              broker_timezone=settings.get("broker_timezone"),
+                              timezone_confirmed=bool(settings.get("timezone_confirmed_at")),
+                              conversion_provenance=settings.get("utc_conversion_status"),
+                              observed_at_ms=end):
+        # A historical closed lifecycle is not implicitly imported by a live
+        # scan. Preserve the existing history-review approval boundary.
+        last=record.get("final_exit_at")
+        if record["status"]=="closed" and last and int(datetime.fromisoformat(last).timestamp()*1000)<start:
+            continue
+        enqueue(link,"lifecycle","lifecycle:"+record["lifecycle_id"],record)
+
 
 def enqueue(link, kind, key, fields):
     payload=json.dumps({"kind":kind,"key":key,"fields":fields}, sort_keys=True)
@@ -158,17 +209,21 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
     # Advance a bounded history window on every cycle while catching up.
     until=min(end,cursor+86400000)
     since=max(start,cursor-86400000)
-    deals=normalize(records(mt5.history_deals_get(utc(since+offset-1000),utc(until+offset+1000))))
-    orders=normalize(records(mt5.history_orders_get(utc(since+offset-1000),utc(until+offset+1000))))
+    raw_deals=records(mt5.history_deals_get(utc(since+offset-1000),utc(until+offset+1000)))
+    raw_orders=records(mt5.history_orders_get(utc(since+offset-1000),utc(until+offset+1000)))
+    deals=normalize(raw_deals)
+    orders=normalize(raw_orders)
     positions=records(mt5.positions_get())
     gap=bool(gap_pending or (last and end-last>60000))
     with db:
-        for d in deals:
+        db.execute("INSERT OR REPLACE INTO capital_snapshots(link,at_ms,equity,balance) VALUES(?,?,?,?)",
+                   (link,end,str(account.equity),str(account.balance)))
+        for d,original in zip(deals,raw_deals):
             if start<=d["time_msc"]<=until:
-                enqueue(link,"raw","deal-"+str(d["ticket"]),raw(d))
-        for order in orders:
+                enqueue(link,"raw","deal-"+str(d["ticket"]),raw(original))
+        for order,original in zip(orders,raw_orders):
             if start<=max(order["time_done_msc"],order["time_setup_msc"])<=until:
-                enqueue(link,"raw","order-"+str(order["ticket"]),raw(order))
+                enqueue(link,"raw","order-"+str(order["ticket"]),raw(original))
         exits={d["position_id"] for d in deals if d["entry"] in (1,2,3) and d["type"] in (0,1) and start<=d["time_msc"]<=until}
         for pid in exits:
             position_orders={o["ticket"]:o for o in records(mt5.history_orders_get(position=pid))}
@@ -184,6 +239,18 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
         for p in positions:
             ident=str(p["identifier"])
             key="open-"+ident
+            prior_observed=db.execute("SELECT sl,tp FROM position_observations WHERE link=? AND position_id=? ORDER BY at_ms DESC LIMIT 1",(link,ident)).fetchone()
+            measured=(str(p["sl"] or 0),str(p["tp"] or 0))
+            if prior_observed is None or prior_observed!=measured:
+                db.execute("INSERT OR IGNORE INTO position_observations(link,position_id,at_ms,sl,tp) VALUES(?,?,?,?,?)",
+                           (link,ident,end,*measured))
+                enqueue(link,"raw",f"stops-{ident}-{end}",{
+                    "position_id":ident,"time_msc":end,"observed_at":iso(end),
+                    "sl":measured[0],"tp":measured[1],"provenance":"first_observed" if prior_observed is None else "observed_change"})
+            position_snapshot=raw(p)
+            position_snapshot["position_id"]=ident
+            snapshot_key=hashlib.sha256(json.dumps(position_snapshot,sort_keys=True,default=str).encode()).hexdigest()[:22]
+            enqueue(link,"raw","position-"+ident+"-"+snapshot_key,position_snapshot)
             previous.discard(key)
             fields={"pair":p["symbol"],"direction":"long" if p["type"]==0 else "short","status":"open",
                     "entry_time":iso(p["time_msc"]-offset),"entry_price":p["price_open"],"exit_price":None,"exit_time":None,
@@ -197,6 +264,11 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
             enqueue(link,"trade",key,fields)
         for key in previous:
             enqueue(link,"retire",key,{})
+        # Each lifecycle is reconstructed from fills and original orders on the
+        # same MT5/SQLite worker. Separate summaries remain immutable by version.
+        settings=timezone_cache.get(link,{})
+        for pid in sorted({str(p["identifier"]) for p in positions}|{str(pid) for pid in exits}):
+            lifecycle_projection(link,pid,end,start,settings)
         db.execute("UPDATE links SET cursor=?,last=?,gap=? WHERE link=?",(until,end,int(gap),link))
     # Acknowledged rows only. On restart, replay with unchanged broker ticket keys.
     for _ in range(5):
@@ -204,6 +276,8 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
         active_history=db.execute("SELECT 1 FROM history_progress WHERE link=?",(link,)).fetchone()
         if not page and not gap and not active_history and end-heartbeats.get(link,0)<15000: break
         response=post("sync",{"link":link,"events":[json.loads(row[1]) for row in page],"balance":account.balance,"equity":account.equity,"gap":gap},token)
+        if isinstance(response.get("preferences"),dict):
+            timezone_cache[link]=response["preferences"]
         heartbeats[link]=end
         with db:
             if page: db.execute("DELETE FROM outbox WHERE link=? AND seq<=?",(link,page[-1][0]))
@@ -260,7 +334,7 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
 
 def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None, report=None):
     """CLI and GUI entrypoint; MT5 and SQLite run on this one worker thread."""
-    global origin, slots, opener, service, token, db, heartbeats
+    global origin, slots, opener, service, token, db, heartbeats, timezone_cache
     parser=argparse.ArgumentParser()
     parser.add_argument("origin",help="HTTPS origin of your dashboard")
     parser.add_argument("slots",nargs="*",help="Full paths to dedicated portable MT5 terminal64.exe copies")
@@ -310,6 +384,8 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None, rep
     db.executescript("""
         CREATE TABLE IF NOT EXISTS links(link TEXT PRIMARY KEY,slot TEXT UNIQUE,login TEXT,server TEXT,start INTEGER,cursor INTEGER,last INTEGER,verified TEXT,gap INTEGER);
         CREATE TABLE IF NOT EXISTS broker_clock(link TEXT PRIMARY KEY,offset INTEGER);
+        CREATE TABLE IF NOT EXISTS position_observations(link TEXT,position_id TEXT,at_ms INTEGER,sl TEXT,tp TEXT,PRIMARY KEY(link,position_id,at_ms));
+        CREATE TABLE IF NOT EXISTS capital_snapshots(link TEXT,at_ms INTEGER,equity TEXT,balance TEXT,PRIMARY KEY(link,at_ms));
         CREATE TABLE IF NOT EXISTS history_seed(link TEXT,request TEXT,PRIMARY KEY(link,request));
         CREATE TABLE IF NOT EXISTS history_progress(link TEXT PRIMARY KEY,request TEXT,cursor INTEGER);
         CREATE TABLE IF NOT EXISTS history_work(link TEXT,request TEXT,pid TEXT,done INTEGER,PRIMARY KEY(link,request,pid));
@@ -319,6 +395,7 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None, rep
     """)
     next_poll=0
     heartbeats={}
+    timezone_cache={}
     failures=0
     print("Connector running. Keep this window open. Press Ctrl+C to exit.")
     if report: report({"state":"running","message":"Starting connector worker."})
