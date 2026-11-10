@@ -1,7 +1,8 @@
+import { ExecutionSummaryCards } from '@/components/ExecutionMetrics';
 import { useEffect, useState } from 'react';
 import { BookOpen, Plus, Trash2, Target, ListChecks, Save } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { useStrategies, useStrategyChecklist, useStrategyEntryModels, useTradingPlans } from '@/hooks/useData';
+import { useStrategies, useStrategyChecklist, useStrategyEntryModels, useTradingPlans, useTrades } from '@/hooks/useData';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { EmptyState, LoadingSpinner } from '@/components/ui/Feedback';
 import { DEFAULT_USER_ENTRY_MODEL, DEFAULT_USER_STRATEGY } from '@/data/workspaceDefaults';
@@ -9,6 +10,7 @@ import { DEFAULT_USER_ENTRY_MODEL, DEFAULT_USER_STRATEGY } from '@/data/workspac
 export function StrategyLibraryPage() {
   const { user } = useAuth();
   const { strategies, loading, addStrategy, updateStrategy, deleteStrategy } = useStrategies(user?.id);
+  const {trades}=useTrades(user?.id);
   const { plans } = useTradingPlans(user?.id);
   const [selectedStrategy, setSelectedStrategy] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
@@ -84,6 +86,7 @@ export function StrategyLibraryPage() {
   if (loading) return <LoadingSpinner label="Loading strategy library…" />;
   return <div>
     <SectionHeader title="Strategy Library" subtitle="Create strategies, entry models, and quick checklists for every trade and test." />
+    {selectedStrategy && <div className="mb-5"><ExecutionSummaryCards trades={trades.filter(trade=>trade.strategy_id===selectedStrategy)} /></div>}
     {error && <p role="alert" className="mb-4 rounded-lg bg-error-500/10 p-3 text-sm text-error-500">{error}</p>}
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
       <section className="card p-5 space-y-4">

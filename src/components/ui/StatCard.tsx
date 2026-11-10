@@ -17,25 +17,25 @@ export function StatCard({ label, value, sublabel, icon, trend, trendValue, acce
   const decimals = isNumeric && value.includes('.') ? value.split('.')[1].length : 0;
 
   return (
-    <section aria-label={label} className="ym-stat-card card relative overflow-hidden p-4 sm:p-5">
+    <section aria-label={label} className="ym-stat-card card relative overflow-hidden p-4 sm:p-5" data-accent={accent}>
       <div className="flex items-start justify-between relative">
         <div className="min-w-0">
-          <p className="ym-stat-label text-[11px] font-semibold text-secondary uppercase tracking-[0.09em]">{label}</p>
-          <p className="ym-stat-value mt-3 text-xl sm:text-2xl font-bold font-mono tracking-tight tabular-nums break-words">
+          <p className="ym-stat-label text-xs font-medium text-secondary">{label}</p>
+          <p className="ym-stat-value mt-3 text-[clamp(1.35rem,2.7vw,2rem)] font-semibold tracking-tight tabular-nums break-words">
             {isNumeric ? <AnimatedCounter value={numericValue} format={v => decimals ? v.toFixed(decimals) : Math.round(v).toLocaleString()} /> : value}
           </p>
           {sublabel && <p className="mt-2 text-[11px] leading-relaxed text-muted break-words">{sublabel}</p>}
         </div>
         {icon && (
           <div className="relative">
-            <div className={`ym-stat-icon p-2 rounded-lg border border-themed icon-bg-${accent}`}>
+            <div className={`ym-stat-icon p-2 rounded-lg icon-bg-${accent}`}>
               {icon}
             </div>
           </div>
         )}
       </div>
       {trend && trendValue && (
-        <div className="mt-3 flex items-center gap-1.5 relative">
+        <div className="mt-4 flex items-center gap-1.5 relative border-t border-themed pt-3">
           <span className={`text-xs font-semibold ${trend === 'up' ? 'text-success-500' : trend === 'down' ? 'text-error-500' : 'text-muted'}`}>
             {trend === 'up' ? '↑' : trend === 'down' ? '↓' : '—'} {trendValue}
           </span>

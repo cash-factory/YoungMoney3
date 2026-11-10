@@ -1,3 +1,4 @@
+import {getExecutionMetrics} from '@/lib/executionMetrics';
 import { useMemo } from 'react';
 import { Shield, AlertTriangle, TrendingDown, Activity, Gauge, Target, Zap, AlertOctagon } from 'lucide-react';
 import type { Trade, RiskSettings, TradingAccount, TradingPlan } from '@/lib/types';
@@ -27,6 +28,10 @@ export function RiskGuardian({ trades, settings, account, plan, onConfigure }: R
     return <div className="card p-5 text-sm text-secondary">Select a single account to view account-specific risk metrics.</div>;
   }
 
+  const positions=trades.filter(t=>t.account_id===account.id && t.status==='open' && !t.superseded_by);
+  const initialRisk=positions.reduce((sum,t)=>sum+(getExecutionMetrics(t).initial_risk ?? 0),0);
+  const protectedPositions=positions.filter(t=>getExecutionMetrics(t).current_risk != null);
+  const currentRisk=protectedPositions.reduce((sum,t)=>sum+Number(getExecutionMetrics(t).current_risk || 0),0);
   const statusConfig = {
     safe: {
       color: 'text-success-500',
@@ -59,6 +64,8 @@ export function RiskGuardian({ trades, settings, account, plan, onConfigure }: R
 
   return (
     <div className={`card p-5 border ${cfg.border} ${cfg.bg}`}>
+      {positions.length>0 && <div className="mb-3 text-xs text-secondary space-y-1"><p>Original risk on open positions: {formatMoney(initialRisk)}</p><p>Remaining stop exposure: {protectedPositions.length===positions.length?formatMoney(currentRisk):'Incomplete — some positions have no captured protective stop'}</p></div>}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2.5">

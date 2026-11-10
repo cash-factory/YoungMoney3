@@ -1,3 +1,5 @@
+import { ExecutionSummaryCards } from '@/components/ExecutionMetrics';
+import { simulatedExecutionTrade } from '@/lib/executionPresentation';
 import { useState, useMemo, useEffect } from 'react';
 import { FlaskConical, Plus, Trash2, Save, ChevronDown, ChevronRight, TrendingUp, BarChart3 } from 'lucide-react';
 import { ScreenshotUpload } from '@/components/ScreenshotUpload';
@@ -169,6 +171,11 @@ function SessionCard({ session, expanded, onToggle, onEdit, onDelete, userId }: 
 
       {expanded && (
         <div className="border-t border-themed p-4 space-y-4">
+          {!tradesLoading && <ExecutionSummaryCards trades={trades.map(trade=>simulatedExecutionTrade({
+            id:trade.id,pair:session.instrument || '',direction:trade.direction,
+            entry_time:trade.entry_time,exit_time:trade.exit_time,status:'closed',
+            pnl:trade.pnl,entry_price:trade.entry_price,exit_price:trade.exit_price,r:trade.r_multiple,
+          }))} />}
           {trades.length > 0 && (
             <>
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
@@ -445,7 +452,7 @@ function TradeForm({ sessionId, accountId, instrumentId, setupId, strategyId, en
   const riskAmount = instrument && entryPrice && stopLoss && positionSize && rate > 0
     ? Math.abs(instrumentPnl(instrument, direction, Number(entryPrice), Number(stopLoss), Number(positionSize), rate))
     : 0;
-  const calculatedR = riskAmount ? calculatedPnl / riskAmount : (Number(rMultiple) || null);
+  const calculatedR = riskAmount ? calculatedPnl / riskAmount : (rMultiple.trim() && Number.isFinite(Number(rMultiple)) ? Number(rMultiple) : null);
   const autoOutcome: TestTradeOutcome = calculatedPnl > 0 ? 'win' : calculatedPnl < 0 ? 'loss' : 'breakeven';
   const usesExample = examplePriceIsUnconfirmed(Number(entryPrice) || null, instrument);
   const tradeChecklist = [

@@ -1,6 +1,6 @@
 interface Query {
   table:string; filters?:Record<string,unknown>; membershipFilters?:Record<string,unknown[]>; or?:string;
-  order?:{column:string;ascending?:boolean}; limit?:number; page?:number; head?:boolean;
+  order?:{column:string;ascending?:boolean}; limit?:number; page?:number; head?:boolean; includeSuperseded?:boolean;
 }
 function column(name:string) {
   if(!/^[a-z][a-z_0-9]{0,63}$/.test(name)) throw Error('Invalid query column.');
@@ -9,6 +9,7 @@ function column(name:string) {
 }
 export async function selectRecords(db:D1Database, owner:unknown, input:Query) {
   const conditions=['user_id=?','table_name=?'], args:unknown[]=[owner,input.table];
+  if(input.table==='trades' && input.includeSuperseded!==true) conditions.push("json_extract(payload,'$.superseded_by') IS NULL");
   for(const [key,value] of Object.entries(input.filters||{})) {
     conditions.push(column(key)+' IS ?'); args.push(value);
   }

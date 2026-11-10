@@ -100,7 +100,40 @@ export type StrategyEntryModelInput = Omit<StrategyEntryModel, 'id' | 'user_id' 
 
 export type TraderStrategyInput = Omit<TraderStrategy, 'id' | 'user_id' | 'created_at' | 'updated_at'>;
 
+export interface ExecutionMetrics {
+  version: 1;
+  position_id?: string;
+  cycle_id?: string;
+  first_sl?: number | null;
+  first_sl_at?: string | null;
+  first_sl_source?: string;
+  delayed_sl?: boolean;
+  first_tp?: number | null;
+  initial_risk?: number | null;
+  initial_risk_decimal?: string | null;
+  closed_risk?: number | null;
+  planned_r?: number | null;
+  realized_r?: number | null;
+  pips?: number | null;
+  ticks?: number | null;
+  points?: number | null;
+  duration_seconds?: number | null;
+  weighted_duration_seconds?: number | null;
+  sessions_at_entry?: string[];
+  sessions_crossed?: string[];
+  timezone_status?: string;
+  fills?: Array<Record<string, unknown>>;
+  entries?: Array<Record<string, unknown>>;
+  exits?: Array<Record<string, unknown>>;
+  stops?: Array<Record<string, unknown>>;
+  completeness?: string[];
+  [key: string]: unknown;
+}
+
 export interface Trade {
+  execution_metrics?: ExecutionMetrics | null;
+  superseded_by?: string;
+  original_trade_ids?: string[];
   trade_source?: 'manual' | 'mt5';
   settlement_currency?: string;
   pnl_decimal?: string;

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { sessionsAt } from '@/lib/executionMetrics';
+import { useEffect, useState } from 'react';
 import { CalendarClock, Plus, Trash2, Save, AlertOctagon, Clock, Newspaper, Mic, Ban } from 'lucide-react';
 import { useMarketEvents } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
@@ -39,6 +40,9 @@ export function MarketSessionsPage() {
   const [filter, setFilter] = useState<'upcoming' | 'past' | 'all'>('upcoming');
 
   const now = new Date();
+  const [sessionClock,setSessionClock]=useState(Date.now);
+  useEffect(()=>{const timer=setInterval(()=>setSessionClock(Date.now()),60000);return ()=>clearInterval(timer);},[]);
+  const activeSessions=sessionsAt(sessionClock);
   const upcoming = events.filter(e => isAfter(parseISO(e.event_date), now));
   const past = events.filter(e => isBefore(parseISO(e.event_date), now));
   const filtered = filter === 'upcoming' ? upcoming : filter === 'past' ? past : events;
@@ -64,6 +68,7 @@ export function MarketSessionsPage() {
         }
       />
 
+      <div className="card p-4 mb-5"><h2 className="text-sm font-semibold">Forex sessions now</h2><p className="mt-1 text-sm text-secondary">{activeSessions.length ? activeSessions.join(' / ') : 'Outside the defined weekday sessions'}</p><p className="mt-1 text-xs text-muted">Sydney 08:00–17:00 · Tokyo 09:00–18:00 · London 08:00–17:00 · New York 08:00–17:00, in each market’s local time. Trade analytics use these same daylight-saving-aware windows.</p></div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <StatCard label="Upcoming" value={String(upcoming.length)} icon={<CalendarClock size={20} />} accent="blue" />
         <StatCard label="High Impact" value={String(highImpact)} icon={<AlertOctagon size={20} />} accent="rose" />

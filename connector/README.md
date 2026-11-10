@@ -1,31 +1,45 @@
-# Windows MT5 connector
+# YoungMoney3 Windows connector
 
-Use a Windows PC with 64-bit Python 3.13 and desktop MetaTrader 5. Create one separate, writable portable terminal installation per simultaneously monitored account. Open each dedicated terminal once and add the exact broker server there. Leave your normal trading terminal separate.
+The desktop app captures MT5 executions for the staging dashboard. Open **YoungMoney3 Connector.exe** when you want to sync. Python and command entry are included in the app's packaging.
 
-1. Extract this ZIP into a folder and open PowerShell there.
-2. Run each PowerShell command on its own line.
+## Start with the desktop app
 
-   ```powershell
-   py -3.13 -m venv .venv
-   .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-   ```
+1. Download the Windows x64 staging executable from **MT5 Connections** and save it in a folder you can keep.
+2. Double-click **YoungMoney3 Connector.exe**. Its dashboard address defaults to `https://ym-fx-staging.ethical-hacker263.workers.dev`.
+3. Choose **Add terminal**. The app finds installed copies of MT5, and **Browse** lets you select `terminal64.exe`. Choose **Create dedicated copy** for a new account slot, or select an existing dedicated portable copy.
+4. Select the new slot and choose **Open selected MT5**. Complete MT5's startup and use **File → Open an Account** to find your broker and prepare its server directory. Use a separate dedicated terminal for every simultaneously monitored account.
+5. Choose **Open dashboard** and sign into staging. Under **MT5 Connections**, choose **Pair a PC**, then paste its five-minute code into the app's **Pair this PC** dialog.
+6. The app starts syncing. On the website choose **Connect MT5 account**, select the broker/server, and enter the account credentials. The app verifies the returned broker identity and syncs that account.
+7. On later visits, open the app and choose **Start syncing**. Pairing and account connections are retained. **Pause** finishes the current operation and preserves pending uploads. Closing the app stops capture; a broker login operation can take up to a minute to finish.
 
-3. Sign into the journal, open **MT5 Connections → Pair a PC**, and copy the five-minute code.
-4. Run this command with your dashboard origin and your dedicated terminal path. Supply additional quoted paths for additional accounts.
+The main window displays paired status, linked-account count, queued records, last MT5 read, and the last upload acknowledgment. A second launch brings the open app forward. There is no automatic Windows-startup registration.
 
-   ```powershell
-   .\.venv\Scripts\python.exe connect.py "https://your-dashboard.example" "C:\Trading\Demo1\terminal64.exe" --pair
-   ```
+Staging and other dashboard addresses have separate pairings and local databases. When upgrading an existing command-line installation for the same address, the app uses the same Windows Credential Manager entries and capture database. It adopts saved terminal paths when the desktop settings are empty. Stop the old command-line connector before starting the desktop app for that address.
 
-5. Enter the code at the prompt. From your phone or PC choose **Connect MT5 account** on the website and enter the exact server, account number, and investor password.
-6. Leave the connector running. Restart it with the same command without `--pair`. Re-pairing creates a new device identity. Revoke the old device in MT5 Connections if you retire it.
+Credentials remain in the current Windows user's Credential Manager. Desktop preferences, trade state, pending uploads, and brief diagnostics are stored under `%LOCALAPPDATA%/YMFX`. The app supports investor or standard broker credentials for capture. Broker order controls are outside the app. Broker history cannot reconstruct a stop change missed while the terminal was offline.
 
-Credentials use the current Windows user's Credential Manager. The private key and device token never belong in source control or logs. The local SQLite journal under LOCALAPPDATA/YMFX contains private trade history and pending uploads. Protect this Windows user profile. The connector supports investor or standard MT5 credentials, performs read operations only, and uses outbound HTTPS. A standard password can still authorize trading inside the external MT5 terminal. YoungMoney3 itself has no order controls. A broker that requires an unsupported second authentication step must be verified in a demo environment before use.
+Earlier history remains optional. On the website choose a lookback range, **Find earlier trades**, and review the preview before importing. Keep the app open through the scan. Stop, cancel, and retry preserve the staged history state.
 
-Capture starts at linking. Positions already open and fills from that point forward appear in the journal. MT5 supplies broker history for fill reconciliation. Changes to SL/TP between samples or during an offline interval may be unavailable. Live imports are disabled by default. The installation owner should enable MT5_ALLOW_LIVE=true only after demo reconciliation, including reconnection and two-account isolation checks.
+## Build the executable from source
 
-## Optional earlier trade history
+The `connector/` directory contains the desktop interface, process controller, capture engine, calculations, tests, and packaging configuration. Build on Windows x64 using Python 3.13. Runtime dependencies and PyInstaller are pinned in `requirements-build.lock.txt`.
 
-After the connector reports **Connected**, select a lookback range under **MT5 Connections**, then **Find earlier trades**. Scanning occurs locally in resumable seven-day windows; long histories may take multiple sync cycles. Keep the connector running, and use **Cancel scan** to end an unwanted request. Review every page of fills before approving import. A broker deal ticket can only be imported once per linked account; review manual duplicates separately.
+```powershell
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r connector\requirements-build.txt
+.\connector\build.ps1 -Python (Resolve-Path .\.venv\Scripts\python.exe).Path
+```
 
-Broker balance and equity are snapshots from the last successful sync. If the terminal is offline, values become stale. The connector estimates a clock offset only from advancing quotes; confirm timestamps, fees, partial closes and currency conversions against your broker's demo statement before trusting imported historical figures. For a one-off reconciliation, use the same command with `--sync-once` (without `--pair`).
+The script produces `connector/dist/YoungMoney3 Connector.exe`, `SHA256SUMS.txt`, and a clean-profile GUI smoke-test report. The `.github/workflows/connector-desktop.yml` workflow runs the same build on Windows. Publish these versioned outputs as staging release assets. The executable is unsigned, so Windows can display a publisher prompt. Persistent data stays outside the one-file executable's temporary extraction directory.
+
+The PyInstaller spec explicitly bundles project modules and installed package dependencies. It does not collect terminal installations, the developer's virtual environment, capture databases, or credential stores.
+
+## Advanced command-line use
+
+The source engine remains available for maintenance and automated reconciliation.
+
+```powershell
+.\.venv\Scripts\python.exe connector\connect.py "https://your-dashboard.example" "C:\Trading\Demo1\terminal64.exe" --pair
+```
+
+Enter the website pairing code when prompted. Restart without `--pair`, or add `--sync-once` for one reconciliation pass. A background supervisor can request a graceful stop with `--stop-file`, and the desktop app passes pairing codes through stdin using `--pair-code-stdin`; the code never appears in command arguments.
