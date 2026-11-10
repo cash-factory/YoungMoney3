@@ -124,7 +124,7 @@ test('deep-dive analytics are not removed when the home screen is simplified',()
 test('staging connector download accepts GitHub-sanitized asset filenames',()=>{
   const page=read('public/connector-download.html');
   assert.ok(page.includes('YoungMoney3(?:[. -])Connector'), 'GitHub may replace whitespace in filenames');
-  assert.ok(page.includes('Connector\\\\.exe'), 'Both Windows exe and checksum must be detected');
+  assert.ok(page.includes('Connector\\.exe'), 'Both Windows exe and checksum must be detected');
   assert.ok(page.includes('staging-connector-v'), 'Only staging prerelease tags should be eligible');
   assert.ok(page.includes('row.prerelease && !row.draft'), 'Do not link unreviewed or production releases');
   assert.ok(page.includes('row.browser_download_url.startsWith(base)'), 'Only official repo assets may be linked');
