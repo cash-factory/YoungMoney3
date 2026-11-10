@@ -1,0 +1,77 @@
+name: Build YoungMoney3 Connector (staging prerelease)
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version suffix, e.g. 0.2.0-rc1'
+        type: string
+        required: true
+      confirmation:
+        description: 'Type RELEASE-STAGING-CONNECTOR'
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: youngmoney3-staging-connector-release
+  cancel-in-progress: false
+
+jobs:
+  connector:
+    if: github.ref == 'refs/heads/feat/rich-capture-staging-20261110' && inputs.confirmation == 'RELEASE-STAGING-CONNECTOR'
+    runs-on: windows-2022
+    environment: staging
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: 'x64'
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r connector/requirements.txt 'pyinstaller>=6.16,<7' tzdata
+          python -m pip freeze | Out-File -Encoding utf8 connector-dependencies.txt
+      - name: Test on Windows
+        shell: pwsh
+        run: |
+          python -m py_compile connector/connect.py connector/lifecycle.py connector/connector_gui.py
+          python -m unittest discover -s connector -p 'test_*.py'
+      - name: Build standalone staging application
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name "YoungMoney3 Connector" --paths connector --collect-all MetaTrader5 --collect-all keyring --collect-all tzdata connector/connector_gui.py
+          if (!(Test-Path 'dist/YoungMoney3 Connector.exe')) { throw 'Windows executable missing' }
+      - name: Generate prerelease checksum
+        shell: pwsh
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if ($env:VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$') { throw 'Use 0.2.0-rc1 format' }
+          New-Item -ItemType Directory -Force staging-release | Out-Null
+          Copy-Item 'dist/YoungMoney3 Connector.exe' 'staging-release/YoungMoney3 Connector.exe'
+          $digest=(Get-FileHash 'staging-release/YoungMoney3 Connector.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$digest *YoungMoney3 Connector.exe" | Set-Content -Encoding ascii 'staging-release/YoungMoney3 Connector.exe.sha256'
+          Copy-Item connector-dependencies.txt staging-release/connector-dependencies.txt
+          '{"version":"' + $env:VERSION + '","commit":"' + '${{ github.sha }}' + '","sha256":"' + $digest + '","signed":false,"platform":"windows-x64","environment":"staging"}' | Set-Content -Encoding utf8 'staging-release/build-manifest.json'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: youngmoney3-connector-staging-${{ inputs.version }}
+          path: staging-release/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish GitHub prerelease
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          $tag='staging-connector-v'+$env:VERSION
+          if (gh release view $tag 2>$null) { throw "Staging prerelease $tag already exists; refusing overwrite" }
+          gh release create $tag 'staging-release/YoungMoney3 Connector.exe' 'staging-release/YoungMoney3 Connector.exe.sha256' 'staging-release/build-manifest.json' 'staging-release/connector-dependencies.txt' --target '${{ github.sha }}' --title "YoungMoney3 Connector $env:VERSION (STAGING)" --notes "Unsigned x64 Windows staging prerelease. Demo/contest capture only. No trading orders. Compare SHA-256 before running. Clean-profile and real broker tests remain mandatory." --prerelease

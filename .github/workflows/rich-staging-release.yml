@@ -1,0 +1,73 @@
+name: Deploy rich capture staging branch (manual only)
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type DEPLOY-RICH-CAPTURE-STAGING'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: youngmoney3-staging-release
+  cancel-in-progress: false
+
+jobs:
+  staging:
+    if: github.ref == 'refs/heads/feat/rich-capture-staging-20261110' && inputs.confirmation == 'DEPLOY-RICH-CAPTURE-STAGING'
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 35
+    env:
+      YM3_STAGING_D1_ID: ${{ vars.YM3_STAGING_D1_ID }}
+      YM3_STAGING_D1_NAME: ${{ vars.YM3_STAGING_D1_NAME }}
+      YM3_STAGING_WORKER_NAME: ${{ vars.YM3_STAGING_WORKER_NAME }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Checkout feature branch only
+        uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Refuse missing credentials and production resource IDs
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID"
+          npm run cf:staging:prepare
+          grep -q '"MT5_ALLOW_LIVE": "false"' wrangler.staging.jsonc
+      - name: Validate before any D1 migration
+        run: |
+          npm run typecheck
+          npm run lint
+          npm test
+          npm run test:staging
+          npm run test:ui
+          npm run test:worker
+          npm run build
+          python3 -m py_compile connector/connect.py connector/ledger.py connector/lifecycle.py connector/connector_gui.py
+          PYTHONPATH=connector python3 -m unittest discover -s connector -p 'test_lifecycle.py'
+      - name: Review outstanding staging migrations
+        run: npx wrangler d1 migrations list DB --remote --config wrangler.staging.jsonc
+      - name: Apply additive migrations only to staging D1
+        run: npm run cf:staging:migrate
+      - name: Verify rich-capture schema before Worker deployment
+        run: node scripts/verify-rich-staging-schema.mjs
+      - name: Deploy staging Worker and assets from feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config wrangler.staging.jsonc | tee "$RUNNER_TEMP/ym3-rich-staging.log"
+      - name: Verify deployed API and SPA routing
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="$(grep -Eo 'https://[a-zA-Z0-9-]+[.][a-zA-Z0-9-]+[.]workers[.]dev' "$RUNNER_TEMP/ym3-rich-staging.log" | tail -n 1)"
+          test -n "$URL"
+          YM3_STAGING_URL="$URL" node scripts/check-staging-health.mjs
+          echo "Rich capture staging deployment: $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Git SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Production untouched. Broker reconciliation and clean-Windows tests still required." >> "$GITHUB_STEP_SUMMARY"
