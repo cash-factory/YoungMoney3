@@ -74,3 +74,48 @@ test('performance cards preserve currency, percent and decimal formatting',()=>{
   assert.ok(cards.includes("value.includes('.')"),'Must retain numerical precision when animating');
   assert.ok(cards.includes(' : value}'),'Formatted P&L, percentages and mixed currency states must stay legible');
 });
+
+
+test('prop-style dashboard emphasizes account context, performance, risk and recent trades before advanced tools',()=>{
+  const dashboard=read('src/pages/DashboardPage.tsx');
+  const css=read('src/index.css');
+  const milestones=[
+    'id="ym-overview"',
+    'className="ym-dash-metric-grid"',
+    'id="ym-risk"',
+    'id="ym-performance"',
+    'id="ym-recent"',
+    'id="ym-deep-dive"',
+  ];
+  const positions=milestones.map(token=>dashboard.indexOf(token));
+  assert.ok(positions.every(index=>index>=0),'The dashboard is missing a primary section');
+  assert.ok(positions.every((index,i)=>i===0||index>positions[i-1]),
+    'The primary dashboard sections must appear in reading order');
+  assert.ok(dashboard.includes('className="ym-dash-jump"'), 'Dashboard needs quick section navigation');
+  assert.ok(dashboard.includes('Cumulative closed P&amp;L'),
+    'Running closed P&L must not be mislabeled as broker equity');
+  assert.ok(dashboard.includes('Balances stay separate across currencies'),
+    'Multiple-currency balances must not be presented as one total');
+  assert.ok(dashboard.includes('Not a live broker quote.'),
+    'Derived journal balance must not be presented as live equity');
+  assert.ok(dashboard.includes('Current filters'),
+    'Performance context must remain visible to the user');
+  assert.ok(css.includes('.ym-dash-balance')&&css.includes('.ym-dash-controls'),
+    'The account summary and filter rail must use the consistent dashboard design');
+  assert.ok(css.includes('@media (max-width:480px)'),'Compact phone layout must be styled');
+});
+
+test('deep-dive analytics are not removed when the home screen is simplified',()=>{
+  const dashboard=read('src/pages/DashboardPage.tsx');
+  for(const component of [
+    'TradeCalculator','RiskGuardian','ActivityHeatmap','Achievements','MoodTracker',
+    'StrategyEdgeScore','TradeAttachments','RiskSettingsModal','TradeForm',
+  ]) {
+    assert.ok(dashboard.includes('<'+component),component+' must remain available');
+  }
+  assert.match(dashboard,/<details className="ym-dash-details"/);
+  assert.match(dashboard,/<summary className="ym-dash-details-trigger"/);
+  for(const text of ['challenge_target_pct','daily_loss_limit_pct','max_loss_limit_pct','mixedCurrencyView','tradeOrigin']) {
+    assert.ok(dashboard.includes(text),'Existing financial safeguard or filter lost: '+text);
+  }
+});

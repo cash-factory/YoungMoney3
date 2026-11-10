@@ -1,13 +1,12 @@
 import { accountLedger, tradeCurrency } from '@/lib/tradeFinance';
 import { dateKeyInTimeZone } from '@/lib/riskMetrics';
 import { useEffect, useMemo, useState } from 'react';
-import { Wallet, Target, TrendingUp, Flame, Activity, Plus, ArrowUpRight, ArrowDownRight, Minus, Star, Clock, Eye } from 'lucide-react';
+import { Wallet, Target, TrendingUp, Flame, Activity, BarChart3, ChevronDown, Plus, ArrowUpRight, ArrowDownRight, Minus, Star, Clock, Eye } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { useAllTestTrades, useBacktests, useForwardTrades, useTestSessions, useTrades, useTradingAccounts, useTradingAccountAdjustments } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
 import { computeDashboardStats, equityCurveData, dailyPnlData, formatPercent, formatDateTime, groupByPair } from '@/lib/utils';
 import { StatCard } from '@/components/ui/StatCard';
-import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { Modal } from '@/components/ui/Modal';
 import { TradeForm } from '@/components/TradeForm';
@@ -142,6 +141,13 @@ export function DashboardPage() {
     await saveSettings(input);
   };
 
+  const jumpToSection = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      block: 'start',
+    });
+  };
+
   if (loading) return <LoadingSpinner label="Loading your dashboard..." />;
 
   if (loadError && !asOf) return <p role="alert">Trade history unavailable. Risk figures will appear after the next successful refresh.</p>;
@@ -150,31 +156,140 @@ export function DashboardPage() {
       {loadError && <p role="alert">Trade history unavailable. Showing figures last refreshed {new Date(asOf!).toLocaleString()}.</p>}
       {trades.some(t=>t.status==='closed' && (!t.exit_time || tradeCurrency(t,accounts)==='Unknown' || t.realized_r == null)) && <p className="card p-3 text-sm" role="status">Some closed trades need review for close time, currency or initial risk. Daily risk and R statistics may be incomplete.</p>}
       {account?.broker_balance != null && (!account.broker_balance_at || Date.now()-Date.parse(account.broker_balance_at)>120000) && <p role="status" className="card p-3 text-xs text-secondary">Broker balance is a last-known snapshot, not a live quote. Check MT5 Connections for its latest sync before making trading decisions.</p>}
-      <SectionHeader
-        title="Dashboard"
-        subtitle="Your trading performance at a glance"
-        action={
-          <button onClick={() => setShowAdd(true)} className="btn-primary">
-            <Plus size={18} /> Add Trade
-          </button>
-        }
-      />
 
-      <div className="ym-dashboard-filters card p-4 sm:p-5 mb-6 flex flex-col sm:flex-row sm:items-end gap-3">
-        <div className="flex-1"><label className="block text-xs font-semibold text-secondary mb-1.5">View account</label><select className="input-field" value={accountFilter} onChange={e => setAccountFilter(e.target.value)}><option value="all">All accounts</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name} · {a.base_currency}</option>)}</select></div>
-        <div className="flex-1"><label className="block text-xs font-semibold text-secondary mb-1.5">Performance source</label><select className="input-field" value={source} onChange={e => setSource(e.target.value as 'live'|'backtest'|'forward')}><option value="live">Live trades</option><option value="backtest">Backtest logs</option><option value="forward">Forward test logs</option></select></div>
-        {source === 'live' && <label className="flex-1 text-xs font-semibold text-secondary">Journal source
-          <select className="input-field mt-1.5" value={tradeOrigin} onChange={event => setTradeOrigin(event.target.value)}>
-            <option value="all">All sources</option><option value="manual">Manual</option><option value="mt5">MT5 imports</option>
-          </select>
-        </label>}
-        {source !== 'live' && <p className="text-xs text-muted sm:max-w-56">Simulated performance is shown separately from live account equity.</p>}
+      <div className="ym-dash-heading" id="ym-overview">
+        <div className="min-w-0">
+          <p className="ym-dash-eyebrow"><span aria-hidden="true" className="ym-dash-eyebrow-mark" /> TRADING OPERATIONS / OVERVIEW</p>
+          <h1>Trading overview</h1>
+          <p>Everything that matters, in one clear view. Review your results, risk and next decisions.</p>
+        </div>
+        <button type="button" onClick={() => setShowAdd(true)} className="btn-primary ym-dash-new-trade">
+          <Plus size={18} /> Add trade
+        </button>
       </div>
 
-      {source === 'live' && <div className="card p-4 mb-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-        {account ? <><span className="text-secondary">Current balance</span><strong className="font-mono">{formatAccountMoney(currentBalance || 0, account.base_currency)}</strong><span className="text-xs text-muted">{account.broker_balance != null ? 'Last broker-reported balance · '+(account.broker_balance_at ? new Date(account.broker_balance_at).toLocaleString() : 'time unknown') : 'Opening balance, realized P&L and adjustments'}</span></> : accounts.length ? <><span className="text-secondary">Balances by currency</span>{Array.from(balancesByCurrency).map(([currency, value]) => <strong key={currency} className="font-mono">{formatAccountMoney(value, currency)}</strong>)}</> : <span className="text-muted">Add a trading account to track account balance here.</span>}
-      </div>}
+      <div className="ym-dash-controls card" role="group" aria-label="Performance filters">
+        <label>
+          <span>Trading account</span>
+          <select className="input-field" value={accountFilter} onChange={event => setAccountFilter(event.target.value)}>
+            <option value="all">All accounts</option>
+            {accounts.map(item => <option key={item.id} value={item.id}>{item.name} · {item.base_currency}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Performance view</span>
+          <select className="input-field" value={source} onChange={event => setSource(event.target.value as 'live' | 'backtest' | 'forward')}>
+            <option value="live">Recorded trades</option>
+            <option value="backtest">Backtest results</option>
+            <option value="forward">Forward test results</option>
+          </select>
+        </label>
+        {source === 'live' ? <label>
+          <span>Trade origin</span>
+          <select className="input-field" value={tradeOrigin} onChange={event => setTradeOrigin(event.target.value)}>
+            <option value="all">All sources</option>
+            <option value="manual">Manual entries</option>
+            <option value="mt5">MT5 imports</option>
+          </select>
+        </label> : <div className="ym-dash-filter-note">Practice results are separate from recorded account balances.</div>}
+      </div>
 
+      <nav className="ym-dash-jump" aria-label="Dashboard sections">
+        <button type="button" onClick={() => jumpToSection('ym-overview')}>Overview</button>
+        {source === 'live' && <button type="button" onClick={() => jumpToSection('ym-risk')}>Risk &amp; rules</button>}
+        <button type="button" onClick={() => jumpToSection('ym-performance')}>Performance</button>
+        <button type="button" onClick={() => jumpToSection('ym-recent')}>Recent trades</button>
+        <button type="button" onClick={() => jumpToSection('ym-deep-dive')}>Deep dive</button>
+      </nav>
+
+      <section className="ym-dash-balance" aria-label="Account and trading result">
+        <div className="ym-dash-balance-main">
+          <p className="ym-dash-kicker">{source === 'live' ? 'ACCOUNT SNAPSHOT' : 'PRACTICE PERFORMANCE'}</p>
+          <h2>{account?.name || (source === 'live' ? 'All trading accounts' : source === 'backtest' ? 'Backtest workspace' : 'Forward testing')}</h2>
+          {source === 'live' ? (
+            account ? (
+              <>
+                <p className="ym-dash-measure-label">Calculated account balance</p>
+                <p className="ym-dash-balance-number">{formatAccountMoney(currentBalance ?? 0, account.base_currency)}</p>
+                <p className="ym-dash-balance-hint">Opening balance + all realized trades and cash adjustments. Not a live broker quote.</p>
+              </>
+            ) : balancesByCurrency.size ? (
+              <>
+                <p className="ym-dash-measure-label">Account balances · by currency</p>
+                <div className="ym-dash-balances">
+                  {Array.from(balancesByCurrency).map(([code, amount]) => <strong key={code}>{formatAccountMoney(amount, code)}</strong>)}
+                </div>
+                <p className="ym-dash-balance-hint">Balances stay separate across currencies and accounts.</p>
+              </>
+            ) : (
+              <>
+                <p className="ym-dash-balance-number">No accounts yet</p>
+                <p className="ym-dash-balance-hint">Create a journal account to see its balance. You can still add a trade.</p>
+              </>
+            )
+          ) : (
+            <>
+              <p className="ym-dash-measure-label">Net result · closed test trades</p>
+              <p className="ym-dash-balance-number">{mixedCurrencyView ? 'By currency' : formatCurrency(stats.totalPnl)}</p>
+              <p className="ym-dash-balance-hint">Simulation results are separate from recorded account balances.</p>
+            </>
+          )}
+          <div className="ym-dash-balance-foot">
+            <span>{account ? 'ACCOUNT SELECTED' : 'ALL ACCOUNTS'}</span>
+            <span>{source === 'live' ? 'JOURNAL VIEW' : source === 'backtest' ? 'BACKTEST VIEW' : 'FORWARD TEST VIEW'}</span>
+          </div>
+        </div>
+        <div className="ym-dash-result">
+          <div className="ym-dash-result-heading">
+            <span>Realized trading result</span>
+            <span className="ym-dash-result-period">Current filters</span>
+          </div>
+          <p className={stats.totalPnl < 0 && !mixedCurrencyView ? 'ym-dash-result-value is-negative' : 'ym-dash-result-value'}>
+            {mixedCurrencyView ? 'By currency' : formatCurrency(stats.totalPnl)}
+          </p>
+          {mixedCurrencyView ? (
+            <div className="ym-dash-currency-results">
+              {currencyTotals.map(([code, amount]) => (
+                <div key={code}><span>{code}</span><strong className={amount < 0 ? 'is-negative' : ''}>{formatAccountMoney(amount, code)}</strong></div>
+              ))}
+            </div>
+          ) : (
+            <p className="ym-dash-result-description">Closed trades only. Results use the selected account and trade source.</p>
+          )}
+          <div className="ym-dash-result-stats">
+            <div><span>Win rate</span><strong>{formatPercent(stats.winRate)}</strong></div>
+            <div><span>Closed trades</span><strong>{stats.totalTrades}</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <div className="ym-dash-section-title">
+        <div><p className="ym-dash-kicker">AT A GLANCE</p><h2>Key performance</h2></div>
+        <span>Closed trades · selected view</span>
+      </div>
+      <div className="ym-dash-metric-grid">
+        <StatCard label="Net P&L" value={mixedCurrencyView ? 'By currency' : formatCurrency(stats.totalPnl)}
+          icon={<Wallet size={19} />} trend={mixedCurrencyView ? 'neutral' : stats.totalPnl >= 0 ? 'up' : 'down'}
+          trendValue={mixedCurrencyView ? 'See the currency breakdown above' : String(stats.totalTrades) + ' closed trades'} accent="blue" />
+        <StatCard label="Win rate" value={formatPercent(stats.winRate)} icon={<Target size={19} />}
+          sublabel={stats.wins + ' wins · ' + stats.losses + ' losses · ' + stats.breakevens + ' break-even'} accent="amber" />
+        <StatCard label="Closed trades" value={String(stats.totalTrades)} icon={<Activity size={19} />}
+          sublabel={String(trades.filter(item => item.status === 'open').length) + ' open trades in this view'} accent="emerald" />
+        <StatCard label="Profit factor"
+          value={mixedCurrencyView ? 'Choose account' : stats.profitFactor === Infinity ? '∞' : stats.profitFactor.toFixed(2)}
+          icon={<TrendingUp size={19} />}
+          sublabel={mixedCurrencyView ? 'Not combined across currencies' : stats.totalTrades === 0 ? 'No closed trades yet' : 'Expectancy: ' + formatCurrency(stats.expectancy)}
+          accent="blue" />
+      </div>
+
+      {source === 'live' && <section id="ym-risk" className="ym-dash-section">
+        <div className="ym-dash-section-title">
+          <div><p className="ym-dash-kicker">CAPITAL PRESERVATION</p><h2>Risk &amp; trading rules</h2></div>
+          <span>Review limits before the next trade</span>
+        </div>
+        <div className="ym-dash-risk-area">
+          <RiskGuardian trades={liveTrades} settings={settings} account={account} plan={accountPlan} onConfigure={() => setShowRiskSettings(true)} />
+        </div>
       {source === 'live' && account?.account_type === 'propfirm' && <div className="card p-4 mb-6 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold">Challenge progress</h3><span className="text-xs text-muted">Resets daily at midnight {account.challenge_reset_timezone || 'UTC'}</span></div>
         {account.challenge_target_pct != null ? <><div className="flex items-center justify-between text-xs"><span className="text-secondary">Profit target · {account.challenge_target_pct}%</span><strong>{challengeProgress.toFixed(0)}% complete</strong></div><div className="h-2 rounded-full bg-secondary overflow-hidden"><div className="h-full rounded-full bg-orange-500 transition-[width]" style={{ width: `${challengeProgress}%` }} /></div></> : <p className="text-xs text-muted">Set a profit target in account settings to track challenge progress.</p>}
@@ -190,42 +305,151 @@ export function DashboardPage() {
         {accountPlan.max_daily_loss_pct != null && accountTodayPnl <= -(account.balance * accountPlan.max_daily_loss_pct / 100) && <p role="alert" className="text-xs font-semibold text-error-500">The default plan’s daily loss limit has been reached or exceeded.</p>}
       </div>}
 
-      {mixedCurrencyView && <div className="card px-4 py-3 mb-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs"><span className="font-semibold text-secondary">Closed P&amp;L by currency</span>{currencyTotals.length ? currencyTotals.map(([currency, pnl]) => <strong key={currency} className={`font-mono ${pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>{currency} {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}</strong>) : <span className="text-muted">No closed trades in this view.</span>}</div>}
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        <StatCard
-          label="Net P&L"
-          value={mixedCurrencyView ? 'Grouped' : formatCurrency(stats.totalPnl)}
-          icon={<Wallet size={20} className="text-orange-500" />}
-          trend={stats.totalPnl >= 0 ? 'up' : 'down'}
-          trendValue={mixedCurrencyView ? 'See P&L by currency above' : `${stats.totalTrades} trades`}
-          accent="blue"
-        />
-        <StatCard
-          label="Win Rate"
-          value={formatPercent(stats.winRate)}
-          icon={<Target size={20} className="text-amber-500" />}
-          sublabel={`${stats.wins}W · ${stats.losses}L · ${stats.breakevens}BE`}
-          accent="amber"
-        />
-        <StatCard
-          label="Avg Win"
-          value={mixedCurrencyView ? 'Grouped' : formatCurrency(stats.avgWin)}
-          icon={<TrendingUp size={20} className="text-success-500" />}
-          sublabel={mixedCurrencyView ? 'Average wins and losses use each account currency' : `Avg Loss: ${formatCurrency(stats.avgLoss)}`}
-          accent="emerald"
-        />
-        <StatCard
-          label="Profit Factor"
-          value={mixedCurrencyView ? 'Select account' : stats.profitFactor === Infinity ? '∞' : stats.profitFactor.toFixed(2)}
-          icon={<Activity size={20} className="text-orange-500" />}
-          sublabel={mixedCurrencyView ? 'Profit factor is not combined across currencies' : `Expectancy: ${formatCurrency(stats.expectancy)}`}
-          accent="blue"
-        />
+      </section>}
+
+      <section className="ym-dash-section" id="ym-performance">
+        <div className="ym-dash-section-title">
+          <div><p className="ym-dash-kicker">PERFORMANCE REVIEW</p><h2>Performance trends</h2></div>
+          <span>Results from closed trades</span>
+        </div>
+      <div className="ym-dash-charts grid grid-cols-1 xl:grid-cols-5 gap-4 mb-6">
+        <div className="ym-dash-chart-card card p-4 sm:p-5 xl:col-span-3">
+          <h3 className="text-sm font-semibold mb-1">Cumulative closed P&amp;L</h3><p className="ym-dash-chart-caption">Running total of closed-trade results—not account equity or live balance.</p>
+          {mixedCurrencyView ? <p className="py-20 text-center text-sm text-muted">Select one account to view cumulative closed P&L. Results in different currencies cannot be combined.</p> : equity.length > 0 ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <AreaChart data={equity} margin={{ left: -10, right: 10, top: 5, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--brand)" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="var(--brand)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} width={50} tickFormatter={value => Number(value).toLocaleString(undefined, { notation: 'compact', maximumFractionDigits: 1 })} />
+                <Tooltip
+                  contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 12 }}
+                  formatter={(v) => [formatCurrency(Number(v)), 'Cumulative P&L']}
+                />
+                <Area type="monotone" dataKey="equity" stroke="var(--brand)" strokeWidth={2} fill="url(#equityGrad)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyState icon={<TrendingUp size={40} />} title="No equity data yet" message="Add your first trade to see your equity curve grow over time." />
+          )}
+        </div>
+
+        <div className="ym-dash-chart-card card p-4 sm:p-5 xl:col-span-2">
+          <h3 className="text-sm font-semibold mb-1">Last 7 days</h3><p className="ym-dash-chart-caption">Realized daily P&amp;L for current filters.</p>
+          {mixedCurrencyView ? <p className="py-20 text-center text-sm text-muted">Choose one account to compare daily P&amp;L in a single currency.</p> : last7Days.some(d => d.trades > 0) ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={last7Days} margin={{ left: -10, right: 10, top: 5, bottom: 0 }}>
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} width={50} tickFormatter={value => Number(value).toLocaleString(undefined, { notation: 'compact', maximumFractionDigits: 1 })} />
+                <Tooltip
+                  contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 12 }}
+                  formatter={(v, _name, p) => [formatCurrency(Number(v)), `P&L (${p.payload.trades} trades)`]}
+                />
+                <Bar dataKey="pnl" radius={[6, 6, 0, 0]}>
+                  {last7Days.map((d, i) => (
+                    <Cell key={i} fill={d.pnl >= 0 ? '#10b981' : '#f87171'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyState icon={<Activity size={40} />} title="No recent activity" message="Your daily P&L will appear here once you start logging trades." />
+          )}
+        </div>
       </div>
 
-      {/* Streak + consecutive */}
+      </section>
+
+      <section className="ym-dash-section" id="ym-recent">
+        <div className="ym-dash-section-title">
+          <div><p className="ym-dash-kicker">THE LEDGER</p><h2>Recent trades</h2></div>
+          <span>Open a trade to review its details</span>
+        </div>
+      <div className="ym-dash-recent-card card p-4 sm:p-5">
+        {recentTrades.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-muted uppercase tracking-wide border-b border-themed">
+                  <th className="text-left py-2 px-2 font-medium">Date</th>
+                  <th className="text-left py-2 px-2 font-medium">Pair</th>
+                  <th className="text-left py-2 px-2 font-medium">Dir</th>
+                  <th className="text-left py-2 px-2 font-medium">Outcome</th>
+                  <th className="text-right py-2 px-2 font-medium">P&L</th>
+                  <th className="text-right py-2 px-2 font-medium">Pips</th>
+                  <th className="text-right py-2 px-2 font-medium">View</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentTrades.map(t => (
+                  <tr key={t.id} className="border-b border-themed/50 hover:bg-secondary transition-colors">
+                    <td className="py-2.5 px-2 text-xs text-muted">{formatDateTime(t.entry_time)}</td>
+                    <td className="py-2.5 px-2 font-mono font-semibold">{t.pair}</td>
+                    <td className="py-2.5 px-2">
+                      <span className={`badge ${t.direction === 'long' ? 'badge-success' : 'badge-error'}`}>
+                        {t.direction === 'long' ? 'Long' : 'Short'}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-2">
+                      {t.status === 'open' ? (
+                        <span className="badge bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20">
+                          <Clock size={12} /> Open
+                        </span>
+                      ) : (
+                        <span className={`badge ${t.outcome === 'win' ? 'badge-success' : t.outcome === 'loss' ? 'badge-error' : 'badge-neutral'}`}>
+                          {t.outcome === 'win' ? <ArrowUpRight size={12} /> : t.outcome === 'loss' ? <ArrowDownRight size={12} /> : <Minus size={12} />}
+                          {t.outcome || '—'}
+                        </span>
+                      )}
+                    </td>
+                    <td className={`py-2.5 px-2 text-right font-mono font-semibold ${t.status === 'open' ? 'text-orange-500' : t.pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>
+                      {t.status === 'open' ? 'Pending' : mixedCurrencyView ? formatAccountMoney(t.pnl, tradeCurrency(t, accounts)) : account ? formatAccountMoney(t.pnl, account.base_currency) : formatCurrency(t.pnl)}
+                    </td>
+                    <td className="py-2.5 px-2 text-right font-mono text-muted">{t.pips?.toFixed(1) || '0.0'}</td>
+                    <td className="py-2.5 px-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTrade(t)}
+                        className="btn-ghost p-1.5"
+                        aria-label={`View ${t.pair} trade details`}
+                        title="View trade details"
+                      >
+                        <Eye size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState icon={<Plus size={36} />} title="No trades yet" message="Click 'Add Trade' to log your first trade and start building your journal." />
+        )}
+      </div>
+
+      </section>
+
+      <details className="ym-dash-details" id="ym-deep-dive">
+        <summary className="ym-dash-details-trigger">
+          <span className="ym-dash-detail-icon"><BarChart3 size={19} /></span>
+          <span className="ym-dash-detail-copy"><strong>Deep-dive analytics &amp; tools</strong><small>Streaks, best days, trade calculator, heatmap and coaching insights</small></span>
+          <span className="ym-dash-expand-label">Explore insights</span>
+          <ChevronDown className="ym-dash-detail-chevron" size={20} aria-hidden="true" />
+        </summary>
+        <div className="ym-dash-details-body">
+          <div className="ym-dash-section-title"><div><p className="ym-dash-kicker">DEEPER METRICS</p><h2>Consistency &amp; edge</h2></div></div>
+          <div className="ym-dash-average-win">
+            <StatCard label="Average winning trade" value={mixedCurrencyView ? 'By currency' : formatCurrency(stats.avgWin)}
+              icon={<TrendingUp size={19} />}
+              sublabel={mixedCurrencyView ? 'Select a single currency for averages' : 'Average loss: ' + formatCurrency(stats.avgLoss)}
+              accent="emerald" />
+          </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <StatCard
           label="Current Streak"
@@ -253,67 +477,13 @@ export function DashboardPage() {
         />
       </div>
 
-      {/* Risk Guardian */}
-      {source === 'live' && <div className="mb-6">
-        <RiskGuardian trades={liveTrades} settings={settings} account={account} plan={accountPlan} onConfigure={() => setShowRiskSettings(true)} />
-      </div>}
-
+          <div className="ym-dash-section-title"><div><p className="ym-dash-kicker">PRACTICAL TOOLS</p><h2>Trade calculator</h2></div></div>
       {/* Trade Calculator */}
       <div className="mb-6">
         <TradeCalculator trades={liveTrades} adjustments={adjustments} />
       </div>
 
-      {/* Equity curve + Daily P&L */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        <div className="card p-5 lg:col-span-2">
-          <h3 className="text-sm font-semibold mb-4">Equity Curve</h3>
-          {mixedCurrencyView ? <p className="py-20 text-center text-sm text-muted">Choose one account to view a combined equity curve. Balances in different currencies stay separate.</p> : equity.length > 0 ? (
-            <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={equity} margin={{ left: -10, right: 10, top: 5, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--brand)" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="var(--brand)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `$${v}`} />
-                <Tooltip
-                  contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 12 }}
-                  formatter={(v) => [formatCurrency(Number(v)), 'Equity']}
-                />
-                <Area type="monotone" dataKey="equity" stroke="var(--brand)" strokeWidth={2} fill="url(#equityGrad)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : (
-            <EmptyState icon={<TrendingUp size={40} />} title="No equity data yet" message="Add your first trade to see your equity curve grow over time." />
-          )}
-        </div>
-
-        <div className="card p-5">
-          <h3 className="text-sm font-semibold mb-4">Last 7 Days P&L</h3>
-          {mixedCurrencyView ? <p className="py-20 text-center text-sm text-muted">Choose one account to compare daily P&amp;L in a single currency.</p> : last7Days.some(d => d.trades > 0) ? (
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={last7Days} margin={{ left: -10, right: 10, top: 5, bottom: 0 }}>
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `$${v}`} />
-                <Tooltip
-                  contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 12 }}
-                  formatter={(v, _name, p) => [formatCurrency(Number(v)), `P&L (${p.payload.trades} trades)`]}
-                />
-                <Bar dataKey="pnl" radius={[6, 6, 0, 0]}>
-                  {last7Days.map((d, i) => (
-                    <Cell key={i} fill={d.pnl >= 0 ? '#10b981' : '#f87171'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <EmptyState icon={<Activity size={40} />} title="No recent activity" message="Your daily P&L will appear here once you start logging trades." />
-          )}
-        </div>
-      </div>
-
+          <div className="ym-dash-section-title"><div><p className="ym-dash-kicker">THE DETAILS</p><h2>Patterns &amp; behavior</h2></div></div>
       {/* Best/Worst day + Top pairs */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         {mixedCurrencyView ? <div className="card p-5"><h3 className="text-sm font-semibold mb-4">Currency Breakdown</h3><div className="space-y-2">{currencyTotals.length ? currencyTotals.map(([currency, pnl]) => <div key={currency} className="flex items-center justify-between rounded-lg bg-secondary px-3 py-2"><span className="text-sm font-medium">{currency}</span><span className={`font-mono text-sm font-semibold ${pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>{pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}</span></div>) : <p className="text-sm text-muted">No closed trades in this view.</p>}</div></div> : <div className="card p-5">
@@ -391,69 +561,8 @@ export function DashboardPage() {
         <StrategyEdgeScore trades={trades} />
       </div>
 
-      {/* Recent trades */}
-      <div className="card p-5">
-        <h3 className="text-sm font-semibold mb-4">Recent Trades</h3>
-        {recentTrades.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-muted uppercase tracking-wide border-b border-themed">
-                  <th className="text-left py-2 px-2 font-medium">Date</th>
-                  <th className="text-left py-2 px-2 font-medium">Pair</th>
-                  <th className="text-left py-2 px-2 font-medium">Dir</th>
-                  <th className="text-left py-2 px-2 font-medium">Outcome</th>
-                  <th className="text-right py-2 px-2 font-medium">P&L</th>
-                  <th className="text-right py-2 px-2 font-medium">Pips</th>
-                  <th className="text-right py-2 px-2 font-medium">View</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentTrades.map(t => (
-                  <tr key={t.id} className="border-b border-themed/50 hover:bg-secondary transition-colors">
-                    <td className="py-2.5 px-2 text-xs text-muted">{formatDateTime(t.entry_time)}</td>
-                    <td className="py-2.5 px-2 font-mono font-semibold">{t.pair}</td>
-                    <td className="py-2.5 px-2">
-                      <span className={`badge ${t.direction === 'long' ? 'badge-success' : 'badge-error'}`}>
-                        {t.direction === 'long' ? 'Long' : 'Short'}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-2">
-                      {t.status === 'open' ? (
-                        <span className="badge bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20">
-                          <Clock size={12} /> Open
-                        </span>
-                      ) : (
-                        <span className={`badge ${t.outcome === 'win' ? 'badge-success' : t.outcome === 'loss' ? 'badge-error' : 'badge-neutral'}`}>
-                          {t.outcome === 'win' ? <ArrowUpRight size={12} /> : t.outcome === 'loss' ? <ArrowDownRight size={12} /> : <Minus size={12} />}
-                          {t.outcome || '—'}
-                        </span>
-                      )}
-                    </td>
-                    <td className={`py-2.5 px-2 text-right font-mono font-semibold ${t.status === 'open' ? 'text-orange-500' : t.pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>
-                      {t.status === 'open' ? 'Pending' : mixedCurrencyView ? formatAccountMoney(t.pnl, tradeCurrency(t, accounts)) : account ? formatAccountMoney(t.pnl, account.base_currency) : formatCurrency(t.pnl)}
-                    </td>
-                    <td className="py-2.5 px-2 text-right font-mono text-muted">{t.pips?.toFixed(1) || '0.0'}</td>
-                    <td className="py-2.5 px-2 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedTrade(t)}
-                        className="btn-ghost p-1.5"
-                        aria-label={`View ${t.pair} trade details`}
-                        title="View trade details"
-                      >
-                        <Eye size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <EmptyState icon={<Plus size={36} />} title="No trades yet" message="Click 'Add Trade' to log your first trade and start building your journal." />
-        )}
-      </div>
+        </div>
+      </details>
 
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add New Trade" size="lg">
         <TradeForm onSubmit={handleSubmit} onCancel={() => setShowAdd(false)} />
