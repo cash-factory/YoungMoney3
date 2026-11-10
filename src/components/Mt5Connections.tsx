@@ -146,7 +146,7 @@ export function Mt5Connections() {
                 ['Final net R',x.final_realized_r ?? 'Unavailable'],['Remaining volume',x.remaining_volume ?? 'Unknown'],
                 ['Total holding',x.holding_seconds ? (Number(x.holding_seconds)/3600).toFixed(2)+' hours' : 'Open/unknown'],
                 ['VW holding',x.weighted_holding_seconds ? (Number(x.weighted_holding_seconds)/3600).toFixed(2)+' hours' : 'Unavailable'],
-              ].map(([label,value])=><div key={label} className="rounded-lg bg-secondary p-3"><p className="text-muted">{label}</p><strong className="block mt-1 break-words font-mono">{value}</strong></div>)}
+              ].map(([label,value])=><div key={String(label)} className="rounded-lg bg-secondary p-3"><p className="text-muted">{label}</p><strong className="block mt-1 break-words font-mono">{value}</strong></div>)}
             </div>
             <p className="text-xs text-secondary mt-3">Sessions: {x.sessions?.status==='confirmed' ? x.sessions.sessions?.join(', ') || 'None' : 'Unresolved — '+(x.sessions?.reason || 'broker timezone not confirmed')} · Initial risk: {x.capture_completeness?.original_risk || 'unknown'}</p>
             <div className="grid md:grid-cols-2 gap-4 mt-4">
@@ -166,10 +166,10 @@ export function Mt5Connections() {
           </details>;
         })}
       </div>
-      {positionsMore && <button className="btn-secondary" onClick={()=>run(async()=>{
+      {positionsMore && <button className="btn-secondary" onClick={async()=>{try {
         const page=await action('positions',{offset:positions.length});
         setPositions(previous=>[...previous,...page.rows]);setPositionsMore(Boolean(page.more));
-      })}>Load more lifecycles</button>}
+      } catch(e){setError(e instanceof Error?e.message:'Could not load more lifecycles.');}}}>Load more lifecycles</button>}
     </section>
     <dialog ref={dialog} aria-labelledby="mt5-dialog-title" className="mt5-dialog" onClose={()=>{setDevice('');void refresh().catch(e=>setError(e.message));}}>
       <header className="flex items-center justify-between border-b border-themed px-5 py-4"><h2 id="mt5-dialog-title" className="font-bold">Connect MT5 account</h2><button className="btn-ghost p-2" aria-label="Close login" onClick={()=>dialog.current?.close()}><X size={18}/></button></header>
