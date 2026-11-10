@@ -131,7 +131,13 @@ try {
   assert.equal((await call('data',{action:'upsert',table:'trades',payload:{
     ...row,id:'forged-restore',account_id:'foreign-account',
   }})).status,400);
-  await call('mt5/history-request',{link,days:30});
+  // Staging contract: one-month default and a server-enforced 90-day lookback ceiling.
+  // Reject crafted API requests too; limiting the select control is insufficient.
+  for (const days of [0, 91, 180, 365, 3650, 1.5]) {
+    assert.equal((await call('mt5/history-request',{link,days})).status,400,
+      'History requests outside the 1–90 day range must be rejected');
+  }
+  assert.equal((await call('mt5/history-request',{link,days:30})).status,200);
   const history=(await (await device('sync',{link,events:[]})).json()).history;
   const older={...row,entry_time:new Date(Date.now()-9*86400000).toISOString(),
     exit_time:new Date(Date.now()-8*86400000).toISOString()};
@@ -160,6 +166,8 @@ try {
   }
   assert.equal((await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json()).count,103);
   assert.equal((await (await call('mt5/history-import',{link,request:history.id,expected_count:102})).json()).added,0);
+  // Ninety days remains an explicit supported choice after reviewing/importing the 30-day window.
+  assert.equal((await call('mt5/history-request',{link,days:90})).status,200);
   // Rich capture contract: immutable evidence, latest projection, owner isolation
   // and separate, explicit broker timezone/UTC conversion evidence.
   assert.equal((await call('mt5/timezone-confirm',{link,timezone:'not-a-timezone',confirm:true})).status,400);
