@@ -160,6 +160,58 @@ try {
   }
   assert.equal((await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json()).count,103);
   assert.equal((await (await call('mt5/history-import',{link,request:history.id,expected_count:102})).json()).added,0);
+  // Rich capture contract: immutable evidence, latest projection, owner isolation
+  // and separate, explicit broker timezone/UTC conversion evidence.
+  assert.equal((await call('mt5/timezone-confirm',{link,timezone:'not-a-timezone',confirm:true})).status,400);
+  assert.equal((await call('mt5/timezone-confirm',{link,timezone:'Europe/Athens',confirm:false})).status,400);
+  const zone=await call('mt5/timezone-confirm',{link,timezone:'Europe/Athens',confirm:true});
+  assert.equal(zone.status,200);
+  assert.equal((await zone.json()).utc_conversion_status,'unverified');
+  const confirmed=await call('mt5/timezone-confirm',{
+    link,timezone:'Europe/Athens',confirm:true,utcEvidence:'broker_statement_checked'
+  });
+  assert.equal((await confirmed.json()).utc_conversion_status,'confirmed');
+  const withZone=(await (await call('mt5/status',{})).json()).links.find(item=>item.id===link);
+  assert.equal(withZone.broker_timezone,'Europe/Athens');
+  assert.equal(withZone.utc_conversion_status,'confirmed');
+  const fill={ticket:'781',position_id:'789',time_msc:1736500000000,volume:1,price:1.1,type:0,order:'700'};
+  const evidenceEvent={kind:'raw',key:'deal-781',fields:fill};
+  assert.equal((await device('sync',{link,events:[evidenceEvent]})).status,200);
+  assert.equal((await device('sync',{link,events:[evidenceEvent]})).status,200);
+  assert.equal((await device('sync',{link,events:[{...evidenceEvent,fields:{...fill,price:1.2}}]})).status,409,
+    'An immutable broker ticket must not silently mutate on replay');
+  const rawCount=await db.prepare('SELECT COUNT(*) AS count FROM mt5_raw_evidence WHERE link=?').bind(link).first();
+  assert.equal(rawCount.count,1);
+  const projected={
+    calculation_version:1,lifecycle_id:'789:0',position_id:'789',symbol:'EURUSD',
+    direction:'long',status:'closed',
+    first_entry_at:'2026-01-01T00:00:00.000Z',final_exit_at:'2026-01-01T00:30:00.000Z',
+    initial_risk_account:'12.5',final_realized_r:'1.2',net_realized_profit:'15',
+    capture_completeness:{original_risk:'known',session_status:'confirmed'},
+    entries:[{deal_ticket:'781'}],exits:[{deal_ticket:'782'}],
+  };
+  const rich={kind:'lifecycle',key:'lifecycle:789:0',fields:projected};
+  assert.equal((await device('sync',{link,events:[rich]})).status,200);
+  assert.equal((await device('sync',{link,events:[rich]})).status,200);
+  let latest=(await (await call('mt5/positions',{})).json()).rows;
+  assert.equal(latest.length,1);
+  assert.equal(latest[0].version,1);
+  assert.equal(latest[0].summary.final_realized_r,'1.2');
+  assert.equal(latest[0].account_id,linkedAccount);
+  const revised={...projected,net_realized_profit:'16',final_realized_r:'1.28'};
+  assert.equal((await device('sync',{link,events:[{...rich,fields:revised}]})).status,200);
+  latest=(await (await call('mt5/positions',{})).json()).rows;
+  assert.equal(latest.length,1,'One lifecycle row regardless of revised projections');
+  assert.equal(latest[0].version,2);
+  assert.equal(latest[0].summary.net_realized_profit,'16');
+  const allVersions=await db.prepare('SELECT COUNT(*) AS count FROM mt5_position_versions WHERE link=? AND lifecycle_id=?')
+    .bind(link,'789:0').first();
+  assert.equal(allVersions.count,2);
+  const evidence=(await (await call('mt5/position-evidence',{link,lifecycle_id:'789:0'})).json()).rows;
+  assert.equal(evidence.length,1);
+  assert.equal(evidence[0].payload.ticket,'781');
+  assert.equal((await call('mt5/position-evidence',{link,lifecycle_id:'not-a-position'})).status,400);
+
   // Two independent demo/contest accounts can coexist for one journal owner.
   const secondLink=(await (await call('mt5/connect',{device:devices[0].id,envelope:{wrapped:'d',iv:'e',data:'f'}})).json()).id;
   assert.equal((await (await device('poll',{})).json()).job.id,secondLink);
@@ -185,6 +237,9 @@ try {
   const other=await call('auth/signup',{email:'other@example.test',username:'second',password:'local-test-pass',invite_code:'integration'});
   cookie=other.headers.get('set-cookie').split(';')[0];
   assert.deepEqual((await (await call('mt5/status',{})).json()).links,[]);
+  assert.deepEqual((await (await call('mt5/positions',{})).json()).rows,[]);
+  assert.equal((await call('mt5/timezone-confirm',{link,timezone:'Etc/UTC',confirm:true})).status,404);
+  assert.equal((await call('mt5/position-evidence',{link,lifecycle_id:'789:0'})).status,404);
   assert.equal((await (await call('data',{action:'select',table:'trades'})).json()).count,0);
   assert.equal((await call('data',{action:'update',table:'trades',id:row.id,
     filters:{updated_at:records[0].updated_at},payload:{notes:'intrusion'}})).status,404);
