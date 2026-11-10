@@ -6,6 +6,9 @@ on:
         description: 'Type DEPLOY-RICH-CAPTURE-STAGING'
         type: string
         required: true
+  pull_request:
+    types: [labeled]
+    branches: [main]
 
 permissions:
   contents: read
@@ -16,7 +19,15 @@ concurrency:
 
 jobs:
   staging:
-    if: github.ref == 'refs/heads/feat/rich-capture-staging-20261110' && inputs.confirmation == 'DEPLOY-RICH-CAPTURE-STAGING'
+    if: >-
+      (github.event_name == 'workflow_dispatch' &&
+       github.ref == 'refs/heads/feat/rich-capture-staging-20261110' &&
+       inputs.confirmation == 'DEPLOY-RICH-CAPTURE-STAGING') ||
+      (github.event_name == 'pull_request' &&
+       github.event.label.name == 'deploy-rich-staging' &&
+       github.event.pull_request.draft == false &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.head.ref == 'feat/rich-capture-staging-20261110')
     runs-on: ubuntu-latest
     environment: staging
     timeout-minutes: 35
@@ -27,8 +38,11 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - name: Checkout feature branch only
+      - name: Checkout approved feature branch SHA only
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
