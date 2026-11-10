@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import Decimal from 'decimal.js-light';
 import { Shield, Save, AlertTriangle, TrendingDown, Wallet, Percent, Gauge } from 'lucide-react';
 import { useRiskSettings, useTrades, useTradingAccounts, useTradingPlans } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
+import { useMt5Lifecycles } from '@/hooks/useMt5Lifecycles';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { StatCard } from '@/components/ui/StatCard';
@@ -15,6 +17,35 @@ export function RiskManagementPage() {
   const { user } = useAuth();
   const { settings, loading, saveSettings } = useRiskSettings(user?.id);
   const { trades } = useTrades(user?.id);
+  const { positions } = useMt5Lifecycles(user?.id);
+  // Open broker exposure must never be masked by a journal source filter.
+  const brokerExposure = useMemo(() => {
+    const open = positions.filter(item=>item.summary.status==='open');
+    return open.map(item=>{
+      const amount=item.summary.current_stop_exposure_account;
+      const initial=item.summary.initial_risk_account;
+      const currency=item.summary.settlement_currency || 'Unknown';
+      const valid=(x:string|null|undefined) => {
+        if(x==null || !/^-?\d+(?:\.\d+)?$/.test(x))return null;
+        return new Decimal(x);
+      };
+      return {...item,
+        currentExposure:valid(amount), initialRisk:valid(initial), currency};
+    });
+  },[positions]);
+  const riskByAccount = useMemo(()=>{
+    const rows=new Map<string,{currency:string;total:Decimal;initial:Decimal;unknown:number;open:number}>();
+    for(const entry of brokerExposure){
+      const key=entry.account_id+'|'+entry.currency;
+      const prior=rows.get(key)||{currency:entry.currency,total:new Decimal(0),initial:new Decimal(0),unknown:0,open:0};
+      prior.open++;
+      if(entry.currentExposure===null)prior.unknown++;
+      else prior.total=prior.total.plus(entry.currentExposure);
+      if(entry.initialRisk!==null)prior.initial=prior.initial.plus(entry.initialRisk);
+      rows.set(key,prior);
+    }
+    return [...rows.entries()].map(([key,record])=>({accountId:key.split('|')[0],...record}));
+  },[brokerExposure]);
   const { accounts, loading: accountsLoading } = useTradingAccounts(user?.id);
   const { plans } = useTradingPlans(user?.id);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
@@ -103,7 +134,23 @@ export function RiskManagementPage() {
         </label>
         <p className="mt-2 text-xs text-muted">Realized results use the selected account's close date and reset timezone. Global settings are defaults; account and plan limits can be stricter.</p>
       </div>
-      {saveError && <p className="mb-4 text-sm text-error-500" role="alert">{saveError}</p>}
+      {riskByAccount.length > 0 && <section className="card p-4 sm:p-5 mb-6" aria-label="Account-wide broker stop exposure">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm font-bold">Open broker positions &amp; stop exposure</h2>
+          <span className="badge badge-neutral">All open MT5 lifecycles, independent of journal source filters</span>
+        </div>
+        <p className="text-xs text-muted mt-2 mb-4">These are account-specific stop-risk estimates calculated from frozen entry tranches and last observed stops. An unknown stop or tick value remains unavailable. No currencies are combined.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {riskByAccount.map(group=><div key={group.accountId+'-'+group.currency} className="rounded-xl bg-secondary border border-themed p-3">
+            <p className="text-xs text-secondary">{accounts.find(a=>a.id===group.accountId)?.name || 'Broker account'} · {group.currency}</p>
+            <p className="font-mono text-xl font-bold mt-2">{group.total.toDecimalPlaces(2).toFixed(2)}</p>
+            <p className="text-xs text-muted">Known current exposure · {group.open} open lifecycles</p>
+            <p className="text-xs text-muted mt-2">Original risk (known positions): {group.initial.toDecimalPlaces(2).toFixed(2)}</p>
+            {group.unknown>0 && <p role="status" className="text-xs text-error-500 mt-2">{group.unknown} open lifecycles with unavailable current stop risk — displayed total is incomplete.</p>}
+          </div>)}
+        </div>
+      </section>}
+      {saveError && <p className="mb-4 text-sm text-error-500" role="alert">{saveError}</p>
       {account ? <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard label="Today's P&L" value={formatMoney(todayPnl)} icon={<Wallet size={20} />} accent={todayPnl >= 0 ? 'emerald' : 'rose'} trend={todayPnl >= 0 ? 'up' : 'down'} trendValue={formatMoney(Math.abs(todayPnl))} />
