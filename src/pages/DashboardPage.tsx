@@ -168,7 +168,7 @@ export function DashboardPage() {
         </button>
       </div>
 
-      <div className="ym-dash-controls card" aria-label="Performance filters">
+      <div className="ym-dash-controls card" role="group" aria-label="Performance filters">
         <label>
           <span>Trading account</span>
           <select className="input-field" value={accountFilter} onChange={event => setAccountFilter(event.target.value)}>
@@ -316,7 +316,7 @@ export function DashboardPage() {
       <div className="ym-dash-charts grid grid-cols-1 xl:grid-cols-5 gap-4 mb-6">
         <div className="ym-dash-chart-card card p-4 sm:p-5 xl:col-span-3">
           <h3 className="text-sm font-semibold mb-1">Cumulative closed P&amp;L</h3><p className="ym-dash-chart-caption">Running total of closed-trade results—not account equity or live balance.</p>
-          {mixedCurrencyView ? <p className="py-20 text-center text-sm text-muted">Choose one account to view a combined equity curve. Balances in different currencies stay separate.</p> : equity.length > 0 ? (
+          {mixedCurrencyView ? <p className="py-20 text-center text-sm text-muted">Select one account to view cumulative closed P&L. Results in different currencies cannot be combined.</p> : equity.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
               <AreaChart data={equity} margin={{ left: -10, right: 10, top: 5, bottom: 0 }}>
                 <defs>
@@ -326,7 +326,7 @@ export function DashboardPage() {
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `$${v}`} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} width={50} tickFormatter={value => Number(value).toLocaleString(undefined, { notation: 'compact', maximumFractionDigits: 1 })} />
                 <Tooltip
                   contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 12 }}
                   formatter={(v) => [formatCurrency(Number(v)), 'Cumulative P&L']}
@@ -345,7 +345,7 @@ export function DashboardPage() {
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={last7Days} margin={{ left: -10, right: 10, top: 5, bottom: 0 }}>
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} width={50} tickFormatter={(v) => `$${v}`} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} width={50} tickFormatter={value => Number(value).toLocaleString(undefined, { notation: 'compact', maximumFractionDigits: 1 })} />
                 <Tooltip
                   contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 12 }}
                   formatter={(v, _name, p) => [formatCurrency(Number(v)), `P&L (${p.payload.trades} trades)`]}
