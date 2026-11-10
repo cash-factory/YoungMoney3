@@ -18,6 +18,8 @@ import { StrategyEdgeScore } from '@/components/StrategyEdgeScore';
 import { RiskGuardian } from '@/components/RiskGuardian';
 import { RiskSettingsModal } from '@/components/RiskSettingsModal';
 import { TradeAttachments } from '@/components/TradeAttachments';
+import { RichLifecycleAnalytics } from '@/components/RichLifecycleAnalytics';
+import { useMt5Lifecycles } from '@/hooks/useMt5Lifecycles';
 import { useRiskSettings, useChecklist, useTradingPlans } from '@/hooks/useData';
 import type { Trade, TradeInput, RiskSettingsInput } from '@/lib/types';
 import { subDays, format } from 'date-fns';
@@ -25,6 +27,7 @@ import { subDays, format } from 'date-fns';
 export function DashboardPage() {
   const { user } = useAuth();
   const { trades: liveTrades, loading, loadError, asOf, addTrade } = useTrades(user?.id);
+  const { positions: lifecyclePositions } = useMt5Lifecycles(user?.id);
   const { accounts } = useTradingAccounts(user?.id);
   const { adjustments } = useTradingAccountAdjustments(user?.id);
   const { backtests } = useBacktests(user?.id);
@@ -42,6 +45,10 @@ export function DashboardPage() {
   const [source, setSource] = useState<'live' | 'backtest' | 'forward'>('live');
 
   const account = accounts.find(a => a.id === accountFilter) || null;
+  const filteredLifecyclePositions = useMemo(() =>
+    source === 'live' && tradeOrigin !== 'manual' ?
+      lifecyclePositions.filter(row => accountFilter === 'all' || row.account_id === accountFilter) : [],
+    [lifecyclePositions,accountFilter,source,tradeOrigin]);
   const accountPlan = plans.find(plan => plan.id === account?.default_plan_id) || null;
   const sessionSourceTrades = useMemo(() => loggedTestTrades.flatMap(test => {
     const session = sessions.find(s => s.id === test.session_id);
@@ -262,6 +269,30 @@ export function DashboardPage() {
           </div>
         </div>
       </section>
+
+      {source === 'live' && account && (account.broker_balance != null || account.broker_equity != null) &&
+        <section className="card p-4 sm:p-5 mb-6" aria-label="Broker reported snapshots">
+          <div className="flex flex-wrap justify-between items-center gap-2 mb-3">
+            <div><p className="ym-dash-kicker">BROKER SNAPSHOT / CAPTURE HEALTH</p><h2 className="text-sm font-semibold mt-1">Last MT5 account snapshot</h2></div>
+            <span className="badge badge-neutral">{account.broker_balance_at && Date.now()-Date.parse(account.broker_balance_at)<120000 ? 'Recent observation' : 'Stale or unknown freshness'}</span>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="rounded-lg bg-secondary p-3">
+              <p className="text-xs text-muted">Broker-reported balance</p>
+              <p className="font-mono text-lg font-bold mt-2">{account.broker_balance == null ? 'Unavailable' : formatAccountMoney(account.broker_balance, account.base_currency)}</p>
+              <p className="text-xs text-muted mt-1">As of {account.broker_balance_at ? new Date(account.broker_balance_at).toLocaleString() : 'unknown'}</p>
+            </div>
+            <div className="rounded-lg bg-secondary p-3">
+              <p className="text-xs text-muted">Broker-reported equity</p>
+              <p className="font-mono text-lg font-bold mt-2">{account.broker_equity == null ? 'Unavailable' : formatAccountMoney(account.broker_equity, account.base_currency)}</p>
+              <p className="text-xs text-muted mt-1">As of {account.broker_equity_at ? new Date(account.broker_equity_at).toLocaleString() : 'unknown'}</p>
+            </div>
+          </div>
+          <p className="text-xs text-muted mt-3">Last reported broker values are snapshots, not live streaming quotes. Review MT5 Connections for sync health and unfinished history.</p>
+        </section>}
+      {filteredLifecyclePositions.length > 0 && <div className="mb-6">
+        <RichLifecycleAnalytics positions={filteredLifecyclePositions} compact />
+      </div>}
 
       <div className="ym-dash-section-title">
         <div><p className="ym-dash-kicker">AT A GLANCE</p><h2>Key performance</h2></div>
