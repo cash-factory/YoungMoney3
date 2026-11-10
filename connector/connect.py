@@ -258,18 +258,23 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
         # A declined/imported request must not continue scanning on this PC.
         with db: db.execute("DELETE FROM history_progress WHERE link=?",(link,))
 
-if __name__=="__main__":
+def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None, report=None):
+    """CLI and GUI entrypoint; MT5 and SQLite run on this one worker thread."""
+    global origin, slots, opener, service, token, db, heartbeats
     parser=argparse.ArgumentParser()
     parser.add_argument("origin",help="HTTPS origin of your dashboard")
-    parser.add_argument("slots",nargs="+",help="Full paths to dedicated portable MT5 terminal64.exe copies")
+    parser.add_argument("slots",nargs="*",help="Full paths to dedicated portable MT5 terminal64.exe copies")
     parser.add_argument("--pair",action="store_true")
     parser.add_argument("--sync-once",action="store_true",help="Reconcile saved accounts once, then exit")
-    args=parser.parse_args()
+    parser.add_argument("--pair-only",action="store_true",help="Pair and return without starting capture")
+    args=parser.parse_args(argv)
     origin=args.origin.rstrip("/")
     parsed=urlsplit(origin)
     if parsed.scheme!="https" or not parsed.hostname or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment:
         parser.error("Use an HTTPS dashboard origin")
     slots=[str(Path(s).resolve(strict=True)) for s in args.slots]
+    if not slots and not (args.pair and args.pair_only):
+        parser.error("Select a dedicated terminal64.exe before syncing")
     if len(set(slots))!=len(slots) or any(Path(s).name.lower()!="terminal64.exe" for s in slots):
         parser.error("Supply different dedicated terminal64.exe paths")
     opener=urllib.request.build_opener(NoRedirect())
@@ -278,7 +283,7 @@ if __name__=="__main__":
     if args.pair:
         private=rsa.generate_private_key(public_exponent=65537,key_size=2048)
         pub=private.public_key().public_bytes(serialization.Encoding.DER,serialization.PublicFormat.SubjectPublicKeyInfo)
-        code=getpass.getpass("Website pairing code: ").strip().lower()
+        code=(pairing_code if pairing_code is not None else getpass.getpass("Website pairing code: ")).strip().lower()
         if len(code)!=32 or any(c not in "0123456789abcdef" for c in code):
             sys.exit("Copy the full 32-character code from Account settings > Pair a PC.")
         try:
@@ -295,6 +300,8 @@ if __name__=="__main__":
         keyring.set_password(service,"private-a",encoded[:850])
         keyring.set_password(service,"private-b",encoded[850:])
         keyring.set_password(service,"token",result["token"])
+        if report: report({"state":"paired","message":"PC pairing completed."})
+        if args.pair_only: return 0
     token=keyring.get_password(service,"token")
     if not token: sys.exit("Pair this PC first with --pair.")
     folder=Path(os.environ["LOCALAPPDATA"])/"YMFX"/hashlib.sha256((origin+token).encode()).hexdigest()[:20]
@@ -314,8 +321,14 @@ if __name__=="__main__":
     heartbeats={}
     failures=0
     print("Connector running. Keep this window open. Press Ctrl+C to exit.")
+    if report: report({"state":"running","message":"Starting connector worker."})
     try:
-        while True:
+        while not (stop_event and stop_event.is_set()):
+            if pause_event and pause_event.is_set():
+                if report: report({"state":"paused","message":"Sync paused; pending uploads preserved."})
+                if stop_event: stop_event.wait(.5)
+                else: time.sleep(.5)
+                continue
             failed=False
             try:
                 if not args.sync_once and time.monotonic()>=next_poll:
@@ -335,7 +348,24 @@ if __name__=="__main__":
                 if failed: sys.exit(1)
                 break
             failures=min(failures+1,5) if failed else 0
-            time.sleep(min(60,2**(failures+1)))
+            if report:
+                report({"state":"retrying" if failed else "running",
+                        "queued":db.execute("SELECT COUNT(*) FROM outbox").fetchone()[0],
+                        "linked":db.execute("SELECT COUNT(*) FROM links").fetchone()[0],
+                        "last_sync":datetime.now(timezone.utc).isoformat(),
+                        "message":"Broker/connection error; check terminal logs." if failed else "Capture cycle complete."})
+            delay=min(60,2**(failures+1))
+            if stop_event: stop_event.wait(delay)
+            else: time.sleep(delay)
     except KeyboardInterrupt:
+        pass
+    finally:
         mt5.shutdown()
+        db.close()
+        if report: report({"state":"stopped","message":"Capture stopped; outbox preserved."})
+    return 0
 
+
+
+if __name__=="__main__":
+    main()
