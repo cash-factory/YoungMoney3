@@ -3,6 +3,7 @@ import { BookOpen, Plus, Trash2, Save, Target, Eye, CheckSquare, FileText, Calen
 import { ScreenshotUpload } from '@/components/ScreenshotUpload';
 import { useJournalEntries, useTrades, useStrategies, useSetups, useMarketInstruments, useTradingAccounts } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
+import { useMt5Lifecycles } from '@/hooks/useMt5Lifecycles';
 import { formatPercent } from '@/lib/utils';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
@@ -41,6 +42,7 @@ export function JournalPage() {
   </label>;
   const { entries, loading, upsertEntry, deleteEntry } = useJournalEntries(user?.id);
   const { trades } = useTrades(user?.id);
+  const { positions: brokerLifecycles, error: lifecycleError } = useMt5Lifecycles(user?.id);
   const { strategies } = useStrategies(user?.id);
   const { setups } = useSetups(user?.id);
   const { instruments } = useMarketInstruments(user?.id);
@@ -51,6 +53,9 @@ export function JournalPage() {
 
   const [accountFilter, setAccountFilter] = useState('all');
   const visibleTrades = useMemo(() => trades.filter(t => (source === 'all' || (t.trade_source ?? 'manual') === source) && (accountFilter === 'all' || (t.account_id || 'unassigned') === accountFilter)), [trades, source, accountFilter]);
+  const journalLifecycles = useMemo(() => brokerLifecycles.filter(row =>
+    source !== 'manual' && (accountFilter === 'all' || row.account_id === accountFilter)
+  ).slice(0, 12), [brokerLifecycles, source, accountFilter]);
   const filtered = useMemo(() => {
     return entries.filter(entry => (!filterType || entry.entry_type === filterType) && (accountFilter === 'all' || (entry.account_id || 'unassigned') === accountFilter));
   }, [entries, filterType, accountFilter]);
@@ -80,6 +85,35 @@ export function JournalPage() {
       />
 
       {sourceFilter}
+      {source !== 'manual' && <section className="card p-4 sm:p-5 mb-5 space-y-3" aria-label="Broker execution context for journaling">
+        <div>
+          <p className="text-[10px] uppercase font-bold tracking-wider text-muted">CAPTURED EXECUTION CONTEXT</p>
+          <h2 className="text-base font-bold mt-1">Broker position lifecycles</h2>
+          <p className="text-xs text-muted mt-1">Use these verified identifiers and execution details when writing journal notes. Existing entries, tags, attachments and manual trade matches remain unchanged.</p>
+        </div>
+        {lifecycleError && <p role="status" className="text-xs text-muted">Broker execution summaries are temporarily unavailable; your journal entries are unaffected.</p>}
+        {journalLifecycles.length === 0 ? <p className="text-xs text-muted">No broker position lifecycles match the current filters yet.</p> :
+          <div className="grid gap-2 sm:grid-cols-2">
+            {journalLifecycles.map(row => {
+              const item = row.summary;
+              return <details key={row.link + ':' + row.lifecycle_id} className="rounded-lg border border-themed bg-secondary p-3 text-xs">
+                <summary className="cursor-pointer flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-semibold">{item.symbol} · {item.direction} · {item.status}</span>
+                  <span className="font-mono text-muted">#{item.position_id}</span>
+                </summary>
+                <dl className="mt-3 grid grid-cols-2 gap-2">
+                  <div><dt className="text-muted">Entry</dt><dd className="font-mono">{item.first_entry_at}</dd></div>
+                  <div><dt className="text-muted">Final exit</dt><dd className="font-mono">{item.final_exit_at || 'Still open'}</dd></div>
+                  <div><dt className="text-muted">Original SL</dt><dd className="font-mono">{item.initial_sl ?? 'Unavailable'}</dd></div>
+                  <div><dt className="text-muted">Risk source</dt><dd>{item.initial_sl_provenance || 'Unverified'}</dd></div>
+                  <div><dt className="text-muted">Net realized R</dt><dd className="font-mono">{item.realized_r == null ? 'Unavailable' : item.realized_r + 'R'}</dd></div>
+                  <div><dt className="text-muted">Movement</dt><dd className="font-mono">{item.movement == null ? 'Unknown' : item.movement + ' ' + item.movement_unit}</dd></div>
+                </dl>
+                <p className="text-muted mt-3">Execution identity: {row.lifecycle_id}. Use the trade details in Trades to review every fill and partial close.</p>
+              </details>;
+            })}
+          </div>}
+      </section>}
       <label className="mb-4 block max-w-sm text-xs font-semibold text-secondary">Journal account
         <select className="input-field mt-1.5" value={accountFilter} onChange={event => setAccountFilter(event.target.value)}>
           <option value="all">All accounts</option><option value="unassigned">Unassigned</option>
