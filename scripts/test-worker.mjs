@@ -166,6 +166,16 @@ try {
   }
   assert.equal((await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json()).count,103);
   assert.equal((await (await call('mt5/history-import',{link,request:history.id,expected_count:102})).json()).added,0);
+  // A request persisted under an older policy cannot bypass the cap by
+  // becoming ready before the deployment. Keep all evidence, reject approval.
+  const approvedSince=(await db.prepare('SELECT history_since FROM mt5_links WHERE id=?')
+    .bind(link).first()).history_since;
+  await db.prepare('UPDATE mt5_links SET history_since=? WHERE id=?')
+    .bind(Date.now()-120*86400000,link).run();
+  assert.equal((await call('mt5/history-preview',{link,offset:0})).status,409);
+  assert.equal((await call('mt5/history-import',{link,request:history.id,expected_count:102})).status,409);
+  await db.prepare('UPDATE mt5_links SET history_since=? WHERE id=?')
+    .bind(approvedSince,link).run();
   // Ninety days remains an explicit supported choice after reviewing/importing the 30-day window.
   assert.equal((await call('mt5/history-request',{link,days:90})).status,200);
   // Rich capture contract: immutable evidence, latest projection, owner isolation
