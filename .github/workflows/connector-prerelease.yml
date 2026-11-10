@@ -71,7 +71,7 @@ jobs:
           $digest=(Get-FileHash 'staging-release/YoungMoney3 Connector.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
           "$digest *YoungMoney3 Connector.exe" | Set-Content -Encoding ascii 'staging-release/YoungMoney3 Connector.exe.sha256'
           Copy-Item connector-dependencies.txt staging-release/connector-dependencies.txt
-          '{"version":"' + $env:VERSION + '","commit":"' + '${{ github.sha }}' + '","sha256":"' + $digest + '","signed":false,"platform":"windows-x64","environment":"staging"}' | Set-Content -Encoding utf8 'staging-release/build-manifest.json'
+          '{"version":"' + $env:VERSION + '","commit":"' + '${{ github.event.pull_request.head.sha || github.sha }}' + '","sha256":"' + $digest + '","signed":false,"platform":"windows-x64","environment":"staging"}' | Set-Content -Encoding utf8 'staging-release/build-manifest.json'
       - uses: actions/upload-artifact@v4
         with:
           name: youngmoney3-connector-staging-${{ inputs.version || '0.2.0-rc1' }}
@@ -86,4 +86,4 @@ jobs:
         run: |
           $tag='staging-connector-v'+$env:VERSION
           if (gh release view $tag 2>$null) { throw "Staging prerelease $tag already exists; refusing overwrite" }
-          gh release create $tag 'staging-release/YoungMoney3 Connector.exe' 'staging-release/YoungMoney3 Connector.exe.sha256' 'staging-release/build-manifest.json' 'staging-release/connector-dependencies.txt' --target '${{ github.sha }}' --title "YoungMoney3 Connector $env:VERSION (STAGING)" --notes "Unsigned x64 Windows staging prerelease. Demo/contest capture only. No trading orders. Compare SHA-256 before running. Clean-profile and real broker tests remain mandatory." --prerelease
+          gh release create $tag 'staging-release/YoungMoney3 Connector.exe' 'staging-release/YoungMoney3 Connector.exe.sha256' 'staging-release/build-manifest.json' 'staging-release/connector-dependencies.txt' --target '${{ github.event.pull_request.head.sha || github.sha }}' --title "YoungMoney3 Connector $env:VERSION (STAGING)" --notes "Unsigned x64 Windows staging prerelease. Demo/contest capture only. No trading orders. Compare SHA-256 before running. Clean-profile and real broker tests remain mandatory." --prerelease
