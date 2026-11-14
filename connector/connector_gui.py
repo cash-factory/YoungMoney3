@@ -280,12 +280,46 @@ class ConnectorApp:
             self.root.destroy()
 
 
-if __name__ == "__main__":
+def main():
+    smoke = len(sys.argv) == 3 and sys.argv[1] == "--startup-smoke"
+    if len(sys.argv) > 1 and not smoke:
+        raise ValueError("Expected --startup-smoke REPORT_PATH or no arguments")
     try:
-        ROOT.mkdir(parents=True, exist_ok=True)
+        if not smoke:
+            ROOT.mkdir(parents=True, exist_ok=True)
         window = tk.Tk()
-        ConnectorApp(window)
+        if smoke:
+            window.withdraw()
+        app = ConnectorApp(window)
+        if smoke:
+            # Exercise the real widgets/event loop, without pairing or MT5 access.
+            # No close() call: it would write the user's preferences.
+            def finish():
+                try:
+                    if app.worker is not None:
+                        raise RuntimeError("Startup unexpectedly started capture")
+                    bundle = Path(getattr(sys, "_MEIPASS", ""))
+                    if not getattr(sys, "frozen", False):
+                        raise RuntimeError("Smoke test requires the frozen executable")
+                    for folder, sentinel in (("_tcl_data", "init.tcl"), ("_tk_data", "tk.tcl")):
+                        if not (bundle / folder / sentinel).is_file():
+                            raise RuntimeError("Bundled Tcl/Tk data missing")
+                    Path(sys.argv[2]).write_text(json.dumps({
+                        "startup": "ok", "frozen": True, "capture_started": False,
+                        "tcl": window.tk.eval("info patchlevel"),
+                        "tk": window.tk.eval("package present Tk"),
+                        "tcl_bundled": Path(window.tk.eval("info library")).resolve() == (bundle / "_tcl_data").resolve(),
+                        "tk_bundled": Path(window.tk.eval("set tk_library")).resolve() == (bundle / "_tk_data").resolve(),
+                    }), encoding="utf-8")
+                finally:
+                    window.destroy()
+            window.after(400, finish)
         window.mainloop()
     except Exception as error:
-        sys.stderr.write(type(error).__name__ + ": " + str(error)[:160] + "\n")
+        if sys.stderr is not None:
+            sys.stderr.write(type(error).__name__ + ": " + str(error)[:160] + "\n")
         raise
+
+
+if __name__ == "__main__":
+    main()
