@@ -9,6 +9,8 @@ The rc2 builder asks its own Tcl/Tk interpreter for the script directories,
 requires `init.tcl` and `tk.tcl`, explicitly bundles their trees at `_tcl_data`
 and `_tk_data`, and inspects the finished one-file archive for both sentinels,
 the `_tkinter` extension, and Tcl/Tk DLLs. PyInstaller is pinned to 6.16.0.
+The isolated launch also exposed NumPy missing from the native MT5 extension's
+dependencies; the builder explicitly collects NumPy and its native libraries.
 See the upstream [runtime hook](https://github.com/pyinstaller/pyinstaller/blob/v6.16.0/PyInstaller/hooks/rthooks/pyi_rth__tkinter.py).
 
 Publication depends on tests, archive inspection, and a separate Windows VM job

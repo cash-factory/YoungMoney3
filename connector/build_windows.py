@@ -30,6 +30,9 @@ def main():
         "--add-data", f"{tcl};_tcl_data",
         "--add-data", f"{tk_data};_tk_data",
         "--collect-all", "MetaTrader5", "--collect-all", "keyring",
+        # MetaTrader5's compiled extension imports NumPy through the C API;
+        # static Python import analysis cannot discover that dependency.
+        "--collect-all", "numpy", "--hidden-import", "numpy",
         "--collect-all", "tzdata", "connector/connector_gui.py",
     ])
     archive = CArchiveReader("dist/YoungMoney3 Connector.exe")
