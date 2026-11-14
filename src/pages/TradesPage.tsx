@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Plus, Search, Edit2, Trash2, ChevronDown, ChevronUp, Star, Download, Filter, X, Clock, CheckCircle } from 'lucide-react';
 import { useTrades, useTradingAccounts } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
+import { useMt5Lifecycles } from '@/hooks/useMt5Lifecycles';
 import { formatCurrency, formatPips, formatDateTime, exportToCSV, downloadFile } from '@/lib/utils';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
@@ -16,7 +17,18 @@ type SortDir = 'asc' | 'desc';
 
 export function TradesPage() {
   const { user } = useAuth();
-  const { trades, loading, addTrade, updateTrade, deleteTrade } = useTrades(user?.id);
+  const { trades: storedTrades, loading, addTrade, updateTrade, deleteTrade } = useTrades(user?.id);
+  const { positions: positionVersions, error: positionError } = useMt5Lifecycles(user?.id);
+  // Only suppress old MT5 fill rows when the same account/link/position
+  // identity is established. Uncertain historical matches remain visible.
+  const trades = useMemo(() => {
+    const exact = new Set(positionVersions.map(row=>row.link+'/'+row.summary.position_id));
+    return storedTrades.filter(trade => {
+      if(trade.trade_source!=='mt5' || !trade.broker_details?.position_id) return true;
+      const link=trade.id.split('/')[0];
+      return !exact.has(link+'/'+String(trade.broker_details.position_id));
+    });
+  },[storedTrades,positionVersions]);
   const { accounts } = useTradingAccounts(user?.id);
   const [origin,setOrigin] = useState('all');
   const [showAdd, setShowAdd] = useState(false);
@@ -32,7 +44,22 @@ export function TradesPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState<TradeStatus | 'all'>('all');
 
-  const pairs = useMemo(() => [...new Set(trades.map(t => t.pair))].sort(), [trades]);
+  const pairs = useMemo(() => [...new Set([...trades.map(t=>t.pair),...positionVersions.map(v=>v.summary.symbol)])].sort(), [trades,positionVersions]);
+  const richTrades=useMemo(()=>positionVersions.filter(row=>{
+    const t=row.summary;
+    if(origin==='manual')return false;
+    if(statusFilter!=='all'&&t.status!==statusFilter)return false;
+    if(filterAccount && row.account_id!==filterAccount)return false;
+    if(filterPair && t.symbol!==filterPair)return false;
+    if(filterDirection && t.direction!==filterDirection)return false;
+    if(search && ![t.symbol,t.broker,t.position_id,t.lifecycle_id].some(value=>value?.toLowerCase().includes(search.toLowerCase())))return false;
+    if(filterOutcome){
+      if(t.status==='open'||t.net_realized_profit==null)return false;
+      const amount=Number(t.net_realized_profit);
+      if((filterOutcome==='win'&&amount<=0)||(filterOutcome==='loss'&&amount>=0)||(filterOutcome==='breakeven'&&amount!==0))return false;
+    }
+    return true;
+  }),[positionVersions,origin,statusFilter,filterAccount,filterPair,filterDirection,search,filterOutcome]);
 
   const filtered = useMemo(() => {
     let result = trades.filter(t => origin === 'all' || (t.trade_source || 'manual') === origin);
@@ -95,8 +122,8 @@ export function TradesPage() {
   };
 
   const hasFilters = origin !== 'all' || search || filterPair || filterOutcome || filterDirection || filterAccount;
-  const openCount = trades.filter(t => t.status === 'open').length;
-  const closedCount = trades.filter(t => t.status === 'closed').length;
+  const openCount = trades.filter(t => t.status === 'open').length + positionVersions.filter(row=>row.summary.status==='open').length;
+  const closedCount = trades.filter(t => t.status === 'closed').length + positionVersions.filter(row=>row.summary.status==='closed').length;
 
   if (loading) return <LoadingSpinner label="Loading trades..." />;
 
@@ -104,7 +131,7 @@ export function TradesPage() {
     <div>
       <SectionHeader
         title="Trades"
-        subtitle={`${filtered.length} of ${trades.length} trades`}
+        subtitle={String(filtered.length+richTrades.length)+' of '+String(trades.length+positionVersions.length)+' trades / broker lifecycles'}
         action={
           <div className="flex gap-2">
             <button onClick={handleExport} className="btn-secondary">
@@ -120,7 +147,7 @@ export function TradesPage() {
       {/* Status tabs */}
       <div className="flex items-center gap-2 mb-4">
         {([
-          { key: 'all', label: 'All', count: trades.length },
+          { key: 'all', label: 'All', count: trades.length+positionVersions.length },
           { key: 'open', label: 'Open', count: openCount },
           { key: 'closed', label: 'Closed', count: closedCount },
         ] as const).map(tab => (
@@ -203,6 +230,64 @@ export function TradesPage() {
         </div>
       )}
 
+      {/* Canonical broker lifecycle rows. Preserve raw legacy fills unless the
+          same position identity is established by an MT5 projection. */}
+      {origin!=='manual' && <section className="card p-4 sm:p-5 mb-4 space-y-3" aria-label="Broker position lifecycles">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div><h2 className="text-sm font-bold">MT5 position lifecycles</h2>
+            <p className="text-xs text-muted mt-1">One row per position lifecycle, including partial closes and scale-ins. Unknown original risk is never estimated.</p>
+          </div>
+          <span className="badge badge-neutral">{richTrades.length} lifecycles in view</span>
+        </div>
+        {positionError && <p role="status" className="text-xs text-muted">Rich capture is not available on this environment yet. Previously imported trades remain visible.</p>}
+        {richTrades.length===0 ? <p className="text-sm text-muted">No synced broker lifecycles match these filters yet.</p> :
+          <div className="space-y-2">
+            {richTrades.map(row=>{
+              const t=row.summary;
+              return <details key={row.link+'/'+t.lifecycle_id} className="rounded-xl border border-themed px-3 py-3">
+                <summary className="flex flex-wrap items-center justify-between gap-3 cursor-pointer">
+                  <span className="flex flex-col">
+                    <strong className="text-sm">{t.symbol} · {t.direction==='long'?'Long':'Short'} · {t.status}</strong>
+                    <small className="text-muted">{t.broker} · {t.first_entry_at} · Position {t.position_id}</small>
+                  </span>
+                  <span className="flex flex-col text-right">
+                    <strong className="font-mono text-sm">{t.net_realized_profit ?? 'Open'} {t.settlement_currency}</strong>
+                    <small className="text-muted">{t.movement ?? '—'} {t.movement_unit} · Net R {t.final_realized_r ?? t.realized_r ?? 'unavailable'}</small>
+                  </span>
+                </summary>
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 mt-4">
+                  {[
+                    ['Original SL',t.initial_sl ?? 'Unavailable'],
+                    ['Stop provenance',t.initial_sl_provenance || 'Unknown'],
+                    ['First observed stop',t.initial_sl_observed_at || '—'],
+                    ['Current SL / TP',String(t.current_sl ?? '—')+' / '+String(t.current_tp ?? '—')],
+                    ['Initial account risk',t.initial_risk_account ?? 'Unavailable'],
+                    ['Current stop exposure',t.current_stop_exposure_account ?? 'Unavailable'],
+                    ['Remaining volume',t.remaining_volume ?? 'Unknown'],
+                    ['Closed volume',t.closed_volume ?? '0'],
+                    ['Duration',t.holding_seconds ? (Number(t.holding_seconds)/3600).toFixed(2)+' hours' : 'Open/unknown'],
+                    ['VW duration',t.weighted_holding_seconds ? (Number(t.weighted_holding_seconds)/3600).toFixed(2)+' hours' : 'Unknown'],
+                  ].map(([label,value])=><div key={label} className="rounded-lg bg-secondary p-3 text-xs"><span className="text-muted">{label}</span><strong className="font-mono block mt-1 break-words">{value}</strong></div>)}
+                </div>
+                <p className="mt-3 text-xs text-secondary">Session: {t.sessions?.status==='confirmed'?t.sessions.sessions?.join(', ')||'Outside named windows':'Unresolved — broker timezone or UTC conversion needs verification'} · Risk: {t.capture_completeness?.original_risk || 'unknown'} · Calculation v{t.calculation_version}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div><h3 className="text-xs font-bold mb-2">Entries / scale-ins ({t.entries.length})</h3>
+                    {t.entries.map((entry,index)=><div key={index} className="border-t border-themed py-2 text-xs">
+                      Ticket {entry.deal_ticket} · {entry.volume} @ {entry.price}
+                      <p className="text-muted">{entry.time} · SL {entry.initial_sl ?? 'unknown'} · Original risk {entry.initial_risk ?? 'unavailable'}</p>
+                    </div>)}
+                  </div>
+                  <div><h3 className="text-xs font-bold mb-2">Partial / full exits ({t.exits.length})</h3>
+                    {t.exits.map((exit,index)=><div key={index} className="border-t border-themed py-2 text-xs">
+                      Ticket {exit.deal_ticket} · {exit.volume} @ {exit.price}
+                      <p className="text-muted">Net {exit.net_profit ?? 'unknown'} · Allocated risk {exit.allocated_initial_risk ?? 'unavailable'} · R {exit.realized_r ?? 'unavailable'}</p>
+                    </div>)}
+                  </div>
+                </div>
+              </details>;
+            })}
+          </div>}
+      </section>}
       {/* Trade list */}
       {filtered.length === 0 ? (
         <div className="card p-8">

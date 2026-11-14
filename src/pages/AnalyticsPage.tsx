@@ -15,6 +15,8 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { StatCard } from '@/components/ui/StatCard';
 import { StrategyEdgeScore } from '@/components/StrategyEdgeScore';
+import { useMt5Lifecycles } from '@/hooks/useMt5Lifecycles';
+import { RichLifecycleAnalytics } from '@/components/RichLifecycleAnalytics';
 
 export function AnalyticsPage() {
   const { user } = useAuth();
@@ -25,6 +27,10 @@ export function AnalyticsPage() {
     </select>
   </label>;
   const { trades, loading } = useTrades(user?.id);
+  const { positions: richPositions } = useMt5Lifecycles(user?.id);
+  // Keep projected broker lifecycles separate from legacy fill-row metrics.
+  // Combining these without exact statement reconciliation would double-count.
+  const selectedRich = source === 'manual' ? [] : richPositions;
   const { accounts, loading: accountsLoading } = useTradingAccounts(user?.id);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const accountId = selectedAccountId ?? 'all';
@@ -59,10 +65,11 @@ export function AnalyticsPage() {
       {sourceFilter}
         <label className="mb-5 block max-w-sm text-xs font-semibold text-secondary">Account view
           <select className="input-field mt-1.5" value={selectedAccountId ?? accountId} onChange={event => setSelectedAccountId(event.target.value || '__unassigned__')}>
-            <option value="all">Whole portfolio</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}
+            <option value="all">Whole portfolio</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} Â· {account.base_currency}</option>)}
             <option value="__unassigned__">Unassigned legacy trades</option>
           </select>
         </label>
+        {selectedRich.length > 0 && <div className="mb-6"><RichLifecycleAnalytics positions={selectedRich} accountId={accountId}/></div>}
         <div className="card p-8">
           <EmptyState icon={<BarChart3 size={40} />} title="No closed trades in this account" message="Choose another account or close/log trades to see realized performance." />
         </div>
@@ -76,17 +83,19 @@ export function AnalyticsPage() {
       {sourceFilter}
       <label className="mb-5 block max-w-sm text-xs font-semibold text-secondary">Account view
         <select className="input-field mt-1.5" value={selectedAccountId ?? accountId} onChange={event => setSelectedAccountId(event.target.value || '__unassigned__')}>
-          <option value="all">Whole portfolio</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}
+          <option value="all">Whole portfolio</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} Â· {account.base_currency}</option>)}
           <option value="__unassigned__">Unassigned legacy trades</option>
         </select>
       </label>
 
-      {groups.length>1 ? <section className="card p-5"><h2>Realized P&amp;L by settlement currency</h2>{groups.map(group=><p key={group}>{group} � {closedTrades.filter(t=>tradeCurrency(t,accounts)===group).reduce((sum,t)=>sum+t.pnl,0).toFixed(2)}</p>)}<p>Select one account to inspect its detailed metrics.</p></section> : <>
+      {selectedRich.length > 0 && <div className="mb-6"><RichLifecycleAnalytics positions={selectedRich} accountId={accountId}/></div>}
+      <p className="text-xs text-muted mb-3">The charts below summarize legacy journal rows. Broker position-lifecycle analytics above are separate until exact matching and statement reconciliation are complete.</p>
+      {groups.length>1 ? <section className="card p-5"><h2>Realized P&amp;L by settlement currency</h2>{groups.map(group=><p key={group}>{group} · {closedTrades.filter(t=>tradeCurrency(t,accounts)===group).reduce((sum,t)=>sum+t.pnl,0).toFixed(2)}</p>)}<p>Select one account to inspect its detailed metrics.</p></section> : <>
       {/* Summary stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard label="Total Trades" value={String(stats.totalTrades)} icon={<Activity size={20} className="text-brand-500" />} />
         <StatCard label="Win Rate" value={formatPercent(stats.winRate)} icon={<TrendingUp size={20} className="text-accent-500" />} />
-        <StatCard label="Profit Factor" value={stats.profitFactor === Infinity ? '∞' : stats.profitFactor.toFixed(2)} icon={<BarChart3 size={20} className="text-brand-500" />} />
+        <StatCard label="Profit Factor" value={stats.profitFactor === Infinity ? 'âˆž' : stats.profitFactor.toFixed(2)} icon={<BarChart3 size={20} className="text-brand-500" />} />
         <StatCard label="Expectancy" value={formatMoney(stats.expectancy)} icon={<TrendingUp size={20} className="text-success-500" />} />
       </div>
 
@@ -107,7 +116,7 @@ export function AnalyticsPage() {
           {pairData.map(p => (
             <div key={p.pair} className="p-2 rounded-lg bg-secondary border border-themed">
               <p className="font-mono text-xs font-semibold">{p.pair}</p>
-              <p className="text-xs text-muted">{p.trades} trades · {formatPercent(p.winRate)} WR</p>
+              <p className="text-xs text-muted">{p.trades} trades Â· {formatPercent(p.winRate)} WR</p>
               <p className={`text-xs font-mono font-semibold ${p.pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>{formatMoney(p.pnl)}</p>
             </div>
           ))}
@@ -146,7 +155,7 @@ export function AnalyticsPage() {
             {dirData.map(d => (
               <div key={d.direction} className="flex items-center justify-between text-sm">
                 <span className="font-medium">{d.direction}</span>
-                <span className="text-muted">{d.trades} trades · {formatPercent(d.winRate)} WR · <span className={d.pnl >= 0 ? 'text-success-500' : 'text-error-500'}>{formatMoney(d.pnl)}</span></span>
+                <span className="text-muted">{d.trades} trades Â· {formatPercent(d.winRate)} WR Â· <span className={d.pnl >= 0 ? 'text-success-500' : 'text-error-500'}>{formatMoney(d.pnl)}</span></span>
               </div>
             ))}
           </div>
@@ -179,7 +188,7 @@ export function AnalyticsPage() {
               <div key={s.strategy} className="flex items-center justify-between p-3 rounded-xl bg-secondary border border-themed">
                 <div>
                   <span className="font-semibold text-sm">{s.strategy}</span>
-                  <span className="ml-2 text-xs text-muted">{s.trades} trades · {formatPercent(s.winRate)} WR</span>
+                  <span className="ml-2 text-xs text-muted">{s.trades} trades Â· {formatPercent(s.winRate)} WR</span>
                 </div>
                 <span className={`font-mono font-semibold text-sm ${s.pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>
                   {formatMoney(s.pnl)}

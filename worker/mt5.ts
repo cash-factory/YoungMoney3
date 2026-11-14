@@ -39,12 +39,51 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if (owner) {
     if (action === 'status') {
       const devices = await q('SELECT id,public_key,last_seen FROM mt5_devices WHERE owner=? AND revoked=0 AND public_key IS NOT NULL', owner).all();
-      const links = await q('SELECT l.id,l.account_id,l.status,l.company,l.server,l.login,l.access_level,l.trade_mode,l.history_id,l.history_status,l.history_since,l.last_sync,l.broker_balance,l.broker_equity,l.currency,l.gap,l.last_error,l.expires FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND d.revoked=0', owner).all();
+      const links = await q('SELECT l.id,l.account_id,l.status,l.company,l.server,l.login,l.access_level,l.trade_mode,l.history_id,l.history_status,l.history_since,l.last_sync,l.broker_balance,l.broker_equity,l.currency,l.gap,l.last_error,l.expires,l.broker_timezone,l.timezone_confirmed_at,l.timezone_source,l.utc_conversion_status FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND d.revoked=0', owner).all();
       const accounts=await q("SELECT id,json_extract(payload,'$.name') AS name FROM workspace_records WHERE user_id=? AND table_name='trading_accounts' ORDER BY created_at",owner).all();
       return json({ accounts:accounts.results, devices: devices.results, links: links.results, demoOnly: env.MT5_ALLOW_LIVE !== 'true', capturePaused: await capturePaused() });
     }
+    if (action === 'timezone-confirm') {
+      if(!limited(input.link,64) || !limited(input.timezone,96) || input.confirm!==true)
+        return fail('Choose a broker timezone and explicitly confirm it.');
+      const linked=await q("SELECT l.id FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE l.id=? AND d.owner=? AND d.revoked=0 AND l.status='connected'",input.link,owner).first();
+      if(!linked) return fail('Linked account unavailable.',404);
+      try { new Intl.DateTimeFormat('en-US',{timeZone:String(input.timezone)}).format(new Date()); }
+      catch { return fail('Use a valid IANA timezone (for example Europe/Athens).'); }
+      // Confirming a timezone alone does NOT verify the broker's historical
+      // conversion of MT5 raw timestamps. A separate attestation is required.
+      const conversion=input.utcEvidence==='broker_statement_checked'?'confirmed':'unverified';
+      await q("UPDATE mt5_links SET broker_timezone=?,timezone_confirmed_at=?,timezone_source='account_owner',utc_conversion_status=? WHERE id=?",
+        input.timezone,now(),conversion,input.link).run();
+      return json({ok:true,utc_conversion_status:conversion});
+    }
+    if (action === 'positions') {
+      const offset=Number(input.offset ?? 0);
+      if(!Number.isSafeInteger(offset)||offset<0||offset>10000) return fail('Invalid page.');
+      const rows=await q(`SELECT latest.link,latest.account_id,latest.lifecycle_id,latest.version,latest.recorded_at,latest.payload
+        FROM (
+          SELECT v.*,ROW_NUMBER() OVER(PARTITION BY v.link,v.lifecycle_id ORDER BY v.version DESC) AS rn
+          FROM mt5_position_versions v
+          JOIN mt5_links l ON l.id=v.link JOIN mt5_devices d ON d.id=l.device
+          WHERE v.owner=? AND l.owner=? AND d.owner=? AND d.revoked=0
+        ) latest WHERE latest.rn=1 ORDER BY latest.recorded_at DESC LIMIT 101 OFFSET ?`,
+        owner,owner,owner,offset).all<{link:string;account_id:string;lifecycle_id:string;version:number;recorded_at:string;payload:string}>();
+      const page=rows.results.slice(0,100);
+      return json({rows:page.map(row=>({...row,summary:JSON.parse(row.payload),payload:undefined})),
+        more:rows.results.length>100,nextOffset:offset+page.length});
+    }
+    if (action === 'position-evidence') {
+      if(!limited(input.link,64)||!limited(input.lifecycle_id,80))
+        return fail('Choose a linked position.');
+      const access=await q('SELECT 1 FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE l.id=? AND l.owner=? AND d.owner=? AND d.revoked=0',input.link,owner,owner).first();
+      if(!access) return fail('Linked account unavailable.',404);
+      const id=String(input.lifecycle_id).split(':')[0];
+      if(!/^\d+$/.test(id)) return fail('Invalid position identity.');
+      const evidence=await q("SELECT event_key,evidence_kind,payload,sha256,recorded_at FROM mt5_raw_evidence WHERE link=? AND owner=? AND (json_extract(payload,'$.position_id')=? OR json_extract(payload,'$.identifier')=?) ORDER BY recorded_at,event_key LIMIT 101",input.link,owner,id,id).all<{event_key:string;evidence_kind:string;payload:string;sha256:string;recorded_at:string}>();
+      return json({rows:evidence.results.slice(0,100).map(row=>({...row,payload:JSON.parse(row.payload)})),more:evidence.results.length>100});
+    }
     if (['history-request','history-preview','history-import','history-decline'].includes(action)) {
-      const link=await q("SELECT l.* FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE l.id=? AND d.owner=? AND d.revoked=0 AND l.status='connected'",input.link,owner).first<{id:string;account_id:string;currency:string;company:string;linked_at:string;history_id:string;history_status:string;trade_mode:number|null}>();
+      const link=await q("SELECT l.* FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE l.id=? AND d.owner=? AND d.revoked=0 AND l.status='connected'",input.link,owner).first<{id:string;account_id:string;currency:string;company:string;linked_at:string;history_id:string;history_status:string;history_since:number|null;trade_mode:number|null}>();
       if(!link) return fail('Linked account unavailable.',404);
       if(['history-request','history-import'].includes(action) && await capturePaused())
         return fail('MT5 capture is paused by the administrator.',403);
@@ -52,13 +91,20 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         return fail('Real-account capture is paused by the release gate.',403);
       if(action==='history-request') {
         const days=Number(input.days);
-        if(!Number.isSafeInteger(days)||days<1||days>3650) return fail('Choose 1–3650 days.');
+        if(!Number.isSafeInteger(days)||days<1||days>90) return fail('Choose 1–90 days.');
         if(link.history_status==='requested') return fail('History scan already running.',409);
         if(!timestamp(link.linked_at)) return fail('The linked account has no valid start time.',409);
         const requestId=uuid();
         await q("UPDATE mt5_links SET history_id=?,history_status='requested',history_since=? WHERE id=?",requestId,Date.parse(link.linked_at)-days*86400000,link.id).run();
         return json({ok:true});
       }
+      // Previously queued long scans may still exist in staging D1 after
+      // the new 90-day policy. Never preview or approve those older results.
+      // Cancellation remains available so owners can discard them and rescan.
+      if(action!=='history-decline' && link.history_since!=null &&
+         (!timestamp(link.linked_at) || !Number.isSafeInteger(link.history_since) ||
+          link.history_since<Date.parse(link.linked_at)-90*86400000))
+        return fail('This earlier history scan exceeds the 90-day limit. Cancel it if running, then request a new scan.',409);
       const prefix='history:'+link.history_id+':';
       if(action==='history-preview') {
         if(!['ready','imported'].includes(link.history_status)) return fail('Wait for the scan to finish.',409);
@@ -203,6 +249,43 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   for(const event of input.events) {
     if(!isObject(event)||!limited(event.key,120)||!isObject(event.fields)) return fail('Invalid capture event.');
     const f=event.fields, time=now();
+    // Append-only evidence, keyed by the immutable MT5 ticket or observation id.
+    // Replays are idempotent. Changed broker evidence cannot silently overwrite.
+    if(event.kind==='raw' && /^(?:deal-|order-|stops-|spec-|position-)/.test(String(event.key))) {
+      const evidenceKind=String(event.key).startsWith('deal-')?'deal'
+        :String(event.key).startsWith('order-')?'order'
+        :String(event.key).startsWith('stops-')?'stop'
+        :String(event.key).startsWith('spec-')?'specification':'position';
+      const payload=JSON.stringify(f);
+      const sha=await hash(payload);
+      const prior=await q('SELECT sha256 FROM mt5_raw_evidence WHERE link=? AND event_key=?',link.id,event.key).first<{sha256:string}>();
+      if(prior && prior.sha256!==sha)
+        return fail('Broker evidence changed for an existing ticket. Import halted; an audited correction is required.',409);
+      statements.push(q('INSERT OR IGNORE INTO mt5_raw_evidence(link,owner,account_id,event_key,evidence_kind,payload,sha256,recorded_at) VALUES(?,?,?,?,?,?,?,?)',
+        link.id,device.owner,link.account_id,event.key,evidenceKind,payload,sha,time));
+    }
+    if(event.kind==='lifecycle') {
+      if(!/^lifecycle:\d+:\d+$/.test(String(event.key)) || f.calculation_version!==1
+        || !limited(f.lifecycle_id,80)||event.key!=='lifecycle:'+f.lifecycle_id
+        || !/^\d+:\d+$/.test(String(f.lifecycle_id))
+        || !limited(f.symbol,80)||!['long','short'].includes(String(f.direction))
+        || !['open','closed'].includes(String(f.status))
+        || !timestamp(f.first_entry_at) || !isObject(f.capture_completeness)
+        || (f.status==='closed'&&!timestamp(f.final_exit_at))
+        || !Array.isArray(f.entries)||!Array.isArray(f.exits))
+        return fail('Invalid lifecycle projection.');
+      const projection={...f,trade_source:'mt5',account_id:link.account_id,settlement_currency:link.currency,broker:link.company};
+      const payload=JSON.stringify(projection);
+      const sha=await hash(payload);
+      const old=await q('SELECT sha256 FROM mt5_position_versions WHERE link=? AND lifecycle_id=? ORDER BY version DESC LIMIT 1',
+        link.id,f.lifecycle_id).first<{sha256:string}>();
+      if(!old || old.sha256!==sha) {
+        statements.push(q(`INSERT OR IGNORE INTO mt5_position_versions(link,owner,account_id,lifecycle_id,version,calculation_version,payload,sha256,recorded_at)
+          VALUES(?,?,?,?,(SELECT COALESCE(MAX(version),0)+1 FROM mt5_position_versions WHERE link=? AND lifecycle_id=?),1,?,?,?)`,
+          link.id,device.owner,link.account_id,f.lifecycle_id,link.id,f.lifecycle_id,payload,sha,time));
+      }
+      continue;
+    }
     statements.push(q('INSERT INTO mt5_events(link,event_key,payload) VALUES(?,?,?) ON CONFLICT(link,event_key) DO UPDATE SET payload=excluded.payload',link.id,event.key,JSON.stringify(f)));
     if(event.kind==='trade' || event.kind==='history') {
       if(event.kind==='trade' && !/^(?:open|close)-\d+$/.test(event.key)) return fail('Invalid broker event key.');
@@ -247,5 +330,6 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if(input.history_done) statements.push(q("UPDATE mt5_links SET history_status='ready' WHERE id=? AND history_id=? AND history_status='requested'",link.id,input.history_done));
   await db.batch(statements);
   const history=await q('SELECT history_id AS id,history_since AS since,history_status AS status FROM mt5_links WHERE id=?',link.id).first();
-  return json({ok:true,history});
+  const preferences=await q('SELECT broker_timezone,timezone_confirmed_at,utc_conversion_status FROM mt5_links WHERE id=?',link.id).first();
+  return json({ok:true,history,preferences});
 }

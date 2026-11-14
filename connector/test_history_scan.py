@@ -18,6 +18,8 @@ class HistoryResumptionTests(unittest.TestCase):
         self.db.executescript("""
             CREATE TABLE links(link TEXT PRIMARY KEY,cursor INTEGER,last INTEGER,gap INTEGER);
             CREATE TABLE broker_clock(link TEXT PRIMARY KEY,offset INTEGER);
+            CREATE TABLE capital_snapshots(link TEXT,at_ms INTEGER,equity TEXT,balance TEXT,PRIMARY KEY(link,at_ms));
+            CREATE TABLE position_observations(link TEXT,position_id TEXT,at_ms INTEGER,sl TEXT,tp TEXT,PRIMARY KEY(link,position_id,at_ms));
             CREATE TABLE history_progress(link TEXT PRIMARY KEY,request TEXT,cursor INTEGER);
             CREATE TABLE history_work(link TEXT,request TEXT,pid TEXT,done INTEGER,PRIMARY KEY(link,request,pid));
             CREATE TABLE latest(link TEXT,key TEXT,payload TEXT,PRIMARY KEY(link,key));
@@ -33,6 +35,7 @@ class HistoryResumptionTests(unittest.TestCase):
         self.stack.enter_context(patch.object(connect,'service','demo',create=True))
         self.stack.enter_context(patch.object(connect,'token','fixture',create=True))
         self.stack.enter_context(patch.object(connect,'heartbeats',{},create=True))
+        self.stack.enter_context(patch.object(connect,'timezone_cache',{},create=True))
         self.stack.enter_context(patch.object(connect,'terminal_account',
             return_value=SimpleNamespace(balance=100.0,equity=102.0)))
         self.stack.enter_context(patch.object(connect.keyring,'get_password',return_value='investor'))

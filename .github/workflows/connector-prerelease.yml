@@ -1,0 +1,175 @@
+name: Build YoungMoney3 Connector (staging prerelease)
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version suffix, e.g. 0.2.0-rc2'
+        type: string
+        required: true
+      confirmation:
+        description: 'Type RELEASE-STAGING-CONNECTOR'
+        type: string
+        required: true
+  pull_request:
+    types: [labeled]
+    branches: [main]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: pwsh
+
+env:
+  VERSION: ${{ inputs.version || '0.2.0-rc2' }}
+  SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: youngmoney3-staging-connector-release
+  cancel-in-progress: false
+
+jobs:
+  connector:
+    if: >-
+      (github.event_name == 'workflow_dispatch' &&
+       github.ref == 'refs/heads/feat/rich-capture-staging-20261110' &&
+       inputs.confirmation == 'RELEASE-STAGING-CONNECTOR') ||
+      (github.event_name == 'pull_request' &&
+       github.event.label.name == 'build-staging-connector-rc2' &&
+       github.event.pull_request.draft == false &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.head.ref == 'feat/rich-capture-staging-20261110')
+    runs-on: windows-2022
+    environment: staging
+    timeout-minutes: 35
+    steps:
+      - name: Validate staging version before building
+        run: |
+          if ($env:VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$') { throw 'Invalid staging prerelease version' }
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: 'x64'
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { throw 'pip upgrade failed' }
+          python -m pip install -r connector/requirements.txt 'pyinstaller==6.16.0'
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency install failed' }
+          python -m pip freeze | Out-File -Encoding utf8 connector-dependencies.txt
+      - name: Test on Windows
+        shell: pwsh
+        run: |
+          python -m py_compile connector/connect.py connector/lifecycle.py connector/connector_gui.py
+          if ($LASTEXITCODE -ne 0) { throw 'Compile check failed' }
+          python -m unittest discover -s connector -p 'test_*.py'
+          if ($LASTEXITCODE -ne 0) { throw 'Connector tests failed' }
+      - name: Build standalone staging application
+        shell: pwsh
+        run: |
+          python connector/build_windows.py
+          if ($LASTEXITCODE -ne 0) { throw 'Executable build or archive inspection failed' }
+      - name: Generate prerelease checksum
+        shell: pwsh
+        env:
+          VERSION: ${{ inputs.version || '0.2.0-rc2' }}
+        run: |
+          if ($env:VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$') { throw 'Use 0.2.0-rc2 format' }
+          New-Item -ItemType Directory -Force staging-release | Out-Null
+          Copy-Item 'dist/YoungMoney3 Connector.exe' 'staging-release/YoungMoney3 Connector.exe'
+          $digest=(Get-FileHash 'staging-release/YoungMoney3 Connector.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$digest *YoungMoney3 Connector.exe" | Set-Content -Encoding ascii 'staging-release/YoungMoney3 Connector.exe.sha256'
+          Copy-Item connector-dependencies.txt staging-release/connector-dependencies.txt
+          '{"version":"' + $env:VERSION + '","commit":"' + '${{ github.event.pull_request.head.sha || github.sha }}' + '","sha256":"' + $digest + '","signed":false,"platform":"windows-x64","environment":"staging"}' | Set-Content -Encoding utf8 'staging-release/build-manifest.json'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: youngmoney3-connector-staging-${{ inputs.version || '0.2.0-rc2' }}
+          path: staging-release/*
+          if-no-files-found: error
+          retention-days: 30
+
+  startup-smoke:
+    needs: connector
+    runs-on: windows-2022
+    timeout-minutes: 8
+    steps:
+      # Separate VM: no checkout, setup-python or pip installation.
+      - uses: actions/download-artifact@v4
+        with:
+          name: youngmoney3-connector-staging-${{ inputs.version || '0.2.0-rc2' }}
+          path: ${{ runner.temp }}/connector-clean
+      - name: Launch standalone executable in isolated profile
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:RUNNER_TEMP 'connector-clean'
+          $exe = Join-Path $dir 'YoungMoney3 Connector.exe'
+          $expected = ((Get-Content (Join-Path $dir 'YoungMoney3 Connector.exe.sha256') -Raw) -split ' ')[0]
+          if ((Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'Checksum mismatch' }
+          $profile = Join-Path $dir 'clean-profile'
+          New-Item -ItemType Directory -Force $profile | Out-Null
+          $env:LOCALAPPDATA = $profile
+          $env:APPDATA = $profile
+          $env:USERPROFILE = $profile
+          $env:HOME = $profile
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          'TCL_LIBRARY','TK_LIBRARY','TCLLIBPATH','PYTHONHOME','PYTHONPATH','VIRTUAL_ENV' | ForEach-Object { Remove-Item "Env:$_" -ErrorAction SilentlyContinue }
+          foreach ($attempt in 1..2) {
+            $report = Join-Path $dir "startup-$attempt.json"
+            $process = Start-Process -FilePath $exe -ArgumentList @('--startup-smoke', ('"' + $report + '"')) -WorkingDirectory $dir -WindowStyle Hidden -PassThru
+            if (!$process.WaitForExit(45000)) {
+              taskkill /PID $process.Id /T /F
+              Get-Content "$report.log" -ErrorAction SilentlyContinue
+              throw 'Standalone startup timed out (possible runtime error dialog)'
+            }
+            Get-Content "$report.log" -ErrorAction SilentlyContinue
+            if ($process.ExitCode -ne 0 -or !(Test-Path $report)) { throw 'Standalone startup failed' }
+            $result = Get-Content $report -Raw | ConvertFrom-Json
+            if ($result.startup -ne 'ok' -or !$result.frozen -or !$result.tcl_bundled -or !$result.tk_bundled -or $result.capture_started) { throw 'Standalone startup evidence invalid' }
+            Get-Content $report
+          }
+          if (Test-Path (Join-Path $profile 'YMFX')) { throw 'Smoke test modified connector state' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: connector-startup-evidence-${{ inputs.version || '0.2.0-rc2' }}
+          path: ${{ runner.temp }}/connector-clean/startup-*
+          if-no-files-found: error
+
+  publish:
+    needs: [connector, startup-smoke]
+    runs-on: windows-2022
+    environment: staging
+    timeout-minutes: 8
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: youngmoney3-connector-staging-${{ inputs.version || '0.2.0-rc2' }}
+          path: staging-release
+      - name: Publish new immutable staging prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$') { throw 'Invalid staging version' }
+          $tag = 'staging-connector-v' + $env:VERSION
+          # List successfully before checking absence; API/auth failure must stop publication.
+          $releases = gh api --paginate "repos/$env:GH_REPO/releases" --jq '.[].tag_name'
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot verify existing releases' }
+          if ($releases -contains $tag) { throw "Release $tag already exists; refusing overwrite" }
+          $tags = gh api --paginate "repos/$env:GH_REPO/git/matching-refs/tags/staging-connector-v" --jq '.[].ref'
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot verify existing tags' }
+          if ($tags -contains "refs/tags/$tag") { throw "Tag $tag already exists; refusing reuse" }
+          $manifest = Get-Content staging-release/build-manifest.json -Raw | ConvertFrom-Json
+          $digest = (Get-FileHash 'staging-release/YoungMoney3 Connector.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($manifest.commit -ne $env:SOURCE_SHA -or $manifest.version -ne $env:VERSION -or $manifest.sha256 -ne $digest -or $manifest.environment -ne 'staging') { throw 'Release provenance mismatch' }
+          gh release create $tag 'staging-release/YoungMoney3 Connector.exe' 'staging-release/YoungMoney3 Connector.exe.sha256' 'staging-release/build-manifest.json' 'staging-release/connector-dependencies.txt' --target $env:SOURCE_SHA --title "YoungMoney3 Connector $env:VERSION (STAGING)" --notes "Fixes missing bundled Tcl/Tk startup files. Frozen GUI startup verified twice on a separate Windows VM with isolated profile and no Python/Tcl environment paths. Unsigned x64 Windows staging prerelease. Demo/contest capture only. No trading orders. Compare SHA-256 before running. Real broker reconciliation and full clean-PC acceptance remain mandatory." --prerelease --latest=false
+          if ($LASTEXITCODE -ne 0) { throw 'Prerelease publication failed' }

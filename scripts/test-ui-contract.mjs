@@ -119,3 +119,21 @@ test('deep-dive analytics are not removed when the home screen is simplified',()
     assert.ok(dashboard.includes(text),'Existing financial safeguard or filter lost: '+text);
   }
 });
+
+
+test('historical trade import UI defaults to 30 days and never offers beyond 90 days',()=>{
+  const mt5=read('src/components/Mt5Connections.tsx');
+  assert.ok(mt5.includes("useState('30')"),'30-day default must remain selected');
+  const choices=Array.from(mt5.matchAll(/<option value="(\d+)">(\d+ days before linking)/g),m=>Number(m[1]));
+  assert.deepEqual(choices,[7,14,30,60,90],'History UI must expose only approved lookback choices');
+  assert.ok(mt5.includes('90 days before linking (maximum)'), 'History must explain the maximum');
+});
+
+test('staging connector download accepts GitHub-sanitized asset filenames',()=>{
+  const page=read('public/connector-download.html');
+  assert.ok(page.includes('YoungMoney3(?:[. -])Connector'), 'GitHub may replace whitespace in filenames');
+  assert.ok(page.includes('Connector\\.exe'), 'Both Windows exe and checksum must be detected');
+  assert.ok(page.includes('staging-connector-v'), 'Only staging prerelease tags should be eligible');
+  assert.ok(page.includes('row.prerelease && !row.draft'), 'Do not link unreviewed or production releases');
+  assert.ok(page.includes('row.browser_download_url.startsWith(base)'), 'Only official repo assets may be linked');
+});

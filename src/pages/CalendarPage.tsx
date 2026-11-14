@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Plus, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { useTrades } from '@/hooks/useData';
+import { useTrades, useTradingAccounts } from '@/hooks/useData';
+import { useMt5Lifecycles } from '@/hooks/useMt5Lifecycles';
 import { useAuth } from '@/context/AuthContext';
 import { formatCurrency, formatPips } from '@/lib/utils';
 import { SectionHeader } from '@/components/ui/SectionHeader';
@@ -16,10 +17,29 @@ import {
 export function CalendarPage() {
   const { user } = useAuth();
   const { trades, loading, addTrade } = useTrades(user?.id);
+  const { accounts } = useTradingAccounts(user?.id);
+  const { positions: brokerPositions, error: positionError } = useMt5Lifecycles(user?.id);
+  const [accountFilter, setAccountFilter] = useState('all');
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [addDate, setAddDate] = useState<Date | null>(null);
+
+  // Derived broker lifecycles are deliberately kept distinct from legacy fill
+  // rows until exact-identity migration is approved. UTC closes are explicit;
+  // never imply an unconfirmed broker-local calendar conversion.
+  const lifecycleRows = useMemo(() => brokerPositions.filter(row =>
+    accountFilter === 'all' || row.account_id === accountFilter
+  ), [brokerPositions, accountFilter]);
+  const lifecycleByCloseDate = useMemo(() => {
+    const grouped = new Map<string, typeof lifecycleRows>();
+    for (const row of lifecycleRows) {
+      if (row.summary.status !== 'closed' || !row.summary.final_exit_at) continue;
+      const day = row.summary.final_exit_at.slice(0,10);
+      grouped.set(day,[...(grouped.get(day)||[]),row]);
+    }
+    return grouped;
+  }, [lifecycleRows]);
 
   const days = useMemo(() => {
     const monthStart = startOfMonth(currentMonth);
@@ -31,7 +51,7 @@ export function CalendarPage() {
 
   const tradesByDay = useMemo(() => {
     const map = new Map<string, { trades: typeof trades; pnl: number }>();
-    trades.forEach(t => {
+    trades.filter(t => accountFilter === 'all' || t.account_id === accountFilter).forEach(t => {
       const key = format(parseISO(t.entry_time), 'yyyy-MM-dd');
       const ex = map.get(key) || { trades: [], pnl: 0 };
       ex.trades.push(t);
@@ -39,7 +59,7 @@ export function CalendarPage() {
       map.set(key, ex);
     });
     return map;
-  }, [trades]);
+  }, [trades, accountFilter]);
 
   const selectedTrades = useMemo(() => {
     if (!selectedDate) return [];
@@ -48,11 +68,11 @@ export function CalendarPage() {
   }, [selectedDate, tradesByDay]);
 
   const monthStats = useMemo(() => {
-    const monthTrades = trades.filter(t => isSameMonth(parseISO(t.entry_time), currentMonth));
+    const monthTrades = trades.filter(t => (accountFilter === 'all' || t.account_id === accountFilter) && isSameMonth(parseISO(t.entry_time), currentMonth));
     const pnl = monthTrades.reduce((s, t) => s + t.pnl, 0);
     const wins = monthTrades.filter(t => t.outcome === 'win').length;
     return { pnl, count: monthTrades.length, wins, winRate: monthTrades.length ? (wins / monthTrades.length) * 100 : 0 };
-  }, [trades, currentMonth]);
+  }, [trades, currentMonth, accountFilter]);
 
   const handleAddOnDate = (date: Date) => {
     setAddDate(date);
@@ -73,8 +93,32 @@ export function CalendarPage() {
     <div>
       <SectionHeader
         title="Calendar"
-        subtitle={`${format(currentMonth, 'MMMM yyyy')} — ${monthStats.count} trades, ${formatCurrency(monthStats.pnl)}`}
+        subtitle={`${format(currentMonth, 'MMMM yyyy')} — legacy journal: ${monthStats.count} rows (separate from broker lifecycles)`}
       />
+
+      <label className="block text-xs text-secondary font-semibold max-w-sm mb-4">Account
+        <select className="input-field mt-1" value={accountFilter} onChange={event=>setAccountFilter(event.target.value)}>
+          <option value="all">All accounts</option>
+          {accounts.map(item=><option key={item.id} value={item.id}>{item.name} · {item.base_currency}</option>)}
+        </select>
+      </label>
+      <section className="card p-4 sm:p-5 mb-5" aria-label="MT5 position lifecycle calendar summary">
+        <p className="text-xs font-bold uppercase tracking-wider text-muted">BROKER POSITION CALENDAR · UTC CLOSE DATES</p>
+        <h2 className="font-semibold text-base mt-1">Verified lifecycle counts</h2>
+        <p className="text-xs text-muted mt-1 mb-3">Each broker position lifecycle counts once, even after partial closes. These close dates use recorded UTC; broker-local dates are not inferred until the account's historical timezone conversion is verified. Existing manual/legacy calendar results below remain separate.</p>
+        {positionError && <p role="status" className="text-xs text-muted">Broker position summaries are temporarily unavailable.</p>}
+        {(()=> {
+          const prefix = format(currentMonth,'yyyy-MM');
+          const matching = [...lifecycleByCloseDate].filter(([day])=>day.startsWith(prefix));
+          const count = matching.reduce((total,[,rows])=>total+rows.length,0);
+          const knownR = matching.flatMap(([,rows])=>rows.map(row=>row.summary.final_realized_r).filter((value):value is string=>value!=null));
+          return <div className="flex flex-wrap gap-3 text-sm">
+            <div className="rounded-lg bg-secondary p-3"><p className="text-xs text-muted">Closed lifecycles</p><strong className="font-mono text-lg">{count}</strong></div>
+            <div className="rounded-lg bg-secondary p-3"><p className="text-xs text-muted">Known final R</p><strong className="font-mono text-lg">{knownR.length} / {count}</strong></div>
+            <div className="rounded-lg bg-secondary p-3"><p className="text-xs text-muted">Close-date coverage</p><strong className="font-mono text-lg">{matching.length} UTC days</strong></div>
+          </div>;
+        })()}
+      </section>
 
       {/* Month navigation */}
       <div className="flex items-center justify-between mb-4">
@@ -107,6 +151,7 @@ export function CalendarPage() {
           {days.map(day => {
             const key = format(day, 'yyyy-MM-dd');
             const dayData = tradesByDay.get(key);
+            const brokerClosed = lifecycleByCloseDate.get(key)?.length || 0;
             const inMonth = isSameMonth(day, currentMonth);
             const isToday = isSameDay(day, new Date());
             const isSelected = selectedDate && isSameDay(day, selectedDate);
@@ -130,6 +175,7 @@ export function CalendarPage() {
                     <div className="text-[10px] text-muted">{dayData.trades.length} trade{dayData.trades.length !== 1 ? 's' : ''}</div>
                   </div>
                 )}
+                {brokerClosed>0 && <div className="mt-1 text-[10px] font-semibold text-brand-500">{brokerClosed} broker position{brokerClosed===1?'':'s'} closed (UTC)</div>}
                 {dayData && (
                   <div className={`absolute bottom-1 right-1 w-2 h-2 rounded-full ${dayData.pnl >= 0 ? 'bg-success-500' : 'bg-error-500'}`} />
                 )}
@@ -155,6 +201,16 @@ export function CalendarPage() {
               <Plus size={16} /> Add Trade
             </button>
           </div>
+
+          {selectedDate && (lifecycleByCloseDate.get(format(selectedDate,'yyyy-MM-dd'))?.length || 0)>0 && <div className="rounded-lg border border-themed p-3 mb-3 text-xs">
+            <strong>Broker positions closed on this UTC date</strong>
+            <div className="mt-2 space-y-2">
+              {(lifecycleByCloseDate.get(format(selectedDate,'yyyy-MM-dd')) || []).map(row=><div key={row.link+'/'+row.lifecycle_id} className="flex flex-wrap justify-between gap-2">
+                <span>{row.summary.symbol} · {row.summary.direction} · #{row.summary.position_id}</span>
+                <span className="font-mono">Final R: {row.summary.final_realized_r==null?'Unavailable':row.summary.final_realized_r+'R'}</span>
+              </div>)}
+            </div>
+          </div>}
 
           {selectedTrades.length > 0 ? (
             <div className="space-y-2">
