@@ -26,6 +26,7 @@ def main():
         "--noconfirm", "--clean", "--onefile", "--windowed",
         "--name", "YoungMoney3 Connector", "--paths", "connector",
         "--hidden-import", "_tkinter", "--hidden-import", "tkinter",
+        "--runtime-hook", "connector/startup_diagnostics.py",
         "--add-data", f"{tcl};_tcl_data",
         "--add-data", f"{tk_data};_tk_data",
         "--collect-all", "MetaTrader5", "--collect-all", "keyring",

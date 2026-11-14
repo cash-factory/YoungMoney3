@@ -124,8 +124,10 @@ jobs:
             $process = Start-Process -FilePath $exe -ArgumentList @('--startup-smoke', ('"' + $report + '"')) -WorkingDirectory $dir -WindowStyle Hidden -PassThru
             if (!$process.WaitForExit(45000)) {
               taskkill /PID $process.Id /T /F
+              Get-Content "$report.log" -ErrorAction SilentlyContinue
               throw 'Standalone startup timed out (possible runtime error dialog)'
             }
+            Get-Content "$report.log" -ErrorAction SilentlyContinue
             if ($process.ExitCode -ne 0 -or !(Test-Path $report)) { throw 'Standalone startup failed' }
             $result = Get-Content $report -Raw | ConvertFrom-Json
             if ($result.startup -ne 'ok' -or !$result.frozen -or !$result.tcl_bundled -or !$result.tk_bundled -or $result.capture_started) { throw 'Standalone startup evidence invalid' }
@@ -133,9 +135,10 @@ jobs:
           }
           if (Test-Path (Join-Path $profile 'YMFX')) { throw 'Smoke test modified connector state' }
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: connector-startup-evidence-${{ inputs.version || '0.2.0-rc2' }}
-          path: ${{ runner.temp }}/connector-clean/startup-*.json
+          path: ${{ runner.temp }}/connector-clean/startup-*
           if-no-files-found: error
 
   publish:
