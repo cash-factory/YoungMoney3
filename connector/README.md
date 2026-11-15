@@ -43,16 +43,45 @@ For a Windows 64-bit Python 3.13 fallback:
 - .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 - .\.venv\Scripts\python.exe connector_gui.py
 
-Use the GUI's Pair this PC, terminal browser, Start syncing and Pause
-controls. The native GUI and CLI share the same staging origin and Windows
-Credential Manager pairing. The GUI never places trades. Closing it stops
-capture cleanly and leaves the per-user SQLite outbox intact for restart.
+## Session manager v0.3.0-rc1 (staging)
 
-Broker server discovery still happens through MetaTrader 5 File → Open an
-Account. A separate writable portable MT5 terminal is required for each
-simultaneously monitored account, even when accounts use the same broker server.
+One desktop app manages multiple broker account sessions. A MetaTrader terminal
+can have one logged-in account at a time, so create a **separate writable
+/portable terminal64.exe directory for each concurrently observed account**.
+Two accounts using the same MT5 broker/server still need two terminal folders.
+The connector uses ONE coordinated Python/SQLite worker to avoid competing MT5
+initializations; enabled account slots are polled sequentially.
 
-Historical data defaults to 30 days, with longer manual lookback options.
+1. Open **Pair this PC**. Generate a five-minute code on your staging dashboard.
+   Paste with the Paste button, right-click context menu or Ctrl+V, then click
+   Pair this PC. Follow the visible progress and wait for **PC paired successfully**.
+2. Open **Sessions → Add session**. Choose the first terminal64.exe and give it a
+   nickname. Use a separate terminal directory for every additional account.
+3. Select a session and choose **Arm for account**. In the browser open
+   **MT5 Connections → Connect MT5 account** and enter the exact broker server,
+   login and investor/standard password. Only the explicitly armed free session
+   can claim that account; otherwise pending verification is not consumed.
+4. Add another terminal session and repeat. Rename, pause and resume sessions
+   individually without affecting the other linked accounts. **Start all** and
+   **Pause all** manage the whole local app. Remove only unlinked GUI profiles;
+   broker links, local SQLite evidence and Windows credentials are not deleted.
+5. Open **Activity** for timestamped progress and safe-to-share diagnostic
+   summaries. The UI does not print or store pairing codes, device tokens or
+   broker passwords. Settings migrate automatically from the older
+   `terminals` preference list.
+
+The native GUI and CLI still share the same staging origin, Credential Manager
+pairing, and per-device SQLite outbox. Closing the app stops capture safely and
+retains queued records. No trading commands are issued.
+
+Broker server discovery remains in MetaTrader 5 → File → Open an Account.
+If MT5 IPC -10005 occurs, launch the exact dedicated terminal with /portable,
+log in to the correct broker server, then retry. Verify full operation using
+actual Windows demo terminals before trusting financial reconciliation.
+
+Historical data defaults to 30 days (approximately one month). The available
+7/14/30/60/90-day choices require explicit preview approval; the staging server
+rejects requests beyond 90 days.
 Timezone labels require the account owner to verify an IANA broker timezone
 and separately attest the historical UTC conversion against broker evidence;
 otherwise historical sessions remain unresolved.
