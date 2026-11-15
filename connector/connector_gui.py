@@ -664,6 +664,8 @@ class ConnectorApp:
 
     def arm_selected(self):
         def arm():
+            if self._worker_busy() and self.worker_mode != "capture":
+                raise SessionError("Finish pairing this PC before arming a broker session.")
             item = self._selected()
             if item["terminal"] in self.account_by_slot:
                 raise SessionError("This session already has an account. Add a separate terminal session for another account.")
@@ -681,6 +683,8 @@ class ConnectorApp:
 
     def start_selected(self):
         def start_one():
+            if self._worker_busy() and self.worker_mode != "capture":
+                raise SessionError("Finish pairing this PC before starting broker capture.")
             item = self._selected()
             self.store.set_enabled(item["id"], True)
             if not self._worker_busy():
