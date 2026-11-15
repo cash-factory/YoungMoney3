@@ -46,23 +46,33 @@ For a Windows 64-bit Python 3.13 fallback:
 ## Session manager v0.3.0-rc1 (staging)
 
 One desktop app manages multiple broker account sessions. A MetaTrader terminal
-can have one logged-in account at a time, so create a **separate writable
-/portable terminal64.exe directory for each concurrently observed account**.
-Two accounts using the same MT5 broker/server still need two terminal folders.
-The connector uses ONE coordinated Python/SQLite worker to avoid competing MT5
-initializations; enabled account slots are polled sequentially.
+can have one logged-in account at a time. Use **Create terminal** to generate a
+new isolated /portable installation from an installed MT5 terminal, or select a
+session and use **Duplicate selected**. Name each session by broker/account
+(e.g. Exness Demo 1) and use its row to see the actual verified broker server
+and login number. Duplicating copies only application files: never broker
+logins, account data, history, trading EAs or credentials. Launch a new copy
+with **Open MT5** and connect the broker account through staging.
+
+Each enabled linked account is monitored in its own spawned Windows process,
+so MT5 sessions can be captured concurrently. One lightweight coordinator
+handles login verification and the existing durable per-device SQLite outbox.
+Even two accounts with the same broker/server need two terminal instances;
+MT5's Navigator may list several accounts but only one is active per instance.
 
 1. Open **Pair this PC**. Generate a five-minute code on your staging dashboard.
    Paste with the Paste button, right-click context menu or Ctrl+V, then click
    Pair this PC. Follow the visible progress and wait for **PC paired successfully**.
-2. Open **Sessions → Add session**. Choose the first terminal64.exe and give it a
-   nickname. Use a separate terminal directory for every additional account.
+2. Open **Sessions → Create terminal** to make a fresh portable installation
+   automatically, or **Duplicate selected** from an existing terminal. Enter a
+   name for each account. **Add existing** is still supported for manually
+   prepared portable terminal64.exe files.
 3. Select a session and choose **Arm for account**. In the browser open
    **MT5 Connections → Connect MT5 account** and enter the exact broker server,
    login and investor/standard password. Only the explicitly armed free session
    can claim that account; otherwise pending verification is not consumed.
-4. Add another terminal session and repeat. Rename, pause and resume sessions
-   individually without affecting the other linked accounts. **Start all** and
+4. Create or duplicate another terminal and repeat. Rename, pause and resume
+   sessions individually without affecting other running MT5 processes. **Start all** and
    **Pause all** manage the whole local app. Remove only unlinked GUI profiles;
    broker links, local SQLite evidence and Windows credentials are not deleted.
 5. Open **Activity** for timestamped progress and safe-to-share diagnostic
