@@ -93,6 +93,14 @@ class ConnectorApp:
         self.last_summary = None
         self.current_page = "overview"
         self.store = SessionStore(SETTINGS)
+        # Restore just the paired/unpaired UI state. No token is displayed,
+        # logged, cached in preferences or sent over the network.
+        try:
+            service = "YMFX MT5 " + hashlib.sha256(STAGING_URL.encode()).hexdigest()[:16]
+            connect.keyring.set_keyring(connect.WinVaultKeyring())
+            self.paired = bool(connect.keyring.get_password(service, "token"))
+        except Exception:
+            self.paired = False
         self.root.title("YoungMoney3  /  MT5 Connector  /  Staging")
         w = min(1170, max(840, self.root.winfo_screenwidth() - 60))
         h = min(790, max(630, self.root.winfo_screenheight() - 90))
@@ -101,7 +109,9 @@ class ConnectorApp:
         self.root.configure(bg=BACKGROUND)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.status_var = tk.StringVar(value="Ready to configure")
-        self.device_var = tk.StringVar(value="Pair this PC once to begin")
+        self.device_var = tk.StringVar(value=(
+            "Existing pairing found in Windows Credential Manager"
+            if self.paired else "Pair this PC once to begin"))
         self.queue_var = tk.StringVar(value="Waiting for a capture cycle")
         self.banner_var = tk.StringVar(value="Configure a session, then connect its broker account.")
         self.pair_stage_var = tk.StringVar(value="Step 1  •  Generate a five-minute pairing code on the dashboard.")
@@ -165,6 +175,21 @@ class ConnectorApp:
     def _card(self, parent, pad=20):
         return tk.Frame(parent, bg=PANEL, highlightbackground=BORDER,
                         highlightthickness=1, padx=pad, pady=pad)
+
+    def _scrollable_page(self, name):
+        """Keep pairing/help actions reachable on smaller Windows displays."""
+        host = self.pages[name]
+        canvas = tk.Canvas(host, bg=BACKGROUND, highlightthickness=0, borderwidth=0)
+        bar = ttk.Scrollbar(host, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=bar.set)
+        bar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        frame = tk.Frame(canvas, bg=BACKGROUND)
+        window = canvas.create_window((0, 0), window=frame, anchor="nw")
+        frame.bind("<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(window, width=e.width))
+        canvas.bind("<MouseWheel>", lambda e: canvas.yview_scroll(-1 if e.delta > 0 else 1, "units"))
+        return frame
 
     def _stack_heading(self, parent, title, description):
         self._label(parent, title, size=21, bold=True).pack(anchor="w", pady=(0, 6))
@@ -239,7 +264,7 @@ class ConnectorApp:
         stats = tk.Frame(page, bg=BACKGROUND)
         stats.pack(fill="x", pady=(0, 16))
         for title, var in (("LOCAL SESSIONS", self.overview_sessions_var),
-                           ("RUNNING SESSIONS", self.overview_active_var),
+                           ("ENABLED SESSIONS", self.overview_active_var),
                            ("VERIFIED ACCOUNTS", self.overview_linked_var)):
             card = self._card(stats, 18)
             card.pack(side="left", fill="both", expand=True, padx=(0, 10))
@@ -317,7 +342,7 @@ class ConnectorApp:
                     size=9, color=MUTED, wrap=850).pack(anchor="w", pady=(6, 0))
 
     def _build_pairing(self):
-        page = self.pages["pair"]
+        page = self._scrollable_page("pair")
         self._stack_heading(page, "Connect this PC",
                             "A guided, one-time secure link between this Windows user and your staging account.")
         steps = self._card(page, 22)
@@ -390,7 +415,7 @@ class ConnectorApp:
                     size=9).pack(anchor="w", pady=(10, 0))
 
     def _build_help(self):
-        page = self.pages["help"]
+        page = self._scrollable_page("help")
         self._stack_heading(page, "Setup & troubleshooting",
                             "Everything needed to prepare isolated broker terminals for capture.")
         for title, desc in [
@@ -784,11 +809,17 @@ class ConnectorApp:
         if state == "known-links":
             for record in item.get("links", []):
                 self.account_by_slot[record["slot"]] = record
+            if self.store.armed_terminal() in self.account_by_slot:
+                self.store.clear_arm()
             self._log("Recovered " + str(len(item.get("links", []))) +
                       " saved broker link(s) from the existing connector database.")
         elif state == "paired":
             self.pair_ok = True
             self.paired = True
+            # A new device token has its own broker links and SQLite folder.
+            # Do not show the old device's linked accounts after re-pairing.
+            self.account_by_slot.clear()
+            self.status_by_slot.clear()
             self.device_var.set("PC paired successfully  •  ready for account setup")
             self.pair_stage_var.set("Success! Your PC is paired with staging.")
             self.pair_elapsed_var.set("Pairing confirmed by the staging server.")
@@ -801,9 +832,9 @@ class ConnectorApp:
             self._log(message)
         elif state == "account-linked":
             self.account_by_slot[slot] = item
-            self.status_by_slot[slot] = "Connected"
+            self.status_by_slot[slot] = "Pending server sync"
             self.store.clear_arm(slot)
-            self.banner_var.set("Broker account verified. Its terminal is now assigned to this session.")
+            self.banner_var.set("Broker login verified locally. Staging acknowledgement will follow on the next sync cycle.")
             self._log("Broker account linked to selected terminal " +
                       str(Path(slot).parent.name) + ".")
         elif state == "arm-consumed":
