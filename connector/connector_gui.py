@@ -604,6 +604,82 @@ class ConnectorApp:
             self._log("Session configuration needs attention: " + str(error))
             messagebox.showwarning("Session manager", str(error))
 
+    def _copy_named_terminal(self, source, name):
+        if self.copy_worker and self.copy_worker.is_alive():
+            messagebox.showinfo("Terminal installation", "Another terminal is being created. Complete it first.")
+            return
+        self.copy_cancel.clear()
+        self.banner_var.set("Creating clean portable terminal • starting file copy…")
+        self.status_var.set("Creating terminal…")
+        self._log("Creating a separate MT5 installation. Broker credentials and EAs are excluded.")
+        self.show_page("sessions")
+
+        def work():
+            try:
+                terminal = create_terminal(
+                    source, ROOT.parent / "terminals", name,
+                    cancel=self.copy_cancel,
+                    progress=lambda info: self.events.put({
+                        "state": "copy-progress", "files": info["files"],
+                        "bytes": info["bytes"]})
+                )
+                self.events.put({"state": "copy-finished",
+                                 "terminal": str(terminal), "name": name})
+            except (TerminalCopyError, OSError) as error:
+                self.events.put({"state": "copy-error",
+                                 "message": str(error)[:180]})
+            except BaseException as error:
+                self.events.put({"state": "copy-error",
+                                 "message": "Could not create terminal (" +
+                                 type(error).__name__ + ")."})
+        self.copy_worker = threading.Thread(target=work, name="YMFX-terminal-copy",
+                                            daemon=False)
+        self.copy_worker.start()
+
+    def create_named_terminal(self):
+        candidates = terminal_candidates()
+        initial = str(Path(candidates[0]).parent) if candidates else str(Path.home())
+        source = filedialog.askopenfilename(
+            title="Select an existing MT5 installation to create a clean copy",
+            initialdir=initial,
+            filetypes=[("MetaTrader terminal", "terminal64.exe"), ("Executable", "*.exe")])
+        if not source:
+            return
+        name = simpledialog.askstring(
+            "Name your new terminal", "New terminal name (e.g. Exness Demo 2):",
+            initialvalue=f"MT5 Demo {len(self.store.snapshot()) + 1}", parent=self.root)
+        if name is not None:
+            self._copy_named_terminal(source, name)
+
+    def duplicate_selected(self):
+        try:
+            item = self._selected()
+        except (SessionError, StopIteration):
+            messagebox.showwarning("Duplicate MT5", "Select a source terminal from the sessions table.")
+            return
+        if not messagebox.askyesno(
+                "Duplicate installed MT5?",
+                "Create a new isolated copy of this terminal's program files? "
+                "The new copy will NOT inherit broker logins, account databases, EAs, "
+                "charts or trading history. You must link the new account separately."):
+            return
+        name = simpledialog.askstring(
+            "Name duplicated terminal", "New terminal name:",
+            initialvalue=item["name"] + " Copy", parent=self.root)
+        if name is not None:
+            self._copy_named_terminal(item["terminal"], name)
+
+    def launch_selected(self):
+        def launch():
+            path = Path(self._selected()["terminal"])
+            if not path.is_file():
+                raise SessionError("This MT5 terminal no longer exists.")
+            # No shell and no account credentials in process arguments.
+            subprocess.Popen([str(path), "/portable"], cwd=str(path.parent),
+                             close_fds=True)
+            self._log("Opened a dedicated MT5 terminal in portable mode.")
+        self._safe_change(launch)
+
     def add_session(self):
         path = filedialog.askopenfilename(
             title="Choose a separate portable MT5 terminal64.exe",
