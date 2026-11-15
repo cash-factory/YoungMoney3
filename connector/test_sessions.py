@@ -26,13 +26,13 @@ class SessionStoreTests(unittest.TestCase):
         second = store.add(str(self.b), "Weltrade demo")
         self.assertEqual(len(store.active_terminals()), 2)
         store.set_enabled(first["id"], False)
-        self.assertEqual(store.active_terminals(), [str(self.b)])
+        self.assertEqual(store.active_terminals(), [str(self.b.resolve())])
         store.arm(second["id"])
-        self.assertEqual(store.armed_terminal(), str(self.b))
+        self.assertEqual(store.armed_terminal(), str(self.b.resolve()))
         self.assertEqual(json.loads(self.settings.read_text())["version"], 1)
         reloaded = SessionStore(self.settings)
         self.assertEqual([s["name"] for s in reloaded.snapshot()], ["Exness demo", "Weltrade demo"])
-        self.assertEqual(reloaded.active_terminals(), [str(self.b)])
+        self.assertEqual(reloaded.active_terminals(), [str(self.b.resolve())])
         self.assertIsNone(reloaded.armed_terminal(), "Never resume an implicit account claim after restart.")
 
     def test_legacy_terminal_list_migrates_without_deleting_credentials(self):
