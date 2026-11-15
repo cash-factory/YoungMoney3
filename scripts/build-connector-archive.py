@@ -14,6 +14,8 @@ FILES = {
     "lifecycle.py": "connector/lifecycle.py",
     "connector_gui.py": "connector/connector_gui.py",
     "sessions.py": "connector/sessions.py",
+    "terminal_factory.py": "connector/terminal_factory.py",
+    "concurrent_capture.py": "connector/concurrent_capture.py",
     "requirements.txt": "connector/requirements.txt",
 }
 
