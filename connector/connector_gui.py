@@ -945,6 +945,39 @@ class ConnectorApp:
                       str(Path(slot).parent.name) + ".")
         elif state == "arm-consumed":
             self.store.clear_arm(slot)
+        elif state == "copy-progress":
+            self.status_var.set("Creating terminal…")
+            self.banner_var.set(
+                "Copying MT5 installation • " + str(item.get("files", 0)) +
+                " files copied. Personal broker data is excluded.")
+            return
+        elif state == "copy-finished":
+            try:
+                created = self.store.add(item["terminal"], item["name"])
+                self.banner_var.set("Terminal created: " + created["name"] +
+                                    ". Choose Arm for account, then link it on staging.")
+                self.status_var.set("New terminal ready")
+                self._log("Clean MT5 terminal created. A new broker login is required.")
+                self.show_page("sessions")
+                self.session_table.selection_set(created["id"])
+                self.session_table.focus(created["id"])
+            except (SessionError, OSError) as error:
+                self._log("Created terminal needs attention: " + str(error))
+                self.banner_var.set("Terminal created but profile could not be added. Use Add existing.")
+        elif state == "copy-error":
+            self.status_var.set("Terminal creation failed")
+            self.banner_var.set(message)
+            self._log("Terminal creation failed: " + message)
+        elif state == "session-starting":
+            self.status_by_slot[slot] = "Starting process"
+            self._log("A dedicated MT5 capture process is starting.")
+        elif state == "session-worker-exited":
+            if slot in self.account_by_slot and self.status_by_slot.get(slot) != "Connection issue":
+                self.status_by_slot[slot] = "Stopped"
+        elif state == "session-unlinked":
+            self.status_by_slot[slot] = "Needs re-link"
+            self.banner_var.set(message)
+            self._log("MT5 broker link was not approved or was removed.")
         elif state == "session-synced":
             prior = self.status_by_slot.get(slot)
             self.status_by_slot[slot] = "Syncing"
@@ -960,6 +993,7 @@ class ConnectorApp:
             self.banner_var.set(message)
             self._log("ERROR: " + message)
         elif state == "worker-exit":
+            self.active_workers = 0
             self.progress.stop()
             if item.get("mode") == "pair":
                 if not self.pair_ok and not self.status_var.get().startswith("Connector error"):
@@ -971,6 +1005,7 @@ class ConnectorApp:
                 self._log("Worker stopped; outbox and paired accounts retained.")
             self.busy_since = None
         elif state == "running":
+            self.active_workers = int(item.get("active_workers", 0))
             self.status_var.set("Capture running")
             if item.get("linked") is not None:
                 self.queue_var.set("Linked accounts: " + str(item["linked"]) +
@@ -1007,7 +1042,7 @@ class ConnectorApp:
                 "Waiting for confirmation  •  " +
                 str(int(time.monotonic() - self.busy_since)) + " seconds elapsed")
         if self.stopping:
-            if self.worker is None:
+            if self.worker is None and (not self.copy_worker or not self.copy_worker.is_alive()):
                 self.root.destroy()
                 return
         self.root.after(160, self.poll)
@@ -1016,14 +1051,20 @@ class ConnectorApp:
         if self.stopping:
             return
         self.stopping = True
+        self.copy_cancel.set()
         self.stop()
-        if self.worker is None:
+        if self.worker is None and (not self.copy_worker or not self.copy_worker.is_alive()):
             self.root.destroy()
 
 def main():
     smoke = len(sys.argv) == 3 and sys.argv[1] == "--startup-smoke"
+    parallel_smoke = len(sys.argv) == 3 and sys.argv[1] == "--parallel-smoke"
+    if parallel_smoke:
+        # No Tk window, MT5 login, network or user settings are touched.
+        Path(sys.argv[2]).write_text(json.dumps(run_parallel_smoke()), encoding="utf-8")
+        return
     if len(sys.argv) > 1 and not smoke:
-        raise ValueError("Expected --startup-smoke REPORT_PATH or no arguments")
+        raise ValueError("Expected --startup-smoke REPORT_PATH, --parallel-smoke REPORT_PATH or no arguments")
     try:
         if not smoke:
             ROOT.mkdir(parents=True, exist_ok=True)
@@ -1053,12 +1094,15 @@ def main():
                         raise RuntimeError("Pair code validation accepted an empty code")
                     if not app.code_input.bind("<Button-3>"):
                         raise RuntimeError("Right-click pairing context menu is missing")
+                    if not app.create_button or not app.duplicate_button:
+                        raise RuntimeError("Terminal creation controls are missing")
                     for folder, sentinel in (("_tcl_data", "init.tcl"), ("_tk_data", "tk.tcl")):
                         if not (bundle / folder / sentinel).is_file():
                             raise RuntimeError("Bundled Tcl/Tk data missing")
                     Path(sys.argv[2]).write_text(json.dumps({
                         "startup": "ok", "frozen": True, "capture_started": False,
                         "session_manager": len(app.pages) == 5 and bool(app.session_table),
+                        "terminal_creation": bool(app.create_button) and bool(app.duplicate_button),
                         "pairing_controls": bool(app.pair_button) and bool(app.code_input),
                         "activity_view": bool(app.activity_text),
                         "tcl": window.tk.eval("info patchlevel"),
@@ -1077,4 +1121,6 @@ def main():
 
 
 if __name__ == "__main__":
+    # PyInstaller workers must dispatch here instead of opening another GUI.
+    multiprocessing.freeze_support()
     main()
