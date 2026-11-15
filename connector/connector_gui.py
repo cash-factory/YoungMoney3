@@ -89,6 +89,7 @@ class ConnectorApp:
         self.busy_since = None
         self.status_by_slot = {}
         self.account_by_slot = {}
+        self._links_initialized = False
         self.log_items = []
         self.last_summary = None
         self.current_page = "overview"
@@ -811,12 +812,21 @@ class ConnectorApp:
         slot = item.get("slot")
         message = item.get("message", "")
         if state == "known-links":
-            for record in item.get("links", []):
-                self.account_by_slot[record["slot"]] = record
+            previous = set(self.account_by_slot)
+            self.account_by_slot = {
+                record["slot"]: record for record in item.get("links", [])
+            }
+            for removed in previous - set(self.account_by_slot):
+                self.status_by_slot.pop(removed, None)
             if self.store.armed_terminal() in self.account_by_slot:
                 self.store.clear_arm()
-            self._log("Recovered " + str(len(item.get("links", []))) +
-                      " saved broker link(s) from the existing connector database.")
+            if self._links_initialized and previous - set(self.account_by_slot):
+                self.banner_var.set("A broker link was rejected or removed by staging. Re-arm its terminal before retrying.")
+                self._log("Broker link removed after staging verification. Existing evidence remains preserved.")
+            else:
+                self._log("Verified local session assignments: " +
+                          str(len(self.account_by_slot)) + " link(s).")
+            self._links_initialized = True
         elif state == "paired":
             self.pair_ok = True
             self.paired = True
@@ -824,6 +834,7 @@ class ConnectorApp:
             # Do not show the old device's linked accounts after re-pairing.
             self.account_by_slot.clear()
             self.status_by_slot.clear()
+            self._links_initialized = False
             self.device_var.set("PC paired successfully  •  ready for account setup")
             self.pair_stage_var.set("Success! Your PC is paired with staging.")
             self.pair_elapsed_var.set("Pairing confirmed by the staging server.")
