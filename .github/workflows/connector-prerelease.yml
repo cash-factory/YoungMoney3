@@ -36,7 +36,7 @@ jobs:
        github.ref == 'refs/heads/feat/rich-capture-staging-20261110' &&
        inputs.confirmation == 'RELEASE-STAGING-CONNECTOR') ||
       (github.event_name == 'pull_request' &&
-       github.event.label.name == 'build-staging-connector-session-manager' &&
+       github.event.label.name == 'build-staging-connector-rc2' &&
        github.event.pull_request.draft == false &&
        github.event.pull_request.head.repo.full_name == github.repository &&
        github.event.pull_request.head.ref == 'feat/rich-capture-staging-20261110')
