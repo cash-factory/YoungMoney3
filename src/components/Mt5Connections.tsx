@@ -68,9 +68,12 @@ export function Mt5Connections() {
     <header className="flex flex-wrap items-center justify-between gap-3"><h2 className="flex items-center gap-2 font-bold"><Monitor size={20} className="text-brand-500"/> Paired PCs</h2>
     <button className="btn-primary" onClick={()=>run(async()=>setCode((await action('pair')).code))}>Pair a PC</button></header>
     {loaded && !devices.length && <p className="text-sm text-secondary">Run the Windows connector, then enter your pairing code on that PC.</p>}
-    <a className="btn-primary inline-flex" href="/connector-download.html"><Download size={15}/>Windows app (staging prerelease)</a>
-    <a className="btn-secondary inline-flex" href="/mt5-connector.zip" download><Download size={15}/>Python source fallback</a>
-    <p className="text-xs text-muted">The Windows .exe is unsigned; use the versioned prerelease and verify its SHA-256 checksum. Existing CLI pairings remain on this PC.</p>
+    <div className="flex flex-wrap items-center gap-2">
+      <a className="btn-primary inline-flex items-center gap-2" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.3.0-rc2/YoungMoney3.Connector.exe" rel="noopener noreferrer" aria-label="Download YoungMoney3 Windows Connector version 0.3.0 release candidate 2"><Download size={15}/>Download Connector v0.3.0-rc2</a>
+      <a className="btn-secondary inline-flex items-center gap-2" href="/connector-download.html">Release details &amp; SHA-256</a>
+      <a className="btn-secondary inline-flex items-center gap-2" href="/mt5-connector.zip" download><Download size={15}/>Python source fallback</a>
+    </div>
+    <p className="text-xs text-muted">Official Windows x64 staging prerelease · unsigned · capture-only. Verify the executable checksum before running. Existing PC pairings remain available.</p>
     {code && <p>Enter this pairing code in the connector within five minutes: <code className="break-all select-all">{code}</code></p>}
     {devices.map(d=><div className="flex flex-wrap items-center gap-3 border-t border-themed pt-4" key={d.id}>PC {d.id.slice(0,8)} · {Date.now()-d.last_seen<90000?'Online':'Offline'}{' '}
       <button className="btn-primary" disabled={Date.now()-d.last_seen>=90000} onClick={()=>{setDevice(d.id);dialog.current?.showModal();}}>Connect MT5 account</button>{' '}
