@@ -182,7 +182,7 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
             if error.code!=409: raise
             with db: db.execute("DELETE FROM links WHERE link=?",(link,))
             keyring.delete_password(service,link)
-            return
+            return False
         with db: db.execute("UPDATE links SET verified=NULL WHERE link=?",(link,))
     account=terminal_account(slot,int(login),server,keyring.get_password(service,link),verify_password=False)
     end=int(time.time()*1000)
@@ -336,6 +336,7 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
     elif request and request.get("status")!="requested":
         # A declined/imported request must not continue scanning on this PC.
         with db: db.execute("DELETE FROM history_progress WHERE link=?",(link,))
+    return True
 
 def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
          report=None, active_slots=None, armed_slot=None, all_slots=None):
@@ -446,8 +447,8 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
                 if active_slots is not None and row[1] not in active_slots():
                     continue
                 try:
-                    scan(*row)
-                    if report:
+                    accepted = scan(*row)
+                    if report and accepted is not False:
                         report({"state":"session-synced", "slot": row[1],
                                 "link": row[0], "login": row[2], "server": row[3],
                                 "message":"Broker capture cycle complete; queued updates uploaded."})
