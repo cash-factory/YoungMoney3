@@ -339,7 +339,8 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
     return True
 
 def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
-         report=None, active_slots=None, armed_slot=None, all_slots=None):
+         report=None, active_slots=None, armed_slot=None, all_slots=None,
+         parallel_capture=False):
     """CLI and GUI entrypoint; MT5 and SQLite run on this one worker thread."""
     global origin, slots, opener, service, token, db, heartbeats, timezone_cache
     parser=argparse.ArgumentParser()
@@ -387,7 +388,7 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
     if not token: sys.exit("Pair this PC first with --pair.")
     folder=Path(os.environ["LOCALAPPDATA"])/"YMFX"/hashlib.sha256((origin+token).encode()).hexdigest()[:20]
     folder.mkdir(parents=True,exist_ok=True)
-    db=sqlite3.connect(folder/"capture.db")
+    db=sqlite3.connect(folder/"capture.db",timeout=30)
     db.executescript("""
         CREATE TABLE IF NOT EXISTS links(link TEXT PRIMARY KEY,slot TEXT UNIQUE,login TEXT,server TEXT,start INTEGER,cursor INTEGER,last INTEGER,verified TEXT,gap INTEGER);
         CREATE TABLE IF NOT EXISTS broker_clock(link TEXT PRIMARY KEY,offset INTEGER);
@@ -400,6 +401,13 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
         CREATE TABLE IF NOT EXISTS outbox(seq INTEGER PRIMARY KEY,link TEXT,payload TEXT);
         CREATE INDEX IF NOT EXISTS outbox_link ON outbox(link,seq);
     """)
+    if parallel_capture and not args.sync_once and not args.pair:
+        from concurrent_capture import run_supervisor
+        try:
+            return run_supervisor(origin, db, folder/"capture.db", slots, token, report,
+                                  stop_event, armed_slot, active_slots, all_slots)
+        finally:
+            db.close()
     next_poll=0
     heartbeats={}
     timezone_cache={}
