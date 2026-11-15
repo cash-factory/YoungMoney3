@@ -135,7 +135,7 @@ def terminal_account(slot, login, server, password, verify_password):
     return info
 
 
-def verify(job):
+def verify(job, slot_override=None, report=None):
     from binascii import Error as Base64Error
     key=serialization.load_der_private_key(base64.b64decode(keyring.get_password(service,"private-a")+keyring.get_password(service,"private-b")),None)
     settings=None
@@ -145,8 +145,8 @@ def verify(job):
         settings=json.loads(AESGCM(aes).decrypt(base64.b64decode(env["iv"]),base64.b64decode(env["data"]),None))
         login, server = int(settings["login"]),settings["server"]
         used={r[0] for r in db.execute("SELECT slot FROM links")}
-        slot=next((s for s in slots if s not in used),None)
-        if slot is None:
+        slot = slot_override if slot_override is not None else next((s for s in slots if s not in used), None)
+        if slot is None or slot not in slots or slot in used:
             raise LoginFailure("no_slot")
         info=terminal_account(slot,login,server,settings["password"],verify_password=True)
         server=info.server
@@ -154,6 +154,9 @@ def verify(job):
         reason = error.reason if isinstance(error, LoginFailure) else "invalid_job"
         code = error.api_code if isinstance(error, LoginFailure) else None
         print("MT5 verification failed:", reason, code if code is not None else "", flush=True)
+        if report:
+            report({"state": "account-error", "slot": slot_override, "message":
+                    "Account connection failed: " + reason + (f" (MT5 {code})" if code is not None else "")})
         post("verified",{"link":job["id"],"ok":False,"reason":reason,"api_code":code},token)
         return
     finally:
@@ -166,6 +169,10 @@ def verify(job):
     keyring.set_password(service,job["id"],settings["password"])
     with db:
         db.execute("INSERT INTO links VALUES(?,?,?,?,?,?,?,?,?)",(job["id"],slot,str(login),server,start,start,0,json.dumps(msg),0))
+    if report:
+        report({"state": "account-linked", "slot": slot, "link": job["id"],
+                "login": str(login), "server": server, "company": info.company,
+                "message": "Broker account verified. Waiting for next sync cycle."})
 
 def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
     if verified:
@@ -330,7 +337,8 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
         # A declined/imported request must not continue scanning on this PC.
         with db: db.execute("DELETE FROM history_progress WHERE link=?",(link,))
 
-def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None, report=None):
+def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
+         report=None, active_slots=None, armed_slot=None):
     """CLI and GUI entrypoint; MT5 and SQLite run on this one worker thread."""
     global origin, slots, opener, service, token, db, heartbeats, timezone_cache
     parser=argparse.ArgumentParser()
@@ -396,7 +404,11 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None, rep
     timezone_cache={}
     failures=0
     print("Connector running. Keep this window open. Press Ctrl+C to exit.")
-    if report: report({"state":"running","message":"Starting connector worker."})
+    if report:
+        report({"state":"running","message":"Starting connector worker."})
+        report({"state":"known-links", "links":[{"link": row[0], "slot": row[1],
+                                                "login": row[2], "server": row[3]}
+                                               for row in db.execute("SELECT link,slot,login,server FROM links").fetchall()]})
     try:
         while not (stop_event and stop_event.is_set()):
             if pause_event and pause_event.is_set():
@@ -407,17 +419,41 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None, rep
             failed=False
             try:
                 if not args.sync_once and time.monotonic()>=next_poll:
-                    job=post("poll",{},token)["job"]
-                    if job: verify(job)
-                    next_poll=time.monotonic()+20
+                    # Only the selected, explicitly armed unassigned terminal
+                    # may consume a website account-verification request.
+                    candidate = armed_slot() if armed_slot else None
+                    used = {row[0] for row in db.execute("SELECT slot FROM links").fetchall()}
+                    if armed_slot is None or (candidate in slots and candidate not in used):
+                        job=post("poll",{},token)["job"]
+                        if job:
+                            if report: report({"state":"verifying","slot":candidate,"message":"Website account request received; connecting to the selected MT5 terminal."})
+                            verify(job, slot_override=candidate, report=report)
+                            if report and candidate and candidate in {
+                                row[0] for row in db.execute("SELECT slot FROM links").fetchall()
+                            }:
+                                report({"state":"arm-consumed","slot":candidate,
+                                        "message":"Selected session assigned to the broker account."})
+                    next_poll=time.monotonic()+5 if armed_slot else time.monotonic()+20
             except Exception as exc:
                 failed=True
                 print("Pairing service unavailable:",type(exc).__name__,flush=True)
             for row in db.execute("SELECT * FROM links").fetchall():
-                try: scan(*row)
+                if active_slots is not None and row[1] not in active_slots():
+                    continue
+                try:
+                    scan(*row)
+                    if report:
+                        report({"state":"session-synced", "slot": row[1],
+                                "link": row[0], "login": row[2], "server": row[3],
+                                "message":"Broker capture cycle complete; queued updates uploaded."})
                 except Exception as exc:
                     failed=True
                     print("Sync pending:",row[0][:8],type(exc).__name__,flush=True)
+                    if report:
+                        report({"state":"session-error", "slot": row[1],
+                                "link": row[0], "message":
+                                "Could not sync this account (" + type(exc).__name__ +
+                                "). Check terminal, broker connection and activity log."})
                 finally: mt5.shutdown()
             if args.sync_once:
                 if failed: sys.exit(1)
