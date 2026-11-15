@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import multiprocessing
+import subprocess
 import json
 import os
 import queue
@@ -22,6 +24,8 @@ import webbrowser
 
 import connect
 from sessions import SessionError, SessionStore
+from terminal_factory import TerminalCopyError, create_terminal
+from concurrent_capture import run_parallel_smoke
 
 STAGING_URL = "https://ym-fx-staging.ethical-hacker263.workers.dev"
 ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "YMFX" / "staging-gui"
@@ -37,7 +41,7 @@ ACCENT = "#63dfc2"
 WARM = "#e6c485"
 DANGER = "#ff9a99"
 FONT = "Segoe UI"
-VERSION = "0.3.0-rc1"
+VERSION = "0.3.0-rc2"
 
 
 def terminal_candidates():
@@ -81,6 +85,9 @@ class ConnectorApp:
         self.events = queue.Queue()
         self.worker = None
         self.worker_mode = None
+        self.copy_worker = None
+        self.copy_cancel = threading.Event()
+        self.active_workers = 0
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
         self.stopping = False
@@ -302,13 +309,19 @@ class ConnectorApp:
     def _build_sessions(self):
         page = self.pages["sessions"]
         self._stack_heading(page, "Account sessions",
-                            "One application, multiple MT5 accounts. Each account requires its own isolated portable terminal folder.")
+                            "Create or duplicate named terminals here. Each broker account runs in a separate MT5 process, monitored concurrently.")
         tools = tk.Frame(page, bg=BACKGROUND)
         tools.pack(fill="x", pady=(0, 16))
-        self._button(tools, "+ Add session", self.add_session, primary=True).pack(side="left", padx=(0, 8))
-        self._button(tools, "Detect terminals", self.detect_sessions).pack(side="left", padx=(0, 8))
-        self._button(tools, "Start all", self.start_all).pack(side="left", padx=(0, 8))
-        self._button(tools, "Pause all", self.pause_all, quiet=True).pack(side="left")
+        self.create_button = self._button(tools, "+ Create terminal", self.create_named_terminal, primary=True)
+        self.create_button.pack(side="left", padx=(0, 8))
+        self.duplicate_button = self._button(tools, "Duplicate selected", self.duplicate_selected)
+        self.duplicate_button.pack(side="left", padx=(0, 8))
+        self._button(tools, "Add existing", self.add_session).pack(side="left", padx=(0, 8))
+        self._button(tools, "Detect", self.detect_sessions, quiet=True).pack(side="left")
+        bulk = tk.Frame(page, bg=BACKGROUND)
+        bulk.pack(fill="x", pady=(0, 12))
+        self._button(bulk, "Start all", self.start_all).pack(side="left", padx=(0, 8))
+        self._button(bulk, "Pause all", self.pause_all, quiet=True).pack(side="left")
         table_area = self._card(page, 12)
         table_area.pack(fill="both", expand=True, pady=(0, 12))
         columns = ("name", "account", "status", "location")
@@ -337,6 +350,7 @@ class ConnectorApp:
         self._button(row, "Pause", self.pause_selected).pack(side="left", padx=(0, 7), pady=2)
         self._button(row, "Rename", self.rename_selected, quiet=True).pack(side="left", padx=(0, 7), pady=2)
         self._button(row, "Folder", self.open_selected_folder, quiet=True).pack(side="left", padx=(0, 7), pady=2)
+        self._button(row, "Open MT5", self.launch_selected, quiet=True).pack(side="left", padx=(0, 7), pady=2)
         self._button(row, "Remove", self.remove_selected, quiet=True).pack(side="left", pady=2)
         self._label(page, "ARM FOR ACCOUNT: Select a free session, arm it here, then use Connect MT5 account on the website. "
                     "An already linked session keeps its existing broker identity.",
@@ -579,7 +593,7 @@ class ConnectorApp:
         self.overview_sessions_var.set(f"{len(entries)} configured")
         enabled = sum(bool(s["enabled"]) and Path(s["terminal"]).is_file()
                       for s in entries)
-        self.overview_active_var.set(f"{enabled} enabled")
+        self.overview_active_var.set(f"{self.active_workers} running / {enabled} enabled")
         self.overview_linked_var.set(f"{len(self.account_by_slot)} verified")
 
     def _safe_change(self, action):
@@ -734,7 +748,8 @@ class ConnectorApp:
                              report=self.events.put,
                              all_slots=self.store.all_terminals,
                              active_slots=self.store.active_terminals,
-                             armed_slot=self.store.armed_terminal)
+                             armed_slot=self.store.armed_terminal,
+                             parallel_capture=pairing_code is None)
             except BaseException as error:
                 # Never expose exception detail: MT5/HTTP exceptions may embed
                 # a URL, account identifier or credential-bearing payload.
@@ -765,7 +780,7 @@ class ConnectorApp:
             self.banner_var.set("All sessions paused. Enable at least one session first.")
             self.show_page("sessions")
             return
-        self._log("Starting capture worker for enabled MT5 sessions.")
+        self._log("Starting parallel account processes for enabled MT5 sessions.")
         self._start_worker([STAGING_URL, *self.store.all_terminals()])
 
     def stop(self):
@@ -886,7 +901,7 @@ class ConnectorApp:
                                    "  •  Outbox: " + str(item.get("queued", 0)) +
                                    " queued  •  Cycle: " + str(item.get("last_sync", "—"))[:19])
             if self.last_summary != "running":
-                self._log("Capture service online; individual sessions cycle sequentially.")
+                self._log("Capture service online; MT5 terminals are captured in separate processes.")
                 self.last_summary = "running"
         elif state == "retrying":
             self.status_var.set("Retrying connection")
