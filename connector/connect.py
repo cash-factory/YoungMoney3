@@ -404,11 +404,12 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
     timezone_cache={}
     failures=0
     print("Connector running. Keep this window open. Press Ctrl+C to exit.")
+    linked_snapshot = db.execute("SELECT link,slot,login,server FROM links ORDER BY link").fetchall()
     if report:
         report({"state":"running","message":"Starting connector worker."})
         report({"state":"known-links", "links":[{"link": row[0], "slot": row[1],
                                                 "login": row[2], "server": row[3]}
-                                               for row in db.execute("SELECT link,slot,login,server FROM links").fetchall()]})
+                                               for row in linked_snapshot]})
     try:
         while not (stop_event and stop_event.is_set()):
             # GUI session profiles may be added while another account is syncing.
@@ -459,6 +460,15 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
                                 "Could not sync this account (" + type(exc).__name__ +
                                 "). Check terminal, broker connection and activity log."})
                 finally: mt5.shutdown()
+            # A staging rejection (for example a real-account release gate)
+            # may revoke a pending local broker link. Keep the GUI's linked
+            # state aligned with the durable SQLite assignments.
+            current_links = db.execute("SELECT link,slot,login,server FROM links ORDER BY link").fetchall()
+            if report and current_links != linked_snapshot:
+                report({"state":"known-links", "links":[{"link": row[0], "slot": row[1],
+                                                        "login": row[2], "server": row[3]}
+                                                       for row in current_links]})
+            linked_snapshot = current_links
             if args.sync_once:
                 if failed: sys.exit(1)
                 break
