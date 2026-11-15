@@ -338,7 +338,7 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
         with db: db.execute("DELETE FROM history_progress WHERE link=?",(link,))
 
 def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
-         report=None, active_slots=None, armed_slot=None):
+         report=None, active_slots=None, armed_slot=None, all_slots=None):
     """CLI and GUI entrypoint; MT5 and SQLite run on this one worker thread."""
     global origin, slots, opener, service, token, db, heartbeats, timezone_cache
     parser=argparse.ArgumentParser()
@@ -411,6 +411,10 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
                                                for row in db.execute("SELECT link,slot,login,server FROM links").fetchall()]})
     try:
         while not (stop_event and stop_event.is_set()):
+            # GUI session profiles may be added while another account is syncing.
+            # Only the single capture thread updates the MT5 slot inventory.
+            if all_slots is not None:
+                slots = list(all_slots())
             if pause_event and pause_event.is_set():
                 if report: report({"state":"paused","message":"Sync paused; pending uploads preserved."})
                 if stop_event: stop_event.wait(.5)
