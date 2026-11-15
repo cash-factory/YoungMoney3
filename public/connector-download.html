@@ -30,20 +30,22 @@
   <h1>The MT5 connector, without the terminal commands.</h1>
   <p class="muted">An unsigned Windows x64 prerelease for capturing demo and contest MT5 trading records. It does not place, modify or cancel orders.</p>
   <section class="card" aria-labelledby="release-heading">
-    <h2 id="release-heading">Latest available staging prerelease</h2>
-    <p id="status" role="status">Looking for a published release…</p>
-    <p id="version" class="muted"></p>
-    <p><a id="download" class="button" hidden>Download YoungMoney3 Connector.exe</a>
-       <a id="checksum" hidden>Download SHA-256 checksum</a></p>
+    <h2 id="release-heading">Download the Windows connector</h2>
+    <p id="status" role="status">Verified staging executable available.</p>
+    <p id="version" class="muted">Version: staging-connector-v0.3.0-rc2 · Windows x64 · unsigned</p>
+    <p><a id="download" class="button" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.3.0-rc2/YoungMoney3.Connector.exe" rel="noopener noreferrer">Download Connector v0.3.0-rc2</a>
+       <a id="checksum" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.3.0-rc2/YoungMoney3.Connector.exe.sha256" rel="noopener noreferrer">Download SHA-256 checksum</a></p>
+    <p class="muted" style="font-size:.8rem">Published SHA-256:</p>
+    <code id="digest">fb0e1f41a59fb44899c82d2f0139871bd6d081b03bb896df0571e8aa8e644c78</code>
     <p id="fallback"><a href="https://github.com/cash-factory/YoungMoney3/releases" rel="noopener noreferrer">View verified GitHub releases</a></p>
-    <p class="muted" style="font-size:.8rem">If this page does not show a download, the Windows CI build has not yet been published or the GitHub release is not publicly accessible. Do not download an executable from a third-party mirror.</p>
+    <p class="muted" style="font-size:.8rem">Downloads are hosted on the official YoungMoney3 GitHub release. This page keeps the verified v0.3.0-rc2 download available even if the GitHub API is rate-limited, and checks for newer published staging versions when possible. Do not use third-party mirrors.</p>
   </section>
   <section class="card">
     <h2>Setup</h2>
     <ul>
-      <li>Install MetaTrader 5 on your own Windows PC. Use one isolated portable terminal per concurrently synced account.</li>
-      <li>Open staging, sign in, and use MT5 Connections → Pair a PC.</li>
-      <li>Paste the short-lived code into the app; choose an MT5 terminal and press Start syncing.</li>
+      <li>Install MetaTrader 5 on your Windows PC. Open the connector and choose <strong>Sessions → Create terminal</strong> or <strong>Duplicate selected</strong> to prepare named, isolated MT5 instances.</li>
+      <li>Open staging, sign in, and use <strong>MT5 Connections → Pair a PC</strong> if your Windows user is not paired yet.</li>
+      <li>In the connector, arm a session for a broker account before linking it on the website. Then use <strong>Start all</strong> to capture across separately running terminal processes.</li>
       <li>Stop or close the app to stop capture; queued records remain available for the next launch.</li>
     </ul>
     <p class="muted"><strong>Important:</strong> The executable is unsigned and Windows SmartScreen may show a warning. Compare its SHA-256 against the published checksum before launching. Real-account capture remains disabled.</p>
@@ -65,17 +67,21 @@
     const exe=assets.find(row=>/^YoungMoney3(?:[. -])Connector\.exe$/i.test(row.name) && typeof row.browser_download_url==='string' && row.browser_download_url.startsWith(base));
     const checksum=assets.find(row=>/^YoungMoney3(?:[. -])Connector\.exe\.sha256$/i.test(row.name) && typeof row.browser_download_url==='string' && row.browser_download_url.startsWith(base));
     if(!release||!exe||!checksum){
-      status.textContent='No verified staging executable has been published yet.';
+      status.textContent='Latest release could not be verified automatically; the last checked v0.3.0-rc2 download is available below.';
       return;
     }
     status.textContent='Staging prerelease is available. Verify the SHA-256 digest before opening it.';
     document.getElementById('version').textContent='Version: '+String(release.tag_name)+' · Windows x64 · unsigned';
     const download=document.getElementById('download');
     download.href=exe.browser_download_url;download.rel='noopener noreferrer';download.hidden=false;
+    download.textContent='Download Connector '+String(release.tag_name).replace('staging-connector-v','v');
     const sum=document.getElementById('checksum');
     sum.href=checksum.browser_download_url;sum.rel='noopener noreferrer';sum.hidden=false;
+    const digest=document.getElementById('digest');
+    digest.textContent=typeof exe.digest==='string' && /^sha256:[a-f0-9]{64}$/i.test(exe.digest)
+      ? exe.digest.slice(7) : 'See the checksum file on the official release.';
   }catch{
-    status.textContent='Could not verify the latest GitHub prerelease. Use the official releases page below.';
+    status.textContent='Automatic release check unavailable. The verified v0.3.0-rc2 download remains available; check GitHub releases for newer builds.';
   }
 })();
 </script>
