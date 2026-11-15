@@ -935,11 +935,26 @@ def main():
                     bundle = Path(getattr(sys, "_MEIPASS", ""))
                     if not getattr(sys, "frozen", False):
                         raise RuntimeError("Smoke test requires the frozen executable")
+                    # Exercise real nav/pairing widgets without starting capture
+                    # or touching any user session/credential setting.
+                    if not {"overview", "sessions", "pair", "activity", "help"} <= set(app.pages):
+                        raise RuntimeError("New session manager navigation is incomplete")
+                    app.code_var.set("a" * 32)
+                    if not app._validate_code():
+                        raise RuntimeError("Pair code validation did not accept a valid code")
+                    app.code_var.set("")
+                    if app._validate_code():
+                        raise RuntimeError("Pair code validation accepted an empty code")
+                    if not app.code_input.bind("<Button-3>"):
+                        raise RuntimeError("Right-click pairing context menu is missing")
                     for folder, sentinel in (("_tcl_data", "init.tcl"), ("_tk_data", "tk.tcl")):
                         if not (bundle / folder / sentinel).is_file():
                             raise RuntimeError("Bundled Tcl/Tk data missing")
                     Path(sys.argv[2]).write_text(json.dumps({
                         "startup": "ok", "frozen": True, "capture_started": False,
+                        "session_manager": len(app.pages) == 5 and bool(app.session_table),
+                        "pairing_controls": bool(app.pair_button) and bool(app.code_input),
+                        "activity_view": bool(app.activity_text),
                         "tcl": window.tk.eval("info patchlevel"),
                         "tk": window.tk.eval("package present Tk"),
                         "tcl_bundled": Path(window.tk.eval("info library")).resolve() == (bundle / "_tcl_data").resolve(),
