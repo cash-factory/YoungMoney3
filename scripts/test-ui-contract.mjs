@@ -101,6 +101,78 @@ test('CraftyLabs Studio is a distinct black, red and white editorial trading the
   assert.ok(css.includes('prefers-reduced-motion'),'Respect motion sensitivity');
 });
 
+
+test('homepage icons use a single accessible, predictable geometry component',()=>{
+  const component=read('src/components/LandingIcon.tsx');
+  const css=read('src/index.css');
+  assert.equal((landing.match(/<LandingIcon /g)||[]).length,9, 'All homepage icon groups should use shared LandingIcon');
+  for(const icon of ['section.icon','item.icon','f.icon','s.icon','BookOpen','TrendingUp']) {
+    assert.ok(landing.includes('icon={'+icon+'}'),icon+' must use the shared component');
+  }
+  assert.doesNotMatch(landing,/<(?:section|item|f|s)\.icon\b/, 'No raw SVG feature glyph should bypass canonical icon geometry');
+  assert.ok(component.includes("import type { LucideIcon }"),'Keep one icon library');
+  assert.ok(component.includes('strokeWidth={1.9}'), 'Normalize optical stroke weight');
+  assert.ok(component.includes('aria-hidden="true"'), 'Decorative icons must not repeat adjacent readable labels');
+  for(const token of ['--landing-icon-box-sm','--landing-icon-box-md','--landing-icon-box-lg','--landing-icon-glyph-sm','--landing-icon-glyph-md','--landing-icon-glyph-lg',
+    '--landing-icon-surface','--landing-icon-fg','--landing-icon-border','--landing-icon-hover','--landing-icon-active']) {
+    assert.ok(css.includes(token),token+' must be a shared semantic homepage icon token');
+  }
+  for(const selector of ['.landing-icon__glyph','.landing-icon--sm','.landing-icon--lg','.landing-icon--solid',
+    '.landing-icon--desktop','.landing-step-number','@media (max-width:639px)','@media (min-width:640px)',
+    '@media (forced-colors:active)','@media (prefers-reduced-motion:reduce)',':focus-visible .landing-icon']) {
+    assert.ok(css.includes(selector),selector+' must retain icon design and accessibility behavior');
+  }
+});
+
+test('all homepage icons meet contrast targets in each of twelve light and dark palettes',()=>{
+  const css=read('src/index.css');
+  const ids=Array.from(theme.matchAll(/\{ id: '([^']+)', name:/g),m=>m[1]);
+  assert.equal(ids.length,12, 'Do not silently remove an existing palette');
+  const cssBlock=selector=>{
+    const start=css.indexOf(selector+' {');
+    assert.notEqual(start,-1,selector+' has no CSS declaration');
+    return css.slice(start,css.indexOf('}',start)+1);
+  };
+  const hexToken=(selector,token)=>{
+    const value=cssBlock(selector).match(new RegExp('--'+token+'\\s*:\\s*(#[0-9a-fA-F]{6})'));
+    assert.ok(value,selector+' is missing '+token+' token');
+    return [1,3,5].map(i=>Number.parseInt(value[1].slice(i,i+2),16));
+  };
+  const mix=(a,b,amount)=>a.map((channel,index)=>channel*amount+b[index]*(1-amount));
+  const luminance=rgb=>rgb.map(channel=>{
+    const normalized=channel/255;
+    return normalized<=.04045?normalized/12.92:Math.pow((normalized+.055)/1.055,2.4);
+  }).reduce((total,channel,index)=>total+channel*[.2126,.7152,.0722][index],0);
+  const contrast=(a,b)=>{
+    const first=luminance(a),second=luminance(b);
+    return (Math.max(first,second)+.05)/(Math.min(first,second)+.05);
+  };
+  const tint=(selector)=>{
+    const match=cssBlock(selector).match(/--landing-icon-surface:\s*color-mix\(in srgb, var\(--brand\) (\d+)%, var\(--bg-card\)\)/);
+    assert.ok(match,selector+' missing semantic surface mix');
+    return Number(match[1])/100;
+  };
+  const lightTint=tint('.ym-studio-landing');
+  const darkTint=tint(':root.dark[data-palette] .ym-studio-landing');
+  let tested=0;
+  for(const id of ids){
+    for(const mode of ['light','dark']){
+      const selector=id==='original'
+        ? (mode==='light'?':root':'.dark')
+        : (mode==='light'?':root[data-palette="'+id+'"]':'.dark[data-palette="'+id+'"]');
+      const brand=hexToken(selector,'brand');
+      const card=hexToken(selector,'bg-card');
+      const foreground=hexToken(selector,mode==='light'?'brand-dark':'brand-light');
+      const surface=mix(brand,card,mode==='light'?lightTint:darkTint);
+      assert.ok(contrast(foreground,surface)>=4.5,id+' '+mode+' soft icon foreground is not sufficiently visible');
+      const solidBackground=mix(brand,[0,0,0],.55);
+      assert.ok(contrast([255,255,255],solidBackground)>=4.5,id+' '+mode+' solid icon has insufficient contrast');
+      tested+=1;
+    }
+  }
+  assert.equal(tested,24,'Check every light/dark combination, not only the default');
+});
+
 test('performance cards preserve currency, percent and decimal formatting',()=>{
   const cards=read('src/components/ui/StatCard.tsx');
   assert.ok(cards.includes('const isNumeric = /^-?'), 'Numeric detection must not parse currency tokens as plain numbers');
