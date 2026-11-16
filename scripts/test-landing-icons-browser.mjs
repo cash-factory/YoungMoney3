@@ -101,6 +101,22 @@ try {
         assert.equal(outcome.mode,mode,'Light/dark selection failed');
         assert.ok(outcome.visibleIcons>=30,'Missing homepage card icons');
         assert.deepEqual(outcome.problems,[],palette+' '+mode+' '+viewport.name+' '+JSON.stringify(outcome));
+        const ribbon = await page.locator('.ym-workflow-ribbon').evaluate(element => {
+          const nodes = [...element.querySelectorAll('li')];
+          const labels = nodes.map(node => node.textContent?.trim().replace(/\\s+/g,' ') || '');
+          const inViewport = nodes.every(node => {
+            const rect=node.getBoundingClientRect();
+            return rect.left>=-2 && rect.right<=window.innerWidth+2 && rect.width>0;
+          });
+          const animation = getComputedStyle(element).animationName;
+          return {labels,inViewport,animation,scrollWidth:element.scrollWidth,clientWidth:element.clientWidth};
+        });
+        assert.deepEqual(ribbon.labels,['01 Plan','02 Capture','03 Test','04 Review'],
+          'All four trading stages must appear exactly once');
+        assert.ok(ribbon.inViewport,palette+' '+mode+' '+viewport.name+' workflow label escaped the ribbon');
+        assert.ok(ribbon.scrollWidth<=ribbon.clientWidth+1,
+          palette+' '+mode+' '+viewport.name+' ribbon causes horizontal scrolling: '+JSON.stringify(ribbon));
+        assert.equal(ribbon.animation,'none','The workflow stages should not drift offscreen');
         if(['phone-390','desktop'].includes(viewport.name)) {
           await page.locator('#features').screenshot({
             path:screenshotDir+'/'+palette+'-'+mode+'-'+viewport.name+'.png',
