@@ -272,10 +272,15 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
       </section>
 
       {/* ─── WORKFLOW DIVIDER ─── */}
-      <section className="ym-studio-landing-ticker relative overflow-hidden border-y border-themed bg-secondary/40 py-5">
-        <div className="flex min-w-max items-center gap-8 animate-ticker whitespace-nowrap px-6">
-          {[...workflowSteps, ...workflowSteps].map((step, index) => <span key={`${step.label}-${index}`} className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.16em] text-muted"><span className="font-mono text-orange-500">{step.value}</span>{step.label}<span className="text-orange-500/50">/</span></span>)}
-        </div>
+      <section className="ym-studio-landing-ticker relative border-y border-themed bg-secondary/40 py-5" aria-label="Your trading workflow">
+        <ol className="ym-workflow-ribbon">
+          {workflowSteps.map(step => (
+            <li key={step.value}>
+              <span className="ym-workflow-ribbon-number" aria-hidden="true">{step.value}</span>
+              <span className="ym-workflow-ribbon-label">{step.label}</span>
+            </li>
+          ))}
+        </ol>
       </section>
 
       {/* ─── PLATFORM OVERVIEW ─── */}
