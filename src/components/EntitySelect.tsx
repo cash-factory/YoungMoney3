@@ -1,3 +1,5 @@
+import { ThemedSelect } from './ThemedSelect';
+
 interface EntitySelectOption {
   id: string;
   name: string;
@@ -13,25 +15,19 @@ interface EntitySelectProps {
 }
 
 export function EntitySelect({ label, options, value, onChange, placeholder = 'Select...', required }: EntitySelectProps) {
-  const labelCls = 'block text-xs font-semibold text-secondary mb-1.5 uppercase tracking-wide';
-  const inputCls = 'input-field';
-
   return (
-    <div>
-      <label className={labelCls}>
+    <div className="ym-entity-select">
+      <span className="block text-xs font-semibold text-secondary mb-1.5 uppercase tracking-wide">
         {label}{required && ' *'}
-      </label>
+      </span>
       {options.length > 0 ? (
-        <select
-          className={inputCls}
+        <ThemedSelect
+          label={label}
           value={value || ''}
-          onChange={e => onChange(e.target.value || null)}
-        >
-          <option value="">{placeholder}</option>
-          {options.map(o => (
-            <option key={o.id} value={o.id}>{o.name}</option>
-          ))}
-        </select>
+          placeholder={placeholder}
+          onChange={next => onChange(next || null)}
+          options={[{value:'',label:placeholder}, ...options.map(option=>({value:option.id,label:option.name}))]}
+        />
       ) : (
         <p className="text-xs text-muted py-2">None available yet.</p>
       )}
