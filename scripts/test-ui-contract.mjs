@@ -102,6 +102,24 @@ test('CraftyLabs Studio is a distinct black, red and white editorial trading the
 });
 
 
+test('workflow ribbon keeps every stage visible and stationary in all palettes',()=>{
+  const css=read('src/index.css');
+  assert.ok(landing.includes('className="ym-workflow-ribbon"'));
+  assert.ok(landing.includes('aria-label="Your trading workflow"'));
+  assert.ok(landing.includes('<ol className="ym-workflow-ribbon">'));
+  assert.ok(landing.includes('workflowSteps.map(step =>'));
+  assert.ok(landing.includes('ym-workflow-ribbon-label'));
+  assert.ok(landing.includes('ym-workflow-ribbon-number'));
+  assert.ok(!landing.includes('[...workflowSteps, ...workflowSteps]'),'Duplicated track can run out or leave empty space');
+  assert.ok(!landing.includes('animate-ticker'),'Homepage ribbon must not translate offscreen');
+  assert.ok(css.includes('grid-template-columns:repeat(4,minmax(0,1fr))'),'Desktop must show four steps');
+  assert.ok(css.includes('grid-template-columns:repeat(2,minmax(0,1fr))'),'Mobile must show all stages in two rows');
+  assert.ok(css.includes('.ym-workflow-ribbon > li'),'Steps need shared alignment rules');
+  assert.ok(css.includes('.ym-workflow-ribbon-label'),'Labels must not be cut off');
+  assert.ok(css.includes('animation:none'),'Ribbon must stay visible regardless of motion preferences');
+  assert.ok(css.includes('skewY(1.25deg)'),'Preserve the editorial ribbon presentation');
+});
+
 test('homepage icons use a single accessible, predictable geometry component',()=>{
   const component=read('src/components/LandingIcon.tsx');
   const css=read('src/index.css');
