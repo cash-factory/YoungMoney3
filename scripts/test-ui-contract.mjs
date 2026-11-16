@@ -58,16 +58,38 @@ test('the original workspace hierarchy gains contextual desktop navigation and a
   assert.ok(css.includes('env(safe-area-inset-bottom)'), 'Mobile dock should honor phone safe area');
   assert.ok(css.includes('prefers-reduced-motion'), 'Motion preferences must remain respected');
 });
-test('all eleven themes retain independent light/dark surfaces and recognizable preview swatches',()=>{
+test('all twelve themes retain independent light/dark surfaces and recognizable preview swatches',()=>{
   const css=read('src/index.css');
   const paletteComponent=read('src/components/ColorPaletteControl.tsx');
-  for(const id of ['true-pink','tiffany','charcoal-violet','cyprus','turmeric','obsidian','sapphire-night','black-opal','royal-amethyst','champagne-noir']) {
+  for(const id of ['true-pink','tiffany','charcoal-violet','cyprus','turmeric','obsidian','sapphire-night','black-opal','royal-amethyst','champagne-noir','craftylabs-studio']) {
     assert.ok(css.includes(':root[data-palette="'+id+'"]'),id+' missing light theme');
     assert.ok(css.includes('.dark[data-palette="'+id+'"]'),id+' missing dark theme');
   }
   assert.ok(paletteComponent.includes('aria-pressed={theme'), 'Light/dark controls should be accessible');
   assert.ok(paletteComponent.includes('activePalette.accents'), 'Palette previews should show distinct colour triples');
 });
+test('CraftyLabs Studio is a distinct opt-in black, red and white editorial trading theme',()=>{
+  const css=read('src/index.css');
+  const layout=read('src/components/Layout.tsx');
+  const landing=read('src/pages/LandingPage.tsx');
+  const theme=read('src/context/ThemeContext.ts');
+  const picker=read('src/components/ColorPaletteControl.tsx');
+  const entries=Array.from(theme.matchAll(/\{ id: '([^']+)', name: '([^']+)', detail: '[^']+', swatch: '(#[0-9a-fA-F]{6})', accents: \['([^']+)','([^']+)','([^']+)'\] \}/g));
+  assert.equal(entries.length,12,'New palette must be in addition to the existing eleven');
+  assert.ok(theme.includes("id: 'craftylabs-studio', name: 'CraftyLabs Studio'"));
+  assert.ok(theme.includes("accents: ['#080808','#ff2145','#f8f8f8']"));
+  assert.ok(picker.includes('COLOR_PALETTES.length'),'Palette count should not be hard-coded');
+  assert.ok(css.includes(':root[data-palette="craftylabs-studio"]'));
+  assert.ok(css.includes('.dark[data-palette="craftylabs-studio"]'));
+  assert.ok(css.includes('--bg-primary:#080809'),'Dark surfaces should be near-black');
+  assert.ok(css.includes('--brand:#ff2145'),'Dark accent should be vivid signal red');
+  assert.ok(css.includes('--text-primary:#fafafa'),'Dark headings should remain legible');
+  assert.ok(layout.includes('className="ym-studio-stripe" aria-hidden="true"'));
+  assert.ok(css.includes('.ym-studio-landing-ticker'),'Welcome page should gain angled editorial banner only for this palette');
+  assert.ok(landing.includes('className="ym-studio-landing '));
+  assert.ok(css.includes('prefers-reduced-motion'),'Respect motion sensitivity');
+});
+
 test('performance cards preserve currency, percent and decimal formatting',()=>{
   const cards=read('src/components/ui/StatCard.tsx');
   assert.ok(cards.includes('const isNumeric = /^-?'), 'Numeric detection must not parse currency tokens as plain numbers');
