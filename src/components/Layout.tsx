@@ -273,6 +273,10 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
           </button>
         </div>
 
+        <div className="ym-studio-stripe" aria-hidden="true">
+          <span>PROCESS <b>•</b> PRECISION <b>•</b> DISCIPLINE <b>•</b> GROWTH</span>
+        </div>
+
         <main id="workspace-content" className="ym-main-content p-4 sm:p-6 lg:p-8 xl:px-10 max-w-[1480px] mx-auto animate-fade-in pb-32 lg:pb-12">
           <DataRecoveryNotice />
           {children}
