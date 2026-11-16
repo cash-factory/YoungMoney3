@@ -55,7 +55,13 @@ export function ThemedSelect({
   useEffect(() => {
     if (!open) return;
     const element = document.getElementById(`${id}-option-${activeIndex}`);
-    element?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const list = ref.current?.querySelector<HTMLElement>('.ym-select-list');
+    if (!element || !list) return;
+    // Never scroll the entire document when a long themed menu opens.
+    const optionBox = element.getBoundingClientRect();
+    const listBox = list.getBoundingClientRect();
+    if (optionBox.top < listBox.top) list.scrollTop -= listBox.top - optionBox.top + 4;
+    else if (optionBox.bottom > listBox.bottom) list.scrollTop += optionBox.bottom - listBox.bottom + 4;
   }, [open, activeIndex, id]);
 
   const firstEnabled = options.findIndex(option => !option.disabled);
