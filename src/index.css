@@ -511,6 +511,116 @@
 }
 
 
+/* CraftyLabs Studio — inspired by the user's CraftyLabs refined-original boards.
+   Studio black, signal red, editorial white, heavyweight typography, pill
+   navigation and angled signal ribbon. All selectors stay palette-scoped. */
+:root[data-palette="craftylabs-studio"] {
+  --bg-primary:#f8f7f7; --bg-secondary:#f0ecec; --bg-card:#ffffff; --bg-elevated:#fffafa;
+  --text-primary:#191417; --border:#e3d9dd; --border-strong:#cbb8bf;
+  --brand:#b4092b; --brand-light:#d31039; --brand-dark:#8d0924;
+  --accent:#302126; --ember:#d62d4b;
+  --shadow-color:346 27% 10%;
+  --mesh-1:rgba(180,9,43,.06); --mesh-2:rgba(20,12,15,.02); --mesh-3:rgba(180,9,43,.02);
+  --glass-bg:rgba(255,252,252,.91); --glass-border:rgba(81,32,44,.11);
+  --studio-stripe-ink:#ffffff;
+}
+.dark[data-palette="craftylabs-studio"] {
+  --bg-primary:#080809; --bg-secondary:#101012; --bg-card:#141416; --bg-elevated:#1b1b1f;
+  --text-primary:#fafafa; --border:#343136; --border-strong:#555058;
+  --brand:#ff2145; --brand-light:#ff4b68; --brand-dark:#d40c30;
+  --accent:#f1e9eb; --ember:#ff4564;
+  --shadow-color:350 34% 2%;
+  --mesh-1:rgba(255,33,69,.075); --mesh-2:rgba(250,250,250,.009); --mesh-3:rgba(255,33,69,.025);
+  --glass-bg:rgba(14,14,16,.93); --glass-border:rgba(255,255,255,.10);
+  --studio-stripe-ink:#080809;
+}
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-sidebar {
+  border-right:1px solid var(--border-strong);
+  box-shadow:none;
+}
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-sidebar-brand {
+  border-bottom:1px solid var(--border-strong);
+}
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-sidebar-brand::after {
+  content:""; position:absolute; bottom:-1px; left:0; width:78px; height:3px;
+  background:var(--brand); transform:skewX(-25deg); pointer-events:none;
+}
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-brand-mark {
+  border-radius:8px;
+  box-shadow:none;
+}
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-nav-item,
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-nav-group,
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-quick-find {
+  border-radius:999px;
+}
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-nav-item[data-active="true"] {
+  border:1px solid color-mix(in srgb,var(--brand) 43%,var(--border));
+  background:color-mix(in srgb,var(--brand) 11%,var(--bg-card));
+}
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-nav-item[data-active="true"]::before {
+  top:50%; bottom:auto; left:9px; width:5px; height:5px;
+  transform:translateY(-50%); border-radius:50%;
+}
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-section-header h1,
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-dash-heading h1,
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-dash-section-title h2 {
+  font-weight:900; text-transform:uppercase; letter-spacing:-.048em;
+}
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-stat-card,
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-dash-chart-card,
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-dash-recent-card,
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-dash-details {
+  border-radius:9px;
+  box-shadow:none;
+}
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-stat-card::before {
+  left:0; right:auto; height:3px; width:45%;
+  background:var(--brand); opacity:.9;
+}
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-workspace-topbar {
+  border-bottom-color:var(--border-strong);
+}
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-topbar-eyebrow {
+  color:var(--brand); letter-spacing:.22em; font-weight:900;
+}
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-desktop-quick-add {
+  border-radius:999px;
+  box-shadow:0 7px 25px color-mix(in srgb,var(--brand) 25%,transparent);
+}
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-dock-item {
+  border-radius:999px;
+}
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-studio-stripe {
+  display:flex;
+  min-height:32px; align-items:center; justify-content:center;
+  margin-top:-1px; overflow:hidden;
+  background:var(--brand); color:var(--studio-stripe-ink);
+  transform:skewY(-.6deg); transform-origin:0 50%;
+  border-top:1px solid color-mix(in srgb,var(--text-primary) 14%,transparent);
+  border-bottom:1px solid color-mix(in srgb,var(--text-primary) 14%,transparent);
+}
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-studio-stripe span {
+  transform:skewY(.6deg);
+  white-space:nowrap; font-size:10px; line-height:1.2;
+  font-weight:900; letter-spacing:.16em; text-transform:uppercase;
+}
+:root[data-palette="craftylabs-studio"] .ym-workspace .ym-studio-stripe b {
+  padding:0 16px; font-weight:900;
+}
+:root[data-palette="craftylabs-studio"] body section .animate-ticker {
+  font-weight:850;
+}
+:root[data-palette="craftylabs-studio"] .palette-control .ym-palette-choice[aria-pressed="true"] {
+  outline:1px solid var(--brand); outline-offset:-1px;
+}
+@media (max-width:767px) {
+  :root[data-palette="craftylabs-studio"] .ym-workspace .ym-studio-stripe { min-height:28px; }
+  :root[data-palette="craftylabs-studio"] .ym-workspace .ym-studio-stripe span { font-size:8px; letter-spacing:.09em; }
+  :root[data-palette="craftylabs-studio"] .ym-workspace .ym-studio-stripe b { padding:0 7px; }
+}
+
+
 /* Small enhancement within the classic interface: quick-find respects each palette. */
 .command-palette { background:var(--bg-card);box-shadow:0 22px 65px hsl(var(--shadow-color)/.25); }
 .command-result { transition:background-color .15s ease; }
