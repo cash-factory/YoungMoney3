@@ -24,6 +24,8 @@ jobs:
       (github.event_name == 'workflow_dispatch' &&
        github.ref == 'refs/heads/feat/rich-capture-staging-20261110')
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
     timeout-minutes: 25
     steps:
       - name: Check out staging branch for visual QA
@@ -39,10 +41,8 @@ jobs:
         run: |
           npm run test:ui
           npm run build
-      - name: Install isolated Playwright Chromium
-        run: |
-          npm install --no-save --ignore-scripts playwright@1.56.1
-          npx playwright install --with-deps chromium
+      - name: Use the browser preinstalled in the pinned Playwright container
+        run: npm install --no-save --ignore-scripts playwright@1.56.1
       - name: Check 12 palettes in both modes at 4 responsive sizes
         shell: bash
         run: |
