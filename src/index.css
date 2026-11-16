@@ -621,6 +621,63 @@
 }
 
 
+/* On the welcome page, make the CraftyLabs-inspired accents feel editorial,
+   not orange/teal. Existing eleven palettes are entirely unaffected. */
+:root[data-palette="craftylabs-studio"] .ym-studio-landing h1,
+:root[data-palette="craftylabs-studio"] .ym-studio-landing h2 {
+  font-weight:900;
+  letter-spacing:-.055em;
+  text-transform:uppercase;
+  text-wrap:balance;
+}
+:root[data-palette="craftylabs-studio"] .ym-studio-landing h1 {
+  font-size:clamp(2.45rem,5.25vw,4.5rem);
+  line-height:1.01;
+}
+:root[data-palette="craftylabs-studio"] .ym-studio-landing .btn-primary,
+:root[data-palette="craftylabs-studio"] .ym-studio-landing .btn-secondary {
+  border-radius:999px;
+}
+:root[data-palette="craftylabs-studio"] .ym-studio-landing nav .bg-gradient-to-br {
+  background:linear-gradient(135deg,var(--brand),var(--brand-dark));
+}
+:root[data-palette="craftylabs-studio"] .ym-studio-landing .text-orange-500,
+:root[data-palette="craftylabs-studio"] .ym-studio-landing .text-orange-700,
+:root[data-palette="craftylabs-studio"] .ym-studio-landing .text-orange-300,
+:root[data-palette="craftylabs-studio"] .ym-studio-landing .text-amber-500 {
+  color:var(--brand);
+}
+:root[data-palette="craftylabs-studio"] .ym-studio-landing .bg-orange-500 {
+  background-color:var(--brand);
+}
+:root[data-palette="craftylabs-studio"] .ym-studio-landing .ym-studio-landing-ticker {
+  background:var(--brand);
+  border-color:var(--brand);
+  color:var(--studio-stripe-ink);
+  padding-block:17px;
+  transform:skewY(-1.25deg);
+  transform-origin:left center;
+}
+:root[data-palette="craftylabs-studio"] .ym-studio-landing .ym-studio-landing-ticker > div {
+  transform:skewY(1.25deg);
+}
+:root[data-palette="craftylabs-studio"] .ym-studio-landing .ym-studio-landing-ticker span,
+:root[data-palette="craftylabs-studio"] .ym-studio-landing .ym-studio-landing-ticker .text-orange-500 {
+  color:var(--studio-stripe-ink);
+  font-weight:900;
+}
+@media (max-width:480px) {
+  :root[data-palette="craftylabs-studio"] .ym-studio-landing h1 {
+    font-size:clamp(2.25rem,10vw,3.3rem);
+  }
+}
+@media (prefers-reduced-motion:reduce) {
+  :root[data-palette="craftylabs-studio"] .ym-studio-landing-ticker > div {
+    animation:none!important;
+  }
+}
+
+
 /* Small enhancement within the classic interface: quick-find respects each palette. */
 .command-palette { background:var(--bg-card);box-shadow:0 22px 65px hsl(var(--shadow-color)/.25); }
 .command-result { transition:background-color .15s ease; }
