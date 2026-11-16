@@ -36,7 +36,7 @@ export function ColorPaletteControl({ compact = false }: { compact?: boolean }) 
       <div className={`${compact ? 'right-0 top-full mt-2' : 'bottom-full left-0 right-0 mb-2'} ym-palette-panel absolute z-[70] w-[340px] max-w-[calc(100vw-2rem)] max-h-[min(75vh,560px)] overflow-y-auto rounded-xl border border-themed bg-card p-3 shadow-2xl`}>
         <div className="mb-3 px-2 pt-1">
           <p className="text-sm font-semibold tracking-tight">Your visual workspace</p>
-          <p className="mt-1 text-[11px] leading-relaxed text-muted">Eleven considered palettes. One familiar trading desk.</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-muted">{COLOR_PALETTES.length} considered palettes. One familiar trading desk.</p>
         </div>
         <div role="group" aria-label="Display mode" className="ym-appearance-modes mb-3 grid grid-cols-2 gap-1 rounded-lg bg-secondary p-1">
           <button type="button" aria-pressed={theme === 'light'} onClick={() => { if (theme !== 'light') toggle(); }} className="ym-mode-choice flex items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-semibold"><Sun size={15} /> Light</button>
