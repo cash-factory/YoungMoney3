@@ -669,7 +669,7 @@
   transform:skewY(-1.25deg);
   transform-origin:left center;
 }
-:root[data-palette="craftylabs-studio"] .ym-studio-landing .ym-studio-landing-ticker > div {
+:root[data-palette="craftylabs-studio"] .ym-studio-landing .ym-studio-landing-ticker > .ym-workflow-ribbon {
   transform:skewY(1.25deg);
 }
 :root[data-palette="craftylabs-studio"] .ym-studio-landing .ym-studio-landing-ticker span,
@@ -1585,3 +1585,88 @@ select:disabled {cursor:not-allowed;opacity:.56;}
    container; progressive sticky workflow steps must track the document scroll. */
 .ym-studio-landing {overflow-x:clip;}
 .ym-studio-landing section[id] {scroll-margin-top:90px;}
+
+
+/* Workflow ribbon: all four labels remain in view, instead of a finite ticker
+   track eventually exposing blank space. Static by design, responsive to 320px. */
+.ym-studio-landing .ym-workflow-ribbon {
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  align-items:center;
+  justify-items:stretch;
+  column-gap:clamp(4px,1.5vw,18px);
+  row-gap:10px;
+  width:min(100%,1050px);
+  margin:0 auto;
+  padding:0 24px;
+  list-style:none;
+  animation:none;
+}
+.ym-studio-landing .ym-workflow-ribbon > li {
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-wrap:nowrap;
+  gap:clamp(6px,1.4vw,14px);
+  min-width:0;
+  white-space:nowrap;
+  font-size:clamp(11px,1.2vw,14px);
+  line-height:1.5;
+  font-weight:850;
+  letter-spacing:.095em;
+  text-transform:uppercase;
+  color:var(--text-primary);
+}
+.ym-studio-landing .ym-workflow-ribbon > li:not(:last-child)::after {
+  content:"/";
+  position:absolute;
+  right:calc(-.6 * clamp(4px,1.5vw,18px));
+  top:50%;
+  transform:translateY(-50%);
+  color:var(--text-muted);
+  opacity:.65;
+}
+.ym-studio-landing .ym-workflow-ribbon-number {
+  flex:none;
+  color:var(--brand-dark);
+  font-size:.82em;
+  font-weight:900;
+  font-variant-numeric:tabular-nums;
+}
+.dark .ym-studio-landing .ym-workflow-ribbon-number {
+  color:var(--brand-light);
+}
+.ym-studio-landing .ym-workflow-ribbon-label {
+  overflow:visible;
+  text-overflow:clip;
+}
+:root[data-palette="craftylabs-studio"] .ym-studio-landing .ym-workflow-ribbon > li,
+:root[data-palette="craftylabs-studio"] .ym-studio-landing .ym-workflow-ribbon-number,
+:root[data-palette="craftylabs-studio"] .ym-studio-landing .ym-workflow-ribbon > li:not(:last-child)::after {
+  color:var(--studio-stripe-ink);
+}
+:root[data-palette="craftylabs-studio"] .ym-studio-landing .ym-workflow-ribbon-number {opacity:.75;}
+:root[data-palette="craftylabs-studio"] .ym-studio-landing .ym-workflow-ribbon > li:not(:last-child)::after {opacity:.45;}
+@media(max-width:639px) {
+  .ym-studio-landing .ym-workflow-ribbon {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    column-gap:14px;
+    row-gap:8px;
+    padding:0 14px;
+  }
+  .ym-studio-landing .ym-workflow-ribbon > li {
+    justify-content:center;
+    gap:8px;
+    font-size:clamp(11px,3vw,13px);
+    letter-spacing:.06em;
+  }
+  .ym-studio-landing .ym-workflow-ribbon > li:nth-child(2)::after {display:none;}
+  .ym-studio-landing .ym-workflow-ribbon > li:not(:last-child)::after {right:-9px;}
+}
+@media(max-width:360px) {
+  .ym-studio-landing .ym-workflow-ribbon {padding:0 9px;column-gap:10px;}
+}
+@media(prefers-reduced-motion:reduce) {
+  .ym-studio-landing .ym-workflow-ribbon {animation:none!important;transition:none!important;}
+}
