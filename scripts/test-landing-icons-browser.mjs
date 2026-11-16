@@ -120,7 +120,13 @@ try {
                 const source=await res.text();
                 const xml=new DOMParser().parseFromString(source,'image/svg+xml');
                 const parserError=xml.querySelector('parsererror');
-                throw new Error(JSON.stringify({
+                // Chromium can reject HTMLImageElement.decode() for a valid SVG
+                // even when the image is complete, has intrinsic dimensions, and
+                // the SVG is served correctly. Verify those properties instead.
+                if (res.ok && res.headers.get('content-type')?.includes('image/svg+xml') &&
+                    img.complete && img.naturalWidth > 0 && !parserError) {
+                  // Valid, present SVG; screenshot assertions check the paint.
+                } else throw new Error(JSON.stringify({
                   src:img.currentSrc || img.src,
                   status:res.status,
                   contentType:res.headers.get('content-type'),
