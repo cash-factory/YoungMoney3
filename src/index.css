@@ -1580,3 +1580,8 @@ select:disabled {cursor:not-allowed;opacity:.56;}
 @media (prefers-reduced-motion:reduce) {
   .ym-select-trigger .ym-select-arrow {transition:none;}
 }
+
+/* Clip decorative art without turning the entire landing page into a scroll
+   container; progressive sticky workflow steps must track the document scroll. */
+.ym-studio-landing {overflow-x:clip;}
+.ym-studio-landing section[id] {scroll-margin-top:90px;}
