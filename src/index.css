@@ -1110,3 +1110,138 @@
 @media (prefers-reduced-motion:reduce) {
   .ym-dash-jump button,.ym-dash-detail-chevron,.ym-dash-details-trigger { transition:none; }
 }
+
+
+/* Home-page icon design system.
+   Geometry is shared by all twelve palettes, while the semantic foreground,
+   surface and border inherit each palette's accessible light/dark tone. */
+.ym-studio-landing {
+  --landing-icon-box-sm: 2.25rem;
+  --landing-icon-box-md: 2.75rem;
+  --landing-icon-box-lg: 3.25rem;
+  --landing-icon-glyph-sm: 1rem;
+  --landing-icon-glyph-md: 1.25rem;
+  --landing-icon-glyph-lg: 1.5rem;
+  --landing-icon-radius: .85rem;
+  --landing-icon-fg: var(--brand-dark);
+  --landing-icon-surface: color-mix(in srgb, var(--brand) 10%, var(--bg-card));
+  --landing-icon-border: color-mix(in srgb, var(--brand) 34%, var(--border-strong));
+  --landing-icon-hover: color-mix(in srgb, var(--brand) 17%, var(--bg-card));
+  --landing-icon-border-hover: color-mix(in srgb, var(--brand) 55%, var(--border-strong));
+  --landing-icon-active: color-mix(in srgb, var(--brand) 22%, var(--bg-card));
+}
+:root.dark[data-palette] .ym-studio-landing {
+  --landing-icon-fg: var(--brand-light);
+  --landing-icon-surface: color-mix(in srgb, var(--brand) 13%, var(--bg-card));
+  --landing-icon-border: color-mix(in srgb, var(--brand) 38%, var(--border-strong));
+  --landing-icon-hover: color-mix(in srgb, var(--brand) 20%, var(--bg-card));
+  --landing-icon-border-hover: color-mix(in srgb, var(--brand) 56%, var(--border-strong));
+  --landing-icon-active: color-mix(in srgb, var(--brand) 28%, var(--bg-card));
+}
+.ym-studio-landing .landing-icon {
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  position: relative;
+  flex: 0 0 auto;
+  inline-size: var(--landing-icon-box-md);
+  block-size: var(--landing-icon-box-md);
+  padding: 0;
+  overflow: hidden;
+  line-height: 1;
+  border: 1px solid var(--landing-icon-border);
+  border-radius: var(--landing-icon-radius);
+  background-color: var(--landing-icon-surface);
+  color: var(--landing-icon-fg);
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
+}
+.ym-studio-landing .landing-icon__glyph {
+  display: block;
+  inline-size: var(--landing-icon-glyph-md);
+  block-size: var(--landing-icon-glyph-md);
+  flex: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+.ym-studio-landing .landing-icon--sm {
+  inline-size: var(--landing-icon-box-sm);
+  block-size: var(--landing-icon-box-sm);
+  border-radius: .65rem;
+}
+.ym-studio-landing .landing-icon--sm .landing-icon__glyph {
+  inline-size: var(--landing-icon-glyph-sm);
+  block-size: var(--landing-icon-glyph-sm);
+}
+.ym-studio-landing .landing-icon--lg {
+  inline-size: var(--landing-icon-box-lg);
+  block-size: var(--landing-icon-box-lg);
+  border-radius: 1rem;
+}
+.ym-studio-landing .landing-icon--lg .landing-icon__glyph {
+  inline-size: var(--landing-icon-glyph-lg);
+  block-size: var(--landing-icon-glyph-lg);
+}
+.ym-studio-landing .landing-icon--solid {
+  background-color: var(--button-bg);
+  border-color: var(--button-bg);
+  color: #fff;
+}
+.ym-studio-landing .group:hover .landing-icon--soft,
+.ym-studio-landing .group:focus-within .landing-icon--soft {
+  background-color: var(--landing-icon-hover);
+  border-color: var(--landing-icon-border-hover);
+  transform: translateY(-1px);
+}
+.ym-studio-landing [aria-current="page"] .landing-icon--soft,
+.ym-studio-landing [aria-selected="true"] .landing-icon--soft {
+  background-color: var(--landing-icon-active);
+  border-color: var(--landing-icon-border-hover);
+}
+.ym-studio-landing :is(a,button):focus-visible .landing-icon {
+  outline: 2px solid var(--landing-icon-fg);
+  outline-offset: 3px;
+}
+.ym-studio-landing .landing-icon--desktop { display: none; }
+.ym-studio-landing .landing-step-number {
+  display: grid;
+  place-items: center;
+  flex: 0 0 var(--landing-icon-box-lg);
+  inline-size: var(--landing-icon-box-lg);
+  block-size: var(--landing-icon-box-lg);
+  border: 1px solid var(--button-bg);
+  border-radius: 1rem;
+  background-color: var(--button-bg);
+  color: #fff;
+  font: 750 1rem/1 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+@media (min-width:640px) {
+  .ym-studio-landing .landing-icon--desktop { display: grid; }
+}
+@media (max-width:639px) {
+  .ym-studio-landing {
+    --landing-icon-box-md: 2.5rem;
+    --landing-icon-box-lg: 3rem;
+    --landing-icon-glyph-md: 1.125rem;
+    --landing-icon-glyph-lg: 1.375rem;
+  }
+}
+@media (prefers-reduced-motion:reduce) {
+  .ym-studio-landing .landing-icon { transition: none; }
+  .ym-studio-landing .group:hover .landing-icon--soft { transform: none; }
+}
+@media (forced-colors:active) {
+  .ym-studio-landing .landing-icon,
+  .ym-studio-landing .landing-step-number {
+    background-color: Canvas;
+    color: CanvasText;
+    border-color: CanvasText;
+    forced-color-adjust: auto;
+  }
+  .ym-studio-landing :is(a,button):focus-visible .landing-icon {
+    outline-color: Highlight;
+  }
+}
