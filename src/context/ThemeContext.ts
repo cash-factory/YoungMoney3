@@ -2,6 +2,7 @@ import { createContext, useContext,  } from 'react';
 
 export type Theme = 'dark' | 'light';
 export type ColorPalette = 'obsidian' | 'sapphire-night' | 'black-opal' | 'royal-amethyst' | 'champagne-noir' | 'original' | 'true-pink' | 'tiffany' | 'charcoal-violet' | 'cyprus' | 'turmeric' | 'craftylabs-studio';
+export const DEFAULT_COLOR_PALETTE: ColorPalette = 'craftylabs-studio';
 export const COLOR_PALETTES: { id: ColorPalette; name: string; detail: string; swatch: string; accents?: [string, string, string] }[] = [
   { id: 'original', name: 'Original Ember', detail: 'The original YoungMoney3 look · ember · gold', swatch: '#f97316', accents: ['#0a0807','#f97316','#facc15'] },
   { id: 'true-pink', name: 'True Pink', detail: 'Blush · graphite · orchid', swatch: '#e74791', accents: ['#242228','#ed6bab','#c696e0'] },
@@ -18,7 +19,7 @@ export const COLOR_PALETTES: { id: ColorPalette; name: string; detail: string; s
 ];
 interface ThemeCtx { theme: Theme; palette: ColorPalette; toggle: () => void; setPalette: (palette: ColorPalette) => void; }
 
-export const ThemeContext = createContext<ThemeCtx>({ theme: 'dark', palette: 'original', toggle: () => {}, setPalette: () => {} });
+export const ThemeContext = createContext<ThemeCtx>({ theme: 'dark', palette: DEFAULT_COLOR_PALETTE, toggle: () => {}, setPalette: () => {} });
 
 export const isPalette = (value: string | null): value is ColorPalette => COLOR_PALETTES.some(palette => palette.id === value);
 
