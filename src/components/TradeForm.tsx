@@ -11,6 +11,7 @@ import { ScreenshotUpload } from './ScreenshotUpload';
 import { SuggestInput } from './ui/SuggestInput';
 import { PreTradeChecklist } from './PreTradeChecklist';
 import { EntitySelect } from './EntitySelect';
+import { ThemedSelect } from '@/components/ThemedSelect';
 import { InstrumentPicker } from './InstrumentPicker';
 import { TradingViewChart } from './TradingViewChart';
 import { calculatePositionSize, createTradeCalculationSnapshot, defaultTradeLevels, distancePresets, examplePriceIsUnconfirmed, instrumentDistanceLabel, instrumentPnl, instrumentPnlFromSnapshot, priceAtDistance, quantityStep, validQuantity, SIZE_PRESETS } from '@/lib/instrumentMath';
@@ -696,12 +697,12 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
         <div className="space-y-4 animate-fade-in">
           {!initial && <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl border border-themed bg-secondary/40 p-3">
             <div><p className="text-xs font-semibold">Capture type</p><p className="text-[11px] text-muted">Live trades require the actual broker fill. Historical records allow past dates.</p></div>
-            <select className={`${inputCls} sm:max-w-48`} value={form.capture_mode || 'live'} onChange={e => {
-              const mode = e.target.value as 'live' | 'historical';
+            <ThemedSelect className="sm:max-w-48" label="Capture type" value={form.capture_mode || 'live'} onChange={value => {
+              const mode = value as 'live' | 'historical';
               update('capture_mode', mode);
               setActualFillConfirmed(false);
               if (mode === 'live') update('entry_time', localDateTimeInputValue());
-            }}><option value="live">Live capture</option><option value="historical">Historical / past trade</option></select>
+            }} options={[{value:'live',label:'Live capture'},{value:'historical',label:'Historical / past trade'}]} />
           </div>}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
@@ -712,11 +713,8 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
             </div>
             <div>
               <label className={labelCls}>Direction *</label>
-              <select className={inputCls} value={form.direction}
-                onChange={e => changeDirection(e.target.value as TradeDirection)}>
-                <option value="long">Long (Buy)</option>
-                <option value="short">Short (Sell)</option>
-              </select>
+              <ThemedSelect label="Direction" value={form.direction} onChange={value => changeDirection(value as TradeDirection)}
+                options={[{value:'long',label:'Long (Buy)'},{value:'short',label:'Short (Sell)'}]} />
             </div>
             <div>
               <label className={labelCls}>Size {selectedInstrument ? `(${selectedInstrument.quantity_unit})` : ''} *</label>
@@ -783,15 +781,9 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label className={labelCls}>Session</label>
-              <select className={inputCls} value={form.session || ''}
-                onChange={e => update('session', (e.target.value || null) as TradeSession)}>
-                <option value="">—</option>
-                <option value="sydney">Sydney</option>
-                <option value="asian">Asian</option>
-                <option value="london">London</option>
-                <option value="new_york">New York</option>
-                <option value="overlap">London/NY Overlap</option>
-              </select>
+              <ThemedSelect label="Session" value={form.session || ''} onChange={value => update('session', (value || null) as TradeSession)}
+                options={[{value:'',label:'Not selected'},{value:'sydney',label:'Sydney'},{value:'asian',label:'Asian'},
+                  {value:'london',label:'London'},{value:'new_york',label:'New York'},{value:'overlap',label:'London / NY Overlap'}]} />
             </div>
             <div>
               <label className={labelCls}>Broker / Prop Firm</label>
@@ -799,12 +791,8 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
             </div>
             <div>
               <label className={labelCls}>Account Type</label>
-              <select className={inputCls} value={form.account_type || ''}
-                onChange={e => update('account_type', (e.target.value || null) as AccountType)}>
-                <option value="">—</option>
-                <option value="personal">Personal Funds</option>
-                <option value="propfirm">Prop Firm</option>
-              </select>
+              <ThemedSelect label="Account Type" value={form.account_type || ''} onChange={value => update('account_type', (value || null) as AccountType)}
+                options={[{value:'',label:'Not selected'},{value:'personal',label:'Personal Funds'},{value:'propfirm',label:'Prop Firm'}]} />
             </div>
             <div>
               <label className={labelCls}>Risk %</label>
@@ -844,18 +832,10 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Emotional State</label>
-              <select className={inputCls} value={form.emotional_state || ''}
-                onChange={e => update('emotional_state', (e.target.value || null) as EmotionalState)}>
-                <option value="">—</option>
-                <option value="calm">Calm</option>
-                <option value="confident">Confident</option>
-                <option value="focused">Focused</option>
-                <option value="rushed">Rushed</option>
-                <option value="frustrated">Frustrated</option>
-                <option value="anxious">Anxious</option>
-                <option value="greedy">Greedy</option>
-                <option value="fearful">Fearful</option>
-              </select>
+              <ThemedSelect label="Emotional State" value={form.emotional_state || ''} onChange={value => update('emotional_state', (value || null) as EmotionalState)}
+                options={[{value:'',label:'Not selected'},{value:'calm',label:'Calm'},{value:'confident',label:'Confident'},
+                  {value:'focused',label:'Focused'},{value:'rushed',label:'Rushed'},{value:'frustrated',label:'Frustrated'},
+                  {value:'anxious',label:'Anxious'},{value:'greedy',label:'Greedy'},{value:'fearful',label:'Fearful'}]} />
             </div>
             <div>
               <label className={labelCls}>Setup Quality · checklist score</label>
