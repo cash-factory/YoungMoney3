@@ -105,8 +105,8 @@ test('CraftyLabs Studio is a distinct black, red and white editorial trading the
 test('homepage icons use a single accessible, predictable geometry component',()=>{
   const component=read('src/components/LandingIcon.tsx');
   const css=read('src/index.css');
-  assert.equal((landing.match(/<LandingIcon /g)||[]).length,9, 'All homepage icon groups should use shared LandingIcon');
-  for(const icon of ['section.icon','item.icon','f.icon','s.icon','BookOpen','TrendingUp']) {
+  assert.equal((landing.match(/<LandingIcon /g)||[]).length,8, 'Feature and tool cards should use shared LandingIcon');
+  for(const icon of ['item.icon','f.icon','s.icon','BookOpen','TrendingUp']) {
     assert.ok(landing.includes('icon={'+icon+'}'),icon+' must use the shared component');
   }
   assert.doesNotMatch(landing,/<(?:section|item|f|s)\.icon\b/, 'No raw SVG feature glyph should bypass canonical icon geometry');
@@ -122,6 +122,39 @@ test('homepage icons use a single accessible, predictable geometry component',()
     '@media (forced-colors:active)','@media (prefers-reduced-motion:reduce)',':focus-visible .landing-icon']) {
     assert.ok(css.includes(selector),selector+' must retain icon design and accessibility behavior');
   }
+});
+
+test('annotated CraftyLabs page refresh retains functional content and loads original visual assets',()=>{
+  const css=read('src/index.css');
+  const auth=read('src/pages/AuthPage.tsx');
+  const select=read('src/components/ThemedSelect.tsx');
+  const dashboard=read('src/pages/DashboardPage.tsx');
+  const entity=read('src/components/EntitySelect.tsx');
+  for(const id of ['platform','features','practice','how'])assert.ok(landing.includes('id="'+id+'"'),'Public anchor should remain navigable: '+id);
+  for(const selector of ['ym-platform-chapter','ym-platform-chapter-number','ym-editorial-banner','ym-intelligence-banner',
+    'ym-practice-banner','ym-feature-tile','ym-process-stack','ym-process-step','ym-studio-footer','ym-footer-art']) {
+    assert.ok(landing.includes(selector),'Missing requested homepage visual treatment: '+selector);
+  }
+  for(const art of ['studio-intelligence.svg','studio-journal.svg','studio-auth.svg','studio-wave.svg']) {
+    const file=read('public/visuals/'+art);
+    assert.ok(file.includes('<svg')&&file.includes('viewBox='),'Invalid vector artwork: '+art);
+    assert.ok(file.includes('role="img"'),'Artwork should have an accessible description');
+    assert.ok((landing+auth).includes('/visuals/'+art),'Artwork must be used in public site: '+art);
+  }
+  for(const token of ['.ym-platform-chapter','.ym-editorial-banner','.ym-feature-grid','.ym-process-stack',
+    '.ym-studio-footer','.ym-auth-form-art','.ym-auth-showcase-art','.ym-dash-topic-mark','.ym-studio-stripe']) {
+    assert.ok(css.includes(token),'Missing style: '+token);
+  }
+  assert.ok(landing.includes('prefers-reduced-motion')||css.includes('prefers-reduced-motion'),'Motion safety must be preserved');
+  assert.ok(dashboard.includes('ym-dash-topic-mark'),'The overview chapter should have its red editorial accent');
+  assert.ok(select.includes('role="combobox"')&&select.includes('role="listbox"')&&select.includes('aria-activedescendant'),
+    'Custom menus must preserve discoverable keyboard semantics');
+  assert.ok(select.includes("event.key === 'Escape'")&&select.includes("event.key === 'ArrowDown'"),
+    'Custom menus need escape and arrow-key navigation');
+  assert.ok(dashboard.includes('<ThemedSelect'),'Main account and performance filters need custom themed options');
+  assert.ok(entity.includes('<ThemedSelect'),'Shared entity forms need custom themed options');
+  assert.ok(css.includes('select.input-field option'),'Unconverted native selects still need palette-specific option styling');
+  assert.ok(theme.includes("id: 'true-pink', name: 'True Pink'"),'True Pink must remain selectable');
 });
 
 test('all homepage icons meet contrast targets in each of twelve light and dark palettes',()=>{
