@@ -103,7 +103,7 @@ try {
         assert.deepEqual(outcome.problems,[],palette+' '+mode+' '+viewport.name+' '+JSON.stringify(outcome));
         const ribbon = await page.locator('.ym-workflow-ribbon').evaluate(element => {
           const nodes = [...element.querySelectorAll('li')];
-          const labels = nodes.map(node => node.textContent?.trim().replace(/\\s+/g,' ') || '');
+          const labels = nodes.map(node => [node.querySelector('.ym-workflow-ribbon-number')?.textContent, node.querySelector('.ym-workflow-ribbon-label')?.textContent].join(' '));
           const inViewport = nodes.every(node => {
             const rect=node.getBoundingClientRect();
             return rect.left>=-2 && rect.right<=window.innerWidth+2 && rect.width>0;
