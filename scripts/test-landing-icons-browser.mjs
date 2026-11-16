@@ -107,6 +107,38 @@ try {
             animations:'disabled',
           });
         }
+
+        if (palette === 'craftylabs-studio' && mode === 'dark') {
+          for (const selector of ['#features','#practice','footer.ym-studio-footer']) {
+            await page.locator(selector).scrollIntoViewIfNeeded();
+            const artwork=page.locator(selector+' img[src^="/visuals/studio-"]');
+            const loaded=await artwork.evaluate(async img=>{
+              await img.decode();
+              const bounds=img.getBoundingClientRect();
+              return {width:img.naturalWidth,height:img.naturalHeight,left:bounds.left,right:bounds.right};
+            });
+            assert.ok(loaded.width>=900 && loaded.height>=500,
+              selector+' artwork failed to load at '+viewport.name+' '+JSON.stringify(loaded));
+            assert.ok(loaded.left>=-2 && loaded.right<=viewport.width+2,
+              selector+' artwork overflows '+viewport.name+' viewport');
+            if(['phone-390','desktop'].includes(viewport.name)) {
+              await page.locator(selector).screenshot({
+                path:screenshotDir+'/'+selector.replace(/[^a-z]+/g,'-')+'-'+viewport.name+'.png',
+                animations:'disabled',
+              });
+            }
+          }
+          assert.equal(await page.locator('#how .ym-process-step').count(),6,'All six workflow steps remain rendered');
+          assert.equal(await page.locator('#platform .ym-platform-chapter').count(),6,'Section categories should have a distinct chapter treatment');
+          const banner=await page.locator('#features .ym-editorial-banner').evaluate(el=>{
+            const bounds=el.getBoundingClientRect();
+            const copy=el.querySelector('.ym-editorial-copy').getBoundingClientRect();
+            const media=el.querySelector('.ym-editorial-media').getBoundingClientRect();
+            return {width:bounds.width,copyLeft:copy.left,copyRight:copy.right,mediaLeft:media.left,mediaRight:media.right};
+          });
+          assert.ok(banner.width>=Math.min(viewport.width-32,600),'Editorial banner too narrow for viewport');
+          assert.ok(banner.copyRight<=viewport.width+2 && banner.mediaRight<=viewport.width+2,'Editorial content overflows');
+        }
         scenarios+=1;
       }
     }
