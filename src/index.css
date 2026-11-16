@@ -638,6 +638,17 @@
 :root[data-palette="craftylabs-studio"] .ym-studio-landing .btn-secondary {
   border-radius:999px;
 }
+:root[data-palette="craftylabs-studio"] .ym-studio-landing .ym-studio-landing-nav {
+  border:1px solid var(--border-strong);
+  border-radius:999px;
+  background:var(--bg-card);
+  padding:4px;
+}
+:root[data-palette="craftylabs-studio"] .ym-studio-landing .ym-studio-landing-nav a {
+  border-radius:999px;
+  font-size:12px;
+  font-weight:750;
+}
 :root[data-palette="craftylabs-studio"] .ym-studio-landing nav .bg-gradient-to-br {
   background:linear-gradient(135deg,var(--brand),var(--brand-dark));
 }
