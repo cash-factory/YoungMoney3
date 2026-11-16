@@ -1,5 +1,5 @@
 import {useEffect, useState, type ReactNode} from 'react';
-import {ThemeContext,isPalette,type Theme,type ColorPalette} from './ThemeContext';
+import {ThemeContext,isPalette,DEFAULT_COLOR_PALETTE,type Theme,type ColorPalette} from './ThemeContext';
 import { readPreference, savePreference } from '@/lib/browserPreferences';
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
@@ -8,7 +8,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   });
   const [palette, setPalette] = useState<ColorPalette>(() => {
     const saved = readPreference('journal-palette');
-    return isPalette(saved) ? saved : 'original';
+    return isPalette(saved) ? saved : DEFAULT_COLOR_PALETTE;
   });
 
   useEffect(() => {
