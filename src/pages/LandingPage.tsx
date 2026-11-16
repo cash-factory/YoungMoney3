@@ -137,7 +137,7 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
   ];
 
   return (
-    <div ref={pageRef} className="min-h-screen bg-primary overflow-x-hidden">
+    <div ref={pageRef} className="ym-studio-landing min-h-screen bg-primary overflow-x-hidden">
       {/* ─── NAV ─── */}
       <nav className="fixed top-0 left-0 right-0 z-50 px-4 sm:px-6 py-3 transition-all duration-300"
         style={{
@@ -273,7 +273,7 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
       </section>
 
       {/* ─── WORKFLOW DIVIDER ─── */}
-      <section className="relative overflow-hidden border-y border-themed bg-secondary/40 py-5">
+      <section className="ym-studio-landing-ticker relative overflow-hidden border-y border-themed bg-secondary/40 py-5">
         <div className="flex min-w-max items-center gap-8 animate-ticker whitespace-nowrap px-6">
           {[...workflowSteps, ...workflowSteps].map((step, index) => <span key={`${step.label}-${index}`} className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.16em] text-muted"><span className="font-mono text-orange-500">{step.value}</span>{step.label}<span className="text-orange-500/50">/</span></span>)}
         </div>
