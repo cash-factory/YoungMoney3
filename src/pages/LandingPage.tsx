@@ -153,7 +153,7 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
             </div>
             <span className="font-bold text-base tracking-tight hidden sm:inline">Young-Money-Fx</span><span className="font-bold text-sm tracking-tight sm:hidden">YM / FX</span>
           </div>
-          <div className="hidden md:flex items-center gap-1">
+          <div className="ym-studio-landing-nav hidden md:flex items-center gap-1">
             <a href="#platform" className="btn-ghost text-sm">Platform</a>
             <a href="#features" className="btn-ghost text-sm">Features</a>
             <a href="#practice" className="btn-ghost text-sm">Private practice</a>
