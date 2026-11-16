@@ -113,7 +113,24 @@ try {
             await page.locator(selector).scrollIntoViewIfNeeded();
             const artwork=page.locator(selector+' img[src^="/visuals/studio-"]');
             const loaded=await artwork.evaluate(async img=>{
-              await img.decode();
+              try {
+                await img.decode();
+              } catch (error) {
+                const res=await fetch(img.currentSrc || img.src);
+                const source=await res.text();
+                const xml=new DOMParser().parseFromString(source,'image/svg+xml');
+                const parserError=xml.querySelector('parsererror');
+                throw new Error(JSON.stringify({
+                  src:img.currentSrc || img.src,
+                  status:res.status,
+                  contentType:res.headers.get('content-type'),
+                  imageComplete:img.complete,
+                  imageNaturalWidth:img.naturalWidth,
+                  xmlError:parserError?.textContent?.slice(0,500),
+                  sourceHead:source.slice(0,130),
+                  reason:String(error),
+                }));
+              }
               const bounds=img.getBoundingClientRect();
               return {width:img.naturalWidth,height:img.naturalHeight,left:bounds.left,right:bounds.right};
             });
