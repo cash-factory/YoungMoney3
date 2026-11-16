@@ -26,6 +26,13 @@ try {
       deviceScaleFactor:1,
     });
     const page=await context.newPage();
+    // Vite preview serves static assets only; simulate the unauthenticated
+    // Worker response so the actual LandingPage renders without a live backend.
+    await page.route('**/api/me',route=>route.fulfill({
+      status:401,
+      contentType:'application/json',
+      body:JSON.stringify({error:'Unauthenticated'}),
+    }));
     await page.goto(baseUrl,{waitUntil:'domcontentloaded'});
     for(const palette of palettes) {
       for(const mode of ['light','dark']) {
