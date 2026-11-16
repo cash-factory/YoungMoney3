@@ -166,7 +166,7 @@ export function DashboardPage() {
 
       <div className="ym-dash-heading" id="ym-overview">
         <div className="min-w-0">
-          <p className="ym-dash-eyebrow"><span aria-hidden="true" className="ym-dash-eyebrow-mark" /> TRADING OPERATIONS / OVERVIEW</p>
+          <p className="ym-dash-eyebrow"><span aria-hidden="true" className="ym-dash-eyebrow-mark" /> TRADING OPERATIONS <span aria-hidden="true">/</span> <span className="ym-dash-topic-mark">OVERVIEW</span></p>
           <h1>Trading overview</h1>
           <p>Everything that matters, in one clear view. Review your results, risk and next decisions.</p>
         </div>
