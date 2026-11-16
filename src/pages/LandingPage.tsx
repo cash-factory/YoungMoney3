@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { ColorPaletteControl } from '@/components/ColorPaletteControl';
+import { LandingIcon } from '@/components/LandingIcon';
 
 function useScrollReveal() {
   const ref = useRef<HTMLDivElement>(null);
@@ -148,9 +149,7 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-gradient-to-br from-orange-500 to-orange-700 text-white shadow-lg shadow-orange-500/20">
-              <TrendingUp size={22} />
-            </div>
+            <LandingIcon icon={TrendingUp} size="sm" variant="solid" />
             <span className="font-bold text-base tracking-tight hidden sm:inline">Young-Money-Fx</span><span className="font-bold text-sm tracking-tight sm:hidden">YM / FX</span>
           </div>
           <div className="ym-studio-landing-nav hidden md:flex items-center gap-1">
@@ -256,7 +255,7 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
                 <div className="mt-2 flex justify-between text-[10px] text-muted"><span>Plan</span><span>Execute</span><span>Reflect</span><span>Adjust</span></div>
               </div>
               <div className="mt-4 flex items-center gap-3 rounded-2xl border border-themed bg-secondary/50 p-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/10 text-orange-500"><BookOpen size={17} /></div>
+                <LandingIcon icon={BookOpen} size="sm" />
                 <div className="min-w-0 flex-1"><p className="text-xs font-semibold">One connected trading journal</p><p className="mt-0.5 truncate text-[10px] text-muted">Trades · strategies · tests · weekly reviews</p></div>
                 <ArrowRight size={15} className="text-orange-500" />
               </div>
@@ -295,9 +294,7 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
             {platformSections.map((section, si) => (
               <div key={si} data-reveal>
                 <div className="flex items-center gap-3 mb-5">
-                  <div className="p-2 rounded-xl bg-orange-500/10 text-orange-500">
-                    <section.icon size={20} />
-                  </div>
+                  <LandingIcon icon={section.icon} />
                   <h3 className="text-lg font-bold tracking-tight">{section.label}</h3>
                   <div className="flex-1 h-px bg-border" />
                   <span className="text-xs text-muted font-mono">{section.items.length} {section.items.length === 1 ? 'tool' : 'tools'}</span>
@@ -309,9 +306,7 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
                       className="card card-hover p-5 group"
                     >
                       <div className="flex items-start gap-3">
-                        <div className="flex-shrink-0 p-2 rounded-xl bg-gradient-to-br from-orange-500/15 to-amber-500/10 text-orange-500 group-hover:scale-110 transition-transform duration-200">
-                          <item.icon size={20} />
-                        </div>
+                        <LandingIcon icon={item.icon} />
                         <div className="min-w-0">
                           <h4 className="font-bold text-sm mb-1">{item.title}</h4>
                           <p className="text-xs text-secondary leading-relaxed">{item.desc}</p>
@@ -345,9 +340,7 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
                 data-reveal
                 className="card card-hover p-6 group"
               >
-                <div className={`p-3 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-600 text-white mb-4 inline-flex shadow-lg group-hover:scale-110 transition-transform duration-200`}>
-                  <f.icon size={24} />
-                </div>
+                <LandingIcon icon={f.icon} size="lg" className="mb-4" />
                 <h3 className="font-bold text-base mb-2">{f.title}</h3>
                 <p className="text-sm text-secondary leading-relaxed">{f.desc}</p>
               </div>
@@ -382,9 +375,7 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             {processFeatures.map((f, i) => (
               <div key={i} data-reveal className="card card-hover p-6 flex gap-4">
-                <div className="flex-shrink-0 p-2.5 rounded-xl bg-orange-500/10 text-orange-500">
-                  <f.icon size={22} />
-                </div>
+                <LandingIcon icon={f.icon} />
                 <div>
                   <h3 className="font-bold text-sm mb-1.5">{f.title}</h3>
                   <p className="text-sm text-secondary leading-relaxed">{f.desc}</p>
@@ -422,12 +413,8 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
               { step: '06', icon: Target, title: 'Review your process', desc: 'Compare your plan with the decisions you recorded, identify recurring patterns, and choose one improvement to test.' },
             ].map((s, i) => (
               <div key={i} data-reveal className="card p-5 flex items-center gap-5 group hover:border-orange-500/30 transition-colors">
-                <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-700 text-white flex items-center justify-center font-bold text-lg shadow-lg shadow-orange-500/20 group-hover:scale-110 transition-transform">
-                  {s.step}
-                </div>
-                <div className="flex-shrink-0 hidden sm:block">
-                  <s.icon size={28} className="text-orange-500" />
-                </div>
+                <span className="landing-step-number" aria-label={`Step ${s.step}`}>{s.step}</span>
+                <LandingIcon icon={s.icon} className="landing-icon--desktop" />
                 <div>
                   <h3 className="font-bold text-base">{s.title}</h3>
                   <p className="text-sm text-secondary mt-1">{s.desc}</p>
@@ -447,9 +434,7 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 rounded-full bg-orange-500/15 blur-3xl animate-pulse-glow" />
             </div>
             <div className="relative z-10">
-              <div className="inline-flex p-4 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-700 text-white shadow-xl shadow-orange-500/20 mb-6">
-                <TrendingUp size={32} />
-              </div>
+              <LandingIcon icon={TrendingUp} size="lg" variant="solid" className="mb-6 mx-auto" />
               <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
                 Ready to trade with <span className="text-gradient">intention?</span>
               </h2>
@@ -475,9 +460,7 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
             <div className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-lg bg-gradient-to-br from-orange-500 to-orange-700 text-white">
-                <TrendingUp size={18} />
-              </div>
+              <LandingIcon icon={TrendingUp} size="sm" variant="solid" />
               <span className="font-bold text-sm">YM-Fx</span>
             </div>
             <p className="text-xs text-muted">Built for accountability. Designed for growth.</p>
