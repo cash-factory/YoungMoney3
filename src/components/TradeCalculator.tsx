@@ -2,6 +2,7 @@ import { accountLedger } from '@/lib/tradeFinance';
 import type { Trade, TradingAccountAdjustment } from '@/lib/types';
 import { useEffect, useMemo, useState } from 'react';
 import { Calculator, RotateCcw, ShieldAlert, Target } from 'lucide-react';
+import { ThemedSelect } from '@/components/ThemedSelect';
 import { useAuth } from '@/context/AuthContext';
 import { useMarketInstruments, useTradingAccounts } from '@/hooks/useData';
 import { calculatePositionSize, instrumentDistanceLabel, instrumentDistanceStep, instrumentPnl } from '@/lib/instrumentMath';
@@ -88,22 +89,18 @@ export function TradeCalculator({ trades, adjustments }: { trades: Trade[]; adju
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
         <div>
           <label className={labelCls}>Account</label>
-          <select className={inputCls} value={accountId} onChange={event => { setAccountId(event.target.value); setConversion(''); }}>
-            {accounts.map(item => <option key={item.id} value={item.id}>{item.name} · {item.base_currency}</option>)}
-          </select>
+          <ThemedSelect label="Account" value={accountId} onChange={value => { setAccountId(value); setConversion(''); }}
+            options={accounts.map(item => ({ value:item.id, label:`${item.name} · ${item.base_currency}` }))} />
         </div>
         <div>
           <label className={labelCls}>Instrument</label>
-          <select className={inputCls} value={instrumentId} onChange={event => { setInstrumentId(event.target.value); setConversion(''); }}>
-            {instruments.map(item => <option key={item.id} value={item.id}>{item.symbol}</option>)}
-          </select>
+          <ThemedSelect label="Instrument" value={instrumentId} onChange={value => { setInstrumentId(value); setConversion(''); }}
+            options={instruments.map(item => ({ value:item.id, label:item.symbol, description:item.display_name }))} />
         </div>
         <div>
           <label className={labelCls}>Direction</label>
-          <select className={inputCls} value={direction} onChange={e => setDirection(e.target.value as 'long' | 'short')}>
-            <option value="long">Long</option>
-            <option value="short">Short</option>
-          </select>
+          <ThemedSelect label="Direction" value={direction} onChange={value=>setDirection(value as 'long' | 'short')}
+            options={[{value:'long',label:'Long / Buy'},{value:'short',label:'Short / Sell'}]} />
         </div>
         <div>
           <label className={labelCls}>Quantity {instrument ? `(${instrument.quantity_unit})` : ''}</label>
