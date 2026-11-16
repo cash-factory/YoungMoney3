@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   TrendingUp, BarChart3, BookOpen, Sparkles, Calendar, Target,
   Flame, Shield, ArrowRight, Zap, Award,
-  CheckCircle2, Star, ChevronRight, Activity, PenLine, Brain,
+  CheckCircle2, ChevronRight, Activity, PenLine, Brain,
   ClipboardList, FlaskConical, ArrowRightCircle, ScrollText,
   CalendarClock, LayoutTemplate, Beaker, BookMarked, StickyNote,
   GraduationCap, CreditCard, ClipboardCheck, CandlestickChart,
@@ -292,18 +292,21 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
 
           <div className="space-y-12">
             {platformSections.map((section, si) => (
-              <div key={si} data-reveal>
-                <div className="flex items-center gap-3 mb-5">
-                  <LandingIcon icon={section.icon} />
-                  <h3 className="text-lg font-bold tracking-tight">{section.label}</h3>
-                  <div className="flex-1 h-px bg-border" />
-                  <span className="text-xs text-muted font-mono">{section.items.length} {section.items.length === 1 ? 'tool' : 'tools'}</span>
+              <div key={si} data-reveal className="ym-platform-category">
+                <div className="ym-platform-chapter">
+                  <div className="ym-platform-chapter-number" aria-hidden="true">{String(si + 1).padStart(2, '0')}</div>
+                  <div className="ym-platform-chapter-text">
+                    <span className="ym-platform-chapter-kicker">AREA / {String(si + 1).padStart(2, '0')}</span>
+                    <h3>{section.label}</h3>
+                  </div>
+                  <div className="ym-platform-chapter-rule" aria-hidden="true" />
+                  <span className="ym-platform-chapter-count">{section.items.length} {section.items.length === 1 ? 'tool' : 'tools'}</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {section.items.map((item, ii) => (
                     <div
                       key={ii}
-                      className="card card-hover p-5 group"
+                      className="card card-hover p-5 group ym-platform-tool"
                     >
                       <div className="flex items-start gap-3">
                         <LandingIcon icon={item.icon} />
@@ -328,17 +331,24 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
           <div className="absolute bottom-1/3 right-0 w-96 h-96 rounded-full bg-amber-500/5 blur-3xl" />
         </div>
         <div className="relative max-w-6xl mx-auto">
-          <div className="text-center mb-14">
-            <p className="text-xs font-bold uppercase tracking-wider text-orange-500 mb-3">What sets it apart</p>
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">Built for serious traders</h2>
-            <p className="mt-3 text-secondary max-w-xl mx-auto">Not just a trade log — a complete trading intelligence system.</p>
+          <div className="ym-editorial-banner ym-intelligence-banner mb-10" data-reveal>
+            <div className="ym-editorial-copy">
+              <p className="ym-editorial-eyebrow">What sets it apart <span aria-hidden="true">/ 02</span></p>
+              <h2>Built for <em>serious traders.</em></h2>
+              <p>Not just a trade log — your decisions, risk and patterns, brought together in a clear trading intelligence system.</p>
+              <div className="ym-editorial-rule" aria-hidden="true"><span /></div>
+              <span className="ym-editorial-caption">PROCESS / PRECISION / PERSPECTIVE</span>
+            </div>
+            <div className="ym-editorial-media">
+              <img src="/visuals/studio-intelligence.svg" alt="Illustration of trading analytics with a chart, risk gauge and strategy data" loading="lazy" width="1200" height="680" />
+            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="ym-feature-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {featureHighlights.map((f, i) => (
               <div
                 key={i}
                 data-reveal
-                className="card card-hover p-6 group"
+                className="ym-feature-tile card card-hover p-6 group"
               >
                 <LandingIcon icon={f.icon} size="lg" className="mb-4" />
                 <h3 className="font-bold text-base mb-2">{f.title}</h3>
@@ -356,20 +366,17 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
           <div className="absolute bottom-0 right-0 w-96 h-96 rounded-full bg-amber-500/5 blur-3xl" />
         </div>
         <div className="relative max-w-5xl mx-auto" data-reveal>
-          <div className="text-center mb-14">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 mb-4">
-              <Shield size={14} className="text-orange-500" />
-              <span className="text-xs font-semibold text-orange-600 dark:text-orange-400">A private trading practice</span>
+          <div className="ym-editorial-banner ym-practice-banner mb-10">
+            <div className="ym-editorial-copy">
+              <p className="ym-editorial-eyebrow"><Shield size={14} aria-hidden="true" /> A private trading practice <span aria-hidden="true">/ 03</span></p>
+              <h2>Build consistency with <em>honest records.</em></h2>
+              <p>Keep your journal private and your review process structured. Capture decisions, not just outcomes, to understand your own evidence.</p>
+              <div className="ym-editorial-rule" aria-hidden="true"><span /></div>
+              <span className="ym-editorial-caption">YOUR PROCESS / YOUR EVIDENCE</span>
             </div>
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight max-w-2xl mx-auto">
-              Build consistency with honest records.
-              <br />
-              <span className="text-gradient">Learn from your own evidence.</span>
-            </h2>
-            <p className="mt-4 text-secondary max-w-xl mx-auto leading-relaxed">
-              Keep your journal private while making the review process structured. Record context,
-              risk, and decisions consistently so your own history can guide measured improvement.
-            </p>
+            <div className="ym-editorial-media">
+              <img src="/visuals/studio-journal.svg" alt="Illustration of a secure trading journal and review checklists" loading="lazy" width="1200" height="680" />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -403,7 +410,7 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
             <p className="text-xs font-bold uppercase tracking-wider text-orange-500 mb-3">Simple workflow</p>
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">How it works</h2>
           </div>
-          <div className="space-y-4">
+          <div className="ym-process-stack">
             {[
               { step: '01', icon: PenLine, title: 'Log your trades', desc: '5-step wizard: pick strategy, enter trade details with live auto-calc, add context (emotion, setup quality, mistakes), attach screenshots and voice notes, then close with a review.' },
               { step: '02', icon: BookOpen, title: 'Journal every decision', desc: 'Daily, weekly, and monthly journal entries with pre-market checklists, post-session reviews, mood tracking, and guided review prompts.' },
@@ -412,7 +419,7 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
               { step: '05', icon: FlaskConical, title: 'Test and learn', desc: 'Backtest strategies, forward-test in real time, document setups, track study progress, and build a resource library.' },
               { step: '06', icon: Target, title: 'Review your process', desc: 'Compare your plan with the decisions you recorded, identify recurring patterns, and choose one improvement to test.' },
             ].map((s, i) => (
-              <div key={i} data-reveal className="card p-5 flex items-center gap-5 group hover:border-orange-500/30 transition-colors">
+              <div key={i} data-reveal className="ym-process-step card p-5 flex items-center gap-5 group" style={{ '--step-index': i } as React.CSSProperties}>
                 <span className="landing-step-number" aria-label={`Step ${s.step}`}>{s.step}</span>
                 <LandingIcon icon={s.icon} className="landing-icon--desktop" />
                 <div>
@@ -456,24 +463,19 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
       </section>
 
       {/* ─── FOOTER ─── */}
-      <footer className="py-10 px-4 border-t border-themed">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+      <footer className="ym-studio-footer py-12 px-4 border-t border-themed">
+        <img className="ym-footer-art" src="/visuals/studio-wave.svg" alt="" aria-hidden="true" loading="lazy" width="1800" height="550" />
+        <div className="ym-footer-content max-w-6xl mx-auto">
+          <div className="ym-footer-head flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
             <div className="flex items-center gap-2.5">
               <LandingIcon icon={TrendingUp} size="sm" variant="solid" />
-              <span className="font-bold text-sm">YM-Fx</span>
+              <span className="ym-footer-wordmark font-bold text-sm">YM-Fx <small> / THE TRADING DESK</small></span>
             </div>
-            <p className="text-xs text-muted">Built for accountability. Designed for growth.</p>
-            <div className="flex items-center gap-3 text-muted">
-              <Star size={14} className="text-orange-500" />
-              <Star size={14} className="text-orange-500" />
-              <Star size={14} className="text-orange-500" />
-              <Star size={14} className="text-orange-500" />
-              <Star size={14} className="text-orange-500" />
-            </div>
+            <p className="ym-footer-promise text-xs">Built for accountability. Designed for growth.</p>
+            <div className="ym-footer-signoff">PROCESS <span>•</span> PRECISION <span>•</span> DISCIPLINE</div>
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-muted">
-            <span>Home · Journal · Playbook · Testing · Accounts · Insights · More</span>
+          <div className="ym-footer-links flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs">
+            <a href="#platform">The platform</a><a href="#features">Features</a><a href="#practice">Our approach</a><a href="#how">How it works</a>
           </div>
         </div>
       </footer>
