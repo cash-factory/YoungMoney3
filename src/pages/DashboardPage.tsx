@@ -10,6 +10,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { Modal } from '@/components/ui/Modal';
 import { TradeForm } from '@/components/TradeForm';
+import { ThemedSelect } from '@/components/ThemedSelect';
 import { TradeCalculator } from '@/components/TradeCalculator';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import { Achievements } from '@/components/Achievements';
@@ -176,29 +177,27 @@ export function DashboardPage() {
       </div>
 
       <div className="ym-dash-controls card" role="group" aria-label="Performance filters">
-        <label>
+        <div className="ym-dash-filter">
           <span>Trading account</span>
-          <select className="input-field" value={accountFilter} onChange={event => setAccountFilter(event.target.value)}>
-            <option value="all">All accounts</option>
-            {accounts.map(item => <option key={item.id} value={item.id}>{item.name} · {item.base_currency}</option>)}
-          </select>
-        </label>
-        <label>
+          <ThemedSelect label="Trading account" value={accountFilter} onChange={setAccountFilter}
+            options={[{value:'all',label:'All accounts',description:'Review every journal account'},
+              ...accounts.map(item=>({value:item.id,label:`${item.name} · ${item.base_currency}`,description:'Journal account'}))]} />
+        </div>
+        <div className="ym-dash-filter">
           <span>Performance view</span>
-          <select className="input-field" value={source} onChange={event => setSource(event.target.value as 'live' | 'backtest' | 'forward')}>
-            <option value="live">Recorded trades</option>
-            <option value="backtest">Backtest results</option>
-            <option value="forward">Forward test results</option>
-          </select>
-        </label>
-        {source === 'live' ? <label>
+          <ThemedSelect label="Performance view" value={source}
+            onChange={value=>setSource(value as 'live'|'backtest'|'forward')}
+            options={[{value:'live',label:'Recorded trades',description:'Broker imports and manual entries'},
+              {value:'backtest',label:'Backtest results',description:'Historical strategy experiments'},
+              {value:'forward',label:'Forward test results',description:'Practice and simulated trades'}]} />
+        </div>
+        {source === 'live' ? <div className="ym-dash-filter">
           <span>Trade origin</span>
-          <select className="input-field" value={tradeOrigin} onChange={event => setTradeOrigin(event.target.value)}>
-            <option value="all">All sources</option>
-            <option value="manual">Manual entries</option>
-            <option value="mt5">MT5 imports</option>
-          </select>
-        </label> : <div className="ym-dash-filter-note">Practice results are separate from recorded account balances.</div>}
+          <ThemedSelect label="Trade origin" value={tradeOrigin} onChange={setTradeOrigin}
+            options={[{value:'all',label:'All sources',description:'Manual entries and MT5 imports'},
+              {value:'manual',label:'Manual entries',description:'Trades recorded in the journal'},
+              {value:'mt5',label:'MT5 imports',description:'Trades captured from the connector'}]} />
+        </div> : <div className="ym-dash-filter-note">Practice results are separate from recorded account balances.</div>}
       </div>
 
       <nav className="ym-dash-jump" aria-label="Dashboard sections">
