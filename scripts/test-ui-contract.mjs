@@ -68,7 +68,18 @@ test('all twelve themes retain independent light/dark surfaces and recognizable 
   assert.ok(paletteComponent.includes('aria-pressed={theme'), 'Light/dark controls should be accessible');
   assert.ok(paletteComponent.includes('activePalette.accents'), 'Palette previews should show distinct colour triples');
 });
-test('CraftyLabs Studio is a distinct opt-in black, red and white editorial trading theme',()=>{
+test('CraftyLabs Studio is the new default without removing True Pink or overriding saved choices',()=>{
+  const provider=read('src/context/ThemeProvider.tsx');
+  assert.ok(theme.includes("export const DEFAULT_COLOR_PALETTE: ColorPalette = 'craftylabs-studio';"));
+  assert.ok(theme.includes('palette: DEFAULT_COLOR_PALETTE'), 'Context fallback should match the studio default');
+  assert.ok(provider.includes('return isPalette(saved) ? saved : DEFAULT_COLOR_PALETTE;'), 'Saved valid preferences must win over the default');
+  assert.ok(provider.includes("readPreference('journal-palette')"));
+  assert.ok(provider.includes("savePreference('journal-palette', palette)"));
+  assert.ok(theme.includes("id: 'true-pink', name: 'True Pink'"), 'The pink theme must remain available');
+  assert.ok(palette.includes('setPalette(option.id)'), 'Users must still be able to select any palette');
+});
+
+test('CraftyLabs Studio is a distinct black, red and white editorial trading theme',()=>{
   const css=read('src/index.css');
   const layout=read('src/components/Layout.tsx');
   const landing=read('src/pages/LandingPage.tsx');
