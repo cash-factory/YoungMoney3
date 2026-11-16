@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 680" role="img" aria-labelledby="t d"><title id="t">Trading intelligence visual</title><desc id="d">Abstract market chart, risk gauge, strategy radar and performance panels</desc><defs>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" role="img" aria-labelledby="t d"><title id="t">Trading intelligence visual</title><desc id="d">Abstract market chart, risk gauge, strategy radar and performance panels</desc><defs>
 <linearGradient id="bg" x2="1" y2=".8"><stop stop-color="#130b12"/><stop offset=".55" stop-color="#090b10"/><stop offset="1" stop-color="#180912"/></linearGradient>
 <linearGradient id="red" x1=".1" y1="0" x2=".8" y2="1"><stop stop-color="#ff617b"/><stop offset=".5" stop-color="#e80b38"/><stop offset="1" stop-color="#900c2b"/></linearGradient>
 <linearGradient id="glass" x2="1" y2="1"><stop stop-color="#2b1a29" stop-opacity=".92"/><stop offset="1" stop-color="#080c14" stop-opacity=".96"/></linearGradient>
