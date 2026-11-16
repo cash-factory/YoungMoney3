@@ -68,11 +68,13 @@ try {
             const glyph=icon.querySelector('svg');
             const svgRect=glyph?.getBoundingClientRect();
             const size=icon.classList.contains('landing-icon--lg')?'lg':icon.classList.contains('landing-icon--sm')?'sm':'md';
-            const width=Math.round(rect.width*10)/10;
+            // Layout dimensions, not transformed screenshot bounds, govern the shared
+            // size contract. Some surrounding hero elements animate at scale(.97).
+            const width=icon.offsetWidth;
             const group=sizeGroups.get(size)||new Set();
             group.add(width);
             sizeGroups.set(size,group);
-            if(Math.abs(rect.width-rect.height)>1)problems.push(size+' icon box not square');
+            if(Math.abs(icon.offsetWidth-icon.offsetHeight)>1)problems.push(size+' icon box not square');
             if(!svgRect||!svgRect.width||!svgRect.height)problems.push(size+' missing rendered glyph');
             if(svgRect&&(
               Math.abs(rect.left+rect.width/2-svgRect.left-svgRect.width/2)>1||
