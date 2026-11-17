@@ -2,7 +2,7 @@ name: Platform browser QA
 on:
   pull_request:
     branches: [main]
-    paths: ['src/**', 'public/visuals/**', 'scripts/test-*-browser.mjs', 'package*.json', '.github/workflows/platform-visual.yml']
+    paths: ['src/**', 'public/visuals/**', 'public/assets/page-art/**', 'connector/assets/**', 'scripts/test-*-browser.mjs', 'package*.json', '.github/workflows/platform-visual.yml']
 permissions:
   contents: read
 jobs:
