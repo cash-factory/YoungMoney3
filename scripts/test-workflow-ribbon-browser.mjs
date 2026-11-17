@@ -28,6 +28,9 @@ try {
             document.documentElement.dataset.palette = palette;
             document.documentElement.classList.toggle('dark', mode === 'dark');
           }, { palette, mode });
+          // Media emulation can acknowledge before Chromium has applied its
+          // style update. Measure only after two rendered frames have settled.
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
           const ribbon = page.locator('.ym-workflow-ribbon');
           await ribbon.waitFor();
           await ribbon.scrollIntoViewIfNeeded();
