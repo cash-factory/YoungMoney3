@@ -1,0 +1,44 @@
+# Brand & asset catalogue
+
+The current workspace uses one CraftyLabs-inspired visual system. Theme palettes change color while the page structure, logo geometry and illustration library remain consistent.
+
+![Young-Money-Fx brand lockup](assets/brand/youngmoney-logo.svg)
+
+## Runtime assets
+
+Files in `public/` are served directly by the app. Keep their existing paths stable when referencing them from components.
+
+| Asset | Use |
+| :--- | :--- |
+| [YM mark](../public/visuals/youngmoney-mark.svg) | Sidebar, mobile shell, welcome navigation, footer and login |
+| [Studio intelligence](../public/visuals/studio-intelligence.svg) | Features, planning, testing, analytics and insight chapters |
+| [Studio journal](../public/visuals/studio-journal.svg) | Private practice, journal, review and learning chapters |
+| [Studio auth](../public/visuals/studio-auth.svg) | Subtle authentication background |
+| [Studio wave](../public/visuals/studio-wave.svg) | Welcome-page footer artwork |
+| [Media still life](../public/visuals/media-still-life.png) | Media Library hero; generated raster illustration, 1536 × 1024 |
+| [Favicon](../public/favicon.svg) | Browser tab icon; the staging version uses the current YM mark |
+| [Social card PNG](../public/social-preview.png) · [editable SVG](../public/social-preview.svg) | Link-preview artwork |
+
+The staging branch contains the current application and its favicon. The reusable `public/visuals/` library is also archived on the default branch. Inline grain and fallback-chevron SVGs remain in `src/index.css` with their consuming styles.
+
+## Documentation & downloads
+
+| Folder / file | Contents |
+| :--- | :--- |
+| [`docs/assets/readme-banner.svg`](assets/readme-banner.svg) | Self-contained vector README cover |
+| [`docs/assets/brand/`](assets/brand/) | Vector wordmark export and [studio favicon](assets/brand/favicon-studio.svg); the reusable transparent symbol lives in `public/visuals/` |
+| [`docs/assets/screenshots/`](assets/screenshots/) | Actual UI captures using synthetic demo records; no customer media |
+| [`public/mt5-connector.zip`](../public/mt5-connector.zip) | Python source fallback; Windows executable releases are published through [GitHub Releases](https://github.com/cash-factory/YoungMoney3/releases) |
+| [`TradingPlanDocs/`](../TradingPlanDocs/) | Existing supplied plan references: two PNGs, two PDFs and one DOCX, retained under their original names |
+
+Trade screenshots, voice notes and avatars are account data. They stay in authenticated storage and are referenced by the Media Library; they are separate from the public brand files listed here.
+
+## Design & implementation credits
+
+- **Brand and art:** the YM monogram was developed from a generated concept and simplified into the production vector mark. The Media Library still life was generated for this project. The four original studio SVG illustrations are preserved as editable source assets. The README banner and wordmark export use the same geometry and scarlet/graphite palette.
+- **Icons:** [Lucide](https://lucide.dev/) / `lucide-react`; [license and acknowledgements](https://lucide.dev/license).
+- **Type:** [Inter](https://github.com/rsms/inter) and [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono), loaded through Google Fonts. [Inter license](https://github.com/rsms/inter/blob/master/LICENSE.txt) · [JetBrains Mono license](https://github.com/JetBrains/JetBrainsMono/blob/master/OFL.txt). Font binaries are not bundled.
+- **Charts:** [Recharts](https://github.com/recharts/recharts) ([license](https://github.com/recharts/recharts/blob/main/LICENSE)) and the externally hosted [TradingView advanced chart widget](https://www.tradingview.com/widget-docs/en/widgets/charts/advanced-chart/). TradingView code and market data are provided by that service.
+- **Style direction:** CraftyLabs-inspired editorial typography, angled accent strips and focused page layouts; product branding is Young-Money-Fx.
+
+Third-party dependencies and supplied reference documents retain their own rights and terms. No project-wide license is declared by this catalogue.
