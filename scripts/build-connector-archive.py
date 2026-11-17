@@ -17,6 +17,7 @@ FILES = {
     "terminal_factory.py": "connector/terminal_factory.py",
     "concurrent_capture.py": "connector/concurrent_capture.py",
     "requirements.txt": "connector/requirements.txt",
+    "assets/connector-scene.svg": "connector/assets/connector-scene.svg",
 }
 
 
