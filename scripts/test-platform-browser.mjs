@@ -42,6 +42,31 @@ try {
     assert.equal(result.palette,palette);
     assert.ok(result.width<=width+2,`${destination}/${palette}/${mode}/${width}: horizontal overflow ${result.width}`);
     assert.equal(result.visibleHeadings,1,`${destination}: needs one page heading`);
+    const artSelector = destination==='dashboard' ? '.ym-dash-heading-art'
+      : destination==='media' ? '.ym-library-art img' : '.ym-page-art img';
+    const art=experience.locator(artSelector).first();
+    await art.waitFor({state:'attached'});
+    const asset=await art.evaluate(img=>{
+      const src=img.getAttribute('src');
+      const region=img.getBoundingClientRect();
+      const parent=img.closest('.ym-page-heading, .ym-dash-heading, .ym-library-hero');
+      const copy=parent?.querySelector('.ym-page-heading-main');
+      const text=copy?.getBoundingClientRect();
+      return {src,complete:img.complete,naturalWidth:img.naturalWidth,
+        width:region.width,height:region.height,
+        textOverlaps: !!text && region.left<text.right-1 && region.top<text.bottom-1 && region.bottom>text.top+1 &&
+          region.right>text.left+1};
+    });
+    assert.ok(asset.src && asset.src.startsWith(destination==='media'?'/visuals/':'/assets/page-art/'),
+      destination+' must load decorative art from local versioned assets: '+JSON.stringify(asset));
+    assert.ok(asset.complete && asset.naturalWidth>0,
+      destination+' image must render in the browser: '+JSON.stringify(asset));
+    assert.ok(asset.width>50 && asset.height>50,
+      destination+' illustration needs adequate visible size: '+JSON.stringify(asset));
+    if(destination!=='dashboard' && destination!=='media') {
+      assert.equal(asset.textOverlaps,false,
+        destination+' image must not overlap editable heading or actions: '+JSON.stringify(asset));
+    }
     for(const [token,ratio] of result.ratios) assert.ok(ratio>=4.5,`${palette}/${mode}: ${token} contrast ${ratio.toFixed(2)}`);
     if(palette==='craftylabs-studio'&&mode==='dark') await page.screenshot({path:`artifacts/platform/${destination}-${width}.png`,fullPage:false});
     scenarios++;
