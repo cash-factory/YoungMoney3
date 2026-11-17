@@ -158,7 +158,11 @@ test('annotated CraftyLabs page refresh retains functional content and loads ori
     const file=read('public/visuals/'+art);
     assert.ok(file.includes('<svg')&&file.includes('viewBox='),'Invalid vector artwork: '+art);
     assert.ok(file.includes('role="img"'),'Artwork should have an accessible description');
-    assert.ok((landing+auth).includes('/visuals/'+art),'Artwork must be used in public site: '+art);
+    // Older art files remain available, but new page-specific artwork replaces
+    // the former repeated image in the authentication and workspace headers.
+    if (art !== 'studio-auth.svg') {
+      assert.ok((landing+auth).includes('/visuals/'+art),'Original landing art must remain usable: '+art);
+    }
   }
   for(const token of ['.ym-platform-chapter','.ym-editorial-banner','.ym-feature-grid','.ym-process-stack',
     '.ym-studio-footer','.ym-auth-form-art','.ym-auth-showcase-art','.ym-dash-topic-mark','.ym-studio-stripe']) {
@@ -174,6 +178,53 @@ test('annotated CraftyLabs page refresh retains functional content and loads ori
   assert.ok(entity.includes('<ThemedSelect'),'Shared entity forms need custom themed options');
   assert.ok(css.includes('select.input-field option'),'Unconverted native selects still need palette-specific option styling');
   assert.ok(theme.includes("id: 'true-pink', name: 'True Pink'"),'True Pink must remain selectable');
+});
+
+
+test('every workspace page has its own text-free design image next to real headings',()=>{
+  const source=read('src/components/PageExperience.tsx');
+  const header=read('src/components/ui/SectionHeader.tsx');
+  const styling=read('src/platform-studio.css');
+  const ids=['dashboard','trades','journal','calendar','weekly-reviews','trading-plan',
+    'strategies','setups','risk-management','goals','market-sessions','strategy-testing',
+    'brokers-charting','analytics','ai','media','resources','notes','study-material',
+    'account-settings','admin-operations','mt5','workspace-setup'];
+  for (const id of ids) {
+    const path='/assets/page-art/'+id+'.svg';
+    assert.ok(source.includes("art: '"+path+"'"),'Missing unique page mapping '+id);
+    const art=read('public'+path);
+    assert.ok(art.startsWith('<svg ')&&art.includes('viewBox="0 0 960 540"'),'Asset is not a scalable SVG: '+id);
+    assert.doesNotMatch(art,/<text(?:\s|>)/i,'Page art must not contain baked-in headings: '+id);
+    assert.ok(art.includes('aria-labelledby="title desc"'),'Decorative source should be described outside the site');
+  }
+  const examples=['welcome','sign-in'];
+  for(const id of examples) {
+    const art=read('public/assets/page-art/'+id+'.svg');
+    assert.doesNotMatch(art,/<text(?:\s|>)/i,id+' art must not have embedded headline copy');
+  }
+  assert.ok(header.includes('src={experience.art}'),'Show exactly the art configured for each page');
+  assert.ok(header.includes('alt=""'),'Decorative art must not double-announce the real heading');
+  assert.ok(header.includes('{title}'),'Page heading must remain editable HTML');
+  assert.ok(header.includes('{subtitle}'),'Explanatory copy must remain editable HTML');
+  assert.ok(header.includes('{action}'),'Page actions must remain interactive');
+  assert.ok(styling.includes('[data-workspace-page] .ym-page-heading-main'));
+  assert.ok(styling.includes('[data-workspace-page] .ym-page-art img'));
+  assert.ok(styling.includes('@media (max-width:639px)'),'Mobile layouts must keep artwork outside the text');
+  assert.ok(read('src/pages/DashboardPage.tsx').includes('/assets/page-art/dashboard.svg'));
+  assert.ok(read('src/pages/LandingPage.tsx').includes('/assets/page-art/welcome.svg'));
+  assert.ok(read('src/pages/AuthPage.tsx').includes('/assets/page-art/sign-in.svg'));
+  assert.ok(read('src/pages/OnboardingPage.tsx').includes('/assets/page-art/workspace-setup.svg'));
+});
+
+test('connector visual refresh preserves read-only capture and editable headings',()=>{
+  const connector=read('connector/connector_gui.py');
+  const graphic=read('connector/assets/connector-scene.svg');
+  assert.ok(connector.includes('ACCENT = "#ff365c"'),'Connector should share studio-red accent');
+  assert.ok(connector.includes('BACKGROUND = "#09090d"'),'Connector surfaces should be obsidian-dark');
+  assert.ok(connector.includes('def _draw_header_art('),'Connector panels need native, dependency-free illustrations');
+  assert.ok(connector.includes('def _stack_heading('),'Connector heading must remain real text');
+  assert.ok(connector.includes('READ-ONLY  •  NO TRADING COMMANDS'),'Read-only safety language must be retained');
+  assert.ok(graphic.startsWith('<svg ')&&!/<text(?:\s|>)/i.test(graphic),'Standalone connector artwork must be text-free');
 });
 
 test('all homepage icons meet contrast targets in each of twelve light and dark palettes',()=>{
