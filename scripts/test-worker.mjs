@@ -39,6 +39,8 @@ try {
   assert.equal(signup.status,200);cookie=signup.headers.get('set-cookie').split(';')[0];
   assert.match(signup.headers.get('set-cookie'),/HttpOnly/);
   assert.match(signup.headers.get('set-cookie'),/SameSite=Strict/);
+  // Consume the response while its Miniflare request context is still live.
+  const subject=(await signup.json()).user.id;
   assert.equal((await call('data',{action:'select',table:'trades'}, {'Sec-Fetch-Site':'same-site'})).status,403);
   assert.equal((await call('data',{action:'select',table:'trades'}, {'Origin':'https://a.journal.example'})).status,403);
   const row={id:'demo-trade',pair:'TEST',settlement_currency:'USD',direction:'long',entry_price:100,exit_price:95,
@@ -251,7 +253,6 @@ try {
   await db.prepare("UPDATE users SET account_status='suspended'").run();
   assert.equal((await call('data',insert)).status,401);
   assert.equal((await device('sync',batch)).status,403);
-  const subject=(await signup.json()).user.id;
   const other=await call('auth/signup',{email:'other@example.test',username:'second',password:'local-test-pass',invite_code:'integration'});
   cookie=other.headers.get('set-cookie').split(';')[0];
   assert.deepEqual((await (await call('mt5/status',{})).json()).links,[]);

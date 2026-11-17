@@ -64,6 +64,17 @@ jobs:
           npm run build
           python3 -m py_compile connector/connect.py connector/ledger.py connector/lifecycle.py connector/connector_gui.py
           PYTHONPATH=connector python3 -m unittest discover -s connector -p 'test_lifecycle.py'
+      - name: Verify stationary workflow ribbon across themes and viewport sizes
+        run: |
+          npx playwright install --with-deps chromium
+          npm run preview -- --host 127.0.0.1 > "$RUNNER_TEMP/ym3-preview.log" 2>&1 &
+          PREVIEW_PID=$!
+          trap 'kill "$PREVIEW_PID"' EXIT
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/ > /dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/test-workflow-ribbon-browser.mjs
       - name: Review outstanding staging migrations
         run: npx wrangler d1 migrations list DB --remote --config wrangler.staging.jsonc
       - name: Apply additive migrations only to staging D1
