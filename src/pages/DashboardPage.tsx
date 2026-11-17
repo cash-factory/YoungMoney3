@@ -178,8 +178,9 @@ export function DashboardPage() {
       {trades.some(t=>t.status==='closed' && (!t.exit_time || tradeCurrency(t,accounts)==='Unknown' || t.realized_r == null)) && <p className="card p-3 text-sm" role="status">Some closed trades need review for close time, currency or initial risk. Daily risk and R statistics may be incomplete.</p>}
       {account?.broker_balance != null && (!account.broker_balance_at || Date.now()-Date.parse(account.broker_balance_at)>120000) && <p role="status" className="card p-3 text-xs text-secondary">Broker balance is a last-known snapshot, not a live quote. Check MT5 Connections for its latest sync before making trading decisions.</p>}
 
-      <div className="ym-dash-heading" id="ym-overview">
-        <div className="min-w-0">
+      <div className="ym-dash-heading ym-dash-heading--illustrated" id="ym-overview">
+        <img className="ym-dash-heading-art" src="/assets/page-art/dashboard.svg" alt="" aria-hidden="true" loading="eager" decoding="async" width="960" height="540" />
+        <div className="min-w-0 ym-dash-heading-copy">
           <p className="ym-dash-eyebrow"><span aria-hidden="true" className="ym-dash-eyebrow-mark" /> TRADING OPERATIONS <span aria-hidden="true">/</span> <span className="ym-dash-topic-mark">OVERVIEW</span></p>
           <h1>Trading <span className="ym-dash-title-mark">Overview</span></h1>
           <p>Everything that matters, in one clear view. Review your results, risk and next decisions.</p>
