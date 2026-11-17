@@ -1,3 +1,4 @@
+import { Select } from '@/components/Select';
 import { useMemo, useState } from 'react';
 import Decimal from 'decimal.js-light';
 import { Shield, Save, AlertTriangle, TrendingDown, Wallet, Percent, Gauge } from 'lucide-react';
@@ -127,10 +128,10 @@ export function RiskManagementPage() {
 
       <div className="card p-4 mb-6">
         <label className="block max-w-sm text-xs font-semibold text-secondary">Risk view by account
-          <select className="input-field mt-1.5" value={account?.id || ''} onChange={event => setSelectedAccountId(event.target.value)}>
+          <Select className="input-field mt-1.5" value={account?.id || ''} onChange={event => setSelectedAccountId(event.target.value)}>
             {accounts.length === 0 && <option value="">No accounts configured</option>}
             {accounts.map(item => <option key={item.id} value={item.id}>{item.name} · {item.base_currency}</option>)}
-          </select>
+          </Select>
         </label>
         <p className="mt-2 text-xs text-muted">Realized results use the selected account's close date and reset timezone. Global settings are defaults; account and plan limits can be stricter.</p>
       </div>

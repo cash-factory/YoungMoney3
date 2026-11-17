@@ -1,3 +1,4 @@
+import { Select } from '@/components/Select';
 import { useMemo, useState } from 'react';
 import { Plus, Search, Edit2, Trash2, ChevronDown, ChevronUp, Star, Download, Filter, X, Clock, CheckCircle } from 'lucide-react';
 import { useTrades, useTradingAccounts } from '@/hooks/useData';
@@ -43,6 +44,14 @@ export function TradesPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState<TradeStatus | 'all'>('all');
+  const [linkedTradeId, setLinkedTradeId] = useState(() => new URLSearchParams(window.location.search).get('trade'));
+  const linkedTrade = linkedTradeId ? storedTrades.find(trade => trade.id === linkedTradeId) : null;
+  const closeLinkedTrade = () => {
+    setLinkedTradeId(null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('trade');
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+  };
 
   const pairs = useMemo(() => [...new Set([...trades.map(t=>t.pair),...positionVersions.map(v=>v.summary.symbol)])].sort(), [trades,positionVersions]);
   const richTrades=useMemo(()=>positionVersions.filter(row=>{
@@ -144,6 +153,8 @@ export function TradesPage() {
         }
       />
 
+      {linkedTradeId && !linkedTrade && <div role="status" className="card p-4 mb-4 text-sm"><p>This linked trade is no longer available in your account.</p><button type="button" className="btn-secondary mt-2" onClick={closeLinkedTrade}>Dismiss</button></div>}
+
       {/* Status tabs */}
       <div className="flex items-center gap-2 mb-4">
         {([
@@ -191,37 +202,37 @@ export function TradesPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
               <label className="block text-xs font-semibold text-secondary mb-1.5">Pair</label>
-              <select className="input-field" value={filterPair} onChange={e => setFilterPair(e.target.value)}>
+              <Select className="input-field" value={filterPair} onChange={e => setFilterPair(e.target.value)}>
                 <option value="">All pairs</option>
                 {pairs.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
+              </Select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-secondary mb-1.5">Outcome</label>
-              <select className="input-field" value={filterOutcome} onChange={e => setFilterOutcome(e.target.value as 'win' | 'loss' | 'breakeven' | '')}>
+              <Select className="input-field" value={filterOutcome} onChange={e => setFilterOutcome(e.target.value as 'win' | 'loss' | 'breakeven' | '')}>
                 <option value="">All outcomes</option>
                 <option value="win">Win</option>
                 <option value="loss">Loss</option>
                 <option value="breakeven">Breakeven</option>
-              </select>
+              </Select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-secondary mb-1.5">Direction</label>
-              <select className="input-field" value={filterDirection} onChange={e => setFilterDirection(e.target.value as TradeDirection | '')}>
+              <Select className="input-field" value={filterDirection} onChange={e => setFilterDirection(e.target.value as TradeDirection | '')}>
                 <option value="">Both</option>
                 <option value="long">Long</option>
                 <option value="short">Short</option>
-              </select>
+              </Select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-secondary mb-1.5">Account</label>
-              <select className="input-field" value={filterAccount} onChange={e => setFilterAccount(e.target.value)}>
+              <Select className="input-field" value={filterAccount} onChange={e => setFilterAccount(e.target.value)}>
                 <option value="">All accounts</option>
                 {accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
+              </Select>
             </div>
           </div>
-          <label>Trade source <select value={origin} onChange={e=>setOrigin(e.target.value)}><option value="all">All trades</option><option value="manual">Manual</option><option value="mt5">MT5</option></select></label>
+          <label>Trade source <Select value={origin} onChange={e=>setOrigin(e.target.value)}><option value="all">All trades</option><option value="manual">Manual</option><option value="mt5">MT5</option></Select></label>
           {hasFilters && (
             <button onClick={clearFilters} className="mt-3 text-xs text-brand-500 hover:underline flex items-center gap-1">
               <X size={14} /> Clear all filters
@@ -440,6 +451,17 @@ export function TradesPage() {
           ))}
         </div>
       )}
+
+      <Modal open={!!linkedTrade} onClose={closeLinkedTrade} title="Trade capture · Media Library" size="lg">
+        {linkedTrade && <div className="space-y-5">
+          <div className="flex flex-wrap justify-between gap-3"><div><h3 className="text-xl font-bold">{linkedTrade.pair}</h3><p className="text-xs text-muted mt-1">{formatDateTime(linkedTrade.entry_time)} · {linkedTrade.direction === 'long' ? 'Long' : 'Short'} · {linkedTrade.status}</p></div><span className="badge badge-brand h-fit">{linkedTrade.trade_source === 'mt5' ? 'Broker capture' : 'Journal trade'}</span></div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3"><DetailItem label="Entry price" value={linkedTrade.entry_price?.toString() || '—'} /><DetailItem label="Exit price" value={linkedTrade.exit_price?.toString() || 'Open'} /><DetailItem label="Strategy" value={linkedTrade.strategy || '—'} /><DetailItem label="Closed at" value={linkedTrade.exit_time ? formatDateTime(linkedTrade.exit_time) : 'Open'} /></div>
+          {linkedTrade.notes && <div><h4 className="text-xs font-semibold text-secondary mb-2">Trade notes</h4><p className="text-sm whitespace-pre-wrap">{linkedTrade.notes}</p></div>}
+          <TradeAttachments trade={linkedTrade} />
+          {linkedTrade.lessons && <div><h4 className="text-xs font-semibold text-secondary mb-2">What I learned</h4><p className="text-sm whitespace-pre-wrap">{linkedTrade.lessons}</p></div>}
+          <button type="button" className="btn-secondary" onClick={closeLinkedTrade}>Back to trades</button>
+        </div>}
+      </Modal>
 
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add New Trade" size="lg">
         <TradeForm onSubmit={handleAdd} onCancel={() => setShowAdd(false)} />

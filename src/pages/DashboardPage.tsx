@@ -1,6 +1,7 @@
 import { accountLedger, tradeCurrency } from '@/lib/tradeFinance';
 import { dateKeyInTimeZone } from '@/lib/riskMetrics';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import '@/dashboard-studio.css';
 import { Wallet, Target, TrendingUp, Flame, Activity, BarChart3, ChevronDown, Plus, ArrowUpRight, ArrowDownRight, Minus, Star, Clock, Eye } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { useAllTestTrades, useBacktests, useForwardTrades, useTestSessions, useTrades, useTradingAccounts, useTradingAccountAdjustments } from '@/hooks/useData';
@@ -44,6 +45,25 @@ export function DashboardPage() {
   const [accountFilter, setAccountFilter] = useState('all');
   const [tradeOrigin, setTradeOrigin] = useState('all');
   const [source, setSource] = useState<'live' | 'backtest' | 'forward'>('live');
+  const [selectedSection, setSelectedSection] = useState('overview');
+  const activeSection = source !== 'live' && selectedSection === 'risk' ? 'overview' : selectedSection;
+  const sections = [
+    { id: 'overview', label: 'Overview', description: 'Your account snapshot and the figures that matter today.' },
+    ...(source === 'live' ? [{ id: 'risk', label: 'Risk & rules', description: 'Protect your capital. Review limits and the plan before your next trade.' }] : []),
+    { id: 'performance', label: 'Performance', description: 'Read your results over time and understand the shape of your progress.' },
+    { id: 'recent', label: 'Recent trades', description: 'Review your latest decisions, one trade at a time.' },
+    { id: 'deep-dive', label: 'Deep dive', description: 'Explore consistency, behavior, milestones and tools for your next review.' },
+  ];
+  const selectAdjacentSection = (event: KeyboardEvent<HTMLElement>) => {
+    const index = sections.findIndex(section => section.id === activeSection);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? sections.length - 1
+      : event.key === 'ArrowRight' ? (index + 1) % sections.length
+        : event.key === 'ArrowLeft' ? (index - 1 + sections.length) % sections.length : null;
+    if (next == null) return;
+    event.preventDefault();
+    setSelectedSection(sections[next].id);
+    document.getElementById(`dashboard-tab-${sections[next].id}`)?.focus();
+  };
 
   const account = accounts.find(a => a.id === accountFilter) || null;
   const filteredLifecyclePositions = useMemo(() =>
@@ -149,13 +169,6 @@ export function DashboardPage() {
     await saveSettings(input);
   };
 
-  const jumpToSection = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
-      block: 'start',
-    });
-  };
-
   if (loading) return <LoadingSpinner label="Loading your dashboard..." />;
 
   if (loadError && !asOf) return <p role="alert">Trade history unavailable. Risk figures will appear after the next successful refresh.</p>;
@@ -168,7 +181,7 @@ export function DashboardPage() {
       <div className="ym-dash-heading" id="ym-overview">
         <div className="min-w-0">
           <p className="ym-dash-eyebrow"><span aria-hidden="true" className="ym-dash-eyebrow-mark" /> TRADING OPERATIONS <span aria-hidden="true">/</span> <span className="ym-dash-topic-mark">OVERVIEW</span></p>
-          <h1>Trading overview</h1>
+          <h1>Trading <span className="ym-dash-title-mark">Overview</span></h1>
           <p>Everything that matters, in one clear view. Review your results, risk and next decisions.</p>
         </div>
         <button type="button" onClick={() => setShowAdd(true)} className="btn-primary ym-dash-new-trade">
@@ -186,7 +199,10 @@ export function DashboardPage() {
         <div className="ym-dash-filter">
           <span>Performance view</span>
           <ThemedSelect label="Performance view" value={source}
-            onChange={value=>setSource(value as 'live'|'backtest'|'forward')}
+            onChange={value=>{
+              setSource(value as 'live'|'backtest'|'forward');
+              if (value !== 'live' && selectedSection === 'risk') setSelectedSection('overview');
+            }}
             options={[{value:'live',label:'Recorded trades',description:'Broker imports and manual entries'},
               {value:'backtest',label:'Backtest results',description:'Historical strategy experiments'},
               {value:'forward',label:'Forward test results',description:'Practice and simulated trades'}]} />
@@ -200,14 +216,19 @@ export function DashboardPage() {
         </div> : <div className="ym-dash-filter-note">Practice results are separate from recorded account balances.</div>}
       </div>
 
-      <nav className="ym-dash-jump" aria-label="Dashboard sections">
-        <button type="button" onClick={() => jumpToSection('ym-overview')}>Overview</button>
-        {source === 'live' && <button type="button" onClick={() => jumpToSection('ym-risk')}>Risk &amp; rules</button>}
-        <button type="button" onClick={() => jumpToSection('ym-performance')}>Performance</button>
-        <button type="button" onClick={() => jumpToSection('ym-recent')}>Recent trades</button>
-        <button type="button" onClick={() => jumpToSection('ym-deep-dive')}>Deep dive</button>
+      <nav className="ym-dash-jump" role="tablist" aria-label="Dashboard sections" onKeyDown={selectAdjacentSection}>
+        {sections.map((section, index) => (
+          <button type="button" key={section.id} id={`dashboard-tab-${section.id}`} role="tab"
+            aria-selected={activeSection === section.id} aria-controls={`dashboard-panel-${section.id}`}
+            tabIndex={activeSection === section.id ? 0 : -1} onClick={() => setSelectedSection(section.id)}>
+            <span aria-hidden="true" className="ym-dash-tab-number">0{index + 1}</span>{section.label}
+          </button>
+        ))}
       </nav>
-
+      <div key={activeSection} className="ym-dash-focus-panel" role="tabpanel" tabIndex={0}
+        id={`dashboard-panel-${activeSection}`} aria-labelledby={`dashboard-tab-${activeSection}`}>
+        <p className="ym-dash-focus-description">{sections.find(section => section.id === activeSection)?.description}</p>
+      {activeSection === 'overview' && <>
       <section className="ym-dash-balance" aria-label="Account and trading result">
         <div className="ym-dash-balance-main">
           <p className="ym-dash-kicker">{source === 'live' ? 'ACCOUNT SNAPSHOT' : 'PRACTICE PERFORMANCE'}</p>
@@ -312,7 +333,9 @@ export function DashboardPage() {
           accent="blue" />
       </div>
 
-      {source === 'live' && <section id="ym-risk" className="ym-dash-section">
+      </>}
+
+      {activeSection === 'risk' && source === 'live' && <section id="ym-risk" className="ym-dash-section">
         <div className="ym-dash-section-title">
           <div><p className="ym-dash-kicker">CAPITAL PRESERVATION</p><h2>Risk &amp; trading rules</h2></div>
           <span>Review limits before the next trade</span>
@@ -338,7 +361,7 @@ export function DashboardPage() {
 
       </section>}
 
-      <section className="ym-dash-section" id="ym-performance">
+      {activeSection === 'performance' && <section className="ym-dash-section" id="ym-performance">
         <div className="ym-dash-section-title">
           <div><p className="ym-dash-kicker">PERFORMANCE REVIEW</p><h2>Performance trends</h2></div>
           <span>Results from closed trades</span>
@@ -395,7 +418,9 @@ export function DashboardPage() {
 
       </section>
 
-      <section className="ym-dash-section" id="ym-recent">
+      }
+
+      {activeSection === 'recent' && <section className="ym-dash-section" id="ym-recent">
         <div className="ym-dash-section-title">
           <div><p className="ym-dash-kicker">THE LEDGER</p><h2>Recent trades</h2></div>
           <span>Open a trade to review its details</span>
@@ -464,7 +489,9 @@ export function DashboardPage() {
 
       </section>
 
-      <details className="ym-dash-details" id="ym-deep-dive">
+      }
+
+      {activeSection === 'deep-dive' && <details className="ym-dash-details" id="ym-deep-dive" open>
         <summary className="ym-dash-details-trigger">
           <span className="ym-dash-detail-icon"><BarChart3 size={19} /></span>
           <span className="ym-dash-detail-copy"><strong>Deep-dive analytics &amp; tools</strong><small>Streaks, best days, trade calculator, heatmap and coaching insights</small></span>
@@ -592,7 +619,8 @@ export function DashboardPage() {
       </div>
 
         </div>
-      </details>
+      </details>}
+      </div>
 
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add New Trade" size="lg">
         <TradeForm onSubmit={handleSubmit} onCancel={() => setShowAdd(false)} />

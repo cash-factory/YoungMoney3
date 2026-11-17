@@ -1,3 +1,4 @@
+import { Select } from '@/components/Select';
 import { useState } from 'react';
 import { Target, Plus, Trash2, Save, CheckCircle2, Circle, Pause, Play, XCircle, TrendingUp, Calendar } from 'lucide-react';
 import { useGoals } from '@/hooks/useData';
@@ -101,7 +102,7 @@ export function GoalsPage() {
           <EmptyState icon={<Target size={40} />} title="No goals yet" message="Set profit targets, win rate goals, discipline metrics, or process goals to keep yourself accountable." />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="ym-goal-board grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map(goal => (
             <GoalCard key={goal.id} goal={goal} onEdit={() => { setEditingGoal(goal); setShowForm(true); }} onDelete={() => handleDelete(goal.id)} onToggle={() => toggleStatus(goal)} />
           ))}
@@ -225,15 +226,15 @@ function GoalForm({ initial, onSave, onCancel }: { initial: Goal | null; onSave:
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className={labelCls}>Category</label>
-          <select className={inputCls} value={category} onChange={e => setCategory(e.target.value as GoalCategory)}>
+          <Select className={inputCls} value={category} onChange={e => setCategory(e.target.value as GoalCategory)}>
             {CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
-          </select>
+          </Select>
         </div>
         <div>
           <label className={labelCls}>Status</label>
-          <select className={inputCls} value={status} onChange={e => setStatus(e.target.value as GoalStatus)}>
+          <Select className={inputCls} value={status} onChange={e => setStatus(e.target.value as GoalStatus)}>
             {STATUSES.map(s => <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>)}
-          </select>
+          </Select>
         </div>
       </div>
 

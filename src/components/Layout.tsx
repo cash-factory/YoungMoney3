@@ -1,12 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { LayoutDashboard, CandlestickChart, Calendar, BarChart3, BookOpen, Sparkles, Menu, X, TrendingUp, Plus, LogOut, ChevronDown, ChevronRight, ClipboardList, Target, FlaskConical, Shield, CalendarClock, LayoutTemplate, BookMarked, StickyNote, GraduationCap, CreditCard, ClipboardCheck, MoreHorizontal, Archive, Settings, Search, Monitor } from 'lucide-react';
+import { LayoutDashboard, CandlestickChart, Calendar, BarChart3, BookOpen, Sparkles, Menu, X, Plus, LogOut, ChevronDown, ChevronRight, ClipboardList, Target, FlaskConical, Shield, CalendarClock, LayoutTemplate, BookMarked, StickyNote, GraduationCap, CreditCard, ClipboardCheck, MoreHorizontal, Archive, Settings, Search, Monitor, Images } from 'lucide-react';
+import { BrandLogo } from './BrandLogo';
 import { CommandPalette } from '@/components/CommandPalette';
 import { ColorPaletteControl } from '@/components/ColorPaletteControl';
 import { DataBackupModal } from '@/components/DataBackupModal';
 import { DataRecoveryNotice } from '@/components/ui/DataRecoveryNotice';
 import { useAuth } from '@/context/AuthContext';
 
-export type PageId = 'dashboard' | 'trades' | 'calendar' | 'analytics' | 'journal' | 'ai' | 'trading-plan' | 'goals' | 'risk-management' | 'market-sessions' | 'setups' | 'strategy-testing' | 'strategies' | 'resources' | 'notes' | 'study-material' | 'brokers-charting' | 'weekly-reviews' | 'account-settings' | 'admin-operations' | 'mt5' | 'workspace-setup';
+export type PageId = 'media' | 'dashboard' | 'trades' | 'calendar' | 'analytics' | 'journal' | 'ai' | 'trading-plan' | 'goals' | 'risk-management' | 'market-sessions' | 'setups' | 'strategy-testing' | 'strategies' | 'resources' | 'notes' | 'study-material' | 'brokers-charting' | 'weekly-reviews' | 'account-settings' | 'admin-operations' | 'mt5' | 'workspace-setup';
 
 interface LayoutProps {
   current: PageId;
@@ -22,6 +23,7 @@ const NAV_SECTIONS: { id: string; label: string; icon: typeof LayoutDashboard; i
   ] },
   { id: 'journal', label: 'Journal', icon: BookOpen, items: [
     { id: 'trades', label: 'Trades', icon: CandlestickChart },
+    { id: 'media', label: 'Media Library', icon: Images },
     { id: 'journal', label: 'Journal', icon: BookOpen },
     { id: 'calendar', label: 'Calendar', icon: Calendar },
     { id: 'weekly-reviews', label: 'Weekly Reviews', icon: ClipboardCheck },
@@ -100,6 +102,7 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
     onNavigate(page);
     setMobileOpen(false);
     setProfileMenuOpen(false);
+    window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
   const displayName = profile?.display_name || 'Trader';
@@ -113,14 +116,7 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
         }`}
       >
         <div className="ym-sidebar-brand relative flex items-center gap-3 px-5 py-5 border-b border-themed">
-          <div className="ym-brand-mark relative flex items-center justify-center text-white">
-            <TrendingUp size={22} />
-            <span className="absolute -top-0.5 -right-0.5">
-              <span className="relative flex h-2 w-2">
-                <span className="relative inline-flex w-2 h-2 rounded-full bg-amber-400 ring-2 ring-card" />
-              </span>
-            </span>
-          </div>
+          <BrandLogo />
           <div>
             <h1 className="font-bold text-[13px] tracking-[-0.025em]">Young-Money-Fx</h1>
             <p className="ym-brand-caption">THE TRADING WORKSPACE</p>
@@ -265,7 +261,7 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
             <Menu size={20} />
           </button>
           <div className="flex items-center gap-2">
-            <TrendingUp size={18} className="ym-mobile-logo-icon" />
+            <BrandLogo />
             <span className="font-bold text-sm tracking-tight">YoungMoney3</span>
           </div>
           <button type="button" onClick={() => setSearchOpen(true)} className="btn-ghost p-1.5" aria-label="Search workspace">
@@ -277,7 +273,7 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
           <span>PROCESS <b>•</b> PRECISION <b>•</b> DISCIPLINE <b>•</b> GROWTH</span>
         </div>
 
-        <main id="workspace-content" className="ym-main-content p-4 sm:p-6 lg:p-8 xl:px-10 max-w-[1480px] mx-auto animate-fade-in pb-32 lg:pb-12">
+        <main tabIndex={-1} id="workspace-content" className="ym-main-content p-4 sm:p-6 lg:p-8 xl:px-10 max-w-[1480px] mx-auto animate-fade-in pb-32 lg:pb-12">
           <DataRecoveryNotice />
           {children}
         </main>

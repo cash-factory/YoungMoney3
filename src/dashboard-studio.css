@@ -1,0 +1,69 @@
+/* Focused dashboard and milestone layouts share the CraftyLabs geometry in every palette. */
+.ym-workspace .ym-dashboard .ym-dash-heading h1 {
+  display:flex;align-items:baseline;flex-wrap:wrap;gap:.22em .32em;line-height:1.25;
+}
+.ym-workspace .ym-dashboard .ym-dash-title-mark {
+  display:inline-block;padding:.05em .22em .08em;background:var(--button-bg);color:#fff;
+  border-radius:3px;transform:skewX(-4deg);letter-spacing:-.045em;
+}
+.ym-workspace .ym-dashboard .ym-dash-topic-mark {
+  display:inline-block;padding:5px 9px;background:var(--button-bg);color:#fff;
+  border-radius:3px;transform:skewX(-4deg);font-weight:850;
+}
+.ym-workspace .ym-dashboard .ym-dash-jump {
+  display:flex;gap:5px;padding:6px;margin:0 0 18px;border:1px solid var(--border);
+  border-radius:14px;background:var(--bg-card);overflow-x:auto;scrollbar-width:thin;
+  box-shadow:0 3px 18px hsl(var(--shadow-color)/.04);
+}
+.ym-workspace .ym-dashboard .ym-dash-jump button {
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;flex:1 0 auto;
+  min-height:44px;padding:10px 14px;border:1px solid transparent;border-radius:9px;
+  background:transparent;color:var(--text-secondary);font-size:12px;font-weight:700;white-space:nowrap;
+  transition:background-color 160ms ease,color 160ms ease,border-color 160ms ease;
+}
+.ym-workspace .ym-dashboard .ym-dash-jump button[aria-selected="true"] {
+  background:var(--button-bg);color:#fff;border-color:var(--button-bg);
+}
+.ym-workspace .ym-dashboard .ym-dash-jump button[aria-selected="false"]:hover {
+  background:var(--bg-secondary);border-color:var(--border);color:var(--text-primary);
+}
+.ym-dash-tab-number {font:600 10px 'JetBrains Mono',monospace;opacity:.65;}
+.ym-workspace .ym-dashboard .ym-dash-focus-panel {min-width:0;animation:dashboard-focus-in 220ms ease;}
+.ym-workspace .ym-dashboard .ym-dash-focus-description {margin:0 2px 22px;color:var(--text-secondary);font-size:12px;line-height:1.65;}
+.ym-workspace .ym-achievements {min-width:0;}
+.ym-achievements-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.ym-achievements-heading h3 {display:flex;align-items:center;gap:8px;font-size:16px;font-weight:750;margin:6px 0 0;}
+.ym-achievements-heading h3 svg {color:var(--brand-text,var(--brand));}
+.ym-achievements-count {flex:none;color:var(--text-secondary);font:500 12px 'JetBrains Mono',monospace;}
+.ym-achievements-count strong {font-size:25px;color:var(--text-primary);font-weight:700;}
+.ym-achievements-overall {height:5px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;margin-top:16px;overflow:hidden;}
+.ym-achievements-overall > span {display:block;height:100%;background:var(--brand);border-radius:6px;}
+.ym-achievements-caption {font-size:11px;line-height:1.6;color:var(--text-secondary);margin:10px 0 16px;}
+.ym-achievement-list {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,235px),1fr));gap:10px;list-style:none;padding:0;margin:0;}
+.ym-achievement {display:flex;align-items:flex-start;gap:12px;min-width:0;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--bg-secondary);}
+.ym-achievement[data-unlocked="true"] {border-color:color-mix(in srgb,var(--brand) 35%,var(--border));background:color-mix(in srgb,var(--brand) 5%,var(--bg-card));}
+.ym-achievement-icon {display:grid;place-items:center;flex:none;width:36px;height:36px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;}
+.ym-achievement-copy {flex:1;min-width:0;}
+.ym-achievement-title {display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.ym-achievement-title strong {font-size:12px;font-weight:700;line-height:1.5;word-break:normal;overflow-wrap:normal;}
+.ym-achievement-title svg {color:var(--success-text,#047857);flex:none;}
+.ym-achievement-copy p {font-size:11px;line-height:1.5;color:var(--text-secondary);margin:3px 0 0;word-break:normal;}
+.ym-achievement-progress {display:flex;align-items:center;gap:10px;margin-top:9px;}
+.ym-achievement-progress > div {height:4px;flex:1;min-width:30px;background:var(--border);border-radius:5px;overflow:hidden;}
+.ym-achievement-progress > div > span {display:block;height:100%;background:var(--brand);border-radius:5px;}
+.ym-achievement-progress > span {font:500 9px 'JetBrains Mono',monospace;color:var(--text-secondary);white-space:nowrap;}
+.ym-achievements-toggle {display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:42px;margin-top:14px;padding:10px 0 0;border-top:1px solid var(--border);font-size:12px;font-weight:650;color:var(--brand-text,var(--text-primary));text-align:left;}
+.ym-achievements-toggle:hover {color:var(--text-primary);}
+.ym-achievements-toggle span {font-size:20px;font-weight:400;}
+@keyframes dashboard-focus-in {from{opacity:.35;transform:translateY(5px)}to{opacity:1;transform:none}}
+@media(max-width:640px) {
+  .ym-workspace .ym-dashboard .ym-dash-jump {border-radius:11px;gap:4px;}
+  .ym-workspace .ym-dashboard .ym-dash-jump button {min-height:44px;padding:9px 11px;font-size:11px;}
+  .ym-dash-tab-number {display:none;}
+  .ym-workspace .ym-dashboard .ym-dash-heading h1 {font-size:clamp(24px,6.6vw,36px);}
+  .ym-workspace .ym-dashboard .ym-dash-focus-description {margin-bottom:16px;}
+}
+@media(prefers-reduced-motion:reduce) {
+  .ym-workspace .ym-dashboard .ym-dash-focus-panel {animation:none;}
+  .ym-workspace .ym-dashboard .ym-dash-jump button {transition:none;}
+}

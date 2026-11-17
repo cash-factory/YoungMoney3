@@ -1,3 +1,4 @@
+import { Select } from '@/components/Select';
 import { useState } from 'react';
 import { ScrollText, Plus, Trash2, Save, AlertTriangle, Shield, Zap, Newspaper, Scale, XCircle } from 'lucide-react';
 import { useTradingRules, useChecklist } from '@/hooks/useData';
@@ -219,9 +220,9 @@ function RuleForm({ initial, onSave, onCancel }: { initial: TradingRule | null; 
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className={labelCls}>Category</label>
-          <select className={inputCls} value={category} onChange={e => setCategory(e.target.value as RuleCategory)}>
+          <Select className={inputCls} value={category} onChange={e => setCategory(e.target.value as RuleCategory)}>
             {CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_CONFIG[c].label}</option>)}
-          </select>
+          </Select>
         </div>
         <div>
           <label className={labelCls}>Priority</label>

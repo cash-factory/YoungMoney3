@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import '@/dashboard-studio.css';
 import { Trophy, Flame, Target, TrendingUp, Star, Zap, Award, CheckCircle2, Lock } from 'lucide-react';
 import type { Trade } from '@/lib/types';
 import { computeDashboardStats, groupByPair } from '@/lib/utils';
@@ -15,6 +16,7 @@ interface Achievement {
 }
 
 export function Achievements({ trades }: { trades: Trade[] }) {
+  const [showAll, setShowAll] = useState(false);
   const stats = useMemo(() => computeDashboardStats(trades), [trades]);
   const pairData = useMemo(() => groupByPair(trades), [trades]);
 
@@ -119,7 +121,7 @@ export function Achievements({ trades }: { trades: Trade[] }) {
         title: 'Visual Journaler',
         description: 'Attach a screenshot to a trade',
         icon: Award,
-        unlocked: trades.some(t => t.screenshot_url),
+        unlocked: trades.some(t => t.screenshot_url || t.entry_screenshot_url || t.closure_screenshot_url),
         color: 'text-brand-500',
       },
       {
@@ -127,7 +129,7 @@ export function Achievements({ trades }: { trades: Trade[] }) {
         title: 'Voice Memo',
         description: 'Record a voice note on a trade',
         icon: Zap,
-        unlocked: trades.some(t => t.voice_note_url),
+        unlocked: trades.some(t => t.voice_note_url || t.entry_voice_note_url || t.closure_voice_note_url),
         color: 'text-accent-500',
       },
     ];
@@ -135,47 +137,45 @@ export function Achievements({ trades }: { trades: Trade[] }) {
 
   const unlockedCount = achievements.filter(a => a.unlocked).length;
 
+  const ordered = [...achievements].sort((a, b) => Number(b.unlocked) - Number(a.unlocked));
+  const visible = showAll ? ordered : ordered.slice(0, 4);
+
   return (
-    <div className="card p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold flex items-center gap-2">
-          <Trophy size={16} className="text-accent-500" /> Achievements
-        </h3>
-        <span className="text-xs text-muted">{unlockedCount}/{achievements.length} unlocked</span>
+    <section className="card p-5 ym-achievements" aria-labelledby="achievements-title">
+      <div className="ym-achievements-heading">
+        <div><p className="ym-dash-kicker">YOUR MILESTONES</p><h3 id="achievements-title"><Trophy size={18} /> Achievements</h3></div>
+        <span className="ym-achievements-count"><strong>{unlockedCount}</strong> / {achievements.length}</span>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        {achievements.map(a => {
+      <div className="ym-achievements-overall" role="progressbar" aria-label="Achievements unlocked"
+        aria-valuenow={unlockedCount} aria-valuemin={0} aria-valuemax={achievements.length}>
+        <span style={{ width: `${unlockedCount / achievements.length * 100}%` }} />
+      </div>
+      <p className="ym-achievements-caption">A record of your practice, progress and consistency.</p>
+      <ul className="ym-achievement-list" id="achievement-list">
+        {visible.map(a => {
           const Icon = a.unlocked ? a.icon : Lock;
           return (
-            <div
-              key={a.id}
-              className={`p-3 rounded-xl border text-center transition-all ${
-                a.unlocked
-                  ? 'bg-gradient-to-br from-accent-500/5 to-brand-500/5 border-accent-500/20 card-hover'
-                  : 'bg-secondary border-themed opacity-60'
-              }`}
-            >
-              <div className={`mx-auto w-fit p-2.5 rounded-full mb-2 ${a.unlocked ? 'bg-secondary' : 'bg-secondary'}`}>
-                <Icon size={20} className={a.unlocked ? a.color : 'text-muted'} />
-              </div>
-              <p className="text-xs font-semibold">{a.title}</p>
-              <p className="text-[10px] text-muted mt-0.5">{a.description}</p>
-              {a.progress != null && a.max != null && !a.unlocked && (
-                <div className="mt-2">
-                  <div className="h-1 rounded-full bg-secondary overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-brand-500 transition-all"
-                      style={{ width: `${(a.progress / a.max!) * 100}%` }}
-                    />
+            <li key={a.id} className="ym-achievement" data-unlocked={a.unlocked}>
+              <span className="ym-achievement-icon"><Icon size={20} className={a.unlocked ? a.color : 'text-muted'} /></span>
+              <div className="ym-achievement-copy">
+                <div className="ym-achievement-title"><strong>{a.title}</strong>{a.unlocked && <CheckCircle2 size={14} aria-label="Unlocked" />}</div>
+                <p>{a.description}</p>
+                {a.progress != null && a.max != null && !a.unlocked && (
+                  <div className="ym-achievement-progress">
+                    <div role="progressbar" aria-label={a.title} aria-valuenow={a.progress} aria-valuemin={0} aria-valuemax={a.max}>
+                      <span style={{ width: `${Math.min(100, a.progress / a.max * 100)}%` }} />
+                    </div>
+                    <span>{a.progress} / {a.max}</span>
                   </div>
-                  <p className="text-[9px] text-muted mt-1">{a.progress}/{a.max}</p>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            </li>
           );
         })}
-      </div>
-    </div>
+      </ul>
+      <button type="button" className="ym-achievements-toggle" aria-expanded={showAll} aria-controls="achievement-list"
+        onClick={() => setShowAll(value => !value)}>{showAll ? 'Show fewer milestones' : `View all ${achievements.length} milestones`} <span aria-hidden="true">{showAll ? '−' : '+'}</span></button>
+    </section>
   );
 }
 

@@ -1,3 +1,4 @@
+import { Select } from '@/components/Select';
 import { accountLedger, settlement, validateTradeTimes } from '@/lib/tradeFinance';
 import { useState, useEffect } from 'react';
 import { Save, X, Calculator, TrendingUp, TrendingDown, Zap, ChevronRight, ChevronLeft, CheckCircle2, Target, Brain, AlertTriangle, Clock, CheckCircle, ListChecks, Camera, Lock, Star } from 'lucide-react';
@@ -524,7 +525,7 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
       </div>
 
       {liveCalc.hasData && step === 2 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-xl bg-gradient-to-br from-orange-500/5 to-amber-500/10 border border-orange-500/20 animate-slide-up">
+        <div className="ym-trade-summary grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-xl animate-slide-up">
           {liveCalc.isClosed ? (
             <>
               <div className="flex items-center gap-2">
@@ -578,7 +579,7 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold text-muted uppercase">Status</p>
-                  <p className="text-sm font-bold text-orange-500">OPEN</p>
+                  <p className="ym-trade-status text-sm font-bold">OPEN</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -625,19 +626,19 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
           </div>
           {plans.length > 0 && <div>
             <label className={labelCls}>Trading plan (optional)</label>
-            <select className={inputCls} value={form.plan_id || ''} onChange={e => {
+            <Select className={inputCls} value={form.plan_id || ''} onChange={e => {
               const planId = e.target.value || null;
               update('plan_id', planId);
               const currentStrategy = strategies.find(s => s.id === form.strategy_id);
               if (currentStrategy && currentStrategy.plan_id !== planId) {
                 update('strategy_id', null); update('strategy', ''); update('entry_model_id', null); setChecklistSnapshot([]);
               }
-            }}><option value="">No plan linked</option>{plans.map(plan => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</select>
+            }}><option value="">No plan linked</option>{plans.map(plan => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</Select>
           </div>}
           <div>
             <label className={labelCls}>Strategy (optional)</label>
             {strategiesForPlan.length > 0 ? (
-              <select
+              <Select
                 className={inputCls}
                 value={form.strategy_id || ''}
                 onChange={e => {
@@ -651,7 +652,7 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
               >
                 <option value="">Select strategy</option>
                 {strategiesForPlan.map(s => <option key={s.id} value={s.id}>{s.name}{!s.plan_id ? ' · needs plan' : ''}</option>)}
-              </select>
+              </Select>
             ) : (
               <p className="text-xs text-muted py-2">Choose a plan first, then add strategies to it in Strategy Library. You can still save this trade and link it later.</p>
             )}
@@ -659,10 +660,10 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
 
           {form.strategy_id && entryModels.length > 0 && <div>
             <label className={labelCls}>Entry model (optional)</label>
-            <select className={inputCls} value={form.entry_model_id || ''} onChange={e => { update('entry_model_id', e.target.value || null); setChecklistSnapshot([]); }}>
+            <Select className={inputCls} value={form.entry_model_id || ''} onChange={e => { update('entry_model_id', e.target.value || null); setChecklistSnapshot([]); }}>
               <option value="">General strategy checklist</option>
               {entryModels.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
-            </select>
+            </Select>
           </div>}
 
           {applicableChecklistItems.length > 0 && (
@@ -807,7 +808,7 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
             </div>
             <div>
               <label className={labelCls}>Trading account</label>
-              <select className={inputCls} value={form.account_id || ''} onChange={e => {
+              <Select className={inputCls} value={form.account_id || ''} onChange={e => {
                 const id = e.target.value || null;
                 const account = accounts.find(a => a.id === id);
                 update('account_id', id);
@@ -824,7 +825,7 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
                   update('strategy', strategies.find(strategy => strategy.id === account.default_strategy_id)?.name || '');
                   update('entry_model_id', null); setChecklistSnapshot([]);
                 }
-              }}><option value="">No account selected</option>{accounts.filter(account => account.is_active).map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}</select>
+              }}><option value="">No account selected</option>{accounts.filter(account => account.is_active).map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}</Select>
             </div>
             <EntitySelect label="Setup (optional)" options={setups} value={form.setup_id} onChange={v => update('setup_id', v)} placeholder="Select a trading setup" />
           </div>
@@ -934,16 +935,12 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
               <div>
                 <label className={labelCls}>Mistake Checklist</label>
                 <p className="text-xs text-muted mb-2.5 -mt-1">Be honest. This is between you and your accountability partner.</p>
-                <div className="flex flex-wrap gap-2">
+                <div className="ym-mistake-checklist">
                   {MISTAKE_OPTIONS.map(m => (
-                    <button key={m} type="button" onClick={() => toggleMistake(m)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                        form.mistakes.includes(m)
-                          ? 'bg-error-500/15 border-error-500/30 text-error-500'
-                          : 'bg-secondary border-themed text-secondary hover:border-muted'
-                      }`}>
-                      {m}
-                    </button>
+                    <label key={m} className="ym-mistake-option">
+                      <input type="checkbox" checked={form.mistakes.includes(m)} onChange={() => toggleMistake(m)} />
+                      <span>{m}</span>
+                    </label>
                   ))}
                 </div>
               </div>

@@ -1,3 +1,4 @@
+import { Select } from '@/components/Select';
 import { useState, useMemo } from 'react';
 import { BookOpen, Plus, Trash2, Save, Search, ExternalLink, Bookmark } from 'lucide-react';
 import { ScreenshotUpload } from '@/components/ScreenshotUpload';
@@ -75,10 +76,10 @@ export function ResourcesPage() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
           <input className="input-field pl-10" placeholder="Search by title or tag..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <select className="input-field sm:w-48" value={filterCat} onChange={e => setFilterCat(e.target.value)}>
+        <Select className="input-field sm:w-48" value={filterCat} onChange={e => setFilterCat(e.target.value)}>
           <option value="">All Categories</option>
           {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-        </select>
+        </Select>
       </div>
 
       {filtered.length === 0 ? (
@@ -169,9 +170,9 @@ function ResourceForm({ initial, onSave, onCancel }: { initial: Resource | null;
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className={labelCls}>Category</label>
-          <select className={inputCls} value={category} onChange={e => setCategory(e.target.value)}>
+          <Select className={inputCls} value={category} onChange={e => setCategory(e.target.value)}>
             {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-          </select>
+          </Select>
         </div>
         <div>
           <label className={labelCls}>URL</label>

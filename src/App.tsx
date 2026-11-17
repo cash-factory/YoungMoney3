@@ -3,6 +3,8 @@ import { ThemeProvider } from '@/context/ThemeProvider';
 import { AuthProvider } from '@/context/AuthProvider';
 import { useAuth } from '@/context/AuthContext';
 import { Layout, type PageId } from '@/components/Layout';
+import { PageExperience } from '@/components/PageExperience';
+import { MediaLibraryPage } from '@/pages/MediaLibraryPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { TradesPage } from '@/pages/TradesPage';
 import { CalendarPage } from '@/pages/CalendarPage';
@@ -34,7 +36,7 @@ import { reportDataError } from '@/lib/recovery';
 import { Mt5Connections } from '@/components/Mt5Connections';
 
 const PAGE_IDS: PageId[] = [
-  'dashboard', 'trades', 'calendar', 'analytics', 'journal', 'ai',
+  'media', 'dashboard', 'trades', 'calendar', 'analytics', 'journal', 'ai',
   'trading-plan', 'goals', 'risk-management', 'market-sessions', 'setups', 'strategy-testing',
   'strategies', 'resources', 'notes', 'study-material', 'brokers-charting', 'weekly-reviews',
   'account-settings', 'admin-operations', 'mt5', 'workspace-setup',
@@ -120,8 +122,9 @@ function AppContent() {
     <Layout current={page} onNavigate={navigateToPage} onQuickAdd={() => setQuickAdd(true)}>
       {onboardingError && <p role="alert" className="card p-3 mb-4 text-sm">Workspace setup could not be checked. <button className="btn-secondary" onClick={()=>setOnboardingAttempt(v=>v+1)}>Retry</button></p>}
       {onboardingNeeded && page !== 'workspace-setup' && <div className="card p-4 mb-4 flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-secondary">Create your first strategy and risk settings when you’re ready.</p><button className="btn-secondary" onClick={()=>navigateToPage('workspace-setup')}>Set up workspace</button></div>}
-      <div key={page} className="animate-fade-in">
+      <PageExperience key={page} page={page}>
         {page === 'workspace-setup' && <OnboardingPage onComplete={()=>{setOnboardingNeeded(false);navigateToPage('dashboard');}} />}
+        {page === 'media' && <MediaLibraryPage />}
         {page === 'dashboard' && <DashboardPage />}
         {page === 'trades' && <TradesPage />}
         {page === 'calendar' && <CalendarPage />}
@@ -143,7 +146,7 @@ function AppContent() {
         {page === 'mt5' && <Mt5Connections />}
         {page === 'account-settings' && <AccountSettingsPage />}
         {page === 'admin-operations' && (profile?.role === 'admin' && profile.account_status === 'active' ? <AdminOperationsPage /> : <p role="alert" className="card p-4">This area is reserved for the workspace administrator.</p>)}
-      </div>
+      </PageExperience>
       {quickAdd && <QuickCaptureModal open onClose={() => setQuickAdd(false)} />}
     </Layout>
   );

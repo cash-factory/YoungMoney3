@@ -1,3 +1,4 @@
+import { Select } from '@/components/Select';
 import { useMemo, useState, useEffect } from 'react';
 import { Swords, ArrowUpRight, ArrowDownRight, Minus, User, User2 } from 'lucide-react';
 import { useTrades, useProfiles } from '@/hooks/useData';
@@ -85,15 +86,15 @@ export function ComparePage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <div>
           <label className="block text-xs font-semibold text-secondary mb-1.5 uppercase tracking-wide">Trader A</label>
-          <select className="input-field" value={traderAId} onChange={e => setTraderAId(e.target.value)}>
+          <Select className="input-field" value={traderAId} onChange={e => setTraderAId(e.target.value)}>
             {activeProfiles.map(p => <option key={p.id} value={p.id}>{p.display_name}</option>)}
-          </select>
+          </Select>
         </div>
         <div>
           <label className="block text-xs font-semibold text-secondary mb-1.5 uppercase tracking-wide">Trader B</label>
-          <select className="input-field" value={traderBId} onChange={e => setTraderBId(e.target.value)}>
+          <Select className="input-field" value={traderBId} onChange={e => setTraderBId(e.target.value)}>
             {activeProfiles.map(p => <option key={p.id} value={p.id}>{p.display_name}</option>)}
-          </select>
+          </Select>
         </div>
       </div>
 

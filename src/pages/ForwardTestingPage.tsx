@@ -1,3 +1,4 @@
+import { Select } from '@/components/Select';
 import { useState } from 'react';
 import { ArrowRightCircle, Plus, Trash2, Save, Activity, TrendingUp, TrendingDown, Minus, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { ScreenshotUpload } from '@/components/ScreenshotUpload';
@@ -245,11 +246,11 @@ function ForwardTradeForm({ onSave, onCancel }: { onSave: (data: ForwardTradeInp
         <EntitySelect label="Strategy" options={strategies} value={strategyId} onChange={value => { setStrategyId(value); setEntryModelId(''); }} placeholder="Select strategy" />
         <EntitySelect label="Setup" options={setups} value={setupId} onChange={setSetupId} placeholder="Select setup" />
       </div>
-      <div className="grid grid-cols-2 gap-4"><div><label className={labelCls}>Entry model</label><select className={inputCls} value={entryModelId} onChange={e => setEntryModelId(e.target.value)}><option value="">General / unspecified</option>{entryModels.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}</select></div><div><label className={labelCls}>Trading plan</label><select className={inputCls} value={planId} onChange={e => setPlanId(e.target.value)}><option value="">No plan linked</option>{plans.map(plan => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</select></div></div>
+      <div className="grid grid-cols-2 gap-4"><div><label className={labelCls}>Entry model</label><Select className={inputCls} value={entryModelId} onChange={e => setEntryModelId(e.target.value)}><option value="">General / unspecified</option>{entryModels.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}</Select></div><div><label className={labelCls}>Trading plan</label><Select className={inputCls} value={planId} onChange={e => setPlanId(e.target.value)}><option value="">No plan linked</option>{plans.map(plan => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</Select></div></div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div><label className={labelCls}>Catalog instrument</label><select className={inputCls} value={instrumentId} onChange={e => { const id = e.target.value; setInstrumentId(id); setConfirmedExample(false); const item = instruments.find(i => i.id === id); if (item) { setInstrument(item.symbol); setEntryPrice(String(item.example_price ?? '')); setPositionSize(String(item.example_size)); } }}><option value="">Custom instrument</option>{instruments.map(i => <option key={i.id} value={i.id}>{i.symbol} — {i.display_name}</option>)}</select></div>
-        <div><label className={labelCls}>Account</label><select className={inputCls} value={accountId} onChange={e => { const account = accounts.find(a => a.id === e.target.value); setAccountId(e.target.value); if (account?.default_strategy_id) setStrategyId(account.default_strategy_id); setPlanId(account?.default_plan_id || ''); if (account) setConversionRate('1'); }}><option value="">No account linked</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.base_currency})</option>)}</select></div>
+        <div><label className={labelCls}>Catalog instrument</label><Select className={inputCls} value={instrumentId} onChange={e => { const id = e.target.value; setInstrumentId(id); setConfirmedExample(false); const item = instruments.find(i => i.id === id); if (item) { setInstrument(item.symbol); setEntryPrice(String(item.example_price ?? '')); setPositionSize(String(item.example_size)); } }}><option value="">Custom instrument</option>{instruments.map(i => <option key={i.id} value={i.id}>{i.symbol} — {i.display_name}</option>)}</Select></div>
+        <div><label className={labelCls}>Account</label><Select className={inputCls} value={accountId} onChange={e => { const account = accounts.find(a => a.id === e.target.value); setAccountId(e.target.value); if (account?.default_strategy_id) setStrategyId(account.default_strategy_id); setPlanId(account?.default_plan_id || ''); if (account) setConversionRate('1'); }}><option value="">No account linked</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.base_currency})</option>)}</Select></div>
       </div>
       {selectedInstrument && <div className="rounded-lg bg-secondary/50 p-3 text-xs"><span className="font-semibold">Static example only</span> — {selectedInstrument.symbol}: {selectedInstrument.example_price} entry, {selectedInstrument.example_size} {selectedInstrument.quantity_unit}. <button className="text-brand-500 underline" onClick={() => { setEntryPrice(String(selectedInstrument.example_price ?? '')); setPositionSize(String(selectedInstrument.example_size)); setConfirmedExample(false); }}>Use example</button></div>}
 
@@ -260,10 +261,10 @@ function ForwardTradeForm({ onSave, onCancel }: { onSave: (data: ForwardTradeInp
         </div>
         <div>
           <label className={labelCls}>Direction</label>
-          <select className={inputCls} value={direction} onChange={e => setDirection(e.target.value as 'long' | 'short')}>
+          <Select className={inputCls} value={direction} onChange={e => setDirection(e.target.value as 'long' | 'short')}>
             <option value="long">Long</option>
             <option value="short">Short</option>
-          </select>
+          </Select>
         </div>
       </div>
 
@@ -293,10 +294,10 @@ function ForwardTradeForm({ onSave, onCancel }: { onSave: (data: ForwardTradeInp
         </div>
         <div>
           <label className={labelCls}>Emotional State</label>
-          <select className={inputCls} value={emotionalState} onChange={e => setEmotionalState(e.target.value as EmotionalState | '')}>
+          <Select className={inputCls} value={emotionalState} onChange={e => setEmotionalState(e.target.value as EmotionalState | '')}>
             <option value="">None</option>
             {EMOTIONAL_STATES.map(s => <option key={s} value={s} className="capitalize">{s}</option>)}
-          </select>
+          </Select>
         </div>
       </div>
 

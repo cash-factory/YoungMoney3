@@ -59,7 +59,7 @@ export function NotesPage() {
           <EmptyState icon={<StickyNote size={40} />} title="No notes yet" message="Create notes to jot down trading ideas, market observations, lessons, or reminders. Pin important ones to the top." />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="ym-notes-board grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(note => (
             <NoteCard key={note.id} note={note} onEdit={() => { setEditing(note); setShowForm(true); }} onDelete={() => handleDelete(note.id)} onPin={() => togglePin(note)} />
           ))}
@@ -75,7 +75,7 @@ export function NotesPage() {
 
 function NoteCard({ note, onEdit, onDelete, onPin }: { note: Note; onEdit: () => void; onDelete: () => void; onPin: () => void }) {
   return (
-    <div className={`card p-4 card-hover flex flex-col ${note.is_pinned ? 'ring-1 ring-brand-500/20' : ''}`}>
+    <div className={`ym-note-card card p-4 card-hover flex flex-col ${note.is_pinned ? 'ring-1 ring-brand-500/20' : ''}`}>
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
           {note.is_pinned && <Pin size={14} className="text-brand-500 fill-current" />}

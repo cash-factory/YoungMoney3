@@ -1,39 +1,35 @@
-import { useEffect, useRef } from 'react';
+import { FloatingPanel } from './FloatingPanel';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Check, Moon, Palette, Sun } from 'lucide-react';
 import { COLOR_PALETTES, useTheme } from '@/context/ThemeContext';
 
 /** A shared palette picker used on the welcome page and inside the workspace. */
 export function ColorPaletteControl({ compact = false }: { compact?: boolean }) {
   const { theme, palette, toggle, setPalette } = useTheme();
-  const controlRef = useRef<HTMLDetailsElement>(null);
+  const controlRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
   const activePalette = COLOR_PALETTES.find(option => option.id === palette) || COLOR_PALETTES[0];
 
   useEffect(() => {
-    const closeOnOutsideInteraction = (event: PointerEvent) => {
-      if (event.target instanceof Node && !controlRef.current?.contains(event.target)) {
-        if (controlRef.current) controlRef.current.open = false;
-      }
-    };
+    if (!open) return;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && controlRef.current?.open) {
-        controlRef.current.open = false;
-      }
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setOpen(false); triggerRef.current?.focus(); }
     };
-    document.addEventListener('pointerdown', closeOnOutsideInteraction);
     document.addEventListener('keydown', closeOnEscape);
     return () => {
-      document.removeEventListener('pointerdown', closeOnOutsideInteraction);
       document.removeEventListener('keydown', closeOnEscape);
     };
-  }, []);
+  }, [open]);
 
   return (
-    <details ref={controlRef} className="palette-control relative">
-      <summary className={`btn-secondary cursor-pointer list-none ${compact ? 'px-3 py-2 text-xs' : 'w-full justify-between'}`} aria-label="Appearance settings">
+    <div ref={controlRef} className="palette-control relative">
+      <button ref={triggerRef} type="button" aria-expanded={open} aria-controls={open ? panelId : undefined} onClick={() => setOpen(value => !value)} className={`btn-secondary cursor-pointer list-none ${compact ? 'px-3 py-2 text-xs' : 'w-full justify-between'}`} aria-label="Appearance settings">
         <span className="inline-flex items-center gap-2"><Palette size={compact ? 15 : 16} />{compact ? <span className="hidden sm:inline">Appearance</span> : 'Appearance'}</span>
         {compact && <span className="ym-mini-palette inline-flex h-4 w-7 overflow-hidden rounded-sm" aria-hidden="true">{activePalette.accents?.map((color, index) => <i key={index} className="flex-1" style={{ background: color }} />)}</span>}
-      </summary>
-      <div className={`${compact ? 'right-0 top-full mt-2' : 'bottom-full left-0 right-0 mb-2'} ym-palette-panel absolute z-[70] w-[340px] max-w-[calc(100vw-2rem)] max-h-[min(75vh,560px)] overflow-y-auto rounded-xl border border-themed bg-card p-3 shadow-2xl`}>
+      </button>
+      {open && <FloatingPanel anchor={controlRef} onDismiss={() => setOpen(false)} minWidth={340} maxHeight={560} id={panelId} className="palette-control ym-palette-panel rounded-xl border border-themed bg-card p-3 shadow-2xl">
         <div className="mb-3 px-2 pt-1">
           <p className="text-sm font-semibold tracking-tight">Your visual workspace</p>
           <p className="mt-1 text-[11px] leading-relaxed text-muted">{COLOR_PALETTES.length} considered palettes. One familiar trading desk.</p>
@@ -58,7 +54,8 @@ export function ColorPaletteControl({ compact = false }: { compact?: boolean }) 
                   aria-pressed={palette === option.id}
                   onClick={() => {
                     setPalette(option.id);
-                    if (controlRef.current) controlRef.current.open = false;
+                    setOpen(false);
+                    triggerRef.current?.focus();
                   }}
                   className={`ym-palette-choice flex items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors ${palette === option.id ? 'bg-secondary' : ''}`}
                 >
@@ -75,7 +72,7 @@ export function ColorPaletteControl({ compact = false }: { compact?: boolean }) 
             </div>
           </section>
         ))}
-      </div>
-    </details>
+      </FloatingPanel>}
+    </div>
   );
 }

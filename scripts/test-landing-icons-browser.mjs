@@ -16,7 +16,7 @@ const viewports = [
   {name:'desktop', width:1440, height:900},
 ];
 await mkdir(screenshotDir, {recursive:true});
-const browser = await chromium.launch({headless:true});
+const browser = await chromium.launch({headless:true,...(process.env.YM3_CHROMIUM_EXECUTABLE ? {executablePath:process.env.YM3_CHROMIUM_EXECUTABLE} : {})});
 let scenarios=0;
 try {
   for(const viewport of viewports) {
@@ -124,6 +124,11 @@ try {
           });
         }
 
+        for (const artwork of await page.locator('img[src^="/visuals/studio-"]').all()) {
+          await artwork.scrollIntoViewIfNeeded();
+          await artwork.evaluate(img => img.decode().catch(() => { if (!img.complete || !img.naturalWidth) throw new Error('Artwork failed to load'); }));
+          assert.ok(await artwork.evaluate(img=>Number(getComputedStyle(img).opacity)>0), 'Initial artwork must remain visible in every theme');
+        }
         if (palette === 'craftylabs-studio' && mode === 'dark') {
           for (const selector of ['#features','#practice','footer.ym-studio-footer']) {
             await page.locator(selector).scrollIntoViewIfNeeded();

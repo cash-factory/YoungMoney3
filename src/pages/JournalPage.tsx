@@ -1,3 +1,4 @@
+import { Select } from '@/components/Select';
 import { useMemo, useState } from 'react';
 import { BookOpen, Plus, Trash2, Save, Target, Eye, CheckSquare, FileText, Calendar } from 'lucide-react';
 import { ScreenshotUpload } from '@/components/ScreenshotUpload';
@@ -36,9 +37,9 @@ export function JournalPage() {
   const { user } = useAuth();
   const [source, setSource] = useState('all');
   const sourceFilter = <label className="mb-4 block max-w-sm text-xs font-semibold text-secondary">Trade source
-    <select className="input-field mt-1.5" value={source} onChange={event => setSource(event.target.value)}>
+    <Select className="input-field mt-1.5" value={source} onChange={event => setSource(event.target.value)}>
       <option value="all">All sources</option><option value="manual">Manual</option><option value="mt5">MT5</option>
-    </select>
+    </Select>
   </label>;
   const { entries, loading, upsertEntry, deleteEntry } = useJournalEntries(user?.id);
   const { trades } = useTrades(user?.id);
@@ -115,10 +116,10 @@ export function JournalPage() {
           </div>}
       </section>}
       <label className="mb-4 block max-w-sm text-xs font-semibold text-secondary">Journal account
-        <select className="input-field mt-1.5" value={accountFilter} onChange={event => setAccountFilter(event.target.value)}>
+        <Select className="input-field mt-1.5" value={accountFilter} onChange={event => setAccountFilter(event.target.value)}>
           <option value="all">All accounts</option><option value="unassigned">Unassigned</option>
           {accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}
-        </select>
+        </Select>
       </label>
       <div className="flex gap-2 mb-4">
         {(['', 'daily', 'weekly', 'monthly'] as const).map(t => (
@@ -139,7 +140,7 @@ export function JournalPage() {
           <EmptyState icon={<BookOpen size={40} />} title="No journal entries yet" message="Create a daily, weekly, or monthly journal entry to plan your sessions and reflect on your trading." />
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="ym-journal-entries space-y-4">
           {filtered.map(entry => (
             <JournalCard key={entry.id} entry={entry} trades={visibleTrades} accounts={accounts} onEdit={() => { setEditingEntry(entry); setShowForm(true); }} onDelete={() => handleDelete(entry.id)} />
           ))}
@@ -329,19 +330,19 @@ function JournalForm({ initial, trades, strategies, setups, instruments, account
         </div>
         <div>
           <label className={labelCls}>Entry Type</label>
-          <select className={inputCls} value={type} onChange={e => setType(e.target.value as JournalType)}>
+          <Select className={inputCls} value={type} onChange={e => setType(e.target.value as JournalType)}>
             <option value="daily">Daily</option>
             <option value="weekly">Weekly</option>
             <option value="monthly">Monthly</option>
-          </select>
+          </Select>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div><label className={labelCls}>Strategy practiced</label><select className={inputCls} value={strategyId} onChange={e => setStrategyId(e.target.value)}><option value="">None</option>{strategies.map(strategy => <option key={strategy.id} value={strategy.id}>{strategy.name}</option>)}</select></div>
-        <div><label className={labelCls}>Setup</label><select className={inputCls} value={setupId} onChange={e => setSetupId(e.target.value)}><option value="">None</option>{setups.map(setup => <option key={setup.id} value={setup.id}>{setup.name}</option>)}</select></div>
-        <div><label className={labelCls}>Instrument</label><select className={inputCls} value={instrumentId} onChange={e => setInstrumentId(e.target.value)}><option value="">None</option>{instruments.map(item => <option key={item.id} value={item.id}>{item.symbol}</option>)}</select></div>
-        <div><label className={labelCls}>Account</label><select className={inputCls} value={accountId} onChange={e => setAccountId(e.target.value)}><option value="">None</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}</select></div>
+        <div><label className={labelCls}>Strategy practiced</label><Select className={inputCls} value={strategyId} onChange={e => setStrategyId(e.target.value)}><option value="">None</option>{strategies.map(strategy => <option key={strategy.id} value={strategy.id}>{strategy.name}</option>)}</Select></div>
+        <div><label className={labelCls}>Setup</label><Select className={inputCls} value={setupId} onChange={e => setSetupId(e.target.value)}><option value="">None</option>{setups.map(setup => <option key={setup.id} value={setup.id}>{setup.name}</option>)}</Select></div>
+        <div><label className={labelCls}>Instrument</label><Select className={inputCls} value={instrumentId} onChange={e => setInstrumentId(e.target.value)}><option value="">None</option>{instruments.map(item => <option key={item.id} value={item.id}>{item.symbol}</option>)}</Select></div>
+        <div><label className={labelCls}>Account</label><Select className={inputCls} value={accountId} onChange={e => setAccountId(e.target.value)}><option value="">None</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}</Select></div>
         <div><label className={labelCls}>Trades linked ({linkedTradeIds.length})</label><div className="max-h-36 overflow-y-auto rounded-lg border border-themed p-2 space-y-1">{trades.slice(0, 30).map(trade => <label key={trade.id} className="flex gap-2 items-center text-xs"><input type="checkbox" checked={linkedTradeIds.includes(trade.id)} onChange={e => setLinkedTradeIds(ids => e.target.checked ? [...ids, trade.id] : ids.filter(id => id !== trade.id))} />{trade.pair} · {format(parseISO(trade.entry_time), 'MMM d')} · {trade.outcome || trade.status}</label>)}</div></div>
       </div>
 

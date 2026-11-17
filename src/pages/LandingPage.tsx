@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { ColorPaletteControl } from '@/components/ColorPaletteControl';
+import { BrandLogo } from '@/components/BrandLogo';
 import { LandingIcon } from '@/components/LandingIcon';
 
 function useScrollReveal() {
@@ -149,7 +150,7 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <LandingIcon icon={TrendingUp} size="sm" variant="solid" />
+            <BrandLogo />
             <span className="font-bold text-base tracking-tight hidden sm:inline">Young-Money-Fx</span><span className="font-bold text-sm tracking-tight sm:hidden">YM / FX</span>
           </div>
           <div className="ym-studio-landing-nav hidden md:flex items-center gap-1">
@@ -473,7 +474,7 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
         <div className="ym-footer-content max-w-6xl mx-auto">
           <div className="ym-footer-head flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
             <div className="flex items-center gap-2.5">
-              <LandingIcon icon={TrendingUp} size="sm" variant="solid" />
+              <BrandLogo />
               <span className="ym-footer-wordmark font-bold text-sm">YM-Fx <small> / THE TRADING DESK</small></span>
             </div>
             <p className="ym-footer-promise text-xs">Built for accountability. Designed for growth.</p>

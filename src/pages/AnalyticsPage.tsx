@@ -1,3 +1,4 @@
+import { Select } from '@/components/Select';
 import {tradeCurrency} from '@/lib/tradeFinance';
 import { useMemo, useState } from 'react';
 import { BarChart3, TrendingUp, Calendar, Compass, Activity, Layers } from 'lucide-react';
@@ -22,9 +23,9 @@ export function AnalyticsPage() {
   const { user } = useAuth();
   const [source, setSource] = useState('all');
   const sourceFilter = <label className="mb-4 block max-w-sm text-xs font-semibold text-secondary">Trade source
-    <select className="input-field mt-1.5" value={source} onChange={event => setSource(event.target.value)}>
+    <Select className="input-field mt-1.5" value={source} onChange={event => setSource(event.target.value)}>
       <option value="all">All sources</option><option value="manual">Manual</option><option value="mt5">MT5</option>
-    </select>
+    </Select>
   </label>;
   const { trades, loading } = useTrades(user?.id);
   const { positions: richPositions } = useMt5Lifecycles(user?.id);
@@ -64,10 +65,10 @@ export function AnalyticsPage() {
         <SectionHeader title="Analytics" subtitle="Deep performance insights across your trading" />
       {sourceFilter}
         <label className="mb-5 block max-w-sm text-xs font-semibold text-secondary">Account view
-          <select className="input-field mt-1.5" value={selectedAccountId ?? accountId} onChange={event => setSelectedAccountId(event.target.value || '__unassigned__')}>
+          <Select className="input-field mt-1.5" value={selectedAccountId ?? accountId} onChange={event => setSelectedAccountId(event.target.value || '__unassigned__')}>
             <option value="all">Whole portfolio</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} Â· {account.base_currency}</option>)}
             <option value="__unassigned__">Unassigned legacy trades</option>
-          </select>
+          </Select>
         </label>
         {selectedRich.length > 0 && <div className="mb-6"><RichLifecycleAnalytics positions={selectedRich} accountId={accountId}/></div>}
         <div className="card p-8">
@@ -82,10 +83,10 @@ export function AnalyticsPage() {
       <SectionHeader title="Analytics" subtitle="Deep performance insights across your trading" />
       {sourceFilter}
       <label className="mb-5 block max-w-sm text-xs font-semibold text-secondary">Account view
-        <select className="input-field mt-1.5" value={selectedAccountId ?? accountId} onChange={event => setSelectedAccountId(event.target.value || '__unassigned__')}>
+        <Select className="input-field mt-1.5" value={selectedAccountId ?? accountId} onChange={event => setSelectedAccountId(event.target.value || '__unassigned__')}>
           <option value="all">Whole portfolio</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} Â· {account.base_currency}</option>)}
           <option value="__unassigned__">Unassigned legacy trades</option>
-        </select>
+        </Select>
       </label>
 
       {selectedRich.length > 0 && <div className="mb-6"><RichLifecycleAnalytics positions={selectedRich} accountId={accountId}/></div>}

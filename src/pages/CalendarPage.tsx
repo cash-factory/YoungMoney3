@@ -1,3 +1,4 @@
+import { Select } from '@/components/Select';
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Plus, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { useTrades, useTradingAccounts } from '@/hooks/useData';
@@ -97,10 +98,10 @@ export function CalendarPage() {
       />
 
       <label className="block text-xs text-secondary font-semibold max-w-sm mb-4">Account
-        <select className="input-field mt-1" value={accountFilter} onChange={event=>setAccountFilter(event.target.value)}>
+        <Select className="input-field mt-1" value={accountFilter} onChange={event=>setAccountFilter(event.target.value)}>
           <option value="all">All accounts</option>
           {accounts.map(item=><option key={item.id} value={item.id}>{item.name} · {item.base_currency}</option>)}
-        </select>
+        </Select>
       </label>
       <section className="card p-4 sm:p-5 mb-5" aria-label="MT5 position lifecycle calendar summary">
         <p className="text-xs font-bold uppercase tracking-wider text-muted">BROKER POSITION CALENDAR · UTC CLOSE DATES</p>
@@ -147,7 +148,7 @@ export function CalendarPage() {
             <div key={d} className="text-center text-xs font-semibold text-muted py-2">{d}</div>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-1">
+        <div className="ym-calendar-grid grid grid-cols-7 gap-1">
           {days.map(day => {
             const key = format(day, 'yyyy-MM-dd');
             const dayData = tradesByDay.get(key);

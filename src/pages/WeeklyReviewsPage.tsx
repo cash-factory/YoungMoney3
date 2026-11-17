@@ -1,3 +1,4 @@
+import { Select } from '@/components/Select';
 import { useState, useMemo } from 'react';
 import { CalendarCheck, Plus, Trash2, Save, Star, TrendingUp, TrendingDown, Brain } from 'lucide-react';
 import { ScreenshotUpload } from '@/components/ScreenshotUpload';
@@ -90,10 +91,10 @@ export function WeeklyReviewsPage() {
           <p className="text-xs text-muted mt-1">Each closed MT5 lifecycle counts once. Closing fills, legacy journal rows and user-entered reviews remain separate until exact matching is verified. Broker-local week boundaries require a confirmed timezone conversion.</p>
         </div>
         <label className="block max-w-sm text-xs text-secondary font-semibold">Trading account
-          <select className="input-field mt-1" value={brokerAccount} onChange={event=>setBrokerAccount(event.target.value)}>
+          <Select className="input-field mt-1" value={brokerAccount} onChange={event=>setBrokerAccount(event.target.value)}>
             <option value="all">All accounts</option>
             {accounts.map(item=><option key={item.id} value={item.id}>{item.name} · {item.base_currency}</option>)}
-          </select>
+          </Select>
         </label>
         <div className="grid gap-2 sm:grid-cols-3">
           <div className="bg-secondary rounded-lg p-3"><p className="text-xs text-muted">Week beginning (UTC)</p><strong>{brokerWeek.weekStart}</strong></div>
@@ -152,7 +153,7 @@ export function WeeklyReviewsPage() {
             </div>
           )}
 
-          <div className="space-y-3">
+          <div className="ym-review-list space-y-3">
             {reviews.map(review => (
               <ReviewCard key={review.id} review={review} onEdit={() => { setEditing(review); setShowForm(true); }} onDelete={() => handleDelete(review.id)} />
             ))}
@@ -307,12 +308,12 @@ function ReviewForm({ initial, trades, onSave, onCancel }: { initial: WeeklyRevi
       </button>
 
       <div className="grid grid-cols-2 gap-4">
-        <div><label className={labelCls}>Strategy</label><select className={inputCls} value={strategyId} onChange={e => { setStrategyId(e.target.value); setEntryModelId(''); }}><option value="">No strategy linked</option>{strategies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-        <div><label className={labelCls}>Account</label><select className={inputCls} value={accountId} onChange={e => setAccountId(e.target.value)}><option value="">All accounts</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.base_currency})</option>)}</select></div>
-        <div><label className={labelCls}>Setup</label><select className={inputCls} value={setupId} onChange={e => setSetupId(e.target.value)}><option value="">None</option>{setups.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-        <div><label className={labelCls}>Instrument</label><select className={inputCls} value={instrumentId} onChange={e => setInstrumentId(e.target.value)}><option value="">All instruments</option>{instruments.map(i => <option key={i.id} value={i.id}>{i.symbol}</option>)}</select></div>
+        <div><label className={labelCls}>Strategy</label><Select className={inputCls} value={strategyId} onChange={e => { setStrategyId(e.target.value); setEntryModelId(''); }}><option value="">No strategy linked</option>{strategies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></div>
+        <div><label className={labelCls}>Account</label><Select className={inputCls} value={accountId} onChange={e => setAccountId(e.target.value)}><option value="">All accounts</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.base_currency})</option>)}</Select></div>
+        <div><label className={labelCls}>Setup</label><Select className={inputCls} value={setupId} onChange={e => setSetupId(e.target.value)}><option value="">None</option>{setups.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></div>
+        <div><label className={labelCls}>Instrument</label><Select className={inputCls} value={instrumentId} onChange={e => setInstrumentId(e.target.value)}><option value="">All instruments</option>{instruments.map(i => <option key={i.id} value={i.id}>{i.symbol}</option>)}</Select></div>
       </div>
-      <div className="grid grid-cols-2 gap-4"><div><label className={labelCls}>Entry model</label><select className={inputCls} value={entryModelId} onChange={e => setEntryModelId(e.target.value)}><option value="">General / unspecified</option>{entryModels.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}</select></div><div><label className={labelCls}>Trading plan</label><select className={inputCls} value={planId} onChange={e => setPlanId(e.target.value)}><option value="">No plan linked</option>{plans.map(plan => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</select></div></div>
+      <div className="grid grid-cols-2 gap-4"><div><label className={labelCls}>Entry model</label><Select className={inputCls} value={entryModelId} onChange={e => setEntryModelId(e.target.value)}><option value="">General / unspecified</option>{entryModels.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}</Select></div><div><label className={labelCls}>Trading plan</label><Select className={inputCls} value={planId} onChange={e => setPlanId(e.target.value)}><option value="">No plan linked</option>{plans.map(plan => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</Select></div></div>
 
       <div>
         <label className={labelCls}>Performance Rating: {rating}/10</label>

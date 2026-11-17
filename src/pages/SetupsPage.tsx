@@ -1,3 +1,4 @@
+import { Select } from '@/components/Select';
 import { useState, useMemo } from 'react';
 import { Layers, Plus, Trash2, Save, Search, TrendingUp, Eye } from 'lucide-react';
 import { ScreenshotUpload } from '@/components/ScreenshotUpload';
@@ -86,10 +87,10 @@ export function SetupsPage() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
           <input className="input-field pl-10" placeholder="Search setups..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <select className="input-field sm:w-48" value={filterCat} onChange={e => setFilterCat(e.target.value)}>
+        <Select className="input-field sm:w-48" value={filterCat} onChange={e => setFilterCat(e.target.value)}>
           <option value="">All Categories</option>
           {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-        </select>
+        </Select>
       </div>
 
       {filtered.length === 0 ? (
@@ -97,7 +98,7 @@ export function SetupsPage() {
           <EmptyState icon={<Layers size={40} />} title="No setups yet" message="Document your trading setups with entry/exit criteria, market conditions, and track their win rates from your journal." />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="ym-setup-gallery grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map(setup => {
             const wr = winRateBySetup[setup.name];
             const winRate = wr && wr.total > 0 ? Math.round((wr.wins / wr.total) * 100) : null;
@@ -226,9 +227,9 @@ function SetupForm({ initial, onSave, onCancel }: { initial: TradingSetup | null
         </div>
         <div>
           <label className={labelCls}>Category</label>
-          <select className={inputCls} value={category} onChange={e => setCategory(e.target.value)}>
+          <Select className={inputCls} value={category} onChange={e => setCategory(e.target.value)}>
             {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-          </select>
+          </Select>
         </div>
       </div>
 

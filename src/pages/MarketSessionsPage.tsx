@@ -1,3 +1,4 @@
+import { Select } from '@/components/Select';
 import { useState } from 'react';
 import { CalendarClock, Plus, Trash2, Save, AlertOctagon, Clock, Newspaper, Mic, Ban } from 'lucide-react';
 import { useMarketEvents } from '@/hooks/useData';
@@ -179,24 +180,24 @@ function EventForm({ onSave, onCancel }: { onSave: (data: MarketEventInput) => v
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className={labelCls}>Event Type</label>
-          <select className={inputCls} value={eventType} onChange={e => setEventType(e.target.value as MarketEventType)}>
+          <Select className={inputCls} value={eventType} onChange={e => setEventType(e.target.value as MarketEventType)}>
             {EVENT_TYPES.map(t => <option key={t} value={t}>{TYPE_CONFIG[t].label}</option>)}
-          </select>
+          </Select>
         </div>
         <div>
           <label className={labelCls}>Impact</label>
-          <select className={inputCls} value={impact} onChange={e => setImpact(e.target.value as MarketImpact)}>
+          <Select className={inputCls} value={impact} onChange={e => setImpact(e.target.value as MarketImpact)}>
             {IMPACTS.map(i => <option key={i} value={i} className="capitalize">{i}</option>)}
-          </select>
+          </Select>
         </div>
       </div>
 
       <div>
         <label className={labelCls}>Trading Session</label>
-        <select className={inputCls} value={session} onChange={e => setSession(e.target.value as TradeSession | '')}>
+        <Select className={inputCls} value={session} onChange={e => setSession(e.target.value as TradeSession | '')}>
           <option value="">Any</option>
           {SESSIONS.map(s => <option key={s} value={s}>{SESSION_LABELS[s]}</option>)}
-        </select>
+        </Select>
       </div>
 
       <div>

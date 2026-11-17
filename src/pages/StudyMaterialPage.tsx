@@ -1,3 +1,4 @@
+import { Select } from '@/components/Select';
 import { useState, useMemo } from 'react';
 import { GraduationCap, Plus, Trash2, Save, ExternalLink, BookOpen, Video, FileText, Headphones } from 'lucide-react';
 import { ScreenshotUpload } from '@/components/ScreenshotUpload';
@@ -194,15 +195,15 @@ function StudyForm({ initial, onSave, onCancel }: { initial: StudyMaterial | nul
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className={labelCls}>Type</label>
-          <select className={inputCls} value={type} onChange={e => setType(e.target.value as StudyType)}>
+          <Select className={inputCls} value={type} onChange={e => setType(e.target.value as StudyType)}>
             {TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-          </select>
+          </Select>
         </div>
         <div>
           <label className={labelCls}>Status</label>
-          <select className={inputCls} value={status} onChange={e => setStatus(e.target.value as StudyStatus)}>
+          <Select className={inputCls} value={status} onChange={e => setStatus(e.target.value as StudyStatus)}>
             {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-          </select>
+          </Select>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4">

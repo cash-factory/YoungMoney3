@@ -123,7 +123,8 @@ test('workflow ribbon keeps every stage visible and stationary in all palettes',
 test('homepage icons use a single accessible, predictable geometry component',()=>{
   const component=read('src/components/LandingIcon.tsx');
   const css=read('src/index.css');
-  assert.equal((landing.match(/<LandingIcon /g)||[]).length,8, 'Feature and tool cards should use shared LandingIcon');
+  assert.equal((landing.match(/<LandingIcon /g)||[]).length,6, 'Feature and tool cards should use shared LandingIcon');
+  assert.equal((landing.match(/<BrandLogo /g)||[]).length,2, 'Header and footer should use the production brand mark');
   for(const icon of ['item.icon','f.icon','s.icon','BookOpen','TrendingUp']) {
     assert.ok(landing.includes('icon={'+icon+'}'),icon+' must use the shared component');
   }

@@ -24,6 +24,7 @@ dist-ssr
 .env
 
 __pycache__/
+artifacts/
 
 # Generated staging config contains deployment account resource IDs
 wrangler.staging.jsonc
