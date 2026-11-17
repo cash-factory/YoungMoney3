@@ -126,7 +126,16 @@ try {
 
         for (const artwork of await page.locator('img[src^="/visuals/studio-"]').all()) {
           await artwork.scrollIntoViewIfNeeded();
-          await artwork.evaluate(img => img.decode().catch(() => { if (!img.complete || !img.naturalWidth) throw new Error('Artwork failed to load'); }));
+          await artwork.evaluate(async img => {
+            img.loading = 'eager';
+            if (!img.complete) await new Promise((resolve, reject) => {
+              img.addEventListener('load', resolve, { once: true });
+              img.addEventListener('error', () => reject(new Error('Artwork failed to load: ' + img.src)), { once: true });
+            });
+            if (!img.naturalWidth) throw new Error('Artwork failed to load: ' + img.src);
+            // Some Chromium versions reject decode() for otherwise valid SVGs.
+            await img.decode().catch(() => {});
+          });
           assert.ok(await artwork.evaluate(img=>Number(getComputedStyle(img).opacity)>0), 'Initial artwork must remain visible in every theme');
         }
         if (palette === 'craftylabs-studio' && mode === 'dark') {

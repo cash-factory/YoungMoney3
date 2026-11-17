@@ -47,5 +47,5 @@ export function FloatingPanel({ anchor, onDismiss, children, maxHeight = 300, mi
       document.removeEventListener('focusin', outside);
     };
   }, [anchor, maxHeight, minWidth]);
-  return createPortal(<div {...props} ref={panel} className={`ym-floating-panel ${className}`} style={position}>{children}</div>, document.body);
+  return createPortal(<div {...props} ref={panel} data-positioned={position.width > 0 ? "true" : undefined} className={`ym-floating-panel ${className}`} style={{ ...position, visibility: position.width > 0 ? 'visible' : 'hidden', pointerEvents: position.width > 0 ? 'auto' : 'none' }}>{children}</div>, document.body);
 }

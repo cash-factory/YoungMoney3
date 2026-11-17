@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import '@/controls.css';
@@ -28,24 +28,22 @@ export function ThemedSelect({ value, options, onChange, label, placeholder = 'C
   const trigger = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number }>({ top: 0, left: 0, width: 0, maxHeight: 320 });
+  const [position, setPosition] = useState<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number } | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const search = useRef({ text: '', time: 0 });
   const selectedIndex = options.findIndex(option => option.value === value);
   const selected = options[selectedIndex];
   const firstEnabled = options.findIndex(option => !option.disabled);
 
-  useLayoutEffect(() => {
-    if (!open) return;
-    const positionList = () => {
+  const positionList = useCallback(() => {
       const bounds = trigger.current?.getBoundingClientRect();
-      if (!bounds) return;
+      if (!bounds || bounds.width <= 0 || bounds.height <= 0) return false;
       const viewport = window.visualViewport;
       const leftEdge = viewport?.offsetLeft ?? 0;
       const topEdge = viewport?.offsetTop ?? 0;
       const viewportWidth = viewport?.width ?? window.innerWidth;
       const bottomEdge = topEdge + (viewport?.height ?? window.innerHeight);
-      if (bounds.bottom < topEdge || bounds.top > bottomEdge) { setOpen(false); return; }
+      if (bounds.bottom < topEdge || bounds.top > bottomEdge) { setOpen(false); return false; }
       const desired = Math.min(320, options.length * 44 + 16);
       const below = Math.max(0, bottomEdge - bounds.bottom - 14);
       const above = Math.max(0, bounds.top - topEdge - 14);
@@ -59,7 +57,11 @@ export function ThemedSelect({ value, options, onChange, label, placeholder = 'C
         width,
         maxHeight,
       });
-    };
+      return true;
+  }, [options.length]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
     positionList();
     window.addEventListener('resize', positionList);
     document.addEventListener('scroll', positionList, true);
@@ -71,7 +73,7 @@ export function ThemedSelect({ value, options, onChange, label, placeholder = 'C
       window.visualViewport?.removeEventListener('resize', positionList);
       window.visualViewport?.removeEventListener('scroll', positionList);
     };
-  }, [open, options.length]);
+  }, [open, positionList]);
 
   useEffect(() => {
     if (!open) return;
@@ -96,10 +98,11 @@ export function ThemedSelect({ value, options, onChange, label, placeholder = 'C
     const listBox = menu.getBoundingClientRect();
     if (optionBox.top < listBox.top) menu.scrollTop -= listBox.top - optionBox.top + 4;
     else if (optionBox.bottom > listBox.bottom) menu.scrollTop += optionBox.bottom - listBox.bottom + 4;
-  }, [open, activeIndex, position.maxHeight, id]);
+  }, [open, activeIndex, position?.maxHeight, id]);
 
   const openList = () => {
-    if (disabled || firstEnabled < 0) return;
+    if (disabled || firstEnabled < 0 || !positionList()) return;
+    // Measure before mounting the portal so its first visible frame is usable.
     setActiveIndex(selectedIndex >= 0 && !options[selectedIndex]?.disabled ? selectedIndex : firstEnabled);
     setOpen(true);
   };
@@ -165,7 +168,7 @@ export function ThemedSelect({ value, options, onChange, label, placeholder = 'C
       <span className="ym-select-value">{selected?.label || placeholder}</span>
       <ChevronDown size={17} className="ym-select-arrow" aria-hidden="true" />
     </button>
-    {open && createPortal(<div ref={list} className="ym-select-list ym-select-portal" style={position}
+    {open && position && createPortal(<div data-positioned="true" ref={list} className="ym-select-list ym-select-portal" style={position}
       id={`${id}-listbox`} role="listbox" aria-label={label}>
       {options.map((option, index) => <div id={`${id}-option-${index}`} key={`${option.value}-${index}`} role="option"
         aria-selected={option.value === value} aria-disabled={option.disabled || undefined} data-active={activeIndex === index}

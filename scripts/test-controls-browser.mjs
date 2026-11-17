@@ -23,6 +23,18 @@ export async function runControlChecks(page) {
   await emotional.click();
   const popup = page.getByRole('listbox', { name: 'Emotional State', exact: true });
   await popup.waitFor();
+  // React must mount a positioned popup; wait for its usable geometry instead of
+  // sampling an intermediate commit or assuming that DOM presence means ready.
+  await page.waitForFunction(id => {
+    const node = document.getElementById(id);
+    if (!node || node.dataset.positioned !== 'true') return false;
+    const box = node.getBoundingClientRect();
+    const first = node.querySelector('[role="option"]');
+    if (!first || box.width < Math.min(180, innerWidth - 24) || box.height < 40) return false;
+    const optionBox = first.getBoundingClientRect();
+    return box.left >= 6 && box.right <= innerWidth - 6 && box.top >= 6 && box.bottom <= innerHeight - 6
+      && node.contains(document.elementFromPoint(optionBox.left + Math.min(30, optionBox.width / 2), optionBox.top + optionBox.height / 2));
+  }, await popup.getAttribute('id'));
   const geometry = await popup.evaluate(node => {
     const box = node.getBoundingClientRect();
     const first = node.querySelector('[role="option"]');
