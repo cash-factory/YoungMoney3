@@ -43,7 +43,7 @@ For a Windows 64-bit Python 3.13 fallback:
 - .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 - .\.venv\Scripts\python.exe connector_gui.py
 
-## Session manager v0.3.0-rc1 (staging)
+## Studio connector v0.3.1-rc1 (staging)
 
 One desktop app manages multiple broker account sessions. A MetaTrader terminal
 can have one logged-in account at a time. Use **Create terminal** to generate a
@@ -99,3 +99,8 @@ otherwise historical sessions remain unresolved.
 The first standalone binary is unsigned: Windows may warn before opening it.
 Always verify the release SHA256 and use only the staging website/release.
 Staging is invite-only and real-account capture is disabled.
+
+
+### CraftyLabs-inspired connector appearance
+
+The Windows session manager uses the Obsidian Studio palette (red #ff365c, near-black #09090d) and native, text-free vector illustrations in its five page headers. All instructions remain real accessible Tk text. The standalone image source is stored in `connector/assets/connector-scene.svg`; the executable renders matching art using Tk Canvas without requiring SVG libraries or internet access. This is a presentation-only redesign: MT5 read-only capture, pairing, session isolation, broker credentials, local outbox, and reconciliation rules are unchanged.
