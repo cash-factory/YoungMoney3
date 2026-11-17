@@ -82,3 +82,24 @@
 @media(max-width:900px) { .ym-library-workbench { grid-template-columns:145px minmax(0,1fr);gap:18px; }.ym-library-hero { grid-template-columns:minmax(0,1fr) 180px;gap:15px; } }
 @media(max-width:640px) { .ym-library-hero { grid-template-columns:1fr;padding:24px; }.ym-library-art { display:none; }.ym-library-workbench { grid-template-columns:1fr;gap:14px; }.ym-library-sidebar { display:flex;gap:5px;padding:0; }.ym-library-sidebar > p,.ym-library-side-note { display:none; }.ym-library-sidebar > button { flex:1;padding:10px 7px;font-size:10px;gap:6px; }.ym-library-sidebar > button small { font-size:9px; }.ym-library-view { display:none; }.ym-library-hero-stats { gap:25px; }.ym-library-list .ym-library-card { grid-template-columns:110px minmax(0,1fr); }.ym-library-list .ym-library-card-content { padding:12px; }.ym-library-list .ym-library-audio-player { left:3px;width:calc(100% - 6px); }.ym-library-lightbox { width:calc(100vw - 16px);max-height:calc(100dvh - 16px); } }
 @media(prefers-reduced-motion:reduce) { .ym-library-skeleton { animation:none; }.ym-library-card { transition:none; } }
+
+
+/* Keep Media Library's original still-life art visible on phones too, with
+   a compact image panel under the real HTML heading and statistics. */
+@media(max-width:640px) {
+  .ym-library-hero .ym-library-art {
+    display:grid;
+    border-left:0;
+    border-top:1px solid var(--border);
+    padding:10px 0 0;
+    min-height:115px;
+    max-height:155px;
+  }
+  .ym-library-hero .ym-library-art img {
+    display:block;
+    width:min(100%,340px);
+    max-height:130px;
+    object-fit:contain;
+  }
+  .ym-library-hero .ym-library-art span {display:none;}
+}
