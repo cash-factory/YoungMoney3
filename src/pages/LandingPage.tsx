@@ -179,6 +179,8 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-red-500/5 blur-[140px] animate-pulse-glow" />
         </div>
 
+        {/* Compositional artwork remains separate from editable headline text. */}
+        <img className="ym-landing-hero-art" src="/assets/page-art/welcome.svg" alt="" aria-hidden="true" decoding="async" width="960" height="540" />
         {/* Grid pattern */}
         <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{
           backgroundImage: 'linear-gradient(currentColor 1px, transparent 1px), linear-gradient(90deg, currentColor 1px, transparent 1px)',
