@@ -16,7 +16,7 @@
     .muted,small{color:var(--quiet)}
     .card{background:var(--surface);border:1px solid var(--edge);border-radius:16px;padding:26px;margin:24px 0}
     a{color:var(--brand);text-underline-offset:3px}
-    a.button{display:inline-flex;padding:11px 17px;border-radius:8px;background:var(--brand);color:#08201b;font-weight:800;text-decoration:none;margin:8px 10px 8px 0}
+    a.button{display:inline-flex;padding:11px 17px;border-radius:8px;background:var(--brand);color:#11070d;font-weight:800;text-decoration:none;margin:8px 10px 8px 0}
     a.button[hidden]{display:none}
     code{display:block;word-break:break-all;background:var(--bg);padding:9px 12px;border-radius:7px;color:#c3d9e2;font-family:ui-monospace,Consolas,monospace;font-size:.8rem}
     ul{padding-left:22px}
@@ -31,14 +31,14 @@
   <p class="muted">An unsigned Windows x64 prerelease for capturing demo and contest MT5 trading records. It does not place, modify or cancel orders.</p>
   <section class="card" aria-labelledby="release-heading">
     <h2 id="release-heading">Download the Windows connector</h2>
-    <p id="status" role="status">Verified staging executable available.</p>
+    <p id="status" role="status">Checking official release information…</p>
     <p id="version" class="muted">Version: staging-connector-v0.3.1-rc1 · Windows x64 · unsigned</p>
     <p><a id="download" class="button" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.3.1-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer">Download Connector v0.3.1-rc1</a>
        <a id="checksum" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.3.1-rc1/YoungMoney3.Connector.exe.sha256" rel="noopener noreferrer">Download SHA-256 checksum</a></p>
-    <p class="muted" style="font-size:.8rem">Published SHA-256:</p>
-    <code id="digest">fb0e1f41a59fb44899c82d2f0139871bd6d081b03bb896df0571e8aa8e644c78</code>
+    <p class="muted" style="font-size:.8rem">SHA-256 verification:</p>
+    <code id="digest">Verify the SHA-256 in the published release checksum file.</code>
     <p id="fallback"><a href="https://github.com/cash-factory/YoungMoney3/releases" rel="noopener noreferrer">View verified GitHub releases</a></p>
-    <p class="muted" style="font-size:.8rem">Downloads are hosted on the official YoungMoney3 GitHub release. This page keeps the verified v0.3.1-rc1 download available even if the GitHub API is rate-limited, and checks for newer published staging versions when possible. Do not use third-party mirrors.</p>
+    <p class="muted" style="font-size:.8rem">Downloads are hosted on the official YoungMoney3 GitHub release. This page links to the designated Studio prerelease and checks newer versions when the API is available, and checks for newer published staging versions when possible. Do not use third-party mirrors.</p>
   </section>
   <section class="card">
     <h2>Setup</h2>
@@ -67,7 +67,7 @@
     const exe=assets.find(row=>/^YoungMoney3(?:[. -])Connector\.exe$/i.test(row.name) && typeof row.browser_download_url==='string' && row.browser_download_url.startsWith(base));
     const checksum=assets.find(row=>/^YoungMoney3(?:[. -])Connector\.exe\.sha256$/i.test(row.name) && typeof row.browser_download_url==='string' && row.browser_download_url.startsWith(base));
     if(!release||!exe||!checksum){
-      status.textContent='Latest release could not be verified automatically; the last checked v0.3.1-rc1 download is available below.';
+      status.textContent='Latest release could not be verified automatically. Check the official release and its checksum before installing.';
       return;
     }
     status.textContent='Staging prerelease is available. Verify the SHA-256 digest before opening it.';
@@ -81,7 +81,7 @@
     digest.textContent=typeof exe.digest==='string' && /^sha256:[a-f0-9]{64}$/i.test(exe.digest)
       ? exe.digest.slice(7) : 'See the checksum file on the official release.';
   }catch{
-    status.textContent='Automatic release check unavailable. The verified v0.3.1-rc1 download remains available; check GitHub releases for newer builds.';
+    status.textContent='Automatic release check unavailable. Check GitHub releases and verify the checksum before downloading.';
   }
 })();
 </script>
