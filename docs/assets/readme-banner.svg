@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="390" viewBox="0 0 1280 390" role="img" aria-labelledby="title desc">
+  <title id="title">Young-Money-Fx — The trading workspace</title>
+  <desc id="desc">An editorial black, white and scarlet brand banner. Plan, capture, test and review.</desc>
+  <defs><pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M48 0H0V48" fill="none" stroke="#fff" stroke-opacity=".035"/></pattern></defs>
+  <rect width="1280" height="390" rx="18" fill="#0c0c0f"/>
+  <rect x="760" width="520" height="390" fill="url(#grid)"/>
+  <path d="M995 0h285v282l-95 108H786Z" fill="#ff2145" fill-opacity=".035"/>
+  <path d="m876 273 58-57 45 23 69-85 47 24 113-121" fill="none" stroke="#ff2145" stroke-width="3"/>
+  <path d="m876 288 58-35 45 18 69-57 47 18 113-89" fill="none" stroke="#fff" stroke-opacity=".13" stroke-width="2"/>
+  <circle cx="1208" cy="57" r="6" fill="#ff2145"/>
+  <g fill="none" stroke="#fff" stroke-opacity=".12"><circle cx="1061" cy="193" r="101"/><circle cx="1061" cy="193" r="131"/></g>
+  <rect x="54" y="43" width="53" height="53" rx="12" fill="#b51030"/>
+  <g transform="translate(61 54) scale(.41)"><path fill="#fff" d="M4 10h16l17 20 17-20h16L39 47v20L26 74V45L4 19Zm40 30 15 12 23-19v34l14-8V2L59 33l-8-7Z"/></g>
+  <text x="126" y="65" fill="#fff" font-family="Arial,Helvetica,sans-serif" font-size="13" font-weight="700" letter-spacing="2.7">THE TRADING WORKSPACE</text>
+  <text x="126" y="86" fill="#aaa5ad" font-family="Arial,Helvetica,sans-serif" font-size="10" letter-spacing="2">YOUNGMONEY3 / THE DESK</text>
+  <text x="51" y="176" fill="#fafafa" font-family="Arial,Helvetica,sans-serif" font-size="63" font-weight="900" letter-spacing="-2.5">YOUNG-MONEY-FX</text>
+  <text x="54" y="224" fill="#d6d1d7" font-family="Arial,Helvetica,sans-serif" font-size="24" letter-spacing="-.3">A clearer process. A better review.</text>
+  <path d="M54 263h635l-7 33H47Z" fill="#ff2145"/>
+  <text x="73" y="285" fill="#09090b" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="900" letter-spacing="2.3">PLAN</text>
+  <text x="170" y="285" fill="#09090b" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="900">/</text>
+  <text x="205" y="285" fill="#09090b" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="900" letter-spacing="2.3">CAPTURE</text>
+  <text x="352" y="285" fill="#09090b" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="900">/</text>
+  <text x="387" y="285" fill="#09090b" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="900" letter-spacing="2.3">TEST</text>
+  <text x="482" y="285" fill="#09090b" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="900">/</text>
+  <text x="517" y="285" fill="#09090b" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="900" letter-spacing="2.3">REVIEW</text>
+  <text x="54" y="350" fill="#89858e" font-family="Arial,Helvetica,sans-serif" font-size="10" font-weight="700" letter-spacing="2.2">PROCESS · PRECISION · DISCIPLINE · GROWTH</text>
+  <text x="1226" y="350" fill="#a8a3ac" text-anchor="end" font-family="Arial,Helvetica,sans-serif" font-size="10" letter-spacing="1.7">BUILT FOR INTENTIONAL TRADING</text>
+</svg>

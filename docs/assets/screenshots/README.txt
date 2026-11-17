@@ -1,0 +1,1 @@
+Documentation screenshots show the actual Young-Money-Fx application in CraftyLabs Studio dark mode with synthetic demo records. No private user trades, images or recordings are included. The illustrated chart captures are synthetic; audio files are silent test WAVs.
