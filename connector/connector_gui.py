@@ -441,7 +441,7 @@ class ConnectorApp:
         self.code_input = tk.Entry(entryrow, textvariable=self.code_var,
                                    width=38, show="●", font=("Consolas", 13),
                                    bg=BACKGROUND, fg=TEXT, insertbackground=TEXT,
-                                   selectbackground="#386d78", relief="flat",
+                                   selectbackground="#662336", relief="flat",
                                    highlightbackground=BORDER, highlightthickness=2,
                                    highlightcolor=ACCENT)
         self.code_input.pack(side="left", fill="x", expand=True, ipady=11, padx=(0, 8))
@@ -480,7 +480,7 @@ class ConnectorApp:
         panel = self._card(page, 14)
         panel.pack(fill="both", expand=True)
         self.activity_text = tk.Text(panel, wrap="word", bg=BACKGROUND, fg=TEXT,
-                                     selectbackground="#315b67",
+                                     selectbackground="#552d3d",
                                      font=("Consolas", 10), relief="flat",
                                      borderwidth=0, spacing2=5,
                                      insertbackground=TEXT, state="disabled")
@@ -533,7 +533,7 @@ class ConnectorApp:
 
     def _attach_context_menu(self):
         menu = tk.Menu(self.code_input, tearoff=0, bg=PANEL_ALT, fg=TEXT,
-                       activebackground="#2f6370", activeforeground=TEXT)
+                       activebackground="#552d3d", activeforeground=TEXT)
         menu.add_command(label="Cut", command=lambda: self.code_input.event_generate("<<Cut>>"))
         menu.add_command(label="Copy", command=lambda: self.code_input.event_generate("<<Copy>>"))
         menu.add_command(label="Paste", command=self.paste_code)
