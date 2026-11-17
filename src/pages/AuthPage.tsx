@@ -72,7 +72,7 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
     <div className="min-h-screen flex">
       {/* Left showcase panel */}
       <div className="ym-auth-showcase hidden lg:flex lg:w-1/2 relative overflow-hidden">
-        <img src="/visuals/studio-journal.svg" className="ym-auth-showcase-art" alt="" aria-hidden="true" width="1200" height="680" loading="lazy" />
+        <img src="/assets/page-art/journal.svg" className="ym-auth-showcase-art" alt="" aria-hidden="true" width="1200" height="680" loading="lazy" />
         <div className="absolute inset-0 opacity-[0.07]" style={{
           backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
           backgroundSize: '48px 48px',
@@ -122,7 +122,7 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
 
       {/* Right auth form */}
       <div className="ym-auth-form flex-1 flex items-center justify-center p-5 sm:p-8 bg-primary relative overflow-hidden">
-        <img src="/visuals/studio-auth.svg" className="ym-auth-form-art" alt="" aria-hidden="true" width="900" height="1200" />
+        <img src="/assets/page-art/sign-in.svg" className="ym-auth-form-art" alt="" aria-hidden="true" width="900" height="1200" />
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute top-1/4 right-1/4 w-64 h-64 rounded-full bg-orange-500/5 blur-3xl" />
           <div className="absolute bottom-1/4 left-1/4 w-64 h-64 rounded-full bg-amber-500/5 blur-3xl" />
