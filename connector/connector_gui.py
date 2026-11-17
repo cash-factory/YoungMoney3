@@ -30,18 +30,18 @@ from concurrent_capture import run_parallel_smoke
 STAGING_URL = "https://ym-fx-staging.ethical-hacker263.workers.dev"
 ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "YMFX" / "staging-gui"
 SETTINGS = ROOT / "preferences.json"
-BACKGROUND = "#091622"
-SIDEBAR = "#0d1e2c"
-PANEL = "#132a3a"
-PANEL_ALT = "#183446"
-BORDER = "#2a4858"
-TEXT = "#edf6f5"
-MUTED = "#a1bac6"
-ACCENT = "#63dfc2"
-WARM = "#e6c485"
-DANGER = "#ff9a99"
+BACKGROUND = "#09090d"
+SIDEBAR = "#111014"
+PANEL = "#18151b"
+PANEL_ALT = "#241c25"
+BORDER = "#473341"
+TEXT = "#f8f3f5"
+MUTED = "#bcb1b9"
+ACCENT = "#ff365c"
+WARM = "#f9c9ab"
+DANGER = "#ff8da7"
 FONT = "Segoe UI"
-VERSION = "0.3.0-rc2"
+VERSION = "0.3.1-rc1"
 
 
 def terminal_candidates():
@@ -147,7 +147,7 @@ class ConnectorApp:
         style.configure("YM.Treeview.Heading", background=PANEL_ALT,
                         foreground=MUTED, font=(FONT, 9, "bold"),
                         padding=(12, 12), relief="flat")
-        style.map("YM.Treeview", background=[("selected", "#255b65")],
+        style.map("YM.Treeview", background=[("selected", "#662336")],
                   foreground=[("selected", TEXT)])
         style.configure("YM.Vertical.TScrollbar", background=PANEL_ALT,
                         troughcolor=BACKGROUND, borderwidth=0)
@@ -167,10 +167,10 @@ class ConnectorApp:
         return tk.Label(parent, **opts)
 
     def _button(self, parent, text, command, *, primary=False, quiet=False, width=None):
-        background = ACCENT if primary else (PANEL_ALT if quiet else "#244656")
+        background = ACCENT if primary else (PANEL_ALT if quiet else "#3a2130")
         foreground = BACKGROUND if primary else TEXT
         opts = {"text": text, "command": command, "bg": background, "fg": foreground,
-                "activebackground": "#83f3d5" if primary else "#315d70",
+                "activebackground": "#ff7590" if primary else "#552d3d",
                 "activeforeground": BACKGROUND if primary else TEXT,
                 "font": (FONT, 10, "bold"), "relief": "flat", "bd": 0,
                 "cursor": "hand2", "padx": 15, "pady": 10,
@@ -199,10 +199,72 @@ class ConnectorApp:
         canvas.bind("<MouseWheel>", lambda e: canvas.yview_scroll(-1 if e.delta > 0 else 1, "units"))
         return frame
 
+    def _draw_header_art(self, parent, variant):
+        """Text-free vector art, drawn natively with Tk. No external image library.
+
+        The actual heading and description stay in normal Tk text widgets so
+        scaling and Windows accessibility do not depend on image typography.
+        """
+        canvas = tk.Canvas(parent, width=202, height=96, bg=BACKGROUND,
+                           highlightthickness=0, borderwidth=0,
+                           takefocus=False)
+        canvas.pack(side="right", padx=(10, 0))
+        canvas.create_rectangle(1, 1, 201, 95, fill=PANEL, outline=BORDER, width=1)
+        for x in (21, 61, 101, 141, 181):
+            canvas.create_line(x, 13, x, 82, fill="#2b202b")
+        for y in (23, 47, 71):
+            canvas.create_line(14, y, 190, y, fill="#2c202b")
+        if variant == "Command centre":
+            coords = [(12, 77), (36, 67), (56, 70), (78, 43),
+                      (101, 51), (124, 28), (152, 39), (177, 18), (192, 23)]
+            canvas.create_line(*sum(([x, y] for x, y in coords), []),
+                               fill=ACCENT, width=3, smooth=True)
+            for i, (x, y) in enumerate(coords):
+                if i in (3, 5, 7):
+                    canvas.create_oval(x-3, y-3, x+3, y+3,
+                                       fill="#ffb9ca", outline=ACCENT)
+        elif variant == "Account sessions":
+            for i in range(3):
+                x = 31 + i * 54
+                canvas.create_rectangle(x, 21, x+39, 76,
+                                        fill="#291c28", outline=ACCENT if i == 1 else BORDER)
+                canvas.create_oval(x+15, 37, x+24, 46,
+                                   fill="#ffb2c4" if i == 1 else "#754056", outline="")
+                canvas.create_line(x+10, 64, x+29, 64, fill=ACCENT)
+        elif variant == "Pair this PC":
+            canvas.create_arc(76, 21, 125, 76, start=0, extent=180,
+                              style="arc", outline=ACCENT, width=4)
+            canvas.create_rectangle(75, 47, 126, 80, fill=ACCENT, outline="")
+            canvas.create_oval(96, 58, 104, 66, fill=BACKGROUND, outline="")
+            canvas.create_line(100, 63, 100, 71, fill=BACKGROUND, width=3)
+            canvas.create_oval(26, 44, 38, 56, fill="#ffb9ca", outline="")
+            canvas.create_line(38, 50, 72, 50, fill=ACCENT, width=2)
+            canvas.create_oval(160, 44, 172, 56, fill="#ffb9ca", outline="")
+            canvas.create_line(129, 50, 160, 50, fill=ACCENT, width=2)
+        elif variant == "Activity":
+            canvas.create_line(10, 57, 37, 57, 50, 31, 67, 76, 83, 40,
+                               108, 40, 122, 58, 142, 17, 163, 50, 190, 50,
+                               fill=ACCENT, width=3)
+            canvas.create_oval(139, 14, 145, 20, fill="#ffd3dc", outline="")
+        else:
+            for i in range(4):
+                x = 23+i*39
+                canvas.create_rectangle(x, 24, x+29, 73,
+                                        fill=PANEL_ALT, outline=BORDER)
+                canvas.create_line(x+7, 44, x+22, 44, fill=ACCENT, width=2)
+                canvas.create_line(x+7, 54, x+17, 54, fill="#df9eae", width=2)
+
     def _stack_heading(self, parent, title, description):
-        self._label(parent, title, size=21, bold=True).pack(anchor="w", pady=(0, 6))
-        self._label(parent, description, size=10, color=MUTED,
-                    wrap=810).pack(anchor="w", pady=(0, 24))
+        header = tk.Frame(parent, bg=BACKGROUND)
+        header.pack(fill="x", pady=(0, 17))
+        copy = tk.Frame(header, bg=BACKGROUND)
+        copy.pack(side="left", fill="both", expand=True)
+        self._label(copy, "THE DESK  /  STAGING", size=8, bold=True,
+                    color=ACCENT).pack(anchor="w", pady=(0, 6))
+        self._label(copy, title, size=22, bold=True).pack(anchor="w", pady=(0, 7))
+        self._label(copy, description, size=10, color=MUTED,
+                    wrap=470).pack(anchor="w")
+        self._draw_header_art(header, title)
 
     def _build(self):
         self.sidebar = tk.Frame(self.root, bg=SIDEBAR, width=205,
@@ -239,11 +301,12 @@ class ConnectorApp:
         right = tk.Frame(self.root, bg=BACKGROUND, padx=29, pady=22)
         right.pack(side="left", fill="both", expand=True)
         header = tk.Frame(right, bg=BACKGROUND)
-        header.pack(fill="x", pady=(0, 18))
-        self._label(header, "MT5  /  DESKTOP SYNC", size=10, bold=True,
+        header.pack(fill="x", pady=(0, 16))
+        self._label(header, "MT5  /  THE CONNECTION BRIDGE", size=10, bold=True,
                     color=ACCENT).pack(side="left")
-        self._label(header, "CAPTURE ONLY  •  NO TRADING COMMANDS", size=9,
+        self._label(header, "READ-ONLY  •  NO TRADING COMMANDS", size=9,
                     color=MUTED).pack(side="right")
+        tk.Frame(right, bg=ACCENT, height=3).pack(fill="x")
         tk.Frame(right, bg=BORDER, height=1).pack(fill="x")
         self.page_host = tk.Frame(right, bg=BACKGROUND)
         self.page_host.pack(fill="both", expand=True, pady=(22, 12))
