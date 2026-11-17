@@ -46,6 +46,14 @@ try {
       : destination==='media' ? '.ym-library-art img' : '.ym-page-art img';
     const art=experience.locator(artSelector).first();
     await art.waitFor({state:'attached'});
+    await page.waitForFunction(
+      ({ pageId, selector }) => {
+        const element = document.querySelector(`[data-workspace-page="${pageId}"] ${selector}`);
+        return element instanceof HTMLImageElement && element.complete && element.naturalWidth > 0;
+      },
+      { pageId:destination, selector:artSelector },
+      { timeout:8000 },
+    );
     const asset=await art.evaluate(img=>{
       const src=img.getAttribute('src');
       const region=img.getBoundingClientRect();
