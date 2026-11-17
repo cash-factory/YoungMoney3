@@ -135,7 +135,8 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
   const inputCls = 'input-field';
 
   return (
-    <div className="min-h-screen bg-primary flex items-center justify-center p-4">
+    <div className="ym-onboarding-illustrated min-h-screen bg-primary flex items-center justify-center p-4">
+      <img className="ym-onboarding-art" src="/assets/page-art/workspace-setup.svg" alt="" aria-hidden="true" width="960" height="540" />
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] rounded-full bg-orange-500/8 blur-[120px] animate-drift" />
         <div className="absolute bottom-1/4 right-1/4 w-[300px] h-[300px] rounded-full bg-amber-500/6 blur-[100px] animate-float-slow" />
