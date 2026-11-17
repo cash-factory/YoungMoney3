@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version suffix, e.g. 0.3.0-rc2'
+        description: 'Version suffix, e.g. 0.3.1-rc1'
         type: string
         required: true
       confirmation:
@@ -22,7 +22,7 @@ defaults:
     shell: pwsh
 
 env:
-  VERSION: ${{ inputs.version || '0.3.0-rc2' }}
+  VERSION: ${{ inputs.version || '0.3.1-rc1' }}
   SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 concurrency:
@@ -78,9 +78,9 @@ jobs:
       - name: Generate prerelease checksum
         shell: pwsh
         env:
-          VERSION: ${{ inputs.version || '0.3.0-rc2' }}
+          VERSION: ${{ inputs.version || '0.3.1-rc1' }}
         run: |
-          if ($env:VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$') { throw 'Use 0.3.0-rc2 format' }
+          if ($env:VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$') { throw 'Use 0.3.1-rc1 format' }
           New-Item -ItemType Directory -Force staging-release | Out-Null
           Copy-Item 'dist/YoungMoney3 Connector.exe' 'staging-release/YoungMoney3 Connector.exe'
           $digest=(Get-FileHash 'staging-release/YoungMoney3 Connector.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -89,7 +89,7 @@ jobs:
           '{"version":"' + $env:VERSION + '","commit":"' + '${{ github.event.pull_request.head.sha || github.sha }}' + '","sha256":"' + $digest + '","signed":false,"platform":"windows-x64","environment":"staging"}' | Set-Content -Encoding utf8 'staging-release/build-manifest.json'
       - uses: actions/upload-artifact@v4
         with:
-          name: youngmoney3-connector-staging-${{ inputs.version || '0.3.0-rc2' }}
+          name: youngmoney3-connector-staging-${{ inputs.version || '0.3.1-rc1' }}
           path: staging-release/*
           if-no-files-found: error
           retention-days: 30
@@ -102,7 +102,7 @@ jobs:
       # Separate VM: no checkout, setup-python or pip installation.
       - uses: actions/download-artifact@v4
         with:
-          name: youngmoney3-connector-staging-${{ inputs.version || '0.3.0-rc2' }}
+          name: youngmoney3-connector-staging-${{ inputs.version || '0.3.1-rc1' }}
           path: ${{ runner.temp }}/connector-clean
       - name: Launch standalone executable in isolated profile
         run: |
@@ -155,7 +155,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: connector-startup-evidence-${{ inputs.version || '0.3.0-rc2' }}
+          name: connector-startup-evidence-${{ inputs.version || '0.3.1-rc1' }}
           path: ${{ runner.temp }}/connector-clean/startup-*
           if-no-files-found: error
 
@@ -169,7 +169,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: youngmoney3-connector-staging-${{ inputs.version || '0.3.0-rc2' }}
+          name: youngmoney3-connector-staging-${{ inputs.version || '0.3.1-rc1' }}
           path: staging-release
       - name: Publish new immutable staging prerelease
         env:
@@ -189,5 +189,5 @@ jobs:
           $manifest = Get-Content staging-release/build-manifest.json -Raw | ConvertFrom-Json
           $digest = (Get-FileHash 'staging-release/YoungMoney3 Connector.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($manifest.commit -ne $env:SOURCE_SHA -or $manifest.version -ne $env:VERSION -or $manifest.sha256 -ne $digest -or $manifest.environment -ne 'staging') { throw 'Release provenance mismatch' }
-          gh release create $tag 'staging-release/YoungMoney3 Connector.exe' 'staging-release/YoungMoney3 Connector.exe.sha256' 'staging-release/build-manifest.json' 'staging-release/connector-dependencies.txt' --target $env:SOURCE_SHA --title "YoungMoney3 Connector $env:VERSION (STAGING)" --notes "YoungMoney3 session manager v0.3.0-rc2: Create and Duplicate clean named MT5 terminal installations without copying broker logins, Expert Advisors or user data. Linked broker accounts capture concurrently in isolated Windows processes, sharing the existing durable per-device SQLite outbox safely. One real MT5 process has one active login; saved accounts in one Navigator are not simultaneous. Frozen app, Tcl/Tk, GUI controls and two-process bootstrap verified in independent clean Windows VM. Unsigned staging demo/contest only, no trading orders. Verify SHA-256. Actual two-broker reconciliation on user PC still required. Production unchanged." --prerelease --latest=false
+          gh release create $tag 'staging-release/YoungMoney3 Connector.exe' 'staging-release/YoungMoney3 Connector.exe.sha256' 'staging-release/build-manifest.json' 'staging-release/connector-dependencies.txt' --target $env:SOURCE_SHA --title "YoungMoney3 Connector $env:VERSION (STAGING)" --notes "YoungMoney3 Studio edition v0.3.1-rc1: CraftyLabs-inspired obsidian/red interface with original text-free native Tk illustrations. Create and Duplicate clean named MT5 terminal installations without copying broker logins, Expert Advisors or user data. Linked broker accounts capture concurrently in isolated Windows processes, sharing the existing durable per-device SQLite outbox safely. One real MT5 process has one active login; saved accounts in one Navigator are not simultaneous. Frozen app, Tcl/Tk, GUI controls and two-process bootstrap verified in independent clean Windows VM. Unsigned staging demo/contest only, no trading orders. Verify SHA-256. Actual two-broker reconciliation on user PC still required. Production unchanged." --prerelease --latest=false
           if ($LASTEXITCODE -ne 0) { throw 'Prerelease publication failed' }
