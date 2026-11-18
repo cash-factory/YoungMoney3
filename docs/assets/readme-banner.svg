@@ -10,7 +10,7 @@
   <circle cx="1208" cy="57" r="6" fill="#ff2145"/>
   <g fill="none" stroke="#fff" stroke-opacity=".12"><circle cx="1061" cy="193" r="101"/><circle cx="1061" cy="193" r="131"/></g>
   <rect x="54" y="43" width="53" height="53" rx="12" fill="#b51030"/>
-  <g transform="translate(61 54) scale(.41)"><path fill="#fff" d="M4 10h16l17 20 17-20h16L39 47v20L26 74V45L4 19Zm40 30 15 12 23-19v34l14-8V2L59 33l-8-7Z"/></g>
+  <g transform="translate(61 54) scale(.41)"><path fill="#fff" d="M1 3h20l19 22L59 3h21L23 71V45ZM27 71l27-32 11 11 20-26h19v48H84V47L65 73 53 59 43 71Z"/></g>
   <text x="126" y="65" fill="#fff" font-family="Arial,Helvetica,sans-serif" font-size="13" font-weight="700" letter-spacing="2.7">THE TRADING WORKSPACE</text>
   <text x="126" y="86" fill="#aaa5ad" font-family="Arial,Helvetica,sans-serif" font-size="10" letter-spacing="2">YOUNGMONEY3 / THE DESK</text>
   <text x="51" y="176" fill="#fafafa" font-family="Arial,Helvetica,sans-serif" font-size="63" font-weight="900" letter-spacing="-2.5">YOUNG-MONEY-FX</text>

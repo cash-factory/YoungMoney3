@@ -101,7 +101,7 @@ The staging UI is covered by page/theme checks and dashboard, dropdown, media an
 
 ## Go deeper
 
-[Architecture](docs/ARCHITECTURE.md) · [Operations](docs/OPERATIONS.md) · [Backup & recovery](docs/BACKUP_RECOVERY.md) · [Release readiness](docs/PRODUCTION_READINESS.md) · [Asset catalogue & credits](docs/ASSETS.md)
+[Architecture](docs/ARCHITECTURE.md) · [Operations](docs/OPERATIONS.md) · [Backup & recovery](docs/BACKUP_RECOVERY.md) · [Release readiness](docs/PRODUCTION_READINESS.md) · [Asset catalogue & credits](docs/ASSETS.md) · [Logo directions](docs/LOGO_DIRECTIONS.md)
 
 Implementation references: [React](https://react.dev/) · [TypeScript](https://www.typescriptlang.org/docs/) · [Vite](https://vite.dev/) · [Cloudflare Workers](https://developers.cloudflare.com/workers/) / [D1](https://developers.cloudflare.com/d1/) · [Supabase Storage](https://supabase.com/docs/guides/storage) · [MT5 Python API](https://www.mql5.com/en/docs/python_metatrader5)
 

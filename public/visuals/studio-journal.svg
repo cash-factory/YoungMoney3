@@ -7,7 +7,7 @@
 <filter id="soft"><feGaussianBlur stdDeviation="9"/></filter>
 <pattern id="grid" width="44" height="44" patternUnits="userSpaceOnUse"><path d="M44 0H0V44" fill="none" stroke="#9b3346" stroke-width=".6" opacity=".2"/><path d="M0 0h3m-1.5-1.5v3" stroke="#e94762" opacity=".14"/></pattern>
 </defs>
-<rect width="1200" height="680" fill="url(#bg)"/><rect width="1200" height="680" fill="url(#grid)" opacity=".5"/><circle cx="885" cy="355" r="390" fill="url(#glow)" opacity=".8"/>
+<rect width="1200" height="680" fill="none"/><rect width="1200" height="680" fill="url(#grid)" opacity=".5"/><circle cx="885" cy="355" r="390" fill="url(#glow)" opacity=".8"/>
 <path d="M0 540Q240 442 425 531T810 529T1200 520" fill="none" stroke="#f31e47" stroke-width="3" opacity=".65"/>
 <g transform="translate(644 129) rotate(-8 210 220)"><rect x="30" y="20" width="403" height="427" rx="33" fill="#110d13" stroke="#f04b6b" stroke-width="3"/><rect x="50" y="34" width="363" height="395" rx="27" fill="url(#glass)" stroke="#7f3048"/><path d="M325 35V429" stroke="#e12044" stroke-width="15" opacity=".67"/><rect x="302" y="16" width="18" height="440" rx="6" fill="#9c1535"/>
 <g transform="translate(138 154)" fill="none" stroke="#ff4b68" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M0 70V0Q54 -12 89 16Q123 -12 176 0V70Q121 57 89 83Q56 57 0 70Z"/><path d="M89 16V83"/></g>

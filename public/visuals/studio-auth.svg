@@ -6,7 +6,7 @@
 <filter id="blur"><feGaussianBlur stdDeviation="24"/></filter>
 <filter id="soft"><feGaussianBlur stdDeviation="9"/></filter>
 <pattern id="grid" width="44" height="44" patternUnits="userSpaceOnUse"><path d="M44 0H0V44" fill="none" stroke="#9b3346" stroke-width=".6" opacity=".2"/><path d="M0 0h3m-1.5-1.5v3" stroke="#e94762" opacity=".14"/></pattern>
-</defs><rect width="900" height="1200" fill="#08090d"/><rect width="900" height="1200" fill="url(#grid)" opacity=".45"/>
+</defs><rect width="900" height="1200" fill="none"/><rect width="900" height="1200" fill="url(#grid)" opacity=".45"/>
 <circle cx="95" cy="70" r="320" fill="url(#glow)"/><circle cx="800" cy="1070" r="360" fill="url(#glow)" opacity=".6"/>
 <g transform="translate(515 90) rotate(9 180 140)" opacity=".38"><rect width="390" height="255" rx="23" fill="url(#glass)" stroke="#fc4267"/><path d="M35 201Q105 167 147 181T235 118T350 63" fill="none" stroke="#fc4267" stroke-width="4"/><path d="M60 151v20" stroke="#f6728c" stroke-width="8"/><path d="M103 140v36" stroke="#f6728c" stroke-width="8"/><path d="M146 129v52" stroke="#f6728c" stroke-width="8"/><path d="M189 118v20" stroke="#f6728c" stroke-width="8"/><path d="M232 107v36" stroke="#f6728c" stroke-width="8"/><path d="M275 96v52" stroke="#f6728c" stroke-width="8"/><path d="M318 85v20" stroke="#f6728c" stroke-width="8"/></g>
 <g transform="translate(-95 848) rotate(-8 150 110)" opacity=".4"><rect width="375" height="210" rx="23" fill="url(#glass)" stroke="#ff446c"/><path d="M30 163Q85 111 121 143T214 70T338 51" fill="none" stroke="#fa2a54" stroke-width="3"/><path d="M28 188H342M28 110H342" stroke="#714754" stroke-width="2"/></g>

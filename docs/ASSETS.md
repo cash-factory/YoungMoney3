@@ -11,6 +11,8 @@ Files in `public/` are served directly by the app. Keep their existing paths sta
 | Asset | Use |
 | :--- | :--- |
 | [YM mark](../public/visuals/youngmoney-mark.svg) | Sidebar, mobile shell, welcome navigation, footer and login |
+| [Four logo concepts](LOGO_DIRECTIONS.md) | Original generated PNGs in `public/assets/logo-options/`; selected direction **01 — Signal Monogram** |
+| [Page illustration library](../public/assets/page-art/) | 25 editable SVGs with transparent canvases; decorative edges blend into every palette |
 | [Studio intelligence](../public/visuals/studio-intelligence.svg) | Features, planning, testing, analytics and insight chapters |
 | [Studio journal](../public/visuals/studio-journal.svg) | Private practice, journal, review and learning chapters |
 | [Studio auth](../public/visuals/studio-auth.svg) | Subtle authentication background |
@@ -35,7 +37,7 @@ Trade screenshots, voice notes and avatars are account data. They stay in authen
 
 ## Design & implementation credits
 
-- **Brand and art:** the YM monogram was developed from a generated concept and simplified into the production vector mark. The Media Library still life was generated for this project. The four original studio SVG illustrations are preserved as editable source assets. The README banner and wordmark export use the same geometry and scarlet/graphite palette.
+- **Brand and art:** Signal Monogram (concept 01, selected 18 November 2026) was refined into the production SVG, favicon and native connector Canvas mark. All four generated logo explorations are archived unchanged, with [directions and prompts](LOGO_DIRECTIONS.md). The Media Library still life was generated for this project. Original studio SVGs remain editable. The README banner and wordmark use the selected geometry and scarlet/graphite palette.
 - **Icons:** [Lucide](https://lucide.dev/) / `lucide-react`; [license and acknowledgements](https://lucide.dev/license).
 - **Type:** [Inter](https://github.com/rsms/inter) and [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono), loaded through Google Fonts. [Inter license](https://github.com/rsms/inter/blob/master/LICENSE.txt) · [JetBrains Mono license](https://github.com/JetBrains/JetBrainsMono/blob/master/OFL.txt). Font binaries are not bundled.
 - **Charts:** [Recharts](https://github.com/recharts/recharts) ([license](https://github.com/recharts/recharts/blob/main/LICENSE)) and the externally hosted [TradingView advanced chart widget](https://www.tradingview.com/widget-docs/en/widgets/charts/advanced-chart/). TradingView code and market data are provided by that service.
