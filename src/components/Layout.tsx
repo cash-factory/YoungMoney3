@@ -18,7 +18,7 @@ interface LayoutProps {
 }
 
 const NAV_SECTIONS: { id: string; label: string; icon: typeof LayoutDashboard; items: { id: PageId; label: string; icon: typeof LayoutDashboard }[] }[] = [
-  { id: 'home', label: 'Home', icon: LayoutDashboard, items: [
+  { id: 'home', label: 'Today', icon: LayoutDashboard, items: [
     { id: 'workspace-setup', label: 'Workspace setup', icon: ClipboardList },
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   ] },
@@ -27,7 +27,6 @@ const NAV_SECTIONS: { id: string; label: string; icon: typeof LayoutDashboard; i
     { id: 'media', label: 'Media Library', icon: Images },
     { id: 'journal', label: 'Journal', icon: BookOpen },
     { id: 'calendar', label: 'Calendar', icon: Calendar },
-    { id: 'weekly-reviews', label: 'Weekly Reviews', icon: ClipboardCheck },
   ] },
   { id: 'playbook', label: 'Playbook', icon: ClipboardList, items: [
     { id: 'trading-plan', label: 'Trading Plan', icon: ClipboardList },
@@ -36,14 +35,13 @@ const NAV_SECTIONS: { id: string; label: string; icon: typeof LayoutDashboard; i
     { id: 'risk-management', label: 'Risk Management', icon: Shield },
     { id: 'goals', label: 'Goals', icon: Target },
     { id: 'market-sessions', label: 'Market Sessions', icon: CalendarClock },
-  ] },
-  { id: 'testing', label: 'Testing', icon: FlaskConical, items: [
     { id: 'strategy-testing', label: 'Testing Workspace', icon: FlaskConical },
   ] },
   { id: 'accounts', label: 'Accounts', icon: CreditCard, items: [
     { id: 'brokers-charting', label: 'Brokers & Charting', icon: CreditCard },
   ] },
-  { id: 'insights', label: 'Insights', icon: BarChart3, items: [
+  { id: 'insights', label: 'Review', icon: BarChart3, items: [
+    { id: 'weekly-reviews', label: 'Weekly Reviews', icon: ClipboardCheck },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'ai', label: 'AI Insights', icon: Sparkles },
   ] },
@@ -300,11 +298,11 @@ export function Layout({ current, onNavigate, onQuickAdd, onOpenGuide, children 
         </button>
       </div>
       <nav aria-label="Mobile workspace navigation" className="ym-mobile-dock lg:hidden">
-        <button type="button" className="ym-dock-item" data-active={current === 'dashboard'} aria-current={current === 'dashboard' ? 'page' : undefined} onClick={() => handleNav('dashboard')}><LayoutDashboard size={20} /><span>Home</span></button>
-        <button type="button" className="ym-dock-item" data-active={current === 'trades'} aria-current={current === 'trades' ? 'page' : undefined} onClick={() => handleNav('trades')}><CandlestickChart size={20} /><span>Trades</span></button>
-        <button type="button" className="ym-dock-item ym-dock-add" aria-label="Quick add trade" onClick={onQuickAdd}><Plus size={22} /><span>Add</span></button>
+        <button type="button" className="ym-dock-item" data-active={current === 'dashboard'} aria-current={current === 'dashboard' ? 'page' : undefined} onClick={() => handleNav('dashboard')}><LayoutDashboard size={20} /><span>Today</span></button>
+        <button type="button" className="ym-dock-item" data-active={current === 'strategies'} aria-current={current === 'strategies' ? 'page' : undefined} onClick={() => handleNav('strategies')}><Target size={20} /><span>Playbook</span></button>
+        <button type="button" className="ym-dock-item ym-dock-add" aria-label="Quick capture" onClick={onQuickAdd}><Plus size={22} /><span>Capture</span></button>
         <button type="button" className="ym-dock-item" data-active={current === 'journal'} aria-current={current === 'journal' ? 'page' : undefined} onClick={() => handleNav('journal')}><BookOpen size={20} /><span>Journal</span></button>
-        <button type="button" className="ym-dock-item" data-active={current === 'analytics'} aria-current={current === 'analytics' ? 'page' : undefined} onClick={() => handleNav('analytics')}><BarChart3 size={20} /><span>Insights</span></button>
+        <button type="button" className="ym-dock-item" data-active={current === 'weekly-reviews'} aria-current={current === 'weekly-reviews' ? 'page' : undefined} onClick={() => handleNav('weekly-reviews')}><ClipboardCheck size={20} /><span>Review</span></button>
       </nav>
       <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} onNavigate={handleNav} onQuickAdd={onQuickAdd} />
       <DataBackupModal open={backupOpen} onClose={() => setBackupOpen(false)} />

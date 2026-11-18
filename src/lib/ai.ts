@@ -63,7 +63,7 @@ function buildSummary(stats: DashboardStats, trades: Trade[], periodType: string
   if (stats.currentStreak.type === 'win') {
     parts.push(`You are currently on a ${stats.currentStreak.count}-trade winning streak.`);
   } else if (stats.currentStreak.type === 'loss') {
-    parts.push(`You are currently on a ${stats.currentStreak.count}-trade losing streak — consider stepping back to review.`);
+    parts.push(`You are currently on a ${stats.currentStreak.count}-trade losing streak.`);
   }
 
   if (stats.bestDay && stats.worstDay) {
@@ -76,72 +76,12 @@ function buildSummary(stats: DashboardStats, trades: Trade[], periodType: string
 function buildSuggestions(trades: Trade[], stats: DashboardStats, money: MoneyFormatter): string[] {
   const suggestions: string[] = [];
 
-  // Win rate analysis
-  if (stats.winRate < 40 && stats.totalTrades >= 5) {
-    suggestions.push('Your win rate is below 40%. Focus on higher-quality setups and consider waiting for A+ entries rather than forcing trades.');
-  } else if (stats.winRate >= 60 && stats.totalTrades >= 5) {
-    suggestions.push('Excellent win rate! Make sure your position sizing reflects this edge — consider scaling up on your highest-conviction setups.');
-  }
-
-  // Risk-reward
-  if (stats.avgRiskReward > 0 && stats.avgRiskReward < 1 && stats.totalTrades >= 5) {
-    suggestions.push('Your average risk-reward ratio is below 1:1. Even with a good win rate, this makes it hard to stay profitable. Aim for at least 1:2 R:R on new trades.');
-  }
-
-  // Emotional state patterns
-  const emotionMap = new Map<string, { count: number; pnl: number }>();
-  trades.forEach(t => {
-    if (!t.emotional_state) return;
-    const ex = emotionMap.get(t.emotional_state) || { count: 0, pnl: 0 };
-    ex.count++;
-    ex.pnl += t.pnl;
-    emotionMap.set(t.emotional_state, ex);
-  });
-  emotionMap.forEach((v, emotion) => {
-    if (v.count >= 3 && v.pnl < 0) {
-      suggestions.push(`Trades taken while feeling "${emotion}" have lost ${money(Math.abs(v.pnl))} across ${v.count} trades. Consider avoiding trading when in this emotional state.`);
-    }
-  });
-
-  // Mistake frequency
-  const mistakeMap = new Map<string, number>();
-  trades.forEach(t => t.mistakes.forEach(m => mistakeMap.set(m, (mistakeMap.get(m) || 0) + 1)));
-  mistakeMap.forEach((count, mistake) => {
-    if (count >= 3) {
-      suggestions.push(`"${mistake}" has been flagged ${count} times. This is a recurring issue — make it a primary focus to eliminate.`);
-    }
-  });
-
-  // Overtrading
-  if (stats.totalTrades >= 10) {
-    suggestions.push('You took a high number of trades. Check if any were impulsive or outside your trading plan.');
-  }
-
-  // Setup quality vs outcome
-  const lowQualityTrades = trades.filter(t => t.setup_quality != null && t.setup_quality <= 2);
-  if (lowQualityTrades.length >= 3) {
-    const lowQualityPnl = lowQualityTrades.reduce((s, t) => s + t.pnl, 0);
-    if (lowQualityPnl < 0) {
-      suggestions.push(`You took ${lowQualityTrades.length} trades rated 1-2 stars, which lost ${money(Math.abs(lowQualityPnl))}. Consider only taking 3+ star setups.`);
-    }
-  }
-
-  // Session analysis
-  const sessionData = groupBySession(trades);
-  const bestSession = sessionData.filter(s => s.trades >= 3).sort((a, b) => b.pnl - a.pnl)[0];
-  if (bestSession && bestSession.pnl > 0) {
-    suggestions.push(`The ${bestSession.session} session is your most profitable (${money(bestSession.pnl)} over ${bestSession.trades} trades). Consider focusing more of your activity here.`);
-  }
-
-  // Streak warning
-  if (stats.currentStreak.type === 'loss' && stats.currentStreak.count >= 3) {
-    suggestions.push(`You've lost ${stats.currentStreak.count} trades in a row. Reduce your risk per trade or take a break to reset mentally before the next entry.`);
-  }
-
-  if (suggestions.length === 0) {
-    suggestions.push('Your trading looks disciplined. Keep maintaining your process and journaling consistently.');
-  }
-
+  if (stats.totalTrades) suggestions.push(stats.wins+' of '+stats.totalTrades+' closed trades finished positive. Replay an entry to review the decision.');
+  const moods=trades.filter(t=>t.emotional_state);
+  if(moods.length) suggestions.push('You recorded how you felt on '+moods.length+' of '+trades.length+' trades. Compare their entry notes.');
+  const flagged=trades.filter(t=>t.mistakes?.length);
+  if(flagged.length) suggestions.push('You marked something to revisit on '+flagged.length+' trades. Choose one example for your weekly review.');
+  if (stats.avgLoss>0) suggestions.push('Average loss on this selection: '+money(stats.avgLoss)+'. Open the underlying trades to check their original risk.');
   return suggestions;
 }
 

@@ -82,9 +82,11 @@ export async function runDashboardChecks(page) {
   const achievements = page.locator('.ym-achievements');
   await achievements.waitFor();
   assert.equal(await achievements.locator('.ym-achievement').count(), 4, 'Milestones start with a compact preview');
-  const toggle = achievements.getByRole('button', { name: 'View all 12 milestones' });
+  const total = Number(await achievements.getByRole('progressbar', {name:'Achievements unlocked'}).getAttribute('aria-valuemax'));
+  assert.ok(total > 4);
+  const toggle = achievements.getByRole('button', { name: 'View all ' + total + ' milestones' });
   await toggle.click();
-  assert.equal(await achievements.locator('.ym-achievement').count(), 12);
+  assert.equal(await achievements.locator('.ym-achievement').count(), total);
   assert.equal(await achievements.getByRole('button', { name: 'Show fewer milestones' }).getAttribute('aria-expanded'), 'true');
   const achievementLayout = await achievements.locator('.ym-achievement').evaluateAll(items => items.map(item => {
     const box = item.getBoundingClientRect();

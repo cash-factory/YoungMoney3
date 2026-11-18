@@ -1,7 +1,7 @@
 import '@/page-results.css';
 import { Select } from '@/components/Select';
 import { useState, useMemo } from 'react';
-import { CalendarCheck, Plus, Trash2, Save, TrendingUp, TrendingDown, Brain, Star } from 'lucide-react';
+import { CalendarCheck, Plus, Trash2, Save, TrendingUp, Brain, Star } from 'lucide-react';
 import { ScreenshotUpload } from '@/components/ScreenshotUpload';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line } from 'recharts';
 import { useWeeklyReviews, useTrades, useStrategies, useStrategyEntryModels, useTradingPlans, useTradingAccounts, useSetups, useMarketInstruments } from '@/hooks/useData';
@@ -13,9 +13,14 @@ import { MediaAudioPlayer } from '@/components/MediaPreview';
 import { VoiceRecorder } from '@/components/VoiceRecorder';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { Modal } from '@/components/ui/Modal';
+import { entryFacts, outcomeFacts, referenceFor, replayTargets, reviewMoney, currencyOfReview, type ReplayTarget } from '@/lib/decisionReplay';
+import { dateKeyInTimeZone } from '@/lib/riskMetrics';
+import { useDecisionReviews } from '@/hooks/useDecisionReviews';
+import { useJournalEntries } from '@/hooks/useData';
+import { ReplayButton } from '@/components/DecisionReplay';
 import { StatCard } from '@/components/ui/StatCard';
 import type { WeeklyReview, WeeklyReviewInput } from '@/lib/types';
-import { format, parseISO, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
+import { format, parseISO, startOfWeek, endOfWeek } from 'date-fns';
 
 export function WeeklyReviewsPage() {
   const { user } = useAuth();
@@ -23,6 +28,10 @@ export function WeeklyReviewsPage() {
   const { trades } = useTrades(user?.id);
   const { positions: brokerPositions, error: positionError } = useMt5Lifecycles(user?.id);
   const { accounts } = useTradingAccounts(user?.id);
+  const { rows:decisions }=useDecisionReviews(user?.id);
+  const { entries:journal }=useJournalEntries(user?.id);
+  const targets=useMemo(()=>replayTargets(trades,brokerPositions),[trades,brokerPositions]);
+  const [trendCurrency,setTrendCurrency]=useState('');
   const [brokerAccount, setBrokerAccount] = useState('all');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<WeeklyReview | null>(null);
@@ -38,7 +47,10 @@ export function WeeklyReviewsPage() {
   };
 
   const avgRating = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
-  const totalPnl = reviews.reduce((s, r) => s + r.pnl, 0);
+  const totals=new Map<string,number>();
+  for(const review of reviews){const code=currencyOfReview(review,accounts);if(code!=='Unknown')totals.set(code,(totals.get(code)||0)+review.pnl);}
+  const unknownCount=reviews.filter(r=>currencyOfReview(r,accounts)==='Unknown').length;
+  const activeCurrency=totals.has(trendCurrency)?trendCurrency:[...totals.keys()][0]||'';
 
   const brokerWeek = useMemo(() => {
     const end = new Date();
@@ -67,9 +79,9 @@ export function WeeklyReviewsPage() {
 
   const chartData = useMemo(() => [...reviews].reverse().map(r => ({
     week: format(parseISO(r.week_start), 'MMM d'),
-    pnl: r.pnl,
+    currency:currencyOfReview(r,accounts), pnl:r.pnl,
     rating: r.rating,
-  })), [reviews]);
+  })), [reviews,accounts]);
 
   if (loading) return <LoadingSpinner label="Loading weekly reviews..." />;
 
@@ -112,7 +124,7 @@ export function WeeklyReviewsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <StatCard label="Total Reviews" value={String(reviews.length)} icon={<CalendarCheck size={20} />} accent="blue" />
         <StatCard label="Avg Rating" value={avgRating.toFixed(1)} icon={<Star size={20} />} accent="amber" />
-        <StatCard label="Total P&L" value={`$${totalPnl.toFixed(2)}`} icon={totalPnl >= 0 ? <TrendingUp size={20} /> : <TrendingDown size={20} />} accent={totalPnl >= 0 ? 'emerald' : 'rose'} />
+        <div className="card p-4"><p className="text-xs text-secondary">Saved review totals · by currency</p>{[...totals].map(([code,n])=><strong className="block" key={code}>{reviewMoney(n,code)}</strong>)}{unknownCount>0 && <p>{unknownCount} with unconfirmed currency</p>}{!reviews.length && <span>—</span>}</div>
       </div>
 
       {reviews.length === 0 ? (
@@ -124,10 +136,10 @@ export function WeeklyReviewsPage() {
           {reviews.length >= 2 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
               <div className="card p-4">
-                <h3 className="text-xs font-bold text-secondary mb-3">Weekly P&L Trend</h3>
+                <h3 className="text-xs font-bold text-secondary mb-3">Weekly P&amp;L trend</h3><label className="text-xs">Settlement currency <select className="input-field" value={activeCurrency} onChange={e=>setTrendCurrency(e.target.value)}>{[...totals.keys()].map(c=><option key={c}>{c}</option>)}</select></label>
                 <div className="h-48">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData}>
+                    <BarChart data={chartData.filter(r=>r.currency===activeCurrency)}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                       <XAxis dataKey="week" stroke="var(--text-muted)" fontSize={10} tickLine={false} />
                       <YAxis stroke="var(--text-muted)" fontSize={10} tickLine={false} />
@@ -156,24 +168,30 @@ export function WeeklyReviewsPage() {
 
           <div className="ym-weekly-debriefs">
             {reviews.map(review => (
-              <ReviewCard key={review.id} review={review} onEdit={() => { setEditing(review); setShowForm(true); }} onDelete={() => handleDelete(review.id)} />
+              <div key={review.id}><ReviewCard currency={currencyOfReview(review,accounts)} review={review} onEdit={() => { setEditing(review); setShowForm(true); }} onDelete={() => handleDelete(review.id)} />
+              <div className="ym-weekly-focus-list card p-3">
+                {targets.filter(t=>referenceFor(t)===review.decision_reference).map(t=><div key={referenceFor(t)}>Source decision · {entryFacts(t).symbol} <ReplayButton target={t}/></div>)}
+                {review.focus_next_week && <p>{decisions.filter(d=>d.commitment_id===review.id && d.commitment_result==='followed').length} followed · {decisions.filter(d=>d.commitment_id===review.id && d.commitment_result==='changed').length} changed course · {decisions.filter(d=>d.commitment_id===review.id && d.commitment_result==='unsure').length} unsure. Based on recorded check-ins.</p>}
+                {decisions.filter(d=>d.commitment_id===review.id).map(d=>{const t=targets.find(x=>referenceFor(x)===d.reference);return t?<div key={d.id}>{d.symbol} · {d.entry_time.slice(0,10)} <ReplayButton target={t}/></div>:null;})}
+                {journal.filter(e=>e.decision_kind==='pass' && e.entry_date>=review.week_start && e.entry_date<=review.week_end && (!review.account_id||e.account_id===review.account_id)).map(e=><p key={e.id}>Deliberate pass · {e.entry_date} · {e.notes || 'Media note'}</p>)}
+              </div></div>
             ))}
           </div>
         </>
       )}
 
       <Modal open={showForm} onClose={() => { setShowForm(false); setEditing(null); }} title={editing ? 'Edit Weekly Review' : 'New Weekly Review'} size="lg">
-        <ReviewForm initial={editing} trades={trades} onSave={handleSave} onCancel={() => { setShowForm(false); setEditing(null); }} />
+        <ReviewForm initial={editing} targets={targets} onSave={handleSave} onCancel={() => { setShowForm(false); setEditing(null); }} />
       </Modal>
     </div>
   );
 }
 
-function ReviewCard({ review, onEdit, onDelete }: { review: WeeklyReview; onEdit: () => void; onDelete: () => void }) {
+function ReviewCard({ review, currency, onEdit, onDelete }: { review: WeeklyReview; currency:string; onEdit: () => void; onDelete: () => void }) {
   const lessons = [{ title: 'Keep doing', value: review.what_went_well, tone: 'positive', number: '01' }, { title: 'Change next time', value: review.what_went_wrong, tone: 'reflect', number: '02' }, { title: 'Take forward', value: review.lessons_learned, tone: 'learn', number: '03' }];
   return <article className="ym-weekly-debrief">
     <header><div><p className="ym-output-eyebrow">WEEKLY DEBRIEF</p><h2>{format(parseISO(review.week_start), 'MMM d')} – {format(parseISO(review.week_end), 'MMM d, yyyy')}</h2></div><div className="ym-output-actions"><button type="button" onClick={onEdit} className="btn-secondary" aria-label={`Edit review for ${review.week_start}`}>Edit review</button><button type="button" onClick={onDelete} className="btn-ghost text-error-500" aria-label={`Delete review for ${review.week_start}`}><Trash2 size={15} /></button></div></header>
-    <div className="ym-review-scoreline"><div><strong>{review.rating}<small>/10</small></strong><span>Self-assessment</span><div className="ym-review-rating" aria-label={`Self-assessment ${review.rating} out of 10`}>{Array.from({ length: 10 }, (_, i) => <span key={i} data-filled={i < review.rating} />)}</div></div><div><strong>{review.trades_taken}<small> / {review.trades_planned}</small></strong><span>Taken / planned trades</span></div><div><strong className={review.pnl >= 0 ? 'text-success-500' : 'text-error-500'}>{review.pnl >= 0 ? '+' : ''}${review.pnl.toFixed(2)}</strong><span>Recorded weekly result</span></div></div>
+    <div className="ym-review-scoreline"><div><strong>{review.rating}<small>/10</small></strong><span>Self-assessment</span><div className="ym-review-rating" aria-label={`Self-assessment ${review.rating} out of 10`}>{Array.from({ length: 10 }, (_, i) => <span key={i} data-filled={i < review.rating} />)}</div></div><div><strong>{review.trades_taken}<small> / {review.trades_planned}</small></strong><span>Taken / planned trades</span></div><div><strong className={review.pnl >= 0 ? 'text-success-500' : 'text-error-500'}>{reviewMoney(review.pnl,currency)}</strong><span>Recorded weekly result</span></div></div>
     <div className="ym-review-lessons">{lessons.map(lesson => <section key={lesson.number} data-tone={lesson.tone}><span>{lesson.number}</span><h3>{lesson.title}</h3><p>{lesson.value || 'No reflection recorded for this part yet.'}</p></section>)}</div>
     {review.focus_next_week && <div className="ym-review-next"><span>NEXT WEEK</span><p>{review.focus_next_week}</p></div>}
     {review.psychological_notes && <details className="ym-review-psychology"><summary><Brain size={15} /> Psychology notes</summary><p>{review.psychological_notes}</p></details>}
@@ -182,19 +200,22 @@ function ReviewCard({ review, onEdit, onDelete }: { review: WeeklyReview; onEdit
   </article>;
 }
 
-function ReviewForm({ initial, trades, onSave, onCancel }: { initial: WeeklyReview | null; trades: ReturnType<typeof useTrades>['trades']; onSave: (data: WeeklyReviewInput, id?: string) => void; onCancel: () => void }) {
+function ReviewForm({ initial, targets, onSave, onCancel }: { initial: WeeklyReview | null; targets: ReplayTarget[]; onSave: (data: WeeklyReviewInput, id?: string) => void; onCancel: () => void }) {
   const { user } = useAuth();
   const { strategies } = useStrategies(user?.id);
   const { plans } = useTradingPlans(user?.id);
   const { accounts } = useTradingAccounts(user?.id);
   const { setups } = useSetups(user?.id);
   const { instruments } = useMarketInstruments(user?.id);
-  const [weekStart, setWeekStart] = useState(initial?.week_start || format(startOfWeek(new Date()), 'yyyy-MM-dd'));
-  const [weekEnd, setWeekEnd] = useState(initial?.week_end || format(endOfWeek(new Date()), 'yyyy-MM-dd'));
+  const [weekStart, setWeekStart] = useState(initial?.week_start || format(startOfWeek(new Date(),{weekStartsOn:1}), 'yyyy-MM-dd'));
+  const [weekEnd, setWeekEnd] = useState(initial?.week_end || format(endOfWeek(new Date(),{weekStartsOn:1}), 'yyyy-MM-dd'));
   const [rating, setRating] = useState(initial?.rating ?? 5);
   const [tradesTaken, setTradesTaken] = useState(initial?.trades_taken?.toString() || '0');
   const [tradesPlanned, setTradesPlanned] = useState(initial?.trades_planned?.toString() || '0');
   const [pnl, setPnl] = useState(initial?.pnl?.toString() || '0');
+  const [currency,setCurrency]=useState(initial?.settlement_currency || '');
+  const [decisionRef,setDecisionRef]=useState(initial?.decision_reference || '');
+  const [report,setReport]=useState('');
   const [whatWentWell, setWhatWentWell] = useState(initial?.what_went_well || '');
   const [whatWentWrong, setWhatWentWrong] = useState(initial?.what_went_wrong || '');
   const [lessonsLearned, setLessonsLearned] = useState(initial?.lessons_learned || '');
@@ -211,21 +232,29 @@ function ReviewForm({ initial, trades, onSave, onCancel }: { initial: WeeklyRevi
   const [saving, setSaving] = useState(false);
   const { models: entryModels } = useStrategyEntryModels(strategyId || null);
 
-  const autoPullStats = () => {
-    if (!weekStart || !weekEnd) return;
-    const start = parseISO(weekStart);
-    const end = parseISO(weekEnd);
-    const weekTrades = trades.filter(t => {
-      if (!t.entry_time) return false;
-      return isWithinInterval(parseISO(t.entry_time), { start, end });
+  const account=accounts.find(a=>a.id===accountId);
+  const code=account?.base_currency || currency;
+  const relevant=targets.filter(t=>!accountId || entryFacts(t).account===accountId);
+  const autoPullStats=()=>{
+    const inWeek=relevant.filter(t=>{
+      const result=outcomeFacts(t,accounts);
+      const day=result.at && dateKeyInTimeZone(result.at,account?.challenge_reset_timezone || 'UTC');
+      return result.closed && day && day>=weekStart && day<=weekEnd;
     });
-    setTradesTaken(String(weekTrades.length));
-    setPnl(String(weekTrades.reduce((s, t) => s + (t.pnl || 0), 0).toFixed(2)));
+    const amounts=inWeek.map(t=>outcomeFacts(t,accounts));
+    const currencies=[...new Set(amounts.map(x=>x.currency))];
+    const useCode=code || (currencies.length===1 ? currencies[0] : '');
+    if(!/^[A-Z]{3}$/.test(useCode)){setReport('Choose a settlement currency to pull a monetary total.');return;}
+    const included=amounts.filter(o=>o.currency===useCode && o.amount!==null);
+    setCurrency(useCode);setTradesTaken(String(inWeek.length));setPnl(included.reduce((v,o)=>v+(o.amount??0),0).toFixed(2));
+    setReport('Closed decisions: '+inWeek.length+' · monetary total covers '+included.length+' in '+useCode+'.');
   };
-
   const handleSave = async () => {
+    if (!weekStart || !weekEnd || weekEnd < weekStart) {setReport('Choose a week end on or after the start.');return;}
+    if (code && !/^[A-Z]{3}$/.test(code)) {setReport('Use a three-letter settlement currency such as ZAR.');return;}
     setSaving(true);
-    await onSave({
+    try {await onSave({
+      settlement_currency:code||null,decision_reference:decisionRef||null,
       week_start: weekStart,
       week_end: weekEnd,
       rating,
@@ -245,8 +274,7 @@ function ReviewForm({ initial, trades, onSave, onCancel }: { initial: WeeklyRevi
       account_id: accountId || null,
       setup_id: setupId || null,
       instrument_id: instrumentId || null,
-    }, initial?.id);
-    setSaving(false);
+    }, initial?.id); }catch(e){setReport(e instanceof Error ? e.message : 'Could not save this review.');}finally{setSaving(false);}
   };
 
   const inputCls = 'input-field';
@@ -259,6 +287,9 @@ function ReviewForm({ initial, trades, onSave, onCancel }: { initial: WeeklyRevi
         <div><label className={labelCls}>Week End</label><input type="date" className={inputCls} value={weekEnd} onChange={e => setWeekEnd(e.target.value)} /></div>
       </div>
 
+      <label className="block text-sm">Settlement currency<input className="input-field" value={code} placeholder="e.g. ZAR" maxLength={3} disabled={!!account} onChange={e=>setCurrency(e.target.value.toUpperCase())}/></label>
+      <label className="block text-sm">Decision to carry into review<select className="input-field" value={decisionRef} onChange={e=>setDecisionRef(e.target.value)}><option value="">Choose a decision (optional)</option>{relevant.filter(t=>{const day=entryFacts(t).time.slice(0,10);return referenceFor(t)===decisionRef || (day>=weekStart && day<=weekEnd);}).map(t=><option key={referenceFor(t)} value={referenceFor(t)}>{entryFacts(t).symbol} · {entryFacts(t).time.slice(0,16)} · {entryFacts(t).source}</option>)}</select></label>
+      {report && <p role="status">{report}</p>}
       <button onClick={autoPullStats} className="btn-secondary text-xs py-1.5 px-3">
         <TrendingUp size={14} /> Auto-pull from Trade Journal
       </button>
@@ -279,13 +310,13 @@ function ReviewForm({ initial, trades, onSave, onCancel }: { initial: WeeklyRevi
       <div className="grid grid-cols-3 gap-4">
         <div><label className={labelCls}>Trades Taken</label><input type="number" className={inputCls} value={tradesTaken} onChange={e => setTradesTaken(e.target.value)} /></div>
         <div><label className={labelCls}>Trades Planned</label><input type="number" className={inputCls} value={tradesPlanned} onChange={e => setTradesPlanned(e.target.value)} /></div>
-        <div><label className={labelCls}>P&L ($)</label><input type="number" className={inputCls} value={pnl} onChange={e => setPnl(e.target.value)} /></div>
+        <div><label className={labelCls}>P&amp;L ({code || 'unconfirmed currency'})</label><input type="number" className={inputCls} value={pnl} onChange={e => setPnl(e.target.value)} /></div>
       </div>
 
       <div><label className={labelCls}>What Went Well</label><textarea className={inputCls} rows={2} value={whatWentWell} onChange={e => setWhatWentWell(e.target.value)} placeholder="Wins, good discipline, followed plan..." /></div>
       <div><label className={labelCls}>What Went Wrong</label><textarea className={inputCls} rows={2} value={whatWentWrong} onChange={e => setWhatWentWrong(e.target.value)} placeholder="Losses, mistakes, broke rules..." /></div>
       <div><label className={labelCls}>Lessons Learned</label><textarea className={inputCls} rows={2} value={lessonsLearned} onChange={e => setLessonsLearned(e.target.value)} placeholder="Key takeaways from this week..." /></div>
-      <div><label className={labelCls}>Focus Next Week</label><textarea className={inputCls} rows={2} value={focusNextWeek} onChange={e => setFocusNextWeek(e.target.value)} placeholder="What to focus on improving..." /></div>
+      <div><label className={labelCls}>Focus Next Week</label><textarea className={inputCls} rows={2} value={focusNextWeek} onChange={e => setFocusNextWeek(e.target.value)} placeholder="If I notice … then I will …" /></div>
       <div><label className={labelCls}>Psychological Notes</label><textarea className={inputCls} rows={2} value={psychNotes} onChange={e => setPsychNotes(e.target.value)} placeholder="Emotional state, psychology observations..." /></div>
 
       <div>
@@ -295,7 +326,7 @@ function ReviewForm({ initial, trades, onSave, onCancel }: { initial: WeeklyRevi
       <div><label className={labelCls}>Voice note</label><VoiceRecorder onUpload={setVoiceUrl} existingUrl={voiceUrl} /></div>
 
       <div className="flex gap-3 pt-2">
-        <button onClick={handleSave} disabled={saving || !weekStart || !weekEnd} className="btn-primary flex-1">
+        <button onClick={handleSave} disabled={saving || !weekStart || !weekEnd || weekEnd<weekStart || (!!code && !/^[A-Z]{3}$/.test(code))} className="btn-primary flex-1">
           <Save size={16} /> {saving ? 'Saving...' : 'Save Review'}
         </button>
         <button onClick={onCancel} className="btn-secondary">Cancel</button>

@@ -1,5 +1,5 @@
 import { Select } from '@/components/Select';
-import { accountLedger, settlement, validateTradeTimes } from '@/lib/tradeFinance';
+import { riskCapital, settlement, validateTradeTimes } from '@/lib/tradeFinance';
 import { useState, useEffect } from 'react';
 import { Save, X, Calculator, TrendingUp, TrendingDown, Zap, ChevronRight, ChevronLeft, CheckCircle2, Target, Brain, AlertTriangle, Clock, CheckCircle, ListChecks, Camera, Lock, Star } from 'lucide-react';
 import type { Trade, TradeInput, TradeDirection, TradeSession, AccountType, EmotionalState, TradeStatus, TradeChecklistSnapshot, TradeCalculationSnapshot } from '@/lib/types';
@@ -206,7 +206,8 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
   const effectiveRiskPercent = configuredRiskLimits.length ? Math.min(...configuredRiskLimits) : null;
   const isExamplePrice = examplePriceIsUnconfirmed(form.entry_price, selectedInstrument);
   const sizePresets = selectedInstrument ? SIZE_PRESETS[selectedInstrument.asset_class] || SIZE_PRESETS.custom : SIZE_PRESETS.fx;
-  const currentBalance = selectedAccount ? accountLedger(selectedAccount, accountTrades, adjustments).balance : 0;
+  const capital = selectedAccount ? riskCapital(selectedAccount, accountTrades, adjustments) : null;
+  const currentBalance = capital?.value ?? null;
   // Legacy edits retain their recorded risk when the entry capital is unknown.
   const entryCapital = initial && form.account_id === initial.account_id ? initial.risk_capital_at_entry ?? null : currentBalance;
   const effectiveBalance = entryCapital ?? 0;
@@ -375,6 +376,8 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
       settlement_currency: currency,
       planned_r: liveCalc.potentialRr,
       risk_capital_at_entry: entryCapital,
+      risk_capital_source: initial && form.account_id === initial.account_id ? initial.risk_capital_source ?? null : capital?.source ?? null,
+      risk_capital_observed_at: initial && form.account_id === initial.account_id ? initial.risk_capital_observed_at ?? null : capital?.observedAt ?? null,
       client_request_id: initial ? undefined : draftId,
       expected_revision: initial?.updated_at,
       instrument_id: selectedInstrument && !selectedInstrument.id.startsWith('seed:') && !selectedInstrument.id.startsWith('custom-local:') ? selectedInstrument.id : null,

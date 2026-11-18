@@ -30,6 +30,7 @@ jobs:
           export YM3_PREVIEW_URL=http://127.0.0.1:4174/
           node scripts/test-dashboard-browser.mjs
           node scripts/test-controls-browser.mjs
+          node scripts/test-decisions-browser.mjs
           node scripts/test-media-browser.mjs
           node scripts/test-workspace-setup-browser.mjs
           node scripts/test-page-results-browser.mjs --palettes

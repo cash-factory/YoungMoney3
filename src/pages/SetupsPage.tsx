@@ -1,4 +1,5 @@
 import { Select } from '@/components/Select';
+import { StrategyEvidence } from '@/components/DecisionEvidence';
 import { useState, useMemo } from 'react';
 import { Layers, Plus, Trash2, Save, Search, TrendingUp, Eye } from 'lucide-react';
 import { ScreenshotUpload } from '@/components/ScreenshotUpload';
@@ -39,7 +40,7 @@ export function SetupsPage() {
   const winRateBySetup = useMemo(() => {
     const map: Record<string, { wins: number; total: number }> = {};
     for (const setup of setups) {
-      const linked = trades.filter(trade => trade.status === 'closed' && (trade.setup_id === setup.id || (!trade.setup_id && trade.strategy === setup.name)));
+      const linked = trades.filter(trade => trade.status === 'closed' && trade.setup_id === setup.id);
       map[setup.id] = { wins: linked.filter(trade => trade.outcome === 'win').length, total: linked.length };
     }
     return map;
@@ -109,7 +110,7 @@ export function SetupsPage() {
         {(() => {
           const setup = filtered.find(item => item.id === selectedId) || filtered[0];
           const result = winRateBySetup[setup.id];
-          return <SetupCard key={setup.id} setup={setup} winRate={result?.total ? Math.round(result.wins / result.total * 100) : null} tradeCount={result?.total || 0} onEdit={() => { setEditingSetup(setup); setShowForm(true); }} onDelete={() => handleDelete(setup.id)} />;
+          return <div key={setup.id}><SetupCard setup={setup} winRate={result?.total ? Math.round(result.wins / result.total * 100) : null} tradeCount={result?.total || 0} onEdit={() => { setEditingSetup(setup); setShowForm(true); }} onDelete={() => handleDelete(setup.id)} /><StrategyEvidence setup={setup.id}/></div>;
         })()}
       </div>}
 

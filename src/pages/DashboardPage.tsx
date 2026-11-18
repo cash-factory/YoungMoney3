@@ -26,7 +26,8 @@ import { useRiskSettings, useChecklist, useTradingPlans } from '@/hooks/useData'
 import type { Trade, TradeInput, RiskSettingsInput } from '@/lib/types';
 import { subDays, format } from 'date-fns';
 
-export function DashboardPage({ onOpenGuide }: { onOpenGuide?: () => void }) {
+import { DecisionDesk, PerformancePin, type FastCapture } from '@/components/DecisionDesk';
+export function DashboardPage({ onOpenGuide,onCapture,openWeekly }: { onOpenGuide?: () => void; onCapture:(mode:FastCapture)=>void;openWeekly:()=>void }) {
   const { user } = useAuth();
   const { trades: liveTrades, loading, loadError, asOf, addTrade } = useTrades(user?.id);
   const { positions: lifecyclePositions } = useMt5Lifecycles(user?.id);
@@ -45,7 +46,9 @@ export function DashboardPage({ onOpenGuide }: { onOpenGuide?: () => void }) {
   const [accountFilter, setAccountFilter] = useState('all');
   const [tradeOrigin, setTradeOrigin] = useState('all');
   const [source, setSource] = useState<'live' | 'backtest' | 'forward'>('live');
-  const [selectedSection, setSelectedSection] = useState('overview');
+  const pinKey='ymfx:opening-performance:'+user?.id;
+  const [pinned,setPinned]=useState(()=>{try{return localStorage.getItem(pinKey)==='1';}catch{return false;}});
+  const [selectedSection, setSelectedSection] = useState(pinned?'performance':'overview');
   const activeSection = source !== 'live' && selectedSection === 'risk' ? 'overview' : selectedSection;
   const sections = [
     { id: 'overview', label: 'Overview', description: 'Your account snapshot and the figures that matter today.' },
@@ -237,7 +240,9 @@ export function DashboardPage({ onOpenGuide }: { onOpenGuide?: () => void }) {
       <div key={activeSection} className="ym-dash-focus-panel" role="tabpanel" tabIndex={0}
         id={`dashboard-panel-${activeSection}`} aria-labelledby={`dashboard-tab-${activeSection}`}>
         <p className="ym-dash-focus-description">{sections.find(section => section.id === activeSection)?.description}</p>
+      {source==='live' && <PerformancePin pinned={pinned} onChange={()=>{try { localStorage.setItem(pinKey,pinned?'0':'1'); }catch{/* optional */}setPinned(!pinned);}}/>}
       {activeSection === 'overview' && <>
+      {source==='live' && <DecisionDesk trades={trades} positions={filteredLifecyclePositions} account={account} onCapture={onCapture} openWeekly={openWeekly}/>}
       <section className="ym-dash-balance" aria-label="Account and trading result">
         <div className="ym-dash-balance-main">
           <p className="ym-dash-kicker">{source === 'live' ? 'ACCOUNT SNAPSHOT' : 'PRACTICE PERFORMANCE'}</p>
@@ -323,24 +328,6 @@ export function DashboardPage({ onOpenGuide }: { onOpenGuide?: () => void }) {
         <RichLifecycleAnalytics positions={filteredLifecyclePositions} compact />
       </div>}
 
-      <div className="ym-dash-section-title">
-        <div><p className="ym-dash-kicker">AT A GLANCE</p><h2>Key performance</h2></div>
-        <span>Closed trades · selected view</span>
-      </div>
-      <div className="ym-dash-metric-grid">
-        <StatCard label="Net P&L" value={mixedCurrencyView ? 'By currency' : formatCurrency(stats.totalPnl)}
-          icon={<Wallet size={19} />} trend={mixedCurrencyView ? 'neutral' : stats.totalPnl >= 0 ? 'up' : 'down'}
-          trendValue={mixedCurrencyView ? 'See the currency breakdown above' : String(stats.totalTrades) + ' closed trades'} accent="blue" />
-        <StatCard label="Win rate" value={formatPercent(stats.winRate)} icon={<Target size={19} />}
-          sublabel={stats.wins + ' wins · ' + stats.losses + ' losses · ' + stats.breakevens + ' break-even'} accent="amber" />
-        <StatCard label="Closed trades" value={String(stats.totalTrades)} icon={<Activity size={19} />}
-          sublabel={String(trades.filter(item => item.status === 'open').length) + ' open trades in this view'} accent="emerald" />
-        <StatCard label="Profit factor"
-          value={mixedCurrencyView ? 'Choose account' : stats.profitFactor === Infinity ? '∞' : stats.profitFactor.toFixed(2)}
-          icon={<TrendingUp size={19} />}
-          sublabel={mixedCurrencyView ? 'Not combined across currencies' : stats.totalTrades === 0 ? 'No closed trades yet' : 'Expectancy: ' + formatCurrency(stats.expectancy)}
-          accent="blue" />
-      </div>
 
       </>}
 
@@ -371,6 +358,25 @@ export function DashboardPage({ onOpenGuide }: { onOpenGuide?: () => void }) {
       </section>}
 
       {activeSection === 'performance' && <section className="ym-dash-section" id="ym-performance">
+      <div className="ym-dash-section-title">
+        <div><p className="ym-dash-kicker">AT A GLANCE</p><h2>Key performance</h2></div>
+        <span>Closed trades · selected view</span>
+      </div>
+      <div className="ym-dash-metric-grid">
+        <StatCard label="Net P&L" value={mixedCurrencyView ? 'By currency' : formatCurrency(stats.totalPnl)}
+          icon={<Wallet size={19} />} trend={mixedCurrencyView ? 'neutral' : stats.totalPnl >= 0 ? 'up' : 'down'}
+          trendValue={mixedCurrencyView ? 'See the currency breakdown above' : String(stats.totalTrades) + ' closed trades'} accent="blue" />
+        <StatCard label="Win rate" value={formatPercent(stats.winRate)} icon={<Target size={19} />}
+          sublabel={stats.wins + ' wins · ' + stats.losses + ' losses · ' + stats.breakevens + ' break-even'} accent="amber" />
+        <StatCard label="Closed trades" value={String(stats.totalTrades)} icon={<Activity size={19} />}
+          sublabel={String(trades.filter(item => item.status === 'open').length) + ' open trades in this view'} accent="emerald" />
+        <StatCard label="Profit factor"
+          value={mixedCurrencyView ? 'Choose account' : stats.profitFactor === Infinity ? '∞' : stats.profitFactor.toFixed(2)}
+          icon={<TrendingUp size={19} />}
+          sublabel={mixedCurrencyView ? 'Not combined across currencies' : stats.totalTrades === 0 ? 'No closed trades yet' : 'Expectancy: ' + formatCurrency(stats.expectancy)}
+          accent="blue" />
+      </div>
+
         <div className="ym-dash-section-title">
           <div><p className="ym-dash-kicker">PERFORMANCE REVIEW</p><h2>Performance trends</h2></div>
           <span>Results from closed trades</span>

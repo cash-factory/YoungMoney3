@@ -232,6 +232,30 @@ try {
   assert.equal(evidence[0].payload.ticket,'781');
   assert.equal((await call('mt5/position-evidence',{link,lifecycle_id:'not-a-position'})).status,400);
 
+  const brokerRef='position/'+link+'/789:0';
+  const brokerReview={id:'review/'+subject+'/'+brokerRef,reference:brokerRef,verdict:'unsure',note:'Waited for my trigger.'};
+  assert.equal((await call('data',{action:'insert',table:'decision_reviews',payload:{...brokerReview,strategy_id:'missing'}})).status,400);
+  const writeReview=()=>call('data',{action:'insert',table:'decision_reviews',payload:brokerReview});
+  const posted=await writeReview();
+  assert.equal(posted.status,200);
+  const reviewVersion=(await posted.json()).data[0].updated_at;
+  assert.equal((await writeReview()).status,200, 'Retrying an identical annotation is idempotent.');
+  assert.equal((await call('data',{action:'insert',table:'decision_reviews',payload:{...brokerReview,verdict:'changed'}})).status,409);
+  const revise={action:'update',table:'decision_reviews',id:brokerReview.id,filters:{updated_at:reviewVersion},payload:{verdict:'followed'}};
+  assert.equal((await call('data',revise)).status,200);
+  assert.equal((await call('data',revise)).status,409);
+  assert.equal((await (await call('mt5/status',{})).json()).links.find(l=>l.id===link).pending_reviews,0);
+  const contextInput={reference:'trade/'+row.id,strategy_id:'as-of-strategy',entry_model_id:'as-of-model'};
+  const effective='2025-12-31T09:00:00.000Z';
+  for(const [table,id,payload] of [
+    ['trader_strategies','as-of-strategy',{name:'Opening range'}],
+    ['strategy_entry_models','as-of-model',{name:'Retest',strategy_id:'as-of-strategy',earliest_entry_utc:'09:15',requires_opening_stop:true}]
+  ]) await db.prepare('INSERT INTO workspace_records(id,user_id,table_name,payload,created_at,updated_at) VALUES(?,?,?,?,?,?)')
+    .bind(id,subject,table,JSON.stringify({id,...payload}),effective,effective).run();
+  const readRules=async()=>(await (await call('decision/context',contextInput)).json());
+  assert.equal((await readRules()).earliest,'09:15');
+  assert.equal((await call('data',{action:'update',table:'strategy_entry_models',id:'as-of-model',payload:{earliest_entry_utc:'11:45'}})).status,200);
+  assert.equal((await readRules()).earliest,'09:15','Later playbook changes cannot rewrite the rule at entry.');
   // Two independent demo/contest accounts can coexist for one journal owner.
   const secondLink=(await (await call('mt5/connect',{device:devices[0].id,envelope:{wrapped:'d',iv:'e',data:'f'}})).json()).id;
   assert.equal((await (await device('poll',{})).json()).job.id,secondLink);
@@ -239,6 +263,15 @@ try {
   const linked=(await (await call('mt5/status',{})).json()).links;
   assert.equal(linked.filter(l=>l.status==='connected').length,2);
   assert.equal(linked.find(l=>l.id===secondLink).access_level,'trading-restricted');
+  assert.equal((await call('mt5/retry-session',{link:secondLink})).status,200);
+  assert.equal((await device('capture-issue',{link:secondLink})).status,200);
+  assert.equal((await (await call('mt5/status',{})).json()).links.find(l=>l.id===secondLink).capture_health,'needs_attention');
+  assert.deepEqual((await (await device('retries',{})).json()).rows.map(r=>r.id),[secondLink]);
+  await device('sync',{link,events:[]});
+  assert.equal((await (await device('retries',{})).json()).rows.length,1);
+  const receipt=await (await device('sync',{link:secondLink,events:[]})).json();
+  assert.ok(receipt.synced_at);
+  assert.deepEqual((await (await device('retries',{})).json()).rows,[]);
   await db.prepare('UPDATE mt5_links SET trade_mode=2 WHERE id=?').bind(secondLink).run();
   assert.equal((await device('sync',{link:secondLink,events:[]})).status,403,'Pausing real capture blocks existing linked devices');
   assert.equal((await call('mt5/history-request',{link:secondLink,days:30})).status,403);
@@ -257,6 +290,9 @@ try {
   cookie=other.headers.get('set-cookie').split(';')[0];
   assert.deepEqual((await (await call('mt5/status',{})).json()).links,[]);
   assert.deepEqual((await (await call('mt5/positions',{})).json()).rows,[]);
+  assert.equal((await call('decision/context',contextInput)).status,404);
+  assert.equal((await call('mt5/retry-session',{link})).status,404);
+  assert.equal((await (await call('data',{action:'select',table:'decision_reviews'})).json()).count,0);
   assert.equal((await call('mt5/timezone-confirm',{link,timezone:'Etc/UTC',confirm:true})).status,404);
   assert.equal((await call('mt5/position-evidence',{link,lifecycle_id:'789:0'})).status,404);
   assert.equal((await (await call('data',{action:'select',table:'trades'})).json()).count,0);

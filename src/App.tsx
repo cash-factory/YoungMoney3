@@ -30,6 +30,9 @@ import { AccountSettingsPage } from '@/pages/AccountSettingsPage';
 import { AdminOperationsPage } from '@/pages/AdminOperationsPage';
 import { LoadingSpinner } from '@/components/ui/Feedback';
 import { supabase } from '@/lib/supabase';
+import '@/decision-studio.css';
+import type { FastCapture } from '@/components/DecisionDesk';
+import { SampleReplay } from '@/components/DecisionReplay';
 import { QuickCaptureModal } from '@/components/QuickCaptureModal';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { reportDataError } from '@/lib/recovery';
@@ -53,6 +56,9 @@ function AppContent() {
   const { session, loading, profile, signOut } = useAuth();
   const [page, setPage] = useState<PageId>(pageFromLocation);
   const [quickAdd, setQuickAdd] = useState(false);
+  const [captureMode,setCaptureMode]=useState<FastCapture>('manual');
+  const [sample,setSample]=useState(false);
+  const openCapture=(mode:FastCapture)=>{setCaptureMode(mode);setQuickAdd(true);};
   const [showLanding, setShowLanding] = useState(true);
   const [onboardingNeeded, setOnboardingNeeded] = useState<boolean | null>(null);
   const [onboardingError, setOnboardingError] = useState('');
@@ -135,13 +141,13 @@ function AppContent() {
   }
 
   return (
-    <Layout current={page} onNavigate={navigateToPage} onQuickAdd={() => setQuickAdd(true)} onOpenGuide={openGuide}>
+    <Layout current={page} onNavigate={navigateToPage} onQuickAdd={() => openCapture('manual')} onOpenGuide={openGuide}>
       {onboardingError && <p role="alert" className="card p-3 mb-4 text-sm">Workspace setup could not be checked. <button className="btn-secondary" onClick={()=>setOnboardingAttempt(v=>v+1)}>Retry</button></p>}
       {onboardingNeeded && page !== 'workspace-setup' && <div className="card p-4 mb-4 flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-secondary">Create your first strategy and risk settings when you’re ready.</p><button className="btn-secondary" onClick={()=>navigateToPage('workspace-setup')}>Set up workspace</button></div>}
       <PageExperience key={page} page={page}>
         {page === 'workspace-setup' && <OnboardingPage onComplete={()=>{setOnboardingNeeded(false);navigateToPage('dashboard');}} />}
         {page === 'media' && <MediaLibraryPage />}
-        {page === 'dashboard' && <DashboardPage onOpenGuide={openGuide} />}
+        {page === 'dashboard' && <DashboardPage onOpenGuide={openGuide} onCapture={openCapture} openWeekly={()=>navigateToPage('weekly-reviews')}/>}
         {page === 'trades' && <TradesPage />}
         {page === 'calendar' && <CalendarPage />}
         {page === 'analytics' && <AnalyticsPage />}
@@ -163,8 +169,9 @@ function AppContent() {
         {page === 'account-settings' && <AccountSettingsPage />}
         {page === 'admin-operations' && (profile?.role === 'admin' && profile.account_status === 'active' ? <AdminOperationsPage /> : <p role="alert" className="card p-4">This area is reserved for the workspace administrator.</p>)}
       </PageExperience>
-      {quickAdd && <QuickCaptureModal open onClose={() => setQuickAdd(false)} />}
-      <PlatformGuide open={guideOpen} userId={session.user.id} currentPage={page}
+      {sample && <SampleReplay onClose={()=>setSample(false)}/>}
+      {quickAdd && <QuickCaptureModal open initialMode={captureMode} onClose={() => setQuickAdd(false)} />}
+      <PlatformGuide onSample={()=>setSample(true)} open={guideOpen} userId={session.user.id} currentPage={page}
         onNavigate={navigateToPage}
         onDismiss={(completed, visited) => {
           writeGuideState(session.user.id, completed ? 'completed' : 'dismissed', visited, visited[visited.length - 1]);

@@ -31,6 +31,7 @@ type View = 'hub' | 'tour';
 type CategoryFilter = GuideCategory | 'All areas';
 
 interface PlatformGuideProps {
+  onSample:()=>void;
   open: boolean;
   userId: string;
   currentPage: PageId;
@@ -51,7 +52,7 @@ function pickTarget(stop: GuideStop): HTMLElement | null {
   return document.querySelector<HTMLElement>('.ym-page-heading, .ym-library-hero, #workspace-content');
 }
 
-export function PlatformGuide({ open, userId, currentPage, onNavigate, onDismiss }: PlatformGuideProps) {
+export function PlatformGuide({ open, userId, currentPage, onNavigate, onDismiss, onSample }: PlatformGuideProps) {
   const [view, setView] = useState<View>('hub');
   const [route, setRoute] = useState<string[]>([...GUIDE_EXPRESS_ROUTE]);
   const [index, setIndex] = useState(0);
@@ -214,6 +215,7 @@ export function PlatformGuide({ open, userId, currentPage, onNavigate, onDismiss
                   Skip the tutorial <SkipForward size={15} />
                 </button>
               </div>
+              <div className="ym-desk-quick" aria-label="Choose your starting point"><button onClick={()=>begin(['mt5'])}>Connect MT5</button><button onClick={()=>begin(['capture'])}>Log manually</button><button onClick={()=>{finish(false);onSample();}}>Explore a sample</button></div>
               <div className="ym-guide-time"><CheckCircle2 size={15} /> 9 guided highlights · You stay in control</div>
             </div>
             <div className="ym-guide-orbit" aria-hidden="true">

@@ -87,6 +87,8 @@ export interface TraderStrategy {
 }
 
 export interface StrategyEntryModel {
+  earliest_entry_utc?: string | null;
+  requires_opening_stop?: boolean;
   id: string;
   user_id: string;
   strategy_id: string;
@@ -100,11 +102,22 @@ export type StrategyEntryModelInput = Omit<StrategyEntryModel, 'id' | 'user_id' 
 
 export type TraderStrategyInput = Omit<TraderStrategy, 'id' | 'user_id' | 'created_at' | 'updated_at'>;
 
+export interface EntryRecord {
+  entry_time: string; entry_price: number | null; stop_loss: number | null; direction: string;
+  strategy_id: string | null; entry_model_id: string | null; plan_id: string | null;
+  risk_percent: number | null; checklist_items: TradeChecklistSnapshot[] | null;
+  entry_screenshot_url: string | null; entry_voice_note_url: string | null;
+  capture_mode: string; originally_open: boolean; entry_note: string | null;
+}
+
 export interface Trade {
+  decision_entry?: EntryRecord;
   trade_source?: 'manual' | 'mt5';
   settlement_currency?: string;
   pnl_decimal?: string;
   risk_capital_at_entry?: number | null;
+  risk_capital_source?: string | null;
+  risk_capital_observed_at?: string | null;
   realized_r?: number | null;
   initial_risk?: number | null;
   planned_r?: number | null;
@@ -178,6 +191,7 @@ export interface ReviewPrompt {
 }
 
 export interface JournalEntry {
+  decision_kind?: 'pass' | 'note';
   id: string;
   user_id: string | null;
   entry_date: string;
@@ -743,6 +757,8 @@ export type ChartingToolInput = Omit<ChartingTool, 'id' | 'user_id' | 'created_a
 
 // ── Weekly Reviews ──
 export interface WeeklyReview {
+  settlement_currency?: string | null;
+  decision_reference?: string | null;
   id: string;
   user_id: string;
   week_start: string;

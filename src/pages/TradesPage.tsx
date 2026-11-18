@@ -1,10 +1,13 @@
+import { ReplayButton, TradeReplay } from '@/components/DecisionReplay';
+import { visibleJournalTrades, reviewMoney, replayTargets, referenceFor } from '@/lib/decisionReplay';
+import { tradeCurrency } from '@/lib/tradeFinance';
 import { Select } from '@/components/Select';
 import { useMemo, useState } from 'react';
 import { Plus, Search, Edit2, Trash2, ChevronDown, ChevronUp, Star, Download, Filter, X, Clock, CheckCircle } from 'lucide-react';
 import { useTrades, useTradingAccounts } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
 import { useMt5Lifecycles } from '@/hooks/useMt5Lifecycles';
-import { formatCurrency, formatPips, formatDateTime, exportToCSV, downloadFile } from '@/lib/utils';
+import { formatPips, formatDateTime, exportToCSV, downloadFile } from '@/lib/utils';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { Modal } from '@/components/ui/Modal';
@@ -19,17 +22,8 @@ type SortDir = 'asc' | 'desc';
 export function TradesPage() {
   const { user } = useAuth();
   const { trades: storedTrades, loading, addTrade, updateTrade, deleteTrade } = useTrades(user?.id);
-  const { positions: positionVersions, error: positionError } = useMt5Lifecycles(user?.id);
-  // Only suppress old MT5 fill rows when the same account/link/position
-  // identity is established. Uncertain historical matches remain visible.
-  const trades = useMemo(() => {
-    const exact = new Set(positionVersions.map(row=>row.link+'/'+row.summary.position_id));
-    return storedTrades.filter(trade => {
-      if(trade.trade_source!=='mt5' || !trade.broker_details?.position_id) return true;
-      const link=trade.id.split('/')[0];
-      return !exact.has(link+'/'+String(trade.broker_details.position_id));
-    });
-  },[storedTrades,positionVersions]);
+  const { positions: positionVersions, loading: positionsLoading, error: positionError } = useMt5Lifecycles(user?.id);
+  const trades=useMemo(()=>visibleJournalTrades(storedTrades,positionVersions),[storedTrades,positionVersions]);
   const { accounts } = useTradingAccounts(user?.id);
   const [origin,setOrigin] = useState('all');
   const [showAdd, setShowAdd] = useState(false);
@@ -45,6 +39,14 @@ export function TradesPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState<TradeStatus | 'all'>('all');
   const [linkedTradeId, setLinkedTradeId] = useState(() => new URLSearchParams(window.location.search).get('trade'));
+  const [decisionRef, setDecisionRef] = useState(() => new URLSearchParams(window.location.search).get('decision'));
+  const linkedDecision = useMemo(() => decisionRef ? replayTargets(storedTrades, positionVersions).find(target => referenceFor(target) === decisionRef) : undefined, [decisionRef, storedTrades, positionVersions]);
+  const closeDecision = () => {
+    setDecisionRef(null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('decision');
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+  };
   const linkedTrade = linkedTradeId ? storedTrades.find(trade => trade.id === linkedTradeId) : null;
   const closeLinkedTrade = () => {
     setLinkedTradeId(null);
@@ -153,6 +155,8 @@ export function TradesPage() {
         }
       />
 
+      {linkedDecision && <TradeReplay target={linkedDecision} onClose={closeDecision}/>}
+      {decisionRef && !linkedDecision && !positionsLoading && <div role="status" className="card p-4 mb-4 text-sm">This decision is currently unavailable in this account. <button className="btn-secondary" onClick={closeDecision}>Dismiss</button></div>}
       {linkedTradeId && !linkedTrade && <div role="status" className="card p-4 mb-4 text-sm"><p>This linked trade is no longer available in your account.</p><button type="button" className="btn-secondary mt-2" onClick={closeLinkedTrade}>Dismiss</button></div>}
 
       {/* Status tabs */}
@@ -266,6 +270,7 @@ export function TradesPage() {
                     <small className="text-muted">{t.movement ?? '—'} {t.movement_unit} · Net R {t.final_realized_r ?? t.realized_r ?? 'unavailable'}</small>
                   </span>
                 </summary>
+                <ReplayButton target={{kind:'position',position:row}}/>
                 <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 mt-4">
                   {[
                     ['Original SL',t.initial_sl ?? 'Unavailable'],
@@ -370,13 +375,14 @@ export function TradesPage() {
                   ) : (
                     <>
                       <span className={t.pnl >= 0 ? 'text-success-500' : 'text-error-500'}>
-                        {formatCurrency(t.pnl)}
+                        {reviewMoney(t.pnl,tradeCurrency(t,accounts))}
                       </span>
                       <span className="block text-xs text-muted">{formatPips(t.pips)}</span>
                     </>
                   )}
                 </div>
                 <div className="col-span-6 lg:col-span-2 flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
+                  <ReplayButton target={{kind:'trade',trade:t}}/>
                   <button onClick={() => setEditTrade(t)} className="btn-ghost p-1.5">
                     <Edit2 size={16} />
                   </button>

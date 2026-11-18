@@ -8,6 +8,7 @@ export interface MediaReference {
   phase: LibraryPhase;
   date: string | null;
   tradeIds: string[];
+  decisionRef?: string;
 }
 export interface LibraryAsset {
   source: string;
@@ -19,6 +20,7 @@ export interface LibraryAsset {
 export interface LibraryFile { name: string; metadata?: { mimetype?: string }; created_at?: string }
 export const MEDIA_RECORD_SOURCES = [
   { table: 'trades', label: 'Trade', page: 'trades' },
+  { table: 'decision_reviews', label: 'Decision review', page: 'trades' },
   { table: 'journal_entries', label: 'Journal entry', page: 'journal' },
   { table: 'trading_plans', label: 'Trading plan', page: 'trading-plan' },
   { table: 'trading_setups', label: 'Setup', page: 'setups' },
@@ -71,8 +73,9 @@ export function buildMediaLibrary(owner: string, records: Record<string, Record<
           if (!source.startsWith(root) || !validPath(source.slice(root.length))) continue;
         }
         const date = text(row, phase === 'closure' ? 'exit_time' : 'entry_time', 'entry_date', 'created_at') || null;
-        const title = text(row, 'pair', 'instrument', 'title', 'name') || spec.label;
+        const title = text(row, 'pair', 'symbol', 'instrument', 'title', 'name') || spec.label;
         const reference: MediaReference = { id: row.id, table: spec.table, title, page: spec.page, phase, date,
+          ...(spec.table === 'decision_reviews' && typeof row.reference === 'string' ? {decisionRef: row.reference} : {}),
           tradeIds: spec.table === 'trades' ? [row.id] : Array.isArray(row.linked_trade_ids) ? row.linked_trade_ids.filter((id): id is string => typeof id === 'string') : [] };
         const asset = assets.get(source) || { source, name: `${title} · ${kind === 'image' ? 'Screenshot' : 'Voice note'}`, kind, date, references: [] };
         asset.references.push(reference);

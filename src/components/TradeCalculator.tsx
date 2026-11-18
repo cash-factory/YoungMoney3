@@ -1,4 +1,4 @@
-import { accountLedger } from '@/lib/tradeFinance';
+import { riskCapital } from '@/lib/tradeFinance';
 import type { Trade, TradingAccountAdjustment } from '@/lib/types';
 import { useEffect, useMemo, useState } from 'react';
 import { Calculator, RotateCcw, ShieldAlert, Target } from 'lucide-react';
@@ -33,7 +33,8 @@ export function TradeCalculator({ trades, adjustments }: { trades: Trade[]; adju
 
   const account = accounts.find(item => item.id === accountId) || null;
   const instrument = instruments.find(item => item.id === instrumentId) || null;
-  const balance = account ? accountLedger(account, trades, adjustments).balance : 0;
+  const capital = account ? riskCapital(account, trades, adjustments) : null;
+  const balance = capital?.value ?? 0;
   const conversionRequired = !!account && !!instrument && instrument.quote_currency !== account.base_currency;
   const conversionRate = conversionRequired ? Number(conversion) : 1;
 
@@ -137,6 +138,7 @@ export function TradeCalculator({ trades, adjustments }: { trades: Trade[]; adju
         <Result label="Suggested size" value={result.suggestedSize != null ? String(result.suggestedSize) : '—'} icon={<Calculator size={14} />} />
       </div>
 
+      <details className="ym-decision-details mt-3"><summary>How these estimates were calculated</summary><p>Account: {account?.name || 'Choose an account'} · {account?.base_currency || 'Currency unconfirmed'}. Instrument: {instrument?.symbol || 'Unselected'}. The calculation uses the selected instrument contract, the prices and fees entered above, and {conversionRequired?'your supplied exchange rate':'same-currency settlement'}. {capital && <>Risk percentage uses {formatMoney(balance)} from {capital.source.toLowerCase()}{capital.observedAt ? ' observed ' + new Date(capital.observedAt).toLocaleString() : ''}.</>}</p></details>
       {!result.hasData && <p className="mt-3 text-xs text-muted text-center">Select an account and instrument, then enter positive prices and quantity{conversionRequired && !result.validConversion ? ' and a valid conversion rate' : ''}.</p>}
     </div>
   );

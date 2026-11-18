@@ -23,6 +23,12 @@ export function accountLedger(account: TradingAccount, trades: Trade[], adjustme
   return { profit: profit.toNumber(), balance: account.broker_balance ?? balance.toNumber() };
 }
 
+export function riskCapital(account: TradingAccount, trades: Trade[], adjustments: TradingAccountAdjustment[]) {
+  if (Number.isFinite(account.broker_equity)) return { value: account.broker_equity!, source: 'Broker equity', observedAt: account.broker_equity_at ?? null };
+  if (Number.isFinite(account.broker_balance)) return { value: account.broker_balance!, source: 'Broker balance', observedAt: account.broker_balance_at ?? null };
+  return { value: accountLedger(account, trades, adjustments).balance, source: 'Journal balance', observedAt: null };
+}
+
 export function validateTradeTimes(entry: string, exit: string | null, closed: boolean): string | null {
   const entered = Date.parse(entry);
   if (!Number.isFinite(entered)) return 'Enter a valid entry date and time.';

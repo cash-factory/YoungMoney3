@@ -16,6 +16,9 @@ import { SuggestInput } from '@/components/ui/SuggestInput';
 import { GOAL_SUGGESTIONS, FOCUS_SUGGESTIONS, NOTE_SUGGESTIONS } from '@/lib/suggestions';
 import { MediaAudioPlayer, MediaImage } from '@/components/MediaPreview';
 import { VoiceRecorder } from '@/components/VoiceRecorder';
+import { ReplayButton } from '@/components/DecisionReplay';
+import { useDecisionReviews } from '@/hooks/useDecisionReviews';
+import { replayTargets, referenceFor } from '@/lib/decisionReplay';
 
 const DEFAULT_CHECKLIST: ChecklistItem[] = [
   { label: 'Reviewed higher timeframe trend', checked: false },
@@ -23,13 +26,13 @@ const DEFAULT_CHECKLIST: ChecklistItem[] = [
   { label: 'Checked economic calendar for news', checked: false },
   { label: 'Defined entry and exit criteria', checked: false },
   { label: 'Set proper position size for risk', checked: false },
-  { label: 'No emotional bias or FOMO', checked: false },
+  { label: 'Named what triggered my decision', checked: false },
 ];
 
 const DEFAULT_PROMPTS: ReviewPrompt[] = [
   { question: 'Did I follow my trading plan today?', answer: '' },
   { question: 'What was my best decision?', answer: '' },
-  { question: 'What was my worst decision?', answer: '' },
+  { question: 'What made me act when I did?', answer: '' },
   { question: 'How did I manage risk?', answer: '' },
   { question: 'What will I improve tomorrow?', answer: '' },
 ];
@@ -55,6 +58,11 @@ export function JournalPage() {
 
   const [accountFilter, setAccountFilter] = useState('all');
   const visibleTrades = useMemo(() => trades.filter(t => (source === 'all' || (t.trade_source ?? 'manual') === source) && (accountFilter === 'all' || (t.account_id || 'unassigned') === accountFilter)), [trades, source, accountFilter]);
+  const { rows: decisionReviews } = useDecisionReviews(user?.id);
+  const targetsByReference = useMemo(() => new Map(replayTargets(visibleTrades, brokerLifecycles.filter(p =>
+    source !== 'manual' && (accountFilter === 'all' || p.account_id === accountFilter)
+  )).map(t => [referenceFor(t), t])), [visibleTrades, brokerLifecycles, source, accountFilter]);
+  const savedDecisions = decisionReviews.filter(review => targetsByReference.has(review.reference));
   const journalLifecycles = useMemo(() => brokerLifecycles.filter(row =>
     source !== 'manual' && (accountFilter === 'all' || row.account_id === accountFilter)
   ).slice(0, 12), [brokerLifecycles, source, accountFilter]);
@@ -87,6 +95,14 @@ export function JournalPage() {
       />
 
       {sourceFilter}
+      {savedDecisions.length > 0 && <section className="card p-4 mb-5" aria-label="Saved decision replays">
+        <h2 className="text-base font-bold">Your decision replays</h2>
+        <ul className="ym-review-ledger">{savedDecisions.slice(0, 12).map(review => <li key={review.id}>
+          <div><strong>{review.symbol}</strong><small className="block text-secondary">{[review.entry_time?.slice(0,10), review.strategy_name, review.model_name].filter(Boolean).join(' · ')}</small>
+          {review.trigger && <p>{review.trigger}</p>}{review.note && <p className="line-clamp-2">{review.note}</p>}</div>
+          <ReplayButton target={targetsByReference.get(review.reference)!}/>
+        </li>)}</ul>
+      </section>}
       {source !== 'manual' && <section className="card p-4 sm:p-5 mb-5 space-y-3" aria-label="Broker execution context for journaling">
         <div>
           <p className="text-[10px] uppercase font-bold tracking-wider text-muted">CAPTURED EXECUTION CONTEXT</p>
@@ -111,7 +127,7 @@ export function JournalPage() {
                   <div><dt className="text-muted">Net realized R</dt><dd className="font-mono">{item.realized_r == null ? 'Unavailable' : item.realized_r + 'R'}</dd></div>
                   <div><dt className="text-muted">Movement</dt><dd className="font-mono">{item.movement == null ? 'Unknown' : item.movement + ' ' + item.movement_unit}</dd></div>
                 </dl>
-                <p className="text-muted mt-3">Execution identity: {row.lifecycle_id}. Use the trade details in Trades to review every fill and partial close.</p>
+                <p className="text-muted my-3">Execution ID {row.lifecycle_id}</p><ReplayButton target={{kind:'position', position:row}}/>
               </details>;
             })}
           </div>}
@@ -188,7 +204,7 @@ function JournalCard({ entry, trades, accounts, onEdit, onDelete }: { entry: Jou
       <div className="flex items-start justify-between mb-3">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className={`badge ${typeColors[entry.entry_type]}`}>{entry.entry_type}</span>
+            <span className={`badge ${typeColors[entry.entry_type]}`}>{entry.decision_kind === 'pass' ? 'Deliberate pass' : entry.entry_type}</span>
             <span className="text-sm font-semibold">{format(parseISO(entry.entry_date), 'MMM d, yyyy')}</span>
           </div>
           {entryTrades.length > 0 && (

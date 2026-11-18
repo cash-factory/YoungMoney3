@@ -1,3 +1,4 @@
+import { SampleReplay } from '@/components/DecisionReplay';
 import { useEffect, useRef, useState } from 'react';
 import {
   TrendingUp, BarChart3, BookOpen, Sparkles, Calendar, Target,
@@ -42,6 +43,7 @@ function useScrollReveal() {
 
 export function LandingPage({ onEnter }: { onEnter: () => void }) {
   const { session } = useAuth();
+  const [sampleReplay,setSampleReplay]=useState(false);
   const [scrollY, setScrollY] = useState(0);
   const pageRef = useScrollReveal();
 
@@ -214,7 +216,9 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
               {session ? 'Open Your Journal' : 'Start Journaling'}
               <ArrowRight size={18} />
             </button>
-            <a href="#platform" className="btn-secondary text-base px-6 py-3">
+            {sampleReplay && <SampleReplay onClose={()=>setSampleReplay(false)}/>}
+            <button type="button" className="btn-secondary text-base px-6 py-3" onClick={()=>setSampleReplay(true)}>Replay an example trade</button>
+            <a href="#platform" className="btn-ghost text-base px-3 py-3">
               Explore the Platform
               <ChevronRight size={18} />
             </a>

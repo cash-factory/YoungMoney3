@@ -30,17 +30,19 @@ function dateLabel(value: string | null) {
   const date = value ? new Date(value) : null;
   return date && Number.isFinite(date.getTime()) ? date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : 'Date unavailable';
 }
-function recordHref(page: string, tradeId?: string) {
+function recordHref(page: string, tradeId?: string, decisionRef?: string) {
   const url = new URL(window.location.href);
   url.searchParams.delete('trade');
+  url.searchParams.delete('decision');
   if (tradeId) url.searchParams.set('trade', tradeId);
+  if (decisionRef) url.searchParams.set('decision', decisionRef);
   url.hash = page;
   return url.pathname + url.search + url.hash;
 }
 function AssetReferences({ asset }: { asset: LibraryAsset }) {
   return <div className="ym-library-references">
     {asset.references.length ? asset.references.map(reference => <div key={reference.table + ':' + reference.id + ':' + reference.phase}>
-      <a href={recordHref(reference.page, reference.table === 'trades' ? reference.id : undefined)}>
+      <a href={recordHref(reference.page, reference.table === 'trades' ? reference.id : undefined, reference.decisionRef)}>
         <span>{reference.title}</span><ArrowUpRight size={14} aria-hidden="true" />
       </a>
       <small>{MEDIA_RECORD_SOURCES.find(source => source.table === reference.table)?.label} · {reference.phase === 'general' ? 'Attachment' : reference.phase === 'entry' ? 'Entry capture' : 'Closure review'}</small>

@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTrades } from '@/hooks/useData';
 
 type Device = { id: string; last_seen: number };
-type Link = { id: string; account_id?:string; company?: string; login?: string; server?: string; trade_mode?: number; access_level?: string; status: string; last_sync?: string; broker_balance?:number;broker_equity?:number;currency?:string; gap?: number; last_error?: string; expires: number;history_id?:string;history_status?:string;broker_timezone?:string;timezone_confirmed_at?:string;timezone_source?:string;utc_conversion_status?:string };
+type Link = { id: string; device?:string; pending_reviews?:number; capture_health?:string; retry_requested_at?:string; account_id?:string; company?: string; login?: string; server?: string; trade_mode?: number; access_level?: string; status: string; last_sync?: string; broker_balance?:number;broker_equity?:number;currency?:string; gap?: number; last_error?: string; expires: number;history_id?:string;history_status?:string;broker_timezone?:string;timezone_confirmed_at?:string;timezone_source?:string;utc_conversion_status?:string };
 type PositionSummary = {
   lifecycle_id:string;position_id:string;symbol:string;direction:string;status:string;
   first_entry_at:string;final_exit_at?:string|null;initial_entry_price?:string|null;
@@ -34,6 +34,7 @@ export function Mt5Connections() {
   const [links,setLinks] = useState<Link[]>([]);
   const dialog = useRef<HTMLDialogElement>(null);
   const [device,setDevice] = useState('');
+  const [accountNames,setAccountNames]=useState<Record<string,string>>({});
   const [loaded,setLoaded] = useState(false);
   const [code,setCode] = useState('');
   const [error,setError] = useState('');
@@ -50,6 +51,7 @@ export function Mt5Connections() {
   const [manual,setManual] = useState('');
   const refresh = useCallback(async () => {
     const [data,rich]=await Promise.all([action('status'),action('positions').catch(()=>({rows:[],more:false}))]);
+    setAccountNames(Object.fromEntries((data.accounts||[]).map((a:{id:string;name:string})=>[a.id,a.name])));
     setDevices(data.devices); setLinks(data.links); setDemo(data.demoOnly); setLoaded(true);
     setPositions(rich.rows || []);setPositionsMore(Boolean(rich.more));
   }, []);
@@ -70,7 +72,7 @@ export function Mt5Connections() {
     <button className="btn-primary" onClick={()=>run(async()=>setCode((await action('pair')).code))}>Pair a PC</button></header>
     {loaded && !devices.length && <p className="text-sm text-secondary">Run the Windows connector, then enter your pairing code on that PC.</p>}
     <div className="flex flex-wrap items-center gap-2">
-      <a className="btn-primary inline-flex items-center gap-2" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.3.2-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer" aria-label="Download YoungMoney3 Windows Connector version 0.3.2 release candidate 1"><Download size={15}/>Download Connector v0.3.2-rc1</a>
+      <a className="btn-primary inline-flex items-center gap-2" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.3.3-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer" aria-label="Download YoungMoney3 Windows Connector version 0.3.3 release candidate 1"><Download size={15}/>Download Connector v0.3.3-rc1</a>
       <a className="btn-secondary inline-flex items-center gap-2" href="/connector-download.html">Release details &amp; SHA-256</a>
       <a className="btn-secondary inline-flex items-center gap-2" href="/mt5-connector.zip" download><Download size={15}/>Python source fallback</a>
     </div>
@@ -90,6 +92,10 @@ export function Mt5Connections() {
     </label>
     {links.map(l=><div key={l.id} className="space-y-2"><p className="rounded-xl bg-secondary p-4 text-sm" key={l.id}>{l.company || 'Account'} {l.login} {l.server ? '· '+l.server : ''} {l.trade_mode === 2 ? '· REAL' : l.trade_mode === 1 ? '· CONTEST' : l.trade_mode === 0 ? '· DEMO' : ''} {l.access_level === 'trading-enabled' ? '· External trading permission (capture-only here)' : l.access_level === 'trading-restricted' ? '· Broker trading disabled externally' : ''} {demo && l.trade_mode===2 ? ' · Real-account capture paused' : ''} · {['pending','verifying'].includes(l.status) && l.expires<Date.now()?'expired':l.status} {l.broker_balance!=null && '· Last reported balance '+l.broker_balance+' '+l.currency+' · Equity '+l.broker_equity+' '+l.currency} {l.last_sync && Date.now()-Date.parse(l.last_sync)>120000 ? ' · Snapshot may be stale; verify the connector is running.' : ''} {l.last_error} {l.last_sync && '· Last sync '+new Date(l.last_sync).toLocaleString()} {l.gap ? '· Offline interval: intermediate stop changes may be missing.' : ''}</p>
       {l.status==='connected' && <div className="rounded-xl border border-themed p-3 space-y-2">
+        <h3 className="font-semibold">{accountNames[l.account_id || ''] || l.company || 'Linked account'}</h3>
+        <p className="text-sm">{devices.some(d=>d.id===l.device && Date.now()-d.last_seen<90000)?'PC connected':'PC offline'} · {l.capture_health==='needs_attention'?'Capture needs attention':l.gap?'History gap to check':l.last_sync?'Last sync acknowledged':'Awaiting first sync'}</p>
+        <p className="text-sm">Last acknowledged {l.last_sync?new Date(l.last_sync).toLocaleString():'—'} · {l.pending_reviews??0} decisions awaiting review</p>
+        <button className="btn-secondary" disabled={!!l.retry_requested_at} onClick={()=>run(async()=>{await action('retry-session',{link:l.id});})}>{l.retry_requested_at?'Retry queued for this account':'Retry this account'}</button>
         <p className="text-xs font-semibold">Broker timezone and historical session provenance</p>
         <div className="flex flex-wrap items-end gap-2">
           <label className="flex-1 min-w-44 text-xs text-secondary">IANA timezone (broker statement)

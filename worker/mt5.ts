@@ -36,12 +36,20 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     const setting=await q("SELECT value FROM site_settings WHERE key='mt5_capture_paused'").first<{value:string}>();
     return setting?.value==='true';
   };
+  const remainingReviews=(link:string)=>q("SELECT COUNT(DISTINCT lifecycle_id) AS n FROM mt5_position_versions v WHERE v.link=? AND NOT EXISTS (SELECT 1 FROM workspace_records w WHERE w.id='review/'||v.owner||'/position/'||v.link||'/'||v.lifecycle_id AND w.user_id=v.owner AND w.table_name='decision_reviews')",link).first<{n:number}>();
   if (owner) {
     if (action === 'status') {
       const devices = await q('SELECT id,public_key,last_seen FROM mt5_devices WHERE owner=? AND revoked=0 AND public_key IS NOT NULL', owner).all();
-      const links = await q('SELECT l.id,l.account_id,l.status,l.company,l.server,l.login,l.access_level,l.trade_mode,l.history_id,l.history_status,l.history_since,l.last_sync,l.broker_balance,l.broker_equity,l.currency,l.gap,l.last_error,l.expires,l.broker_timezone,l.timezone_confirmed_at,l.timezone_source,l.utc_conversion_status FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND d.revoked=0', owner).all();
+      const links = await q('SELECT l.device,l.retry_requested_at,l.capture_health,l.id,l.account_id,l.status,l.company,l.server,l.login,l.access_level,l.trade_mode,l.history_id,l.history_status,l.history_since,l.last_sync,l.broker_balance,l.broker_equity,l.currency,l.gap,l.last_error,l.expires,l.broker_timezone,l.timezone_confirmed_at,l.timezone_source,l.utc_conversion_status FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND d.revoked=0', owner).all();
       const accounts=await q("SELECT id,json_extract(payload,'$.name') AS name FROM workspace_records WHERE user_id=? AND table_name='trading_accounts' ORDER BY created_at",owner).all();
-      return json({ accounts:accounts.results, devices: devices.results, links: links.results, demoOnly: env.MT5_ALLOW_LIVE !== 'true', capturePaused: await capturePaused() });
+      const states=await Promise.all(links.results.map(async link=>({...link,pending_reviews:(await remainingReviews(String(link.id)))?.n??0})));
+      return json({ accounts:accounts.results, devices: devices.results, links: states, demoOnly: env.MT5_ALLOW_LIVE !== 'true', capturePaused: await capturePaused() });
+    }
+    if(action==='retry-session'){
+      if(!limited(input.link,64))return fail('Choose a linked account.');
+      if(await capturePaused())return fail('Capture is paused in staging.',409);
+      const result=await q("UPDATE mt5_links SET retry_requested_at=COALESCE(retry_requested_at,?) WHERE id=? AND owner=? AND status='connected' AND device IN (SELECT id FROM mt5_devices WHERE owner=? AND revoked=0)",now(),input.link,owner,owner).run();
+      return result.meta.changes?json({ok:true}):fail('Account unavailable.',404);
     }
     if (action === 'timezone-confirm') {
       if(!limited(input.link,64) || !limited(input.timezone,96) || input.confirm!==true)
@@ -190,6 +198,11 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if (!token) return fail('Device authentication required.',401);
   const device=await q("SELECT d.id,d.owner FROM mt5_devices d JOIN users u ON u.id=d.owner WHERE token_hash=? AND revoked=0 AND u.account_status='active'",await hash(token)).first<{id:string;owner:string}>();
   if (!device) return fail('Device access revoked.',403);
+  if(action==='device/retries'){
+    await q('UPDATE mt5_devices SET last_seen=? WHERE id=?',unix,device.id).run();
+    const rows=await capturePaused()?[]:(await q("SELECT id,retry_requested_at FROM mt5_links WHERE device=? AND status='connected' AND retry_requested_at IS NOT NULL",device.id).all()).results;
+    return json({rows});
+  }
   if (action==='device/poll') {
     await q('UPDATE mt5_devices SET last_seen=? WHERE id=?',unix,device.id).run();
     if(await capturePaused()) return json({job:null,capturePaused:true});
@@ -202,6 +215,11 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if (!limited(input.link,64)) return fail('Missing link.');
   const link=await q('SELECT * FROM mt5_links WHERE id=? AND device=?',input.link,device.id).first<{id:string;account_id:string;status:string;currency:string;company:string;expires:number;trade_mode:number|null}>();
   if (!link) return fail('Unknown link.',404);
+  if(action==='device/capture-issue'){
+    if(link.status!=='connected')return fail('Account unavailable.',409);
+    await q("UPDATE mt5_links SET capture_health='needs_attention' WHERE id=?",link.id).run();
+    return json({ok:true});
+  }
   if (action==='device/verified') {
     if(await capturePaused()) return fail('MT5 capture is paused by the administrator.',403);
     if (link.status==='connected') return json({ok:true});
@@ -319,7 +337,10 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   }
   const balance = typeof input.balance === 'number' && Number.isFinite(input.balance) ? input.balance : null;
   const equity = typeof input.equity === 'number' && Number.isFinite(input.equity) ? input.equity : null;
-  statements.push(q('UPDATE mt5_links SET last_sync=?,gap=MAX(gap,?),broker_balance=COALESCE(?,broker_balance),broker_equity=COALESCE(?,broker_equity) WHERE id=?',now(),input.gap===true?1:0,balance,equity,link.id));
+  const syncedAt=now();
+  statements.push(q('UPDATE mt5_devices SET last_seen=? WHERE id=?',unix,device.id));
+  statements.push(q("UPDATE mt5_links SET retry_requested_at=NULL,capture_health='synced' WHERE id=?",link.id));
+  statements.push(q('UPDATE mt5_links SET last_sync=?,gap=MAX(gap,?),broker_balance=COALESCE(?,broker_balance),broker_equity=COALESCE(?,broker_equity) WHERE id=?',syncedAt,input.gap===true?1:0,balance,equity,link.id));
   if(balance!==null || equity!==null) {
     const snapshot: Fields = {};
     if(balance!==null) { snapshot.broker_balance=balance; snapshot.broker_balance_at=now(); }
@@ -331,5 +352,5 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   await db.batch(statements);
   const history=await q('SELECT history_id AS id,history_since AS since,history_status AS status FROM mt5_links WHERE id=?',link.id).first();
   const preferences=await q('SELECT broker_timezone,timezone_confirmed_at,utc_conversion_status FROM mt5_links WHERE id=?',link.id).first();
-  return json({ok:true,history,preferences});
+  return json({ok:true,history,preferences,synced_at:syncedAt,pending_reviews:(await remainingReviews(link.id))?.n??0});
 }

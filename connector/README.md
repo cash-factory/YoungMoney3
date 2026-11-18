@@ -119,3 +119,7 @@ change pages. Turn **Motion** off in the footer to use immediate states and stat
 busy feedback; the initial preference follows the Windows client-area animation
 setting. Pairing and capture still require the same explicit actions, and no
 broker operation starts because of navigation, animation or resizing.
+
+## Per-account capture status in v0.3.3-rc1
+
+Each session shows its latest sync acknowledged by staging and the number of positions awaiting review. Select a session and choose Retry to wake that account. A retry requested on the dashboard is picked up by its paired PC when that session is running.
