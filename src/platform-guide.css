@@ -166,3 +166,48 @@
   .ym-guide-hub,.ym-guide-tour-card {border:2px solid CanvasText;}
   .ym-guide-primary,.ym-guide-category-tabs button[aria-pressed="true"] {border:1px solid CanvasText;}
 }
+
+
+/* Permanent guide launchers fit the original dashboard and palette shell. */
+.ym-guide-sidebar-launch {
+  display:flex;align-items:center;gap:10px;width:calc(100% - 24px);margin:10px 12px 2px;
+  padding:11px 12px;border:1px solid color-mix(in srgb,var(--brand) 37%,var(--border));
+  border-radius:11px;text-align:left;background:color-mix(in srgb,var(--brand) 7%,var(--bg-card));
+  color:var(--text-primary);
+}
+.ym-guide-sidebar-launch:hover,.ym-guide-sidebar-launch:focus-visible {
+  background:color-mix(in srgb,var(--brand) 13%,var(--bg-card));border-color:var(--brand);
+}
+.ym-guide-sidebar-icon {display:grid;place-items:center;flex:none;width:33px;height:33px;border-radius:9px;background:var(--button-bg);color:#fff;}
+.ym-guide-sidebar-copy {display:flex;flex-direction:column;gap:2px;min-width:0;}
+.ym-guide-sidebar-copy strong {font-size:12px;font-weight:750;letter-spacing:-.01em;}
+.ym-guide-sidebar-copy small {font-size:10px;color:var(--text-secondary);}
+.ym-guide-sidebar-trail {font:750 9px/1.4 'JetBrains Mono',monospace;color:var(--brand-text,var(--brand));margin-left:auto;white-space:nowrap;}
+.ym-guide-topbar-launch {
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  min-height:37px;padding:8px 12px;border:1px solid color-mix(in srgb,var(--brand) 47%,var(--border));
+  background:color-mix(in srgb,var(--brand) 7%,var(--bg-card));border-radius:9px;
+  color:var(--text-primary);font-size:11px;font-weight:750;white-space:nowrap;
+}
+.ym-guide-topbar-launch svg {color:var(--brand-text,var(--brand));}
+.ym-guide-topbar-launch:hover {border-color:var(--brand);background:color-mix(in srgb,var(--brand) 14%,var(--bg-card));}
+.ym-guide-mobile-actions {display:flex;align-items:center;gap:9px;}
+.ym-dash-heading-actions {display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:relative;z-index:2;}
+.ym-dash-guide-launch {
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;
+  padding:10px 14px;border:1px solid var(--border-strong);border-radius:9px;
+  background:var(--bg-card);color:var(--text-primary);font-weight:760;font-size:12px;
+  box-shadow:0 4px 20px color-mix(in srgb,var(--brand) 8%,transparent);
+}
+.ym-dash-guide-launch svg {color:var(--brand-text,var(--brand));}
+.ym-dash-guide-launch:hover {border-color:var(--brand);background:color-mix(in srgb,var(--brand) 6%,var(--bg-card));}
+.ym-dash-guide-live {border-left:1px solid var(--border);padding-left:8px;margin-left:2px;color:var(--text-muted);font:600 9px 'JetBrains Mono',monospace;}
+@media(max-width:767px) {
+  .ym-dash-heading-actions {width:100%;}
+  .ym-dash-guide-launch {flex:1 1 auto;}
+  .ym-dash-heading-actions .ym-dash-new-trade {flex:1 1 auto;}
+}
+@media(max-width:365px) {
+  .ym-dash-heading-actions {flex-direction:column;align-items:stretch;}
+  .ym-dash-heading-actions button {width:100%;}
+}
