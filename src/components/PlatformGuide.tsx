@@ -44,7 +44,7 @@ function pickTarget(stop: GuideStop): HTMLElement | null {
     for (const candidate of candidates) {
       const box = candidate.getBoundingClientRect();
       const display = window.getComputedStyle(candidate);
-      if (box.width > 25 && box.height > 17 && display.display !== 'none'
+      if (box.width > 25 && box.height > 17 && box.right > 0 && box.left < window.innerWidth && box.bottom > 0 && box.top < window.innerHeight && display.display !== 'none'
           && display.visibility !== 'hidden') return candidate;
     }
   }
@@ -181,7 +181,7 @@ export function PlatformGuide({ open, userId, currentPage, onNavigate, onDismiss
     const controls = [...dialog.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex="0"]')]
       .filter(el => el.getClientRects().length > 0);
     if (!controls.length) return;
-    if (event.shiftKey && document.activeElement === controls[0]) {
+    if (event.shiftKey && (document.activeElement === controls[0] || document.activeElement === titleRef.current)) {
       event.preventDefault(); controls[controls.length - 1].focus();
     } else if (!event.shiftKey && document.activeElement === controls[controls.length - 1]) {
       event.preventDefault(); controls[0].focus();
