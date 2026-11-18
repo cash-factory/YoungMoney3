@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { LayoutDashboard, CandlestickChart, Calendar, BarChart3, BookOpen, Sparkles, Menu, X, Plus, LogOut, ChevronDown, ChevronRight, ClipboardList, Target, FlaskConical, Shield, CalendarClock, LayoutTemplate, BookMarked, StickyNote, GraduationCap, CreditCard, ClipboardCheck, MoreHorizontal, Archive, Settings, Search, Monitor, Images } from 'lucide-react';
+import { LayoutDashboard, CandlestickChart, Calendar, BarChart3, BookOpen, Sparkles, Menu, X, Plus, LogOut, ChevronDown, ChevronRight, ClipboardList, Target, FlaskConical, Shield, CalendarClock, LayoutTemplate, BookMarked, StickyNote, GraduationCap, CreditCard, ClipboardCheck, MoreHorizontal, Archive, Settings, Search, Monitor, Images, Compass } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 import { CommandPalette } from '@/components/CommandPalette';
 import { ColorPaletteControl } from '@/components/ColorPaletteControl';
@@ -13,6 +13,7 @@ interface LayoutProps {
   current: PageId;
   onNavigate: (page: PageId) => void;
   onQuickAdd: () => void;
+  onOpenGuide: () => void;
   children: ReactNode;
 }
 
@@ -53,7 +54,7 @@ const NAV_SECTIONS: { id: string; label: string; icon: typeof LayoutDashboard; i
   ] },
 ];
 
-export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProps) {
+export function Layout({ current, onNavigate, onQuickAdd, onOpenGuide, children }: LayoutProps) {
   const { profile, signOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -137,6 +138,12 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
           <kbd className="rounded-md border border-themed px-1.5 py-0.5 text-[10px] text-muted">Ctrl K</kbd>
         </button>
 
+        <button type="button" className="ym-guide-sidebar-launch" onClick={() => { setMobileOpen(false); onOpenGuide(); }} aria-label="Open platform guide">
+          <span className="ym-guide-sidebar-icon"><Compass size={18} /></span>
+          <span className="ym-guide-sidebar-copy"><strong>The Field Guide</strong><small>Explore your workspace</small></span>
+          <span className="ym-guide-sidebar-trail">01—22</span>
+        </button>
+
         <nav aria-label="Main navigation" className="ym-sidebar-nav relative flex-1 px-3 py-4 overflow-y-auto">
           <div className="space-y-1">
             <button type="button" data-active={current === 'account-settings'}
@@ -218,6 +225,7 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
                 <div className="fixed inset-0 z-40" onClick={() => setProfileMenuOpen(false)} />
                 <div className="absolute bottom-full left-0 right-0 mb-2 card border border-themed rounded-xl shadow-xl z-50 animate-scale-in">
                   <div className="border-t border-themed p-3"><ColorPaletteControl /></div>
+                  <button type="button" onClick={() => { setProfileMenuOpen(false); onOpenGuide(); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-secondary hover:bg-secondary hover:text-primary transition-colors"><Compass size={16} /> Replay platform tour</button>
                   <div className="border-t border-themed" />
                   <button onClick={() => { handleNav('account-settings'); setProfileMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-secondary hover:bg-secondary hover:text-primary transition-colors">
                     <Settings size={16} /> Account Settings
@@ -250,6 +258,7 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
           </div>
           <div className="flex items-center gap-3">
             <span className="ym-workspace-note hidden 2xl:inline">Keep the process. Review the outcome.</span>
+            <button type="button" onClick={onOpenGuide} className="ym-guide-topbar-launch" aria-label="Explore platform tour"><Compass size={16} /><span>Field Guide</span></button>
             <button type="button" onClick={() => setSearchOpen(true)} aria-label="Search workspace (Ctrl K)" className="ym-topbar-search">
               <Search size={16} /><span>Find anything</span><kbd>Ctrl K</kbd>
             </button>
@@ -264,9 +273,12 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
             <BrandLogo />
             <span className="font-bold text-sm tracking-tight">YoungMoney3</span>
           </div>
-          <button type="button" onClick={() => setSearchOpen(true)} className="btn-ghost p-1.5" aria-label="Search workspace">
+          <div className="ym-guide-mobile-actions">
+            <button type="button" onClick={onOpenGuide} className="btn-ghost p-1.5" aria-label="Open platform guide"><Compass size={20} /></button>
+            <button type="button" onClick={() => setSearchOpen(true)} className="btn-ghost p-1.5" aria-label="Search workspace">
             <Search size={20} />
-          </button>
+            </button>
+          </div>
         </div>
 
         <div className="ym-studio-stripe" aria-hidden="true">
