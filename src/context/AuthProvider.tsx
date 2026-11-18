@@ -2,6 +2,7 @@ import {useEffect, useRef, useState, type ReactNode} from 'react';
 import {AuthContext,type TraderProfile} from './AuthContext';
 import type {Session} from '@supabase/supabase-js';
 import {supabase} from '@/lib/supabase';
+import { writeGuideState } from '@/lib/platformGuide';
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<TraderProfile | null>(null);
@@ -59,6 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (error) return { error: error.message };
     if (data.user) {
+      // A successful first registration invites the user to an optional tour.
+      // This is per-account presentation state, never a broker or auth credential.
+      writeGuideState(data.user.id, 'pending', []);
       // Profile is auto-created by trigger, but update display_name
       await supabase
         .from('profiles')
