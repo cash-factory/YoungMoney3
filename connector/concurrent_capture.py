@@ -36,7 +36,7 @@ def _put(out, event):
         pass
 
 
-def capture_account(origin, database_path, slot, link, stop_event, event_queue):
+def capture_account(origin, database_path, slot, link, stop_event, event_queue, wake_event=None):
     """Spawned process. MT5's native module is strictly process-local."""
     # Import inside child after multiprocessing.freeze_support dispatch.
     import connect
@@ -78,12 +78,19 @@ def capture_account(origin, database_path, slot, link, stop_event, event_queue):
                 pending = connect.db.execute(
                     "SELECT COUNT(*) FROM outbox WHERE link=?", (link,)
                 ).fetchone()[0]
+                synced_at, awaiting = connect.sync_receipts.get(link, (None, None))
                 _put(event_queue, {
+                    "synced_at": synced_at, "awaiting": awaiting,
                     "state": "session-synced", "slot": slot, "link": link,
                     "login": record[2], "server": record[3], "pending": pending,
                     "message": "Account capture completed; next scan scheduled.",
                 })
             except Exception as error:
+                if failures == 0:
+                    try:
+                        connect.post("capture-issue", {"link": link}, connect.token)
+                    except Exception:
+                        pass  # Offline devices retain their last server receipt.
                 failures = min(5, failures + 1)
                 _put(event_queue, {
                     "state": "session-error", "slot": slot, "link": link,
@@ -92,7 +99,13 @@ def capture_account(origin, database_path, slot, link, stop_event, event_queue):
                 })
             finally:
                 connect.mt5.shutdown()
-            stop_event.wait(min(45, 2 ** failures + 2))
+            deadline = time.monotonic() + min(45, 2 ** failures + 2)
+            while not stop_event.is_set() and time.monotonic() < deadline:
+                if wake_event is not None and wake_event.is_set():
+                    wake_event.clear()
+                    connect.heartbeats.pop(link, None)
+                    break
+                stop_event.wait(0.25)
     finally:
         try:
             connect.mt5.shutdown()
@@ -137,7 +150,7 @@ def run_parallel_smoke():
 
 
 def run_supervisor(origin, db, database_path, slots, token, report,
-                   stop_event, armed_slot, active_slots, all_slots):
+                   stop_event, armed_slot, active_slots, all_slots, retry_queue=None):
     """Runs in the GUI's non-Tk coordinator thread; worker processes own MT5."""
     import connect
 
@@ -148,6 +161,9 @@ def run_supervisor(origin, db, database_path, slots, token, report,
     events = ctx.Queue(maxsize=256)
     children = {}  # broker link id -> (process, stop event, terminal path)
     retry_after = {}
+    wake_events = {}
+    seen_requests = {}
+    next_retry_poll = 0.0
     previous_links = None
     next_poll = 0.0
     last_report = 0.0
@@ -174,6 +190,7 @@ def run_supervisor(origin, db, database_path, slots, token, report,
                 if not process.is_alive():
                     process.join(timeout=0.1)
                     del children[link]
+                    wake_events.pop(link, None)
                     if link in selected and not halt.is_set():
                         retry_after[link] = now + 10
                         if report:
@@ -186,8 +203,9 @@ def run_supervisor(origin, db, database_path, slots, token, report,
                 if link in children or now < retry_after.get(link, 0):
                     continue
                 halt = ctx.Event()
+                wake_events[link] = ctx.Event()
                 proc = ctx.Process(target=capture_account,
-                                   args=(origin, str(database_path), row[1], link, halt, events),
+                                   args=(origin, str(database_path), row[1], link, halt, events, wake_events[link]),
                                    name="YMFX-MT5-" + hashlib.sha256(link.encode()).hexdigest()[:9],
                                    daemon=True)
                 proc.start()
@@ -195,6 +213,30 @@ def run_supervisor(origin, db, database_path, slots, token, report,
                 if report:
                     report({"state": "session-starting", "slot": row[1],
                             "message": "Starting isolated MT5 account capture process."})
+
+            requested = set()
+            if retry_queue is not None:
+                while True:
+                    try:
+                        selected_slot = retry_queue.get_nowait()
+                    except queue.Empty:
+                        break
+                    requested.update(link for link, row in selected.items() if row[1] == selected_slot)
+            if selected and now >= next_retry_poll:
+                next_retry_poll = now + 12
+                try:
+                    pending = connect.post("retries", {}, token).get("rows", [])
+                    for request in pending:
+                        link_id = request["id"]
+                        if link_id in selected and seen_requests.get(link_id) != request["retry_requested_at"]:
+                            requested.add(link_id)
+                            seen_requests[link_id] = request["retry_requested_at"]
+                except Exception:
+                    pass  # Each account still performs its own broker retry.
+            for link_id in requested:
+                retry_after.pop(link_id, None)
+                if link_id in wake_events:
+                    wake_events[link_id].set()
 
             # Accept website requests only when a free, explicitly armed
             # terminal exists. Otherwise requests remain waiting on staging.

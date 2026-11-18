@@ -27,6 +27,9 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args):
         return None
 
+sync_receipts = {}
+
+
 def post(action, data, token=None):
     headers = {"Content-Type":"application/json", "User-Agent":"YoungMoney3-MT5-Connector/1.0 (Python; Windows)"}
     if token:
@@ -283,6 +286,8 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
         response=post("sync",{"link":link,"events":[json.loads(row[1]) for row in page],"balance":account.balance,"equity":account.equity,"gap":gap},token)
         if isinstance(response.get("preferences"),dict):
             timezone_cache[link]=response["preferences"]
+        if response.get("synced_at"):
+            sync_receipts[link] = (response["synced_at"], response.get("pending_reviews"))
         heartbeats[link]=end
         with db:
             if page: db.execute("DELETE FROM outbox WHERE link=? AND seq<=?",(link,page[-1][0]))
@@ -340,7 +345,7 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
 
 def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
          report=None, active_slots=None, armed_slot=None, all_slots=None,
-         parallel_capture=False):
+         parallel_capture=False, retry_queue=None):
     """CLI and GUI entrypoint; MT5 and SQLite run on this one worker thread."""
     global origin, slots, opener, service, token, db, heartbeats, timezone_cache
     parser=argparse.ArgumentParser()
@@ -405,7 +410,7 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
         from concurrent_capture import run_supervisor
         try:
             return run_supervisor(origin, db, folder/"capture.db", slots, token, report,
-                                  stop_event, armed_slot, active_slots, all_slots)
+                                  stop_event, armed_slot, active_slots, all_slots, retry_queue)
         finally:
             db.close()
     next_poll=0

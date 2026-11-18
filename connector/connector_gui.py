@@ -42,7 +42,7 @@ ACCENT = "#ff365c"
 WARM = "#f9c9ab"
 DANGER = "#ff8da7"
 FONT = "Segoe UI"
-VERSION = "0.3.2-rc1"
+VERSION = "0.3.3-rc1"
 
 
 def terminal_candidates():
@@ -96,6 +96,8 @@ class ConnectorApp:
         self.paired = False
         self.busy_since = None
         self.status_by_slot = {}
+        self.sync_by_slot = {}
+        self.retry_queue = queue.Queue()
         self.account_by_slot = {}
         self._links_initialized = False
         self.log_items = []
@@ -485,7 +487,7 @@ class ConnectorApp:
                     color=MUTED, wrap=810).pack(anchor="w", pady=(0, 9))
         self.session_actions = self._actions(detail, [
             ("Arm for account", self.arm_selected, {"primary": True}),
-            ("Start", self.start_selected, {}), ("Pause", self.pause_selected, {}),
+            ("Start", self.start_selected, {}), ("Retry this account", self.retry_selected, {}), ("Pause", self.pause_selected, {}),
             ("Rename", self.rename_selected, {"quiet": True}),
             ("Open folder", self.open_selected_folder, {"quiet": True}),
             ("Open MT5", self.launch_selected, {"quiet": True}),
@@ -708,6 +710,9 @@ class ConnectorApp:
         link = self.account_by_slot.get(s["terminal"])
         identity = (str(link.get("server") or "broker") + " / " +
                     str(link.get("login") or "account")) if link else "Not linked yet"
+        receipt = self.sync_by_slot.get(s["terminal"])
+        if receipt:
+            identity += "  •  Last sync " + receipt[0] + "  •  " + str(receipt[1]) + " decisions awaiting review"
         self.selected_details_var.set(s["name"] + "  •  " + identity +
                                        "  •  " + s["terminal"])
 
@@ -936,6 +941,17 @@ class ConnectorApp:
             self._log(item["name"] + " enabled.")
         self._safe_change(start_one)
 
+    def retry_selected(self):
+        def retry():
+            item = self._selected()
+            if not item["enabled"] or item["terminal"] not in self.account_by_slot:
+                raise SessionError("Choose an enabled, linked session to retry.")
+            if not self._worker_busy():
+                self.start()
+            self.retry_queue.put(item["terminal"])
+            self.banner_var.set("Retry queued for " + item["name"] + ".")
+        self._safe_change(retry)
+
     def pause_selected(self):
         def pause_one():
             item = self._selected()
@@ -973,7 +989,7 @@ class ConnectorApp:
             try:
                 connect.main(args, pairing_code=pairing_code,
                              stop_event=self.stop_event, pause_event=self.pause_event,
-                             report=self.events.put,
+                             report=self.events.put, retry_queue=self.retry_queue,
                              all_slots=self.store.all_terminals,
                              active_slots=self.store.active_terminals,
                              armed_slot=self.store.armed_terminal,
@@ -1056,10 +1072,14 @@ class ConnectorApp:
         slot = item.get("slot")
         message = item.get("message", "")
         if state == "known-links":
-            previous = set(self.account_by_slot)
+            previous_accounts = self.account_by_slot
+            previous = set(previous_accounts)
             self.account_by_slot = {
                 record["slot"]: record for record in item.get("links", [])
             }
+            for terminal, old in previous_accounts.items():
+                if old.get("link") != self.account_by_slot.get(terminal, {}).get("link"):
+                    self.sync_by_slot.pop(terminal, None)
             for removed in previous - set(self.account_by_slot):
                 self.status_by_slot.pop(removed, None)
             if self.store.armed_terminal() in self.account_by_slot:
@@ -1130,13 +1150,16 @@ class ConnectorApp:
             if slot in self.account_by_slot and self.status_by_slot.get(slot) != "Connection issue":
                 self.status_by_slot[slot] = "Stopped"
         elif state == "session-unlinked":
+            self.sync_by_slot.pop(slot, None)
             self.status_by_slot[slot] = "Needs re-link"
             self.banner_var.set(message)
             self._log("MT5 broker link was not approved or was removed.")
         elif state == "session-synced":
             prior = self.status_by_slot.get(slot)
-            self.status_by_slot[slot] = "Syncing"
-            if prior != "Syncing":
+            if item.get("synced_at"):
+                self.sync_by_slot[slot] = (item["synced_at"], item.get("awaiting", 0))
+            self.status_by_slot[slot] = "Synced" if slot in self.sync_by_slot else "Capturing"
+            if prior != self.status_by_slot[slot]:
                 self._log("Broker session " + str(Path(slot).parent.name) + " synced successfully.")
         elif state in ("session-error", "account-error"):
             self.status_by_slot[slot] = "Connection issue"
