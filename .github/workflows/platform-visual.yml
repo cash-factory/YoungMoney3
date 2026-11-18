@@ -32,7 +32,7 @@ jobs:
           node scripts/test-controls-browser.mjs
           node scripts/test-media-browser.mjs
           node scripts/test-workspace-setup-browser.mjs
-          node scripts/test-page-results-browser.mjs
+          node scripts/test-page-results-browser.mjs --palettes
           node scripts/test-platform-browser.mjs
           node scripts/test-guide-browser.mjs
       - uses: actions/upload-artifact@v4
