@@ -1,6 +1,7 @@
+import '@/page-results.css';
 import { Select } from '@/components/Select';
 import { useState, useMemo } from 'react';
-import { CalendarCheck, Plus, Trash2, Save, Star, TrendingUp, TrendingDown, Brain } from 'lucide-react';
+import { CalendarCheck, Plus, Trash2, Save, TrendingUp, TrendingDown, Brain, Star } from 'lucide-react';
 import { ScreenshotUpload } from '@/components/ScreenshotUpload';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line } from 'recharts';
 import { useWeeklyReviews, useTrades, useStrategies, useStrategyEntryModels, useTradingPlans, useTradingAccounts, useSetups, useMarketInstruments } from '@/hooks/useData';
@@ -153,7 +154,7 @@ export function WeeklyReviewsPage() {
             </div>
           )}
 
-          <div className="ym-review-list space-y-3">
+          <div className="ym-weekly-debriefs">
             {reviews.map(review => (
               <ReviewCard key={review.id} review={review} onEdit={() => { setEditing(review); setShowForm(true); }} onDelete={() => handleDelete(review.id)} />
             ))}
@@ -169,61 +170,16 @@ export function WeeklyReviewsPage() {
 }
 
 function ReviewCard({ review, onEdit, onDelete }: { review: WeeklyReview; onEdit: () => void; onDelete: () => void }) {
-  return (
-    <div className="card p-5 card-hover">
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <h3 className="text-sm font-bold">{format(parseISO(review.week_start), 'MMM d')} – {format(parseISO(review.week_end), 'MMM d, yyyy')}</h3>
-          <div className="flex items-center gap-2 mt-1">
-            <div className="flex items-center gap-0.5">
-              {Array.from({ length: 10 }, (_, i) => (
-                <Star key={i} size={10} className={i < review.rating ? 'text-amber-500 fill-current' : 'text-muted/30'} />
-              ))}
-            </div>
-            <span className="text-xs text-muted">{review.rating}/10</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right">
-            <p className={`text-sm font-bold ${review.pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>{review.pnl >= 0 ? '+' : ''}${review.pnl.toFixed(2)}</p>
-            <p className="text-xs text-muted">{review.trades_taken} trades</p>
-          </div>
-          <div className="flex gap-1">
-            <button onClick={onEdit} className="btn-ghost p-1.5 text-xs">Edit</button>
-            <button onClick={onDelete} className="btn-ghost p-1.5 text-error-500 hover:bg-error-500/10"><Trash2 size={14} /></button>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-        {review.what_went_well && (
-          <div><p className="font-semibold text-success-500 mb-0.5">What Went Well</p><p className="text-secondary whitespace-pre-wrap">{review.what_went_well}</p></div>
-        )}
-        {review.what_went_wrong && (
-          <div><p className="font-semibold text-error-500 mb-0.5">What Went Wrong</p><p className="text-secondary whitespace-pre-wrap">{review.what_went_wrong}</p></div>
-        )}
-        {review.lessons_learned && (
-          <div><p className="font-semibold text-brand-500 mb-0.5">Lessons Learned</p><p className="text-secondary whitespace-pre-wrap">{review.lessons_learned}</p></div>
-        )}
-        {review.focus_next_week && (
-          <div><p className="font-semibold text-amber-500 mb-0.5">Focus Next Week</p><p className="text-secondary whitespace-pre-wrap">{review.focus_next_week}</p></div>
-        )}
-      </div>
-
-      {review.psychological_notes && (
-        <div className="mt-2 pt-2 border-t border-themed">
-          <p className="text-xs"><span className="font-semibold text-muted flex items-center gap-1"><Brain size={11} /> Psychological Notes</span></p>
-          <p className="text-xs text-secondary mt-0.5 whitespace-pre-wrap">{review.psychological_notes}</p>
-        </div>
-      )}
-      {review.screenshot_url && (
-        <div className="mt-3 rounded-lg overflow-hidden border border-themed">
-          <MediaImage source={review.screenshot_url} alt="Weekly review chart" className="w-full max-h-64 object-contain bg-secondary" />
-        </div>
-      )}
-      {review.voice_note_url && <div className="mt-3"><MediaAudioPlayer source={review.voice_note_url} /></div>}
-    </div>
-  );
+  const lessons = [{ title: 'Keep doing', value: review.what_went_well, tone: 'positive', number: '01' }, { title: 'Change next time', value: review.what_went_wrong, tone: 'reflect', number: '02' }, { title: 'Take forward', value: review.lessons_learned, tone: 'learn', number: '03' }];
+  return <article className="ym-weekly-debrief">
+    <header><div><p className="ym-output-eyebrow">WEEKLY DEBRIEF</p><h2>{format(parseISO(review.week_start), 'MMM d')} – {format(parseISO(review.week_end), 'MMM d, yyyy')}</h2></div><div className="ym-output-actions"><button type="button" onClick={onEdit} className="btn-secondary" aria-label={`Edit review for ${review.week_start}`}>Edit review</button><button type="button" onClick={onDelete} className="btn-ghost text-error-500" aria-label={`Delete review for ${review.week_start}`}><Trash2 size={15} /></button></div></header>
+    <div className="ym-review-scoreline"><div><strong>{review.rating}<small>/10</small></strong><span>Self-assessment</span><div className="ym-review-rating" aria-label={`Self-assessment ${review.rating} out of 10`}>{Array.from({ length: 10 }, (_, i) => <span key={i} data-filled={i < review.rating} />)}</div></div><div><strong>{review.trades_taken}<small> / {review.trades_planned}</small></strong><span>Taken / planned trades</span></div><div><strong className={review.pnl >= 0 ? 'text-success-500' : 'text-error-500'}>{review.pnl >= 0 ? '+' : ''}${review.pnl.toFixed(2)}</strong><span>Recorded weekly result</span></div></div>
+    <div className="ym-review-lessons">{lessons.map(lesson => <section key={lesson.number} data-tone={lesson.tone}><span>{lesson.number}</span><h3>{lesson.title}</h3><p>{lesson.value || 'No reflection recorded for this part yet.'}</p></section>)}</div>
+    {review.focus_next_week && <div className="ym-review-next"><span>NEXT WEEK</span><p>{review.focus_next_week}</p></div>}
+    {review.psychological_notes && <details className="ym-review-psychology"><summary><Brain size={15} /> Psychology notes</summary><p>{review.psychological_notes}</p></details>}
+    {review.screenshot_url && <div className="mt-3"><MediaImage source={review.screenshot_url} alt="Weekly review chart" className="w-full max-h-64 object-contain bg-secondary rounded-lg" /></div>}
+    {review.voice_note_url && <div className="mt-3"><MediaAudioPlayer source={review.voice_note_url} /></div>}
+  </article>;
 }
 
 function ReviewForm({ initial, trades, onSave, onCancel }: { initial: WeeklyReview | null; trades: ReturnType<typeof useTrades>['trades']; onSave: (data: WeeklyReviewInput, id?: string) => void; onCancel: () => void }) {

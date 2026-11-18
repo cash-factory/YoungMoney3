@@ -104,3 +104,18 @@ Staging is invite-only and real-account capture is disabled.
 ### CraftyLabs-inspired connector appearance
 
 The Windows session manager uses the Obsidian Studio palette (red #ff365c, near-black #09090d) and native, text-free vector illustrations in its five page headers. All instructions remain real accessible Tk text. The standalone image source is stored in `connector/assets/connector-scene.svg`; the executable renders matching art using Tk Canvas without requiring SVG libraries or internet access. This is a presentation-only redesign: MT5 read-only capture, pairing, session isolation, broker credentials, local outbox, and reconciliation rules are unchanged.
+
+
+## Studio interface v0.3.2-rc1
+
+The capture controls now adapt to window width. Quick setup, terminal tools and
+session actions wrap into complete readable rows, while Overview, Sessions, Pairing
+and Help scroll when vertical space is limited. The session table has a horizontal
+scrollbar for long terminal paths. Pairing keeps its code field on its own line.
+
+Buttons have short color transitions and visible keyboard focus. Text-free native
+illustrations share the page background and reveal their signal briefly when you
+change pages. Turn **Motion** off in the footer to use immediate states and static
+busy feedback; the initial preference follows the Windows client-area animation
+setting. Pairing and capture still require the same explicit actions, and no
+broker operation starts because of navigation, animation or resizing.

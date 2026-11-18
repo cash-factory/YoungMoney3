@@ -1,3 +1,4 @@
+import '@/page-results.css';
 import { Select } from '@/components/Select';
 import { useState } from 'react';
 import { ClipboardList, Plus, Trash2, Save, FileText, Target, Shield, GitBranch, Map, Eye, Layers, ScrollText, ListChecks, ChevronDown } from 'lucide-react';
@@ -33,6 +34,8 @@ export function TradingPlanPage() {
   const { rules, upsertRule, deleteRule } = useTradingRules(user?.id);
   const [showForm, setShowForm] = useState(false);
   const [editingPlan, setEditingPlan] = useState<TradingPlan | null>(null);
+  const [selectedPlanId, setSelectedPlanId] = useState('');
+  const selectedPlan = plans.find(plan => plan.id === selectedPlanId) || plans[0];
 
   const handleSave = async (data: TradingPlanInput, id?: string) => {
     await upsertPlan(data, id);
@@ -67,8 +70,9 @@ export function TradingPlanPage() {
           <EmptyState icon={<ClipboardList size={40} />} title="No trading plan yet" message="Create your trading plan to document your philosophy, entry models, risk rules, and mapping process." />
         </div>
       ) : (
-        <div className="space-y-4">
-          {plans.map(plan => (
+        <div className="ym-plan-library">
+          <nav className="ym-plan-switcher" aria-label="Trading plans">{plans.map((plan, index) => <button type="button" key={plan.id} aria-pressed={plan.id === selectedPlan?.id} onClick={() => setSelectedPlanId(plan.id)}><span>{String(index + 1).padStart(2, '0')}</span>{plan.title}</button>)}</nav>
+          {plans.filter(plan => plan.id === selectedPlan?.id).map(plan => (
             <PlanCard key={plan.id} plan={plan} rules={rules.filter(rule => rule.plan_id === plan.id)} checklist={checklist.filter(item => item.plan_id === plan.id)} onAddRule={(data) => upsertRule(data)} onUpdateRule={(rule) => upsertRule(rule, rule.id)} onDeleteRule={deleteRule} onAddChecklist={(label, required) => addChecklistItem(label, required, plan.id)} onUpdateChecklist={updateChecklistItem} onDeleteChecklist={deleteChecklistItem} onEdit={() => { setEditingPlan(plan); setShowForm(true); }} onDelete={() => handleDelete(plan.id)} />
           ))}
         </div>
@@ -99,7 +103,7 @@ function PlanCard({ plan, rules, checklist, onAddRule, onUpdateRule, onDeleteRul
   const adherence = plan.adherence_score != null ? `${plan.adherence_score}%` : null;
 
   return (
-    <div className="card p-5 card-hover">
+    <article className="ym-plan-document card p-5">
       <div className="flex items-start justify-between mb-3">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -109,18 +113,13 @@ function PlanCard({ plan, rules, checklist, onAddRule, onUpdateRule, onDeleteRul
           <p className="text-xs text-muted">Created {format(parseISO(plan.created_at), 'MMM d, yyyy')}</p>
         </div>
         <div className="flex gap-1">
-          <button onClick={onEdit} className="btn-ghost p-1.5"><FileText size={16} /></button>
-          <button onClick={onDelete} className="btn-ghost p-1.5 text-error-500 hover:bg-error-500/10"><Trash2 size={16} /></button>
+          <button type="button" aria-label={`Edit ${plan.title}`} onClick={onEdit} className="btn-ghost p-1.5"><FileText size={16} /></button>
+          <button type="button" aria-label={`Delete ${plan.title}`} onClick={onDelete} className="btn-ghost p-1.5 text-error-500 hover:bg-error-500/10"><Trash2 size={16} /></button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {sections.map(({ key, label, icon: Icon }) => (
-          <div key={key}>
-            <p className="text-xs font-semibold text-secondary mb-1 flex items-center gap-1.5"><Icon size={12} /> {label}</p>
-            <p className="text-sm whitespace-pre-wrap">{plan[key] as string}</p>
-          </div>
-        ))}
+      <div className="ym-plan-chapters">
+        {sections.map(({ key, label, icon: Icon }, index) => <details key={key} className="ym-plan-chapter" open={index === 0}><summary><span>{String(index + 1).padStart(2, '0')}</span><Icon size={16} /><strong>{label}</strong><ChevronDown size={16} /></summary><p>{plan[key] as string}</p></details>)}
       </div>
         <div className="mt-4 rounded-xl border border-themed bg-secondary/40 p-3">
           <p className="text-xs font-semibold text-secondary">Plan risk guardrails</p>
@@ -143,7 +142,7 @@ function PlanCard({ plan, rules, checklist, onAddRule, onUpdateRule, onDeleteRul
       </div>
       {plan.screenshot_url && <div className="mt-4"><MediaImage source={plan.screenshot_url} alt={`${plan.title} attachment`} className="max-h-64 rounded-lg object-contain" /></div>}
       {plan.voice_note_url && <div className="mt-3"><MediaAudioPlayer source={plan.voice_note_url} /></div>}
-    </div>
+    </article>
   );
 }
 

@@ -26,6 +26,7 @@ import connect
 from sessions import SessionError, SessionStore
 from terminal_factory import TerminalCopyError, create_terminal
 from concurrent_capture import run_parallel_smoke
+from studio_ui import AnimatedButton, ResponsiveActions, StudioArt, brand_mark, windows_motion_enabled
 
 STAGING_URL = "https://ym-fx-staging.ethical-hacker263.workers.dev"
 ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "YMFX" / "staging-gui"
@@ -41,7 +42,7 @@ ACCENT = "#ff365c"
 WARM = "#f9c9ab"
 DANGER = "#ff8da7"
 FONT = "Segoe UI"
-VERSION = "0.3.1-rc1"
+VERSION = "0.3.2-rc1"
 
 
 def terminal_candidates():
@@ -100,6 +101,12 @@ class ConnectorApp:
         self.log_items = []
         self.last_summary = None
         self.current_page = "overview"
+        self.action_groups = []
+        self.header_art = {}
+        self._page_canvases = {}
+        self._layout_job = None
+        self._poll_job = None
+        self.motion_var = tk.BooleanVar(value=windows_motion_enabled())
         self.store = SessionStore(SETTINGS)
         # Restore just the paired/unpaired UI state. No token is displayed,
         # logged, cached in preferences or sent over the network.
@@ -110,10 +117,10 @@ class ConnectorApp:
         except Exception:
             self.paired = False
         self.root.title("YoungMoney3  /  MT5 Connector  /  Staging")
-        w = min(1170, max(840, self.root.winfo_screenwidth() - 60))
-        h = min(790, max(630, self.root.winfo_screenheight() - 90))
+        w = min(1240, max(720, self.root.winfo_screenwidth() - 60))
+        h = min(850, max(560, self.root.winfo_screenheight() - 90))
         self.root.geometry(f"{w}x{h}")
-        self.root.minsize(840, 630)
+        self.root.minsize(720, 560)
         self.root.configure(bg=BACKGROUND)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.status_var = tk.StringVar(value="Ready to configure")
@@ -132,11 +139,15 @@ class ConnectorApp:
         self.overview_linked_var = tk.StringVar(value="0 verified accounts")
         self._configure_ttk()
         self._build()
+        self.root.bind("<Configure>", self._queue_responsive_layout, add="+")
+        self.root.bind("<MouseWheel>", self._wheel_page, add="+")
+        self.root.bind("<Destroy>", self._cleanup_ui, add="+")
+        self._layout_job = self.root.after_idle(self._responsive_layout)
         self.code_var.trace_add("write", lambda *_: self._validate_code())
         self._validate_code()
         self.refresh_sessions()
         self._log("Application ready. Broker capture is not started automatically.")
-        self.root.after(160, self.poll)
+        self._poll_job = self.root.after(160, self.poll)
 
     def _configure_ttk(self):
         style = ttk.Style(self.root)
@@ -150,9 +161,18 @@ class ConnectorApp:
         style.map("YM.Treeview", background=[("selected", "#662336")],
                   foreground=[("selected", TEXT)])
         style.configure("YM.Vertical.TScrollbar", background=PANEL_ALT,
-                        troughcolor=BACKGROUND, borderwidth=0)
+                        troughcolor=BACKGROUND, borderwidth=0, bordercolor=BACKGROUND,
+                        lightcolor=PANEL_ALT, darkcolor=PANEL_ALT,
+                        arrowcolor=MUTED, width=11, arrowsize=11)
+        style.map("YM.Vertical.TScrollbar", background=[("active", "#663347")])
+        style.configure("YM.Horizontal.TScrollbar", background=PANEL_ALT,
+                        troughcolor=BACKGROUND, borderwidth=0, bordercolor=BACKGROUND,
+                        lightcolor=PANEL_ALT, darkcolor=PANEL_ALT,
+                        arrowcolor=MUTED, width=11, arrowsize=11)
+        style.map("YM.Horizontal.TScrollbar", background=[("active", "#663347")])
         style.configure("YM.Horizontal.TProgressbar", troughcolor=PANEL_ALT,
-                        background=ACCENT, borderwidth=0)
+                        background=ACCENT, borderwidth=0, bordercolor=PANEL_ALT,
+                        lightcolor=ACCENT, darkcolor=ACCENT, thickness=5)
 
     def _label(self, parent, text="", *, size=10, color=TEXT, bold=False,
                wrap=0, textvar=None):
@@ -164,7 +184,15 @@ class ConnectorApp:
             opts["textvariable"] = textvar
         else:
             opts["text"] = text
-        return tk.Label(parent, **opts)
+        label = tk.Label(parent, **opts)
+        if wrap or textvar is not None:
+            limit = wrap or 800
+            def fit(_event=None):
+                inset = sum(parent.winfo_pixels(str(parent.cget(option)))
+                            for option in ("padx", "borderwidth", "highlightthickness")) * 2
+                label.configure(wraplength=min(limit, max(100, parent.winfo_width() - inset - 2)))
+            parent.bind("<Configure>", fit, add="+")
+        return label
 
     def _button(self, parent, text, command, *, primary=False, quiet=False, width=None):
         background = ACCENT if primary else (PANEL_ALT if quiet else "#3a2130")
@@ -178,7 +206,71 @@ class ConnectorApp:
                 "highlightcolor": ACCENT, "takefocus": True}
         if width:
             opts["width"] = width
-        return tk.Button(parent, **opts)
+        opts["disabledforeground"] = "#948590"
+        return AnimatedButton(parent, motion=self.motion_var.get, **opts)
+
+    def _actions(self, parent, specifications, *, minimum=132):
+        group = ResponsiveActions(parent, bg=parent.cget("bg"), minimum=minimum)
+        group.pack(fill="x")
+        self.action_groups.append(group)
+        for text, command, options in specifications:
+            group.add(self._button(group, text, command, **options))
+        return group
+
+    def _queue_responsive_layout(self, event=None):
+        if event is not None and event.widget is not self.root:
+            return
+        if self._layout_job is not None:
+            self.root.after_cancel(self._layout_job)
+        self._layout_job = self.root.after_idle(self._responsive_layout)
+
+    def _cleanup_ui(self, event):
+        if event.widget is self.root:
+            for attribute in ("_poll_job", "_layout_job"):
+                job = getattr(self, attribute, None)
+                if job is not None:
+                    self.root.after_cancel(job)
+                    setattr(self, attribute, None)
+
+    def _responsive_layout(self):
+        self._layout_job = None
+        compact = self.root.winfo_width() < 1060
+        self.sidebar.configure(width=174 if compact else 210)
+        self.workspace.configure(padx=20 if compact else 30, pady=20)
+        short = self.root.winfo_height() < 660
+        self.sidebar_footer.configure(pady=12 if short else 20)
+        self.environment_label.configure(text="●  STAGING" if short else "●  STAGING ENVIRONMENT")
+        self.sidebar_mode_label.configure(text="Read-only · demo/contest" if short else "Read-only  /  demo + contest")
+        if short:
+            self.sidebar_version_label.pack_forget()
+        elif not self.sidebar_version_label.winfo_manager():
+            self.sidebar_version_label.pack(anchor="w", pady=(14, 0))
+        for group in self.action_groups:
+            group.reflow()
+
+    def _wheel_page(self, event):
+        canvas = self._page_canvases.get(self.current_page)
+        if canvas is not None and event.widget.winfo_class() not in ("Text", "Treeview", "Entry"):
+            canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
+
+    def _set_busy_feedback(self, active):
+        for bar in (self.progress, self.pair_progress):
+            bar.stop()
+            if active and self.motion_var.get():
+                bar.configure(mode="indeterminate")
+                bar.start(18)
+            else:
+                bar.configure(mode="determinate", value=55 if active else 0)
+        if active and self.worker_mode == "pair":
+            self.pair_progress.pack(fill="x", pady=(0, 12), before=self.pair_button)
+        else:
+            self.pair_progress.pack_forget()
+
+    def _refresh_motion(self):
+        self._set_busy_feedback(self._worker_busy() or bool(self.copy_worker and self.copy_worker.is_alive()))
+        for art in self.header_art.values():
+            if not self.motion_var.get():
+                art.reveal()
 
     def _card(self, parent, pad=20):
         return tk.Frame(parent, bg=PANEL, highlightbackground=BORDER,
@@ -188,7 +280,8 @@ class ConnectorApp:
         """Keep pairing/help actions reachable on smaller Windows displays."""
         host = self.pages[name]
         canvas = tk.Canvas(host, bg=BACKGROUND, highlightthickness=0, borderwidth=0)
-        bar = ttk.Scrollbar(host, orient="vertical", command=canvas.yview)
+        bar = ttk.Scrollbar(host, orient="vertical", command=canvas.yview,
+                            style="YM.Vertical.TScrollbar")
         canvas.configure(yscrollcommand=bar.set)
         bar.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
@@ -196,63 +289,16 @@ class ConnectorApp:
         window = canvas.create_window((0, 0), window=frame, anchor="nw")
         frame.bind("<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.bind("<Configure>", lambda e: canvas.itemconfigure(window, width=e.width))
-        canvas.bind("<MouseWheel>", lambda e: canvas.yview_scroll(-1 if e.delta > 0 else 1, "units"))
+        self._page_canvases[name] = canvas
         return frame
 
     def _draw_header_art(self, parent, variant):
-        """Text-free vector art, drawn natively with Tk. No external image library.
-
-        The actual heading and description stay in normal Tk text widgets so
-        scaling and Windows accessibility do not depend on image typography.
-        """
-        canvas = tk.Canvas(parent, width=202, height=96, bg=BACKGROUND,
-                           highlightthickness=0, borderwidth=0,
-                           takefocus=False)
-        canvas.pack(side="right", padx=(10, 0))
-        canvas.create_rectangle(1, 1, 201, 95, fill=PANEL, outline=BORDER, width=1)
-        for x in (21, 61, 101, 141, 181):
-            canvas.create_line(x, 13, x, 82, fill="#2b202b")
-        for y in (23, 47, 71):
-            canvas.create_line(14, y, 190, y, fill="#2c202b")
-        if variant == "Command centre":
-            coords = [(12, 77), (36, 67), (56, 70), (78, 43),
-                      (101, 51), (124, 28), (152, 39), (177, 18), (192, 23)]
-            canvas.create_line(*sum(([x, y] for x, y in coords), []),
-                               fill=ACCENT, width=3, smooth=True)
-            for i, (x, y) in enumerate(coords):
-                if i in (3, 5, 7):
-                    canvas.create_oval(x-3, y-3, x+3, y+3,
-                                       fill="#ffb9ca", outline=ACCENT)
-        elif variant == "Account sessions":
-            for i in range(3):
-                x = 31 + i * 54
-                canvas.create_rectangle(x, 21, x+39, 76,
-                                        fill="#291c28", outline=ACCENT if i == 1 else BORDER)
-                canvas.create_oval(x+15, 37, x+24, 46,
-                                   fill="#ffb2c4" if i == 1 else "#754056", outline="")
-                canvas.create_line(x+10, 64, x+29, 64, fill=ACCENT)
-        elif variant == "Pair this PC":
-            canvas.create_arc(76, 21, 125, 76, start=0, extent=180,
-                              style="arc", outline=ACCENT, width=4)
-            canvas.create_rectangle(75, 47, 126, 80, fill=ACCENT, outline="")
-            canvas.create_oval(96, 58, 104, 66, fill=BACKGROUND, outline="")
-            canvas.create_line(100, 63, 100, 71, fill=BACKGROUND, width=3)
-            canvas.create_oval(26, 44, 38, 56, fill="#ffb9ca", outline="")
-            canvas.create_line(38, 50, 72, 50, fill=ACCENT, width=2)
-            canvas.create_oval(160, 44, 172, 56, fill="#ffb9ca", outline="")
-            canvas.create_line(129, 50, 160, 50, fill=ACCENT, width=2)
-        elif variant == "Activity":
-            canvas.create_line(10, 57, 37, 57, 50, 31, 67, 76, 83, 40,
-                               108, 40, 122, 58, 142, 17, 163, 50, 190, 50,
-                               fill=ACCENT, width=3)
-            canvas.create_oval(139, 14, 145, 20, fill="#ffd3dc", outline="")
-        else:
-            for i in range(4):
-                x = 23+i*39
-                canvas.create_rectangle(x, 24, x+29, 73,
-                                        fill=PANEL_ALT, outline=BORDER)
-                canvas.create_line(x+7, 44, x+22, 44, fill=ACCENT, width=2)
-                canvas.create_line(x+7, 54, x+17, 54, fill="#df9eae", width=2)
+        # Native shapes share their host background, avoiding a framed image seam.
+        art = StudioArt(parent, variant, background=BACKGROUND,
+                        accent=ACCENT, motion=self.motion_var.get)
+        art.pack(side="right", padx=(18, 0))
+        self.header_art[variant] = art
+        return art
 
     def _stack_heading(self, parent, title, description):
         header = tk.Frame(parent, bg=BACKGROUND)
@@ -264,24 +310,36 @@ class ConnectorApp:
         self._label(copy, title, size=22, bold=True).pack(anchor="w", pady=(0, 7))
         self._label(copy, description, size=10, color=MUTED,
                     wrap=470).pack(anchor="w")
-        self._draw_header_art(header, title)
+        art = self._draw_header_art(header, title)
+        def fit_header(event):
+            if event.width < 660:
+                art.pack_forget()
+            elif not art.winfo_manager():
+                art.pack(side="right", padx=(18, 0))
+        header.bind("<Configure>", fit_header, add="+")
 
     def _build(self):
         self.sidebar = tk.Frame(self.root, bg=SIDEBAR, width=205,
                                 highlightbackground=BORDER, highlightthickness=1)
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
-        brand = tk.Frame(self.sidebar, bg=SIDEBAR, padx=19, pady=28)
+        brand = tk.Frame(self.sidebar, bg=SIDEBAR, padx=12, pady=25)
         brand.pack(fill="x")
-        self._label(brand, "YOUNGMONEY3", size=11, bold=True, color=ACCENT).pack(anchor="w")
-        self._label(brand, "CONNECTOR", size=19, bold=True).pack(anchor="w", pady=(2, 4))
-        self._label(brand, "Trading evidence, in sync.", size=9, color=MUTED).pack(anchor="w")
+        lockup = tk.Frame(brand, bg=SIDEBAR)
+        lockup.pack(fill="x", pady=(0, 10))
+        brand_mark(lockup, SIDEBAR).pack(side="left", padx=(0, 8))
+        wordmark = tk.Frame(lockup, bg=SIDEBAR)
+        wordmark.pack(side="left", fill="x", expand=True)
+        self._label(wordmark, "YOUNGMONEY3", size=8, bold=True, color=ACCENT).pack(anchor="w")
+        self._label(wordmark, "CONNECTOR", size=12, bold=True).pack(anchor="w", pady=(2, 0))
+        self._label(brand, "Trading evidence, in sync.", size=9, color=MUTED, wrap=150).pack(anchor="w")
         tk.Frame(self.sidebar, bg=BORDER, height=1).pack(fill="x", padx=18, pady=(0, 18))
         self.nav_buttons = {}
         for key, title in self.NAV:
             row = tk.Frame(self.sidebar, bg=SIDEBAR, padx=12)
             row.pack(fill="x", pady=3)
-            button = tk.Button(row, text=title, command=lambda page=key: self.show_page(page),
+            button = AnimatedButton(row, motion=self.motion_var.get,
+                               text=title, command=lambda page=key: self.show_page(page),
                                font=(FONT, 11), anchor="w", padx=14, pady=13,
                                bg=SIDEBAR, fg=MUTED, relief="flat", borderwidth=0,
                                activebackground=PANEL_ALT, activeforeground=TEXT,
@@ -289,23 +347,34 @@ class ConnectorApp:
             button.pack(fill="x")
             self.nav_buttons[key] = button
         tk.Frame(self.sidebar, bg=SIDEBAR).pack(fill="both", expand=True)
-        foot = tk.Frame(self.sidebar, bg=SIDEBAR, padx=18, pady=20)
+        foot = self.sidebar_footer = tk.Frame(self.sidebar, bg=SIDEBAR, padx=18, pady=20)
         foot.pack(fill="x")
-        self._label(foot, "●  STAGING ENVIRONMENT", size=9, color=ACCENT,
-                    bold=True).pack(anchor="w")
-        self._label(foot, "Read-only  /  demo + contest", color=MUTED,
-                    size=9).pack(anchor="w", pady=(6, 0))
-        self._label(foot, "v" + VERSION + "   •   Windows x64",
-                    color=MUTED, size=8).pack(anchor="w", pady=(14, 0))
+        self.environment_label = self._label(foot, "●  STAGING ENVIRONMENT", size=9,
+                                             color=ACCENT, wrap=155, bold=True)
+        self.environment_label.pack(anchor="w")
+        self.sidebar_mode_label = self._label(foot, "Read-only  /  demo + contest", color=MUTED,
+                                              size=9, wrap=155)
+        self.sidebar_mode_label.pack(anchor="w", pady=(6, 0))
+        self.sidebar_version_label = self._label(foot, "v" + VERSION + "   •   Windows x64",
+                                                 color=MUTED, size=8, wrap=155)
+        self.sidebar_version_label.pack(anchor="w", pady=(14, 0))
 
-        right = tk.Frame(self.root, bg=BACKGROUND, padx=29, pady=22)
+        right = self.workspace = tk.Frame(self.root, bg=BACKGROUND, padx=29, pady=22)
         right.pack(side="left", fill="both", expand=True)
         header = tk.Frame(right, bg=BACKGROUND)
         header.pack(fill="x", pady=(0, 16))
-        self._label(header, "MT5  /  THE CONNECTION BRIDGE", size=10, bold=True,
-                    color=ACCENT).pack(side="left")
-        self._label(header, "READ-ONLY  •  NO TRADING COMMANDS", size=9,
-                    color=MUTED).pack(side="right")
+        bridge_label = self._label(header, "MT5  /  THE CONNECTION BRIDGE", size=10, bold=True,
+                                   color=ACCENT)
+        bridge_label.pack(side="left")
+        safety_label = self._label(header, "READ-ONLY  •  NO TRADING COMMANDS", size=9,
+                                   color=MUTED)
+        safety_label.pack(side="right")
+        def fit_topbar(event):
+            narrow = event.width < 650
+            bridge_label.pack_configure(side="top" if narrow else "left", anchor="w",
+                                         pady=(0, 5 if narrow else 0))
+            safety_label.pack_configure(side="top" if narrow else "right", anchor="w")
+        header.bind("<Configure>", fit_topbar, add="+")
         tk.Frame(right, bg=ACCENT, height=3).pack(fill="x")
         tk.Frame(right, bg=BORDER, height=1).pack(fill="x")
         self.page_host = tk.Frame(right, bg=BACKGROUND)
@@ -323,13 +392,22 @@ class ConnectorApp:
         footer = tk.Frame(right, bg=BACKGROUND)
         footer.pack(fill="x", pady=(2, 0))
         self._label(footer, textvar=self.banner_var, size=9,
-                    color=WARM, wrap=800).pack(side="left", fill="x", expand=True)
-        self._button(footer, "Open dashboard", lambda: webbrowser.open(STAGING_URL),
+                    color=WARM, wrap=1000).pack(fill="x", pady=(0, 10))
+        footer_actions = tk.Frame(footer, bg=BACKGROUND)
+        footer_actions.pack(fill="x")
+        tk.Checkbutton(footer_actions, text="Motion", variable=self.motion_var,
+                       command=self._refresh_motion,
+                       bg=BACKGROUND, fg=MUTED, selectcolor=PANEL_ALT,
+                       activebackground=BACKGROUND, activeforeground=TEXT,
+                       font=(FONT, 9), cursor="hand2", highlightthickness=0,
+                       takefocus=True).pack(side="left")
+        self._label(footer_actions, "CAPTURE ONLY", color=MUTED, size=8).pack(side="left", padx=12)
+        self._button(footer_actions, "Open dashboard  ↗", lambda: webbrowser.open(STAGING_URL),
                      quiet=True).pack(side="right")
         self.show_page("overview")
 
     def _build_overview(self):
-        page = self.pages["overview"]
+        page = self._scrollable_page("overview")
         self._stack_heading(page, "Command centre",
                             "See what's connected, what is syncing, and what needs your attention.")
         stats = tk.Frame(page, bg=BACKGROUND)
@@ -348,43 +426,37 @@ class ConnectorApp:
                     color=ACCENT).pack(anchor="w", pady=(10, 5))
         self._label(hero, textvar=self.queue_var, color=MUTED,
                     size=10).pack(anchor="w")
-        self.progress = ttk.Progressbar(hero, mode="indeterminate",
+        self.progress = ttk.Progressbar(hero, mode="determinate", value=0,
                                         style="YM.Horizontal.TProgressbar")
         self.progress.pack(fill="x", pady=(17, 14))
-        actions = tk.Frame(hero, bg=PANEL)
-        actions.pack(fill="x")
-        self._button(actions, "Start syncing", self.start, primary=True).pack(side="left", padx=(0, 9))
-        self._button(actions, "Pause all", self.pause_all).pack(side="left", padx=(0, 9))
-        self._button(actions, "Stop service", self.stop, quiet=True).pack(side="left")
+        self._actions(hero, [("Start syncing", self.start, {"primary": True}),
+                             ("Pause all", self.pause_all, {}),
+                             ("Stop service", self.stop, {"quiet": True})])
         next_card = self._card(page, 20)
         next_card.pack(fill="x")
         self._label(next_card, "QUICK SETUP", size=9, color=ACCENT,
                     bold=True).pack(anchor="w")
         self._label(next_card, textvar=self.device_var, size=11,
                     bold=True).pack(anchor="w", pady=(8, 13))
-        shortcuts = tk.Frame(next_card, bg=PANEL)
-        shortcuts.pack(fill="x")
-        self._button(shortcuts, "Pair this PC", lambda: self.show_page("pair")).pack(side="left", padx=(0, 8))
-        self._button(shortcuts, "+ Add a session", self.add_session).pack(side="left", padx=(0, 8))
-        self._button(shortcuts, "Manage sessions",
-                     lambda: self.show_page("sessions"), quiet=True).pack(side="left")
+        self.quick_setup_actions = self._actions(next_card, [
+            ("01  Pair this PC", lambda: self.show_page("pair"), {}),
+            ("02  Add a session", self.add_session, {}),
+            ("03  Manage sessions", lambda: self.show_page("sessions"), {"quiet": True})], minimum=164)
 
     def _build_sessions(self):
-        page = self.pages["sessions"]
+        page = self._scrollable_page("sessions")
         self._stack_heading(page, "Account sessions",
                             "Create or duplicate named terminals here. Each broker account runs in a separate MT5 process, monitored concurrently.")
-        tools = tk.Frame(page, bg=BACKGROUND)
-        tools.pack(fill="x", pady=(0, 16))
-        self.create_button = self._button(tools, "+ Create terminal", self.create_named_terminal, primary=True)
-        self.create_button.pack(side="left", padx=(0, 8))
-        self.duplicate_button = self._button(tools, "Duplicate selected", self.duplicate_selected)
-        self.duplicate_button.pack(side="left", padx=(0, 8))
-        self._button(tools, "Add existing", self.add_session).pack(side="left", padx=(0, 8))
-        self._button(tools, "Detect", self.detect_sessions, quiet=True).pack(side="left")
-        bulk = tk.Frame(page, bg=BACKGROUND)
-        bulk.pack(fill="x", pady=(0, 12))
-        self._button(bulk, "Start all", self.start_all).pack(side="left", padx=(0, 8))
-        self._button(bulk, "Pause all", self.pause_all, quiet=True).pack(side="left")
+        self.session_tools = self._actions(page, [
+            ("+ Create terminal", self.create_named_terminal, {"primary": True}),
+            ("Duplicate selected", self.duplicate_selected, {}),
+            ("Add existing", self.add_session, {}),
+            ("Detect terminals", self.detect_sessions, {"quiet": True})])
+        self.session_tools.pack_configure(pady=(0, 8))
+        self.create_button, self.duplicate_button = self.session_tools.buttons[:2]
+        bulk = self._actions(page, [("Start all sessions", self.start_all, {}),
+                                    ("Pause all sessions", self.pause_all, {"quiet": True})])
+        bulk.pack_configure(pady=(0, 8))
         table_area = self._card(page, 12)
         table_area.pack(fill="both", expand=True, pady=(0, 12))
         columns = ("name", "account", "status", "location")
@@ -398,23 +470,26 @@ class ConnectorApp:
             self.session_table.column(key, width=width, minwidth=90, stretch=True, anchor="w")
         bar = ttk.Scrollbar(table_area, orient="vertical", command=self.session_table.yview,
                             style="YM.Vertical.TScrollbar")
-        self.session_table.configure(yscrollcommand=bar.set)
-        self.session_table.pack(side="left", fill="both", expand=True)
-        bar.pack(side="right", fill="y")
+        horizontal = ttk.Scrollbar(table_area, orient="horizontal", command=self.session_table.xview,
+                                   style="YM.Horizontal.TScrollbar")
+        self.session_table.configure(yscrollcommand=bar.set, xscrollcommand=horizontal.set)
+        table_area.grid_columnconfigure(0, weight=1)
+        table_area.grid_rowconfigure(0, weight=1)
+        self.session_table.grid(row=0, column=0, sticky="nsew")
+        bar.grid(row=0, column=1, sticky="ns")
+        horizontal.grid(row=1, column=0, sticky="ew", pady=(5, 0))
         self.session_table.bind("<<TreeviewSelect>>", lambda _event: self._selected_session_details())
         detail = self._card(page, 15)
         detail.pack(fill="x")
         self._label(detail, textvar=self.selected_details_var, size=10,
                     color=MUTED, wrap=810).pack(anchor="w", pady=(0, 9))
-        row = tk.Frame(detail, bg=PANEL)
-        row.pack(fill="x")
-        self._button(row, "Arm for account", self.arm_selected, primary=True).pack(side="left", padx=(0, 7), pady=2)
-        self._button(row, "Start", self.start_selected).pack(side="left", padx=(0, 7), pady=2)
-        self._button(row, "Pause", self.pause_selected).pack(side="left", padx=(0, 7), pady=2)
-        self._button(row, "Rename", self.rename_selected, quiet=True).pack(side="left", padx=(0, 7), pady=2)
-        self._button(row, "Folder", self.open_selected_folder, quiet=True).pack(side="left", padx=(0, 7), pady=2)
-        self._button(row, "Open MT5", self.launch_selected, quiet=True).pack(side="left", padx=(0, 7), pady=2)
-        self._button(row, "Remove", self.remove_selected, quiet=True).pack(side="left", pady=2)
+        self.session_actions = self._actions(detail, [
+            ("Arm for account", self.arm_selected, {"primary": True}),
+            ("Start", self.start_selected, {}), ("Pause", self.pause_selected, {}),
+            ("Rename", self.rename_selected, {"quiet": True}),
+            ("Open folder", self.open_selected_folder, {"quiet": True}),
+            ("Open MT5", self.launch_selected, {"quiet": True}),
+            ("Remove session", self.remove_selected, {"quiet": True})], minimum=126)
         self._label(page, "ARM FOR ACCOUNT: Select a free session, arm it here, then use Connect MT5 account on the website. "
                     "An already linked session keeps its existing broker identity.",
                     size=9, color=MUTED, wrap=850).pack(anchor="w", pady=(6, 0))
@@ -444,14 +519,14 @@ class ConnectorApp:
                                    selectbackground="#662336", relief="flat",
                                    highlightbackground=BORDER, highlightthickness=2,
                                    highlightcolor=ACCENT)
-        self.code_input.pack(side="left", fill="x", expand=True, ipady=11, padx=(0, 8))
-        self._button(entryrow, "Paste", self.paste_code).pack(side="left", padx=(0, 8))
-        self._button(entryrow, "Show", self.toggle_code, quiet=True).pack(side="left", padx=(0, 8))
-        self._button(entryrow, "Clear", lambda: self.code_var.set(""),
-                     quiet=True).pack(side="left")
+        self.code_input.pack(fill="x", ipady=11, pady=(0, 10))
+        self.code_actions = self._actions(field, [
+            ("Paste code", self.paste_code, {}),
+            ("Show / hide", self.toggle_code, {"quiet": True}),
+            ("Clear", lambda: self.code_var.set(""), {"quiet": True})], minimum=120)
         self._attach_context_menu()
         self._label(field, textvar=self.code_error_var, color=MUTED,
-                    size=9).pack(anchor="w", pady=(10, 0))
+                    wrap=790, size=9).pack(anchor="w", pady=(10, 0))
         confirmation = self._card(page, 22)
         confirmation.pack(fill="x")
         self._label(confirmation, "03   Verify and confirm", size=13,
@@ -463,6 +538,8 @@ class ConnectorApp:
         self.pair_button = self._button(confirmation, "Pair this PC",
                                         self.pair, primary=True)
         self.pair_button.pack(anchor="w")
+        self.pair_progress = ttk.Progressbar(confirmation, mode="indeterminate",
+                                            style="YM.Horizontal.TProgressbar")
         self._label(confirmation, "When it says 'PC paired successfully', return to Sessions, "
                     "add a terminal, arm it and connect its broker account on the website. "
                     "No broker password is entered here.", color=MUTED,
@@ -484,7 +561,8 @@ class ConnectorApp:
                                      font=("Consolas", 10), relief="flat",
                                      borderwidth=0, spacing2=5,
                                      insertbackground=TEXT, state="disabled")
-        scroll = ttk.Scrollbar(panel, orient="vertical", command=self.activity_text.yview)
+        scroll = ttk.Scrollbar(panel, orient="vertical", command=self.activity_text.yview,
+                               style="YM.Vertical.TScrollbar")
         self.activity_text.configure(yscrollcommand=scroll.set)
         self.activity_text.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
@@ -526,10 +604,19 @@ class ConnectorApp:
         self.pages[key].tkraise()
         for item, button in self.nav_buttons.items():
             selected = item == key
-            button.configure(bg=PANEL_ALT if selected else SIDEBAR,
-                             fg=ACCENT if selected else MUTED)
+            button.set_tones(PANEL_ALT if selected else SIDEBAR, "#31212d")
+            button.configure(fg=ACCENT if selected else MUTED)
         if key == "sessions":
             self.refresh_sessions()
+        titles = {"overview": "Command centre", "sessions": "Account sessions",
+                  "pair": "Connect this PC", "activity": "Activity & diagnostics",
+                  "help": "Setup & troubleshooting"}
+        art = self.header_art.get(titles.get(key))
+        if art:
+            art.reveal()
+        canvas = self._page_canvases.get(key)
+        if canvas is not None:
+            canvas.yview_moveto(0)
 
     def _attach_context_menu(self):
         menu = tk.Menu(self.code_input, tearoff=0, bg=PANEL_ALT, fg=TEXT,
@@ -581,6 +668,7 @@ class ConnectorApp:
             self.code_error_var.set("32-character code • expires in five minutes • never logged")
         self.pair_button.configure(state="normal" if valid and not self._worker_busy()
                                    else "disabled")
+        self.pair_button.configure(text="Pairing securely…" if self._worker_busy() and self.worker_mode == "pair" else "Pair this PC")
         return valid
 
     def _worker_busy(self):
@@ -698,6 +786,7 @@ class ConnectorApp:
         self.copy_worker = threading.Thread(target=work, name="YMFX-terminal-copy",
                                             daemon=False)
         self.copy_worker.start()
+        self._set_busy_feedback(True)
 
     def create_named_terminal(self):
         candidates = terminal_candidates()
@@ -877,7 +966,7 @@ class ConnectorApp:
         self.worker_mode = "pair" if pairing_code is not None else "capture"
         self.status_var.set("Pairing securely…" if self.worker_mode == "pair" else
                             "Starting broker capture…")
-        self.progress.start(12)
+        self._set_busy_feedback(True)
         self._validate_code()
 
         def work():
@@ -902,6 +991,7 @@ class ConnectorApp:
         self.worker = threading.Thread(target=work, daemon=False,
                                        name="YMFX-single-MT5-SQLite-worker")
         self.worker.start()
+        self._validate_code()
 
     def start(self):
         if self._worker_busy():
@@ -1015,6 +1105,7 @@ class ConnectorApp:
                 " files copied. Personal broker data is excluded.")
             return
         elif state == "copy-finished":
+            self._set_busy_feedback(self._worker_busy())
             try:
                 created = self.store.add(item["terminal"], item["name"])
                 self.banner_var.set("Terminal created: " + created["name"] +
@@ -1028,6 +1119,7 @@ class ConnectorApp:
                 self._log("Created terminal needs attention: " + str(error))
                 self.banner_var.set("Terminal created but profile could not be added. Use Add existing.")
         elif state == "copy-error":
+            self._set_busy_feedback(self._worker_busy())
             self.status_var.set("Terminal creation failed")
             self.banner_var.set(message)
             self._log("Terminal creation failed: " + message)
@@ -1057,7 +1149,7 @@ class ConnectorApp:
             self._log("ERROR: " + message)
         elif state == "worker-exit":
             self.active_workers = 0
-            self.progress.stop()
+            self._set_busy_feedback(False)
             if item.get("mode") == "pair":
                 if not self.pair_ok and not self.status_var.get().startswith("Connector error"):
                     self.pair_stage_var.set("Pairing did not complete. Generate a new code and retry.")
@@ -1088,6 +1180,7 @@ class ConnectorApp:
         self.refresh_sessions()
 
     def poll(self):
+        self._poll_job = None
         try:
             while True:
                 item = self.events.get_nowait()
@@ -1096,7 +1189,7 @@ class ConnectorApp:
             pass
         if self.worker and not self.worker.is_alive():
             # A finished pairing task does not erase its success or error state.
-            self.progress.stop()
+            self._set_busy_feedback(False)
             self.worker = None
             self.worker_mode = None
             self._validate_code()
@@ -1108,7 +1201,7 @@ class ConnectorApp:
             if self.worker is None and (not self.copy_worker or not self.copy_worker.is_alive()):
                 self.root.destroy()
                 return
-        self.root.after(160, self.poll)
+        self._poll_job = self.root.after(160, self.poll)
 
     def close(self):
         if self.stopping:
@@ -1136,6 +1229,10 @@ def main():
             window.withdraw()
         app = ConnectorApp(window)
         if smoke:
+            # Layout needs a mapped window; full transparency keeps CI startup
+            # unobtrusive while exercising the real Windows Tk geometry engine.
+            window.attributes("-alpha", 0)
+            window.deiconify()
             # Exercise the real widgets/event loop, without pairing or MT5 access.
             # No close() call: it would write the user's preferences.
             def finish():
@@ -1159,6 +1256,28 @@ def main():
                         raise RuntimeError("Right-click pairing context menu is missing")
                     if not app.create_button or not app.duplicate_button:
                         raise RuntimeError("Terminal creation controls are missing")
+                    app.motion_var.set(False)
+                    responsive_sizes = []
+                    for width, height in ((720, 560), (780, 600), (1024, 768), (1440, 900)):
+                        window.geometry(f"{width}x{height}")
+                        for page, groups in (("overview", [app.quick_setup_actions]),
+                                             ("sessions", [app.session_tools, app.session_actions]),
+                                             ("pair", [app.code_actions])):
+                            app.show_page(page)
+                            for _ in range(3):
+                                window.update_idletasks()
+                                app._responsive_layout()
+                            for group in groups:
+                                edge = group.winfo_rootx() + group.winfo_width()
+                                for button in group.buttons:
+                                    if button.winfo_width() < button.winfo_reqwidth() or button.winfo_rootx() + button.winfo_width() > edge + 1:
+                                        raise RuntimeError("Responsive action label was clipped")
+                                    siblings = group.winfo_children()
+                                    if siblings.index(button) < siblings.index(button.pack_info()["in"]):
+                                        raise RuntimeError("Responsive action covered by row frame")
+                        responsive_sizes.append([width, height])
+                    if app.worker is not None or SETTINGS.exists():
+                        raise RuntimeError("Presentation smoke started capture or wrote settings")
                     for folder, sentinel in (("_tcl_data", "init.tcl"), ("_tk_data", "tk.tcl")):
                         if not (bundle / folder / sentinel).is_file():
                             raise RuntimeError("Bundled Tcl/Tk data missing")
@@ -1168,6 +1287,10 @@ def main():
                         "terminal_creation": bool(app.create_button) and bool(app.duplicate_button),
                         "pairing_controls": bool(app.pair_button) and bool(app.code_input),
                         "activity_view": bool(app.activity_text),
+                        "responsive_layout": True,
+                        "responsive_sizes": responsive_sizes,
+                        "motion_controls": bool(app.motion_var is not None),
+                        "native_artwork": len(app.header_art) == 5,
                         "tcl": window.tk.eval("info patchlevel"),
                         "tk": window.tk.eval("package present Tk"),
                         "tcl_bundled": Path(window.tk.eval("info library")).resolve() == (bundle / "_tcl_data").resolve(),

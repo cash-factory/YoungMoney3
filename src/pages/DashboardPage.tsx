@@ -2,7 +2,7 @@ import { accountLedger, tradeCurrency } from '@/lib/tradeFinance';
 import { dateKeyInTimeZone } from '@/lib/riskMetrics';
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import '@/dashboard-studio.css';
-import { Wallet, Target, TrendingUp, Flame, Activity, BarChart3, ChevronDown, Plus, ArrowUpRight, ArrowDownRight, Minus, Star, Clock, Eye, Compass } from 'lucide-react';
+import { Wallet, Target, TrendingUp, Flame, Activity, BarChart3, ChevronDown, Plus, ArrowUpRight, ArrowDownRight, Minus, Star, Clock, Eye, AlertCircle, Compass } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { useAllTestTrades, useBacktests, useForwardTrades, useTestSessions, useTrades, useTradingAccounts, useTradingAccountAdjustments } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
@@ -174,16 +174,14 @@ export function DashboardPage({ onOpenGuide }: { onOpenGuide?: () => void }) {
   if (loadError && !asOf) return <p role="alert">Trade history unavailable. Risk figures will appear after the next successful refresh.</p>;
   return (
     <div className="ym-dashboard">
-      {loadError && <p role="alert">Trade history unavailable. Showing figures last refreshed {new Date(asOf!).toLocaleString()}.</p>}
-      {trades.some(t=>t.status==='closed' && (!t.exit_time || tradeCurrency(t,accounts)==='Unknown' || t.realized_r == null)) && <p className="card p-3 text-sm" role="status">Some closed trades need review for close time, currency or initial risk. Daily risk and R statistics may be incomplete.</p>}
-      {account?.broker_balance != null && (!account.broker_balance_at || Date.now()-Date.parse(account.broker_balance_at)>120000) && <p role="status" className="card p-3 text-xs text-secondary">Broker balance is a last-known snapshot, not a live quote. Check MT5 Connections for its latest sync before making trading decisions.</p>}
+      {loadError && <p role="alert" className="ym-dash-history-alert">Trade history unavailable. Showing figures last refreshed {new Date(asOf!).toLocaleString()}.</p>}
 
       <div className="ym-dash-heading ym-dash-heading--illustrated" id="ym-overview">
         <img className="ym-dash-heading-art" src="/assets/page-art/dashboard.svg" alt="" aria-hidden="true" loading="eager" decoding="async" width="960" height="540" />
         <div className="min-w-0 ym-dash-heading-copy">
           <p className="ym-dash-eyebrow"><span aria-hidden="true" className="ym-dash-eyebrow-mark" /> TRADING OPERATIONS <span aria-hidden="true">/</span> <span className="ym-dash-topic-mark">OVERVIEW</span></p>
           <h1>Trading <span className="ym-dash-title-mark">Overview</span></h1>
-          <p>Everything that matters, in one clear view. Review your results, risk and next decisions.</p>
+          <p>Review your results. Plan your next decision.</p>
         </div>
         <div className="ym-dash-heading-actions">
           <button type="button" onClick={onOpenGuide} className="ym-dash-guide-launch" aria-label="Explore platform features">
@@ -221,6 +219,11 @@ export function DashboardPage({ onOpenGuide }: { onOpenGuide?: () => void }) {
               {value:'mt5',label:'MT5 imports',description:'Trades captured from the connector'}]} />
         </div> : <div className="ym-dash-filter-note">Practice results are separate from recorded account balances.</div>}
       </div>
+
+      {(trades.some(t=>t.status==='closed' && (!t.exit_time || tradeCurrency(t,accounts)==='Unknown' || t.realized_r == null)) || (account?.broker_balance != null && (!account.broker_balance_at || Date.now()-Date.parse(account.broker_balance_at)>120000))) && <aside className="ym-dash-data-quality" aria-label="Dashboard data quality" role="status">
+        {trades.some(t=>t.status==='closed' && (!t.exit_time || tradeCurrency(t,accounts)==='Unknown' || t.realized_r == null)) && <details className="ym-dash-quality-notice"><summary><AlertCircle size={16} aria-hidden="true" /><span><strong>Some trade data needs review</strong><small>Daily risk and R figures may be incomplete.</small></span><ChevronDown size={15} aria-hidden="true" /></summary><p>Some closed trades need review for close time, currency or initial risk. Daily risk and R statistics may be incomplete.</p></details>}
+        {account?.broker_balance != null && (!account.broker_balance_at || Date.now()-Date.parse(account.broker_balance_at)>120000) && <details className="ym-dash-quality-notice"><summary><Clock size={16} aria-hidden="true" /><span><strong>Broker balance is a last-known snapshot</strong><small>Check the latest sync before making trading decisions.</small></span><ChevronDown size={15} aria-hidden="true" /></summary><p>Broker balance is a last-known snapshot, not a live quote. Check MT5 Connections for its latest sync before making trading decisions.</p></details>}
+      </aside>}
 
       <nav className="ym-dash-jump" role="tablist" aria-label="Dashboard sections" onKeyDown={selectAdjacentSection}>
         {sections.map((section, index) => (

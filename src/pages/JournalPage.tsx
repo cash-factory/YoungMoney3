@@ -1,3 +1,4 @@
+import '@/page-results.css';
 import { Select } from '@/components/Select';
 import { useMemo, useState } from 'react';
 import { BookOpen, Plus, Trash2, Save, Target, Eye, CheckSquare, FileText, Calendar } from 'lucide-react';
@@ -140,7 +141,7 @@ export function JournalPage() {
           <EmptyState icon={<BookOpen size={40} />} title="No journal entries yet" message="Create a daily, weekly, or monthly journal entry to plan your sessions and reflect on your trading." />
         </div>
       ) : (
-        <div className="ym-journal-entries space-y-4">
+        <div className="ym-journal-timeline">
           {filtered.map(entry => (
             <JournalCard key={entry.id} entry={entry} trades={visibleTrades} accounts={accounts} onEdit={() => { setEditingEntry(entry); setShowForm(true); }} onDelete={() => handleDelete(entry.id)} />
           ))}
@@ -183,7 +184,7 @@ function JournalCard({ entry, trades, accounts, onEdit, onDelete }: { entry: Jou
   };
 
   return (
-    <div className="card p-5 card-hover">
+    <article className="ym-journal-spread"><aside className="ym-journal-date"><time dateTime={entry.entry_date}><strong>{format(parseISO(entry.entry_date), 'dd')}</strong><span>{format(parseISO(entry.entry_date), 'MMM yyyy')}</span><small>{format(parseISO(entry.entry_date), 'EEEE')}</small></time></aside><div className="ym-journal-sheet card p-5">
       <div className="flex items-start justify-between mb-3">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -195,12 +196,12 @@ function JournalCard({ entry, trades, accounts, onEdit, onDelete }: { entry: Jou
           )}
         </div>
         <div className="flex gap-1">
-          <button onClick={onEdit} className="btn-ghost p-1.5"><FileText size={16} /></button>
-          <button onClick={onDelete} className="btn-ghost p-1.5 text-error-500 hover:bg-error-500/10"><Trash2 size={16} /></button>
+          <button type="button" aria-label={`Edit journal entry for ${entry.entry_date}`} onClick={onEdit} className="btn-ghost p-1.5"><FileText size={16} /></button>
+          <button type="button" aria-label={`Delete journal entry for ${entry.entry_date}`} onClick={onDelete} className="btn-ghost p-1.5 text-error-500 hover:bg-error-500/10"><Trash2 size={16} /></button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="ym-journal-reflections">
         {entry.daily_goals && (
           <div>
             <p className="text-xs font-semibold text-secondary mb-1 flex items-center gap-1"><Target size={12} /> Goals</p>
@@ -258,7 +259,7 @@ function JournalCard({ entry, trades, accounts, onEdit, onDelete }: { entry: Jou
         </div>
       )}
       {entry.voice_note_url && <div className="mt-3"><MediaAudioPlayer source={entry.voice_note_url} /></div>}
-    </div>
+    </div></article>
   );
 }
 

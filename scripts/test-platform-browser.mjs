@@ -60,8 +60,13 @@ try {
       const parent=img.closest('.ym-page-heading, .ym-dash-heading, .ym-library-hero');
       const copy=parent?.querySelector('.ym-page-heading-main');
       const text=copy?.getBoundingClientRect();
+      const artwork=img.closest('.ym-page-art');
       return {src,complete:img.complete,naturalWidth:img.naturalWidth,
         width:region.width,height:region.height,
+        composed:artwork ? getComputedStyle(artwork).position==='absolute' && getComputedStyle(artwork).borderLeftWidth==='0px' && getComputedStyle(artwork).pointerEvents==='none' : true,
+        masked:artwork ? getComputedStyle(artwork).maskImage!=='none' : true,
+        foreground:!artwork || !copy || Number(getComputedStyle(copy).zIndex)>Number(getComputedStyle(artwork).zIndex),
+        copyFits:!copy || copy.scrollWidth<=copy.clientWidth+1,
         textOverlaps: !!text && region.left<text.right-1 && region.top<text.bottom-1 && region.bottom>text.top+1 &&
           region.right>text.left+1};
     });
@@ -72,8 +77,8 @@ try {
     assert.ok(asset.width>50 && asset.height>50,
       destination+' illustration needs adequate visible size: '+JSON.stringify(asset));
     if(destination!=='dashboard' && destination!=='media') {
-      assert.equal(asset.textOverlaps,false,
-        destination+' image must not overlap editable heading or actions: '+JSON.stringify(asset));
+      assert.ok(asset.composed && asset.masked && asset.foreground && asset.copyFits,
+        destination+' artwork must blend beneath a readable, unclipped foreground: '+JSON.stringify(asset));
     }
     for(const [token,ratio] of result.ratios) assert.ok(ratio>=4.5,`${palette}/${mode}: ${token} contrast ${ratio.toFixed(2)}`);
     if(palette==='craftylabs-studio'&&mode==='dark') await page.screenshot({path:`artifacts/platform/${destination}-${width}.png`,fullPage:false});

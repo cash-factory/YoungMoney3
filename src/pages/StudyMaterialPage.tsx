@@ -7,7 +7,8 @@ import { useAuth } from '@/context/AuthContext';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { Modal } from '@/components/ui/Modal';
-import { StatCard } from '@/components/ui/StatCard';
+import { MediaImage } from '@/components/MediaPreview';
+import '@/page-results.css';
 import type { StudyMaterial, StudyMaterialInput, StudyType, StudyStatus } from '@/lib/types';
 
 const TYPES: { value: StudyType; label: string; icon: typeof BookOpen }[] = [
@@ -73,11 +74,7 @@ export function StudyMaterialPage() {
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <StatCard label="Total Items" value={String(materials.length)} icon={<GraduationCap size={20} />} accent="blue" />
-        <StatCard label="Completed" value={String(completed)} icon={<BookOpen size={20} />} accent="emerald" />
-        <StatCard label="Avg Progress" value={`${avgProgress}%`} icon={<Video size={20} />} accent="amber" />
-      </div>
+      <section className="ym-learning-overview" aria-label="Learning progress"><div><p className="ym-output-eyebrow">YOUR LEARNING PATH</p><h2>Make the next lesson count.</h2><p>{materials.filter(item => item.status === 'in_progress').length} in progress · {completed} completed · {materials.length} saved</p></div><div className="ym-learning-overview-progress"><strong>{avgProgress}%</strong><span>average progress</span><progress max="100" value={Math.max(0, Math.min(100, avgProgress))} aria-label="Average learning progress" /></div></section>
 
       <div className="flex gap-2 mb-5 flex-wrap">
         <button onClick={() => setFilterType('')} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${filterType === '' ? 'bg-brand-500/10 text-brand-600 dark:text-brand-400 border-brand-500/20' : 'bg-secondary border-themed text-secondary hover:border-muted'}`}>All Types</button>
@@ -91,18 +88,18 @@ export function StudyMaterialPage() {
           <EmptyState icon={<GraduationCap size={40} />} title="No study materials yet" message="Add books, courses, video series, or articles to track your learning journey and progress." />
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="ym-learning-shelves">
           {Object.entries(grouped).map(([type, items]) => (
-            <div key={type}>
+            <section key={type} className="ym-learning-shelf">
               <h2 className="text-sm font-bold text-secondary mb-3 flex items-center gap-2">
                 {TYPE_LABELS[type] || type} <span className="text-xs text-muted">({items.length})</span>
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="ym-learning-list">
                 {items.map(item => (
                   <StudyCard key={item.id} item={item} onEdit={() => { setEditing(item); setShowForm(true); }} onDelete={() => handleDelete(item.id)} />
                 ))}
               </div>
-            </div>
+            </section>
           ))}
         </div>
       )}
@@ -115,40 +112,13 @@ export function StudyMaterialPage() {
 }
 
 function StudyCard({ item, onEdit, onDelete }: { item: StudyMaterial; onEdit: () => void; onDelete: () => void }) {
-  return (
-    <div className="card p-4 card-hover">
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-bold">{item.title}</h3>
-          <span className={`badge ${STATUS_COLORS[item.status]} mt-1`}>{STATUS_LABELS[item.status]}</span>
-        </div>
-        <div className="flex gap-1 ml-2">
-          {item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="btn-ghost p-1"><ExternalLink size={14} /></a>}
-          <button onClick={onEdit} className="btn-ghost p-1 text-xs">Edit</button>
-          <button onClick={onDelete} className="btn-ghost p-1 text-error-500 hover:bg-error-500/10"><Trash2 size={14} /></button>
-        </div>
-      </div>
-
-      <div className="mt-2">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-xs text-muted">
-            {item.total_units ? `${item.completed_units}/${item.total_units} units` : `${item.progress}%`}
-          </span>
-          <span className="text-xs font-semibold">{item.progress}%</span>
-        </div>
-        <div className="h-2 rounded-full bg-secondary overflow-hidden">
-          <div className="h-full rounded-full bg-gradient-to-r from-orange-400 to-orange-600 transition-all duration-500" style={{ width: `${item.progress}%` }} />
-        </div>
-      </div>
-
-      {item.notes && <p className="text-xs text-secondary mt-2 line-clamp-2">{item.notes}</p>}
-      {item.cover_image_url && (
-        <div className="mt-2 rounded-lg overflow-hidden border border-themed">
-          <img src={item.cover_image_url} alt={item.title} className="w-full max-h-32 object-cover" />
-        </div>
-      )}
-    </div>
-  );
+  const Icon = TYPES.find(type => type.value === item.type)?.icon || BookOpen;
+  const progress = Math.max(0, Math.min(100, item.progress));
+  return <article className="ym-learning-item">
+    <div className="ym-learning-cover">{item.cover_image_url ? <MediaImage source={item.cover_image_url} alt={`${item.title} cover`} className="ym-learning-cover-image" /> : <Icon size={26} />}</div>
+    <div className="ym-learning-copy"><span className={`badge ${STATUS_COLORS[item.status] || 'badge-neutral'}`}>{STATUS_LABELS[item.status] || item.status}</span><h3>{item.title}</h3>{item.notes && <p>{item.notes}</p>}<div className="ym-learning-units"><span>{item.total_units ? `${item.completed_units} of ${item.total_units} units` : 'Self-directed study'}</span><strong>{progress}%</strong></div><progress max="100" value={progress} aria-label={`${item.title} progress`} /></div>
+    <div className="ym-learning-actions"><button type="button" className="btn-secondary" onClick={onEdit} aria-label={`Update progress for ${item.title}`}>Update progress</button>{item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="btn-ghost text-xs" aria-label={`Open ${item.title}`}><ExternalLink size={14} /> Open material</a>}<button type="button" onClick={onDelete} className="btn-ghost text-error-500" aria-label={`Delete ${item.title}`}><Trash2 size={14} /></button></div>
+  </article>;
 }
 
 function StudyForm({ initial, onSave, onCancel }: { initial: StudyMaterial | null; onSave: (data: StudyMaterialInput, id?: string) => void; onCancel: () => void }) {

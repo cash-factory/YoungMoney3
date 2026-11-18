@@ -1,12 +1,12 @@
 import { Select } from '@/components/Select';
 import { useState } from 'react';
-import { Target, Plus, Trash2, Save, CheckCircle2, Circle, Pause, Play, XCircle, TrendingUp, Calendar } from 'lucide-react';
+import { Target, Plus, Trash2, Save, CheckCircle2, Circle, Pause, Play, XCircle, Calendar } from 'lucide-react';
 import { useGoals } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { Modal } from '@/components/ui/Modal';
-import { StatCard } from '@/components/ui/StatCard';
+import '@/page-results.css';
 import type { Goal, GoalInput, GoalCategory, GoalStatus } from '@/lib/types';
 import { format, parseISO, differenceInDays } from 'date-fns';
 
@@ -73,11 +73,10 @@ export function GoalsPage() {
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <StatCard label="Active Goals" value={String(activeCount)} icon={<Target size={20} />} accent="blue" />
-        <StatCard label="Completed" value={String(completedCount)} icon={<CheckCircle2 size={20} />} accent="emerald" />
-        <StatCard label="Avg Progress" value={`${avgProgress}%`} icon={<TrendingUp size={20} />} accent="amber" />
-      </div>
+      <section className="ym-goal-compass" aria-label="Goal progress overview">
+        <div className="ym-goal-dial" role="img" aria-label={`${avgProgress}% average goal progress`}><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="42" /><circle cx="50" cy="50" r="42" pathLength="100" strokeDasharray={`${Math.max(0, Math.min(100, avgProgress))} 100`} /></svg><span><strong>{avgProgress}%</strong><small>average progress</small></span></div>
+        <div><p className="ym-output-eyebrow">YOUR NEXT MILESTONE</p><h2>Turn intention into progress.</h2><p>Keep the next action visible. Move a goal forward when your work is done.</p><div className="ym-goal-totals"><span><strong>{activeCount}</strong> active</span><span><strong>{completedCount}</strong> completed</span><span><strong>{goals.length}</strong> total goals</span></div></div>
+      </section>
 
       <div className="flex gap-2 mb-4 flex-wrap">
         <button
@@ -102,10 +101,11 @@ export function GoalsPage() {
           <EmptyState icon={<Target size={40} />} title="No goals yet" message="Set profit targets, win rate goals, discipline metrics, or process goals to keep yourself accountable." />
         </div>
       ) : (
-        <div className="ym-goal-board grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filtered.map(goal => (
-            <GoalCard key={goal.id} goal={goal} onEdit={() => { setEditingGoal(goal); setShowForm(true); }} onDelete={() => handleDelete(goal.id)} onToggle={() => toggleStatus(goal)} />
-          ))}
+        <div className="ym-goal-lanes" data-filtered={!!filterStatus}>
+          {[{ id: 'active', label: 'In motion', statuses: ['active'], hint: 'Your current commitments' }, { id: 'completed', label: 'Milestones reached', statuses: ['completed'], hint: 'Progress worth remembering' }, { id: 'parked', label: 'Pause & reassess', statuses: ['paused', 'failed'], hint: 'Decide what comes next' }].filter(lane => !filterStatus || lane.statuses.includes(filterStatus)).map(lane => {
+            const items = filtered.filter(goal => lane.statuses.includes(goal.status));
+            return <section key={lane.id} className="ym-goal-lane" aria-label={lane.label}><header><div><h2>{lane.label}</h2><p>{lane.hint}</p></div><span>{items.length}</span></header><div className="ym-goal-lane-items">{items.length ? items.map(goal => <GoalCard key={goal.id} goal={goal} onEdit={() => { setEditingGoal(goal); setShowForm(true); }} onDelete={() => handleDelete(goal.id)} onToggle={() => toggleStatus(goal)} />) : <p className="ym-goal-lane-empty">No goals in this stage.</p>}</div></section>;
+          })}
         </div>
       )}
 
@@ -119,17 +119,17 @@ export function GoalsPage() {
 function GoalCard({ goal, onEdit, onDelete, onToggle }: { goal: Goal; onEdit: () => void; onDelete: () => void; onToggle: () => void }) {
   const config = STATUS_CONFIG[goal.status];
   const progress = goal.target_value && goal.current_value != null
-    ? Math.min(100, (goal.current_value / goal.target_value) * 100)
+    ? Math.max(0, Math.min(100, (goal.current_value / goal.target_value) * 100))
     : null;
 
   const daysLeft = goal.deadline ? differenceInDays(parseISO(goal.deadline), new Date()) : null;
 
   return (
-    <div className="card p-5 card-hover">
+    <article className="ym-goal-milestone">
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <button onClick={onToggle} className="text-secondary hover:text-brand-500 transition-colors">
+            <button type="button" aria-label={goal.status === 'active' ? `Complete ${goal.title}` : goal.status === 'completed' ? `Reopen ${goal.title}` : `Resume ${goal.title}`} onClick={onToggle} className="text-secondary hover:text-brand-500 transition-colors">
               {goal.status === 'completed' ? <CheckCircle2 size={18} className="text-success-500" /> : <Circle size={18} />}
             </button>
             <h3 className={`text-sm font-bold ${goal.status === 'completed' ? 'line-through text-muted' : ''}`}>{goal.title}</h3>
@@ -137,12 +137,12 @@ function GoalCard({ goal, onEdit, onDelete, onToggle }: { goal: Goal; onEdit: ()
           {goal.description && <p className="text-xs text-secondary ml-7">{goal.description}</p>}
         </div>
         <div className="flex gap-1 ml-2">
-          <button onClick={onEdit} className="btn-ghost p-1.5 text-xs">Edit</button>
-          <button onClick={onDelete} className="btn-ghost p-1.5 text-error-500 hover:bg-error-500/10"><Trash2 size={14} /></button>
+          <button type="button" aria-label={`Edit ${goal.title}`} onClick={onEdit} className="btn-ghost p-1.5 text-xs">Edit</button>
+          <button type="button" aria-label={`Delete ${goal.title}`} onClick={onDelete} className="btn-ghost p-1.5 text-error-500 hover:bg-error-500/10"><Trash2 size={14} /></button>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 ml-7 mb-3">
+      <div className="ym-goal-tags">
         <span className={`badge ${config.color}`}>{config.label}</span>
         <span className="badge badge-neutral">{CATEGORY_LABELS[goal.category]}</span>
         {daysLeft != null && daysLeft >= 0 && (
@@ -154,9 +154,9 @@ function GoalCard({ goal, onEdit, onDelete, onToggle }: { goal: Goal; onEdit: ()
       </div>
 
       {progress != null && (
-        <div className="ml-7">
+        <div className="ym-goal-progress">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-muted">Progress</span>
+            <span className="text-xs text-muted">{goal.target_metric?.replace(/_/g, ' ') || 'Progress'}</span>
             <span className="text-xs font-semibold">{goal.current_value} / {goal.target_value} ({progress.toFixed(0)}%)</span>
           </div>
           <div className="h-2 rounded-full bg-secondary overflow-hidden">
@@ -173,7 +173,7 @@ function GoalCard({ goal, onEdit, onDelete, onToggle }: { goal: Goal; onEdit: ()
           <Calendar size={11} /> Due {format(parseISO(goal.deadline), 'MMM d, yyyy')}
         </p>
       )}
-    </div>
+    </article>
   );
 }
 

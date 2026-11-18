@@ -184,7 +184,7 @@ test('annotated CraftyLabs page refresh retains functional content and loads ori
 test('every workspace page has its own text-free design image next to real headings',()=>{
   const source=read('src/components/PageExperience.tsx');
   const header=read('src/components/ui/SectionHeader.tsx');
-  const styling=read('src/platform-studio.css');
+  const styling=read('src/platform-studio.css')+read('src/surface-composition.css');
   const ids=['dashboard','trades','journal','calendar','weekly-reviews','trading-plan',
     'strategies','setups','risk-management','goals','market-sessions','strategy-testing',
     'brokers-charting','analytics','ai','media','resources','notes','study-material',
@@ -209,7 +209,7 @@ test('every workspace page has its own text-free design image next to real headi
   assert.ok(header.includes('{action}'),'Page actions must remain interactive');
   assert.ok(styling.includes('[data-workspace-page] .ym-page-heading-main'));
   assert.ok(styling.includes('[data-workspace-page] .ym-page-art img'));
-  assert.ok(styling.includes('@media (max-width:639px)'),'Mobile layouts must keep artwork outside the text');
+  assert.match(styling,/@media\s*\(max-width:639px\)/,'Mobile composition must preserve readable copy');
   assert.ok(read('src/pages/DashboardPage.tsx').includes('/assets/page-art/dashboard.svg'));
   assert.ok(read('src/pages/LandingPage.tsx').includes('/assets/page-art/welcome.svg'));
   assert.ok(read('src/pages/AuthPage.tsx').includes('/assets/page-art/sign-in.svg'));

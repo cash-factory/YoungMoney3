@@ -1,3 +1,4 @@
+import '@/page-results.css';
 import { Select } from '@/components/Select';
 import { useState } from 'react';
 import { CalendarClock, Plus, Trash2, Save, AlertOctagon, Clock, Newspaper, Mic, Ban } from 'lucide-react';
@@ -6,7 +7,6 @@ import { useAuth } from '@/context/AuthContext';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { Modal } from '@/components/ui/Modal';
-import { StatCard } from '@/components/ui/StatCard';
 import type { MarketEvent, MarketEventInput, MarketEventType, MarketImpact, TradeSession } from '@/lib/types';
 import { format, parseISO, isAfter, isBefore } from 'date-fns';
 
@@ -44,6 +44,12 @@ export function MarketSessionsPage() {
   const past = events.filter(e => isBefore(parseISO(e.event_date), now));
   const filtered = filter === 'upcoming' ? upcoming : filter === 'past' ? past : events;
 
+  const agenda = Object.entries(filtered.reduce<Record<string, MarketEvent[]>>((days, event) => {
+    const key = format(parseISO(event.event_date), 'yyyy-MM-dd');
+    (days[key] ||= []).push(event);
+    return days;
+  }, {})).sort(([a], [b]) => filter === 'past' ? b.localeCompare(a) : a.localeCompare(b));
+
   const highImpact = upcoming.filter(e => e.impact === 'high').length;
   const noTrade = upcoming.filter(e => e.is_no_trade).length;
 
@@ -65,11 +71,7 @@ export function MarketSessionsPage() {
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <StatCard label="Upcoming" value={String(upcoming.length)} icon={<CalendarClock size={20} />} accent="blue" />
-        <StatCard label="High Impact" value={String(highImpact)} icon={<AlertOctagon size={20} />} accent="rose" />
-        <StatCard label="No-Trade Events" value={String(noTrade)} icon={<Ban size={20} />} accent="amber" />
-      </div>
+      <section className="ym-session-planner-summary" aria-label="Session planner summary"><div><Clock size={22} /><span>YOUR MARKET AGENDA</span></div><p><strong>{upcoming.length}</strong> upcoming <i>/</i> <strong>{highImpact}</strong> high impact <i>/</i> <strong>{noTrade}</strong> no-trade periods</p></section>
 
       <div className="flex gap-2 mb-4">
         {(['upcoming', 'past', 'all'] as const).map(f => (
@@ -88,11 +90,7 @@ export function MarketSessionsPage() {
           <EmptyState icon={<CalendarClock size={40} />} title="No market events" message="Add economic events, news releases, or session times to plan around high-impact periods." />
         </div>
       ) : (
-        <div className="space-y-2">
-          {filtered.map(event => (
-            <EventRow key={event.id} event={event} onDelete={() => handleDelete(event.id)} />
-          ))}
-        </div>
+        <div className="ym-market-agenda">{agenda.map(([day, items]) => <section key={day} className="ym-agenda-day"><header><time dateTime={day}><strong>{format(parseISO(day), 'dd')}</strong><span>{format(parseISO(day), 'MMM')}</span></time><div><h2>{format(parseISO(day), 'EEEE')}</h2><p>{format(parseISO(day), 'MMMM d, yyyy')} · {items.length} {items.length === 1 ? 'event' : 'events'}</p></div></header><div className="ym-agenda-events">{items.sort((a, b) => a.event_date.localeCompare(b.event_date)).map(event => <EventRow key={event.id} event={event} onDelete={() => handleDelete(event.id)} />)}</div></section>)}</div>
       )}
 
       <Modal open={showForm} onClose={() => setShowForm(false)} title="New Market Event" size="md">
@@ -108,7 +106,8 @@ function EventRow({ event, onDelete }: { event: MarketEvent; onDelete: () => voi
   const isPast = isBefore(parseISO(event.event_date), new Date());
 
   return (
-    <div className={`card p-3 flex items-center gap-3 card-hover ${isPast ? 'opacity-60' : ''} ${event.is_no_trade ? 'border-error-500/20' : ''}`}>
+    <div className={`ym-agenda-event card p-3 flex items-center gap-3 ${isPast ? 'opacity-60' : ''} ${event.is_no_trade ? 'border-error-500/20' : ''}`}>
+      <time className="ym-agenda-time" dateTime={event.event_date}>{format(parseISO(event.event_date), 'HH:mm')}</time>
       <div className={`p-2 rounded-lg ${event.impact === 'high' ? 'bg-error-500/10 text-error-500' : event.impact === 'medium' ? 'bg-warning-500/10 text-warning-500' : 'bg-secondary text-muted'}`}>
         <Icon size={16} />
       </div>
@@ -125,7 +124,7 @@ function EventRow({ event, onDelete }: { event: MarketEvent; onDelete: () => voi
         </p>
         {event.notes && <p className="text-xs text-secondary mt-1">{event.notes}</p>}
       </div>
-      <button onClick={onDelete} className="btn-ghost p-1.5 text-error-500 hover:bg-error-500/10"><Trash2 size={14} /></button>
+      <button type="button" aria-label={`Delete ${event.event_name}`} onClick={onDelete} className="btn-ghost p-1.5 text-error-500 hover:bg-error-500/10"><Trash2 size={14} /></button>
     </div>
   );
 }

@@ -4,7 +4,7 @@ Use after editing a connector source. CI intentionally checks byte equality
 rather than silently modifying the checked-in release artifact.
 """
 from pathlib import Path
-from zipfile import ZipFile, ZIP_DEFLATED
+from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED
 
 ROOT = Path(__file__).resolve().parent.parent
 FILES = {
@@ -13,6 +13,7 @@ FILES = {
     "ledger.py": "connector/ledger.py",
     "lifecycle.py": "connector/lifecycle.py",
     "connector_gui.py": "connector/connector_gui.py",
+    "studio_ui.py": "connector/studio_ui.py",
     "sessions.py": "connector/sessions.py",
     "terminal_factory.py": "connector/terminal_factory.py",
     "concurrent_capture.py": "connector/concurrent_capture.py",
@@ -25,7 +26,13 @@ def main():
     dest = ROOT / "public" / "mt5-connector.zip"
     with ZipFile(dest, "w", compression=ZIP_DEFLATED, compresslevel=9) as archive:
         for target, source in FILES.items():
-            archive.write(ROOT / source, target)
+            # Text is canonical LF regardless of checkout platform/autocrlf.
+            # Fixed metadata makes the source fallback reproducible.
+            info = ZipInfo(target, date_time=(2026, 1, 1, 0, 0, 0))
+            info.compress_type = ZIP_DEFLATED
+            info.create_system = 3
+            info.external_attr = 0o644 << 16
+            archive.writestr(info, (ROOT / source).read_bytes().replace(b"\r\n", b"\n"))
     print("Built", dest, "with", len(FILES), "canonical connector files.")
 
 

@@ -7,7 +7,7 @@
 <filter id="soft"><feGaussianBlur stdDeviation="9"/></filter>
 <pattern id="grid" width="44" height="44" patternUnits="userSpaceOnUse"><path d="M44 0H0V44" fill="none" stroke="#9b3346" stroke-width=".6" opacity=".2"/><path d="M0 0h3m-1.5-1.5v3" stroke="#e94762" opacity=".14"/></pattern>
 </defs>
-<rect width="1200" height="680" fill="url(#bg)"/><rect width="1200" height="680" fill="url(#grid)" opacity=".65"/>
+<rect width="1200" height="680" fill="none"/><rect width="1200" height="680" fill="url(#grid)" opacity=".65"/>
 <circle cx="1065" cy="155" r="300" fill="url(#glow)"/><circle cx="180" cy="590" r="300" fill="url(#glow)" opacity=".4"/>
 <path d="M0 552Q190 425 335 529T690 493T1200 541" fill="none" stroke="#d1103a" stroke-width="4" opacity=".7"/><path d="M0 572Q220 463 390 548T780 509T1200 575" fill="none" stroke="#fb3a5e" stroke-width="1.5" opacity=".45"/>
 <g transform="translate(690 74) rotate(-6 220 160)">

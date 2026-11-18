@@ -7,7 +7,8 @@ import { useAuth } from '@/context/AuthContext';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { Modal } from '@/components/ui/Modal';
-import { StatCard } from '@/components/ui/StatCard';
+import { MediaImage } from '@/components/MediaPreview';
+import '@/page-results.css';
 import type { Resource, ResourceInput, ResourceCategory } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
 
@@ -64,12 +65,8 @@ export function ResourcesPage() {
         }
       />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Total" value={String(resources.length)} icon={<Bookmark size={20} />} accent="blue" />
-        <StatCard label="Books" value={String(resources.filter(r => r.category === 'book').length)} icon={<BookOpen size={20} />} accent="emerald" />
-        <StatCard label="Videos" value={String(resources.filter(r => r.category === 'video').length)} icon={<ExternalLink size={20} />} accent="amber" />
-        <StatCard label="Courses" value={String(resources.filter(r => r.category === 'course').length)} icon={<BookOpen size={20} />} accent="rose" />
-      </div>
+      <div className="ym-resource-catalogue-meta"><Bookmark size={17} /><strong>{resources.length}</strong><span>saved sources</span><span>Keep the references that support your process.</span></div>
+      <nav className="ym-resource-collections" aria-label="Resource collections"><button type="button" aria-pressed={!filterCat} onClick={() => setFilterCat('')}>All sources <span>{resources.length}</span></button>{CATEGORIES.filter(category => resources.some(resource => resource.category === category.value)).map(category => <button type="button" key={category.value} aria-pressed={filterCat === category.value} onClick={() => setFilterCat(category.value)}>{category.label}<span>{resources.filter(resource => resource.category === category.value).length}</span></button>)}</nav>
 
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <div className="relative flex-1">
@@ -84,10 +81,10 @@ export function ResourcesPage() {
 
       {filtered.length === 0 ? (
         <div className="card p-8">
-          <EmptyState icon={<BookOpen size={40} />} title="No resources yet" message="Build your trading resource library by adding books, videos, articles, courses, and tools." />
+          <EmptyState icon={<BookOpen size={40} />} title={resources.length ? 'No matching sources' : 'Build your reference shelf'} message={resources.length ? 'Choose another collection or search term.' : 'Keep useful books, videos, articles and tools together with notes on why they matter.'} />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="ym-resource-catalogue" aria-label="Saved resource catalogue">
           {filtered.map(resource => (
             <ResourceCard key={resource.id} resource={resource} onEdit={() => { setEditing(resource); setShowForm(true); }} onDelete={() => handleDelete(resource.id)} />
           ))}
@@ -102,37 +99,12 @@ export function ResourcesPage() {
 }
 
 function ResourceCard({ resource, onEdit, onDelete }: { resource: Resource; onEdit: () => void; onDelete: () => void }) {
-  return (
-    <div className="card p-4 card-hover flex flex-col">
-      <div className="flex items-start justify-between mb-2">
-        <span className="badge badge-brand">{CATEGORY_LABELS[resource.category] || resource.category}</span>
-        <div className="flex gap-1">
-          <button onClick={onEdit} className="btn-ghost p-1 text-xs">Edit</button>
-          <button onClick={onDelete} className="btn-ghost p-1 text-error-500 hover:bg-error-500/10"><Trash2 size={14} /></button>
-        </div>
-      </div>
-      <h3 className="text-sm font-bold mb-1">{resource.title}</h3>
-      {resource.thumbnail_url && (
-        <div className="mb-2 rounded-lg overflow-hidden border border-themed">
-          <img src={resource.thumbnail_url} alt={resource.title} className="w-full max-h-32 object-cover" />
-        </div>
-      )}
-      {resource.description && <p className="text-xs text-secondary mb-2 line-clamp-2">{resource.description}</p>}
-      {resource.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-2">
-          {resource.tags.map(tag => <span key={tag} className="badge badge-neutral text-[10px]">{tag}</span>)}
-        </div>
-      )}
-      <div className="mt-auto flex items-center justify-between">
-        {resource.url ? (
-          <a href={resource.url} target="_blank" rel="noopener noreferrer" className="text-xs text-brand-500 hover:underline flex items-center gap-1">
-            <ExternalLink size={12} /> Open
-          </a>
-        ) : <span />}
-        <span className="text-xs text-muted">{format(parseISO(resource.created_at), 'MMM d, yyyy')}</span>
-      </div>
-    </div>
-  );
+  const Icon = CATEGORIES.find(category => category.value === resource.category)?.icon || BookOpen;
+  return <article className="ym-resource-row">
+    <div className="ym-resource-cover">{resource.thumbnail_url ? <MediaImage source={resource.thumbnail_url} alt={`${resource.title} thumbnail`} className="ym-resource-thumbnail" /> : <Icon size={26} />}</div>
+    <div className="ym-resource-copy"><p className="ym-output-eyebrow">{CATEGORY_LABELS[resource.category] || resource.category}</p><h2>{resource.title}</h2>{resource.description && <p>{resource.description}</p>}{resource.tags.length > 0 && <div className="ym-resource-tags">{resource.tags.map(tag => <span key={tag}>#{tag}</span>)}</div>}<small>Saved {format(parseISO(resource.created_at), 'MMM d, yyyy')}</small></div>
+    <div className="ym-resource-row-actions">{resource.url && <a href={resource.url} target="_blank" rel="noopener noreferrer" className="btn-secondary" aria-label={`Open ${resource.title}`}>Open source <ExternalLink size={14} /></a>}<div><button type="button" aria-label={`Edit ${resource.title}`} onClick={onEdit} className="btn-ghost text-xs">Edit</button><button type="button" aria-label={`Delete ${resource.title}`} onClick={onDelete} className="btn-ghost text-error-500"><Trash2 size={14} /></button></div></div>
+  </article>;
 }
 
 function ResourceForm({ initial, onSave, onCancel }: { initial: Resource | null; onSave: (data: ResourceInput, id?: string) => void; onCancel: () => void }) {

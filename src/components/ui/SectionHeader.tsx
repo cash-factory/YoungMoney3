@@ -9,8 +9,8 @@ interface SectionHeaderProps {
 
 /**
  * The real page title, supporting copy and actions stay in the document.
- * Artwork is purely decorative, has no embedded typography, and lives in a
- * separate compositional panel so it cannot obscure meaningful content.
+ * Artwork is decorative and fades into the shared page surface. Copy and
+ * actions keep a reserved foreground area so the heading remains readable.
  */
 export function SectionHeader({ title, subtitle, action }: SectionHeaderProps) {
   const experience = usePageExperience();
@@ -18,13 +18,13 @@ export function SectionHeader({ title, subtitle, action }: SectionHeaderProps) {
     <header className={`ym-section-header ${experience ? 'ym-page-heading' : 'flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-6'}`}>
       <div className="ym-page-heading-main">
         <div className="ym-page-heading-copy">
-          {experience && <p className="ym-page-chapter">{experience.chapter}</p>}
+          {experience && <p className="ym-page-chapter">{experience.chapter.replace(/^(?:\d+\s*\/|Workspace\s*\/)\s*/, '')}</p>}
           <div className="flex items-center gap-3">
             <span className="ym-section-rule" aria-hidden="true" />
             <h1 className="text-[1.55rem] sm:text-[1.75rem] font-bold tracking-[-0.045em] leading-tight">{title}</h1>
           </div>
           {subtitle && <p className="mt-2 text-[13px] sm:text-sm text-secondary">{subtitle}</p>}
-          {experience && <p className="ym-page-cue">{experience.cue}</p>}
+          {experience && !subtitle && <p className="ym-page-cue">{experience.cue}</p>}
         </div>
         {action && <div className="ym-page-heading-actions">{action}</div>}
       </div>
