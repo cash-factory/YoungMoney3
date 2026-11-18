@@ -362,3 +362,44 @@ test('staging connector download accepts GitHub-sanitized asset filenames',()=>{
   assert.ok(page.includes('row.prerelease && !row.draft'), 'Do not link unreviewed or production releases');
   assert.ok(page.includes('row.browser_download_url.startsWith(base)'), 'Only official repo assets may be linked');
 });
+
+
+test('Field Guide is a real skippable and replayable journey through platform features',()=>{
+  const guide=read('src/components/PlatformGuide.tsx');
+  const stops=read('src/lib/platformGuide.ts');
+  const css=read('src/platform-guide.css');
+  const app=read('src/App.tsx');
+  const shell=read('src/components/Layout.tsx');
+  const dash=read('src/pages/DashboardPage.tsx');
+  const auth=read('src/context/AuthProvider.tsx');
+  const workflow=read('.github/workflows/platform-visual.yml');
+  assert.equal([...stops.matchAll(/  \{ id: '[^']+', label: /g)].length,22,
+    'Every feature destination must be a named live page target');
+  for (const token of [
+    "id: 'desk'","id: 'filters'","id: 'capture'","id: 'journal'",
+    "id: 'mt5'","id: 'testing'","id: 'analytics'","id: 'risk'",
+    "id: 'appearance'","id: 'search'","id: 'media'",
+  ]) assert.ok(stops.includes(token), 'Missing explorer area '+token);
+  assert.ok(stops.includes('GUIDE_EXPRESS_ROUTE'),'A curated short route is required');
+  assert.ok(stops.includes('GUIDE_STATE_PREFIX + userId'),'Tour state must be per-user');
+  assert.ok(stops.includes("status === 'pending'"),'New signup must be offered the guide');
+  assert.ok(stops.includes("age < 12 * 60 * 60 * 1000"),'The auto invitation must be limited to newly registered accounts');
+  assert.ok(auth.includes("writeGuideState(data.user.id, 'pending', [])"),'Signup must offer guide once');
+  assert.ok(app.includes('guideShouldWelcome('),'Existing account settings must control automatic invitation');
+  assert.ok(app.includes("completed ? 'completed' : 'dismissed'"),'Skip/complete must persist');
+  assert.ok(app.includes('<PlatformGuide'),'Guide must be present in the authenticated workspace');
+  assert.ok(guide.includes('pickTarget('),'Guidance should highlight real feature elements');
+  assert.ok(guide.includes("onNavigate(next.page)"),'Feature jump must open the correct page');
+  assert.ok(guide.includes("setView('hub')"),'Users need a Skip-to directory');
+  assert.ok(guide.includes('Search guide destinations'),'The guide should be searchable');
+  assert.ok(guide.includes('Skip the tutorial') && guide.includes('Skip tutorial'),
+    'Skip must be available in the welcome and the live step');
+  assert.ok(guide.includes('aria-modal="true"') && guide.includes('handleKeyDown'),
+    'Tutorial must support accessible modal and escape navigation');
+  assert.ok(shell.includes('onOpenGuide'),'Tour must be replayable from the global shell');
+  assert.ok(dash.includes('Explore platform features'),'Dashboard must offer obvious replay');
+  assert.ok(css.includes('prefers-reduced-motion:reduce') && css.includes('max-width:680px'),
+    'Tour should work on phones and respect reduced motion');
+  assert.ok(workflow.includes('node scripts/test-guide-browser.mjs'),
+    'Browser QA must exercise the guide against real UI');
+});
