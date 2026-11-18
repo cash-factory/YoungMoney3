@@ -32,6 +32,7 @@ jobs:
           node scripts/test-controls-browser.mjs
           node scripts/test-media-browser.mjs
           node scripts/test-platform-browser.mjs
+          node scripts/test-guide-browser.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
