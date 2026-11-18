@@ -20,10 +20,11 @@ interface DeskProps {
   trades: Trade[];
   positions: Mt5PositionVersion[];
   account: TradingAccount | null;
+  accounts: TradingAccount[];
   onCapture: (mode: FastCapture) => void;
   openWeekly: () => void;
 }
-export function DecisionDesk({ trades, positions, account, onCapture, openWeekly }: DeskProps) {
+export function DecisionDesk({ trades, positions, account, accounts, onCapture, openWeekly }: DeskProps) {
   const { user } = useAuth(),
     { rows, error, loading, refresh } = useDecisionReviews(user?.id);
   const { reviews } = useWeeklyReviews(user?.id),
@@ -43,6 +44,8 @@ export function DecisionDesk({ trades, positions, account, onCapture, openWeekly
       e.decision_kind === 'pass' && e.entry_date === today && (!account || e.account_id === account.id)
   );
   const next = queue[0];
+  const entry = next && entryFacts(next);
+  const entryAccount = entry && !account ? accounts.find(a => a.id === entry.account)?.name : undefined;
   return (
     <section className="ym-decision-desk" aria-label="Today’s decisions">
       <div className="ym-desk-main">
@@ -68,11 +71,10 @@ export function DecisionDesk({ trades, positions, account, onCapture, openWeekly
               Retry
             </button>
           </p>
-        ) : next ? (
+        ) : next && entry ? (
           <>
             <p>
-              {entryFacts(next).symbol} · {entryFacts(next).source} ·{' '}
-              {entryFacts(next).time.slice(0, 10)}
+              {[entry.symbol, entryAccount, entry.source, entry.time.slice(0, 10)].filter(Boolean).join(' · ')}
             </p>
             <button className="btn-primary" onClick={() => setTarget(next)}>
               Review this entry <ArrowUpRight size={16} />

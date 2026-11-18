@@ -21,8 +21,11 @@ type PositionSummary = {
   capital_at_entry?:{value?:string|null;source?:string;observed_at?:string|null};
 };
 type PositionRow = {link:string;account_id:string;lifecycle_id:string;version:number;recorded_at:string;summary:PositionSummary};
-async function action(name: string, payload: unknown = {}) {
-  const result = await fetch('/api/mt5/' + name, {method:'POST', headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
+type HistoryScan = { link: string; request: string };
+type SelectedScan = HistoryScan & { name: string; brokerAccount: string };
+type HistoryPage = HistoryScan & { rows: Record<string,unknown>[]; more: boolean; nextOffset: number };
+async function action(name: string, payload: unknown = {}, signal?: AbortSignal) {
+  const result = await fetch('/api/mt5/' + name, {method:'POST', headers:{'content-type':'application/json'},body:JSON.stringify(payload),signal});
   const data = await result.json();
   if (!result.ok) throw new Error(data.error || 'MT5 connection unavailable.');
   return data;
@@ -40,17 +43,18 @@ export function Mt5Connections() {
   const [error,setError] = useState('');
   const [demo,setDemo] = useState(true);
   const [imported,setImported] = useState('');
-  const [historyLink,setHistoryLink]=useState('');
+  const [historyScan, setHistoryScan] = useState<SelectedScan | null>(null);
+  const latestRefresh = useRef(0);
   const [historyDays,setHistoryDays]=useState('30');
-  const [preview,setPreview]=useState<{rows:Record<string,unknown>[];more:boolean;status:string;nextOffset:number}|null>(null);
-  const [historyBusy,setHistoryBusy]=useState(false);
   const [positions,setPositions]=useState<PositionRow[]>([]);
   const [positionsMore,setPositionsMore]=useState(false);
   const [timezoneDraft,setTimezoneDraft]=useState<Record<string,string>>({});
   const [timezoneProof,setTimezoneProof]=useState<Record<string,boolean>>({});
   const [manual,setManual] = useState('');
   const refresh = useCallback(async () => {
+    const revision = ++latestRefresh.current;
     const [data,rich]=await Promise.all([action('status'),action('positions').catch(()=>({rows:[],more:false}))]);
+    if (revision !== latestRefresh.current) return;
     setAccountNames(Object.fromEntries((data.accounts||[]).map((a:{id:string;name:string})=>[a.id,a.name])));
     setDevices(data.devices); setLinks(data.links); setDemo(data.demoOnly); setLoaded(true);
     setPositions(rich.rows || []);setPositionsMore(Boolean(rich.more));
@@ -63,6 +67,7 @@ export function Mt5Connections() {
     try { setError(''); await operation(); await refresh(); } catch (e) {setError(e instanceof Error ? e.message : 'Request failed.');}
   }
   const source = (t: typeof trades[number]) => (t as {trade_source?:string}).trade_source;
+  const historyAccount = links.find(link => link.id === historyScan?.link);
   const selected = trades.find(t=>t.id===imported);
   const matches = trades.filter(t=>selected && source(t)!=='mt5' && selected.pair===t.pair && t.account_id===selected.account_id && t.direction===selected.direction);
   return <main className="space-y-5">
@@ -90,7 +95,7 @@ export function Mt5Connections() {
       <Select className="input-field mt-1 max-w-xs" value={historyDays} onChange={e=>setHistoryDays(e.target.value)}><option value="7">7 days before linking</option><option value="14">14 days before linking</option><option value="30">30 days before linking (default)</option><option value="60">60 days before linking</option><option value="90">90 days before linking (maximum)</option></Select>
       <span className="mt-1 block text-xs text-muted">Default: approximately one month. Historical imports are limited to the 90 days before linking. Review the broker fills before approving an import.</span>
     </label>
-    {links.map(l=><div key={l.id} className="space-y-2"><p className="rounded-xl bg-secondary p-4 text-sm" key={l.id}>{l.company || 'Account'} {l.login} {l.server ? '· '+l.server : ''} {l.trade_mode === 2 ? '· REAL' : l.trade_mode === 1 ? '· CONTEST' : l.trade_mode === 0 ? '· DEMO' : ''} {l.access_level === 'trading-enabled' ? '· External trading permission (capture-only here)' : l.access_level === 'trading-restricted' ? '· Broker trading disabled externally' : ''} {demo && l.trade_mode===2 ? ' · Real-account capture paused' : ''} · {['pending','verifying'].includes(l.status) && l.expires<Date.now()?'expired':l.status} {l.broker_balance!=null && '· Last reported balance '+l.broker_balance+' '+l.currency+' · Equity '+l.broker_equity+' '+l.currency} {l.last_sync && Date.now()-Date.parse(l.last_sync)>120000 ? ' · Snapshot may be stale; verify the connector is running.' : ''} {l.last_error} {l.last_sync && '· Last sync '+new Date(l.last_sync).toLocaleString()} {l.gap ? '· Offline interval: intermediate stop changes may be missing.' : ''}</p>
+    {links.map(l=><div key={l.id} role="group" aria-label={'MT5 account '+(accountNames[l.account_id || ''] || l.company || 'Pending')+(l.login?' · '+l.login:'')} className="space-y-2"><p className="rounded-xl bg-secondary p-4 text-sm" key={l.id}>{l.company || 'Account'} {l.login} {l.server ? '· '+l.server : ''} {l.trade_mode === 2 ? '· REAL' : l.trade_mode === 1 ? '· CONTEST' : l.trade_mode === 0 ? '· DEMO' : ''} {l.access_level === 'trading-enabled' ? '· External trading permission (capture-only here)' : l.access_level === 'trading-restricted' ? '· Broker trading disabled externally' : ''} {demo && l.trade_mode===2 ? ' · Real-account capture paused' : ''} · {['pending','verifying'].includes(l.status) && l.expires<Date.now()?'expired':l.status} {l.broker_balance!=null && '· Last reported balance '+l.broker_balance+' '+l.currency+' · Equity '+l.broker_equity+' '+l.currency} {l.last_sync && Date.now()-Date.parse(l.last_sync)>120000 ? ' · Snapshot may be stale; verify the connector is running.' : ''} {l.last_error} {l.last_sync && '· Last sync '+new Date(l.last_sync).toLocaleString()} {l.gap ? '· Offline interval: intermediate stop changes may be missing.' : ''}</p>
       {l.status==='connected' && <div className="rounded-xl border border-themed p-3 space-y-2">
         <h3 className="font-semibold">{accountNames[l.account_id || ''] || l.company || 'Linked account'}</h3>
         <p className="text-sm">{devices.some(d=>d.id===l.device && Date.now()-d.last_seen<90000)?'PC connected':'PC offline'} · {l.capture_health==='needs_attention'?'Capture needs attention':l.gap?'History gap to check':l.last_sync?'Last sync acknowledged':'Awaiting first sync'}</p>
@@ -109,46 +114,24 @@ export function Mt5Connections() {
         </label>
         <p className="text-xs text-muted">Timezone: {l.broker_timezone || 'Unconfirmed'} · UTC conversion: {l.utc_conversion_status || 'Unverified'} · Historical session labels remain unresolved until both are verified.</p>
       </div>}
-      {l.status==='connected' && <div className="flex flex-wrap gap-2"><button className="btn-secondary" disabled={historyBusy || l.history_status==='requested'} onClick={()=>run(async()=>{await action('history-request',{link:l.id,days:Number(historyDays)});setPreview(null);})}>Find earlier trades</button>
+      {l.status==='connected' && <div className="flex flex-wrap gap-2"><button className="btn-secondary" disabled={l.history_status==='requested'} onClick={()=>run(async()=>{await action('history-request',{link:l.id,days:Number(historyDays)});})}>Find earlier trades</button>
       {l.history_status==='requested' && <><span role="status" className="text-sm">Scanning on your PC. Keep the connector running.</span>
-        <button className="btn-secondary" onClick={()=>run(async()=>{await action('history-decline',{link:l.id,request:l.history_id});setPreview(null);})}>Cancel scan</button></>}
-      {['ready','imported'].includes(l.history_status || '') && <button className="btn-secondary" onClick={()=>run(async()=>{setHistoryLink(l.id);setPreview(await action('history-preview',{link:l.id,offset:0}));})}>Review earlier trades</button>}</div>}
+        <button className="btn-secondary" onClick={()=>run(async()=>{await action('history-decline',{link:l.id,request:l.history_id});})}>Cancel scan</button></>}
+      {l.history_id && ['ready','imported'].includes(l.history_status || '') && <button className="btn-secondary"
+        onClick={()=>setHistoryScan({link:l.id, request:l.history_id!, brokerAccount:[l.server,l.login].filter(Boolean).join(' · '), name:accountNames[l.account_id || ''] || [l.company,l.login].filter(Boolean).join(' ') || 'Linked account'})}>Review earlier trades</button>}</div>}
     </div>)}
     <datalist id="broker-timezones">
       <option value="Etc/UTC"/><option value="Europe/Athens"/><option value="Europe/Helsinki"/>
       <option value="Europe/London"/><option value="Africa/Johannesburg"/><option value="America/New_York"/>
       <option value="Europe/Berlin"/><option value="Asia/Dubai"/>
     </datalist>
-    {preview && <section className="rounded-xl border border-themed p-4 space-y-3"><h3 className="font-semibold">Load these earlier trades for analysis?</h3><p className="text-sm text-secondary">Previewed {preview.rows.length} broker fills{preview.more?' (more pages remain)':''}. Open every page before importing; only the reviewed request will be imported. Review possible manual matches afterward. Your broker balance remains the latest reported balance.</p>
-      <div className="overflow-auto max-h-80"><table className="w-full min-w-[950px] text-xs text-left border-separate border-spacing-0">
-        <thead><tr className="text-muted uppercase tracking-wide">
-          {['Symbol','Position / deal','Entry / exit UTC','Direction','Volume','Entry / exit price','Original / close SL','Initial risk','Costs / swap','Net P&L'].map(label=><th key={label} className="border-b border-themed px-2 py-3 font-semibold whitespace-nowrap">{label}</th>)}
-        </tr></thead>
-        <tbody>{preview.rows.map((r,i)=>{
-          const broker=(r.broker_details && typeof r.broker_details==='object' ? r.broker_details : {}) as Record<string,unknown>;
-          const value=(key:string)=>r[key]==null?'Unknown':String(r[key]);
-          return <tr key={i} className="align-top hover:bg-secondary">
-            <td className="px-2 py-3 font-semibold">{value('pair')}</td>
-            <td className="px-2 py-3 font-mono">Position {broker.position_id == null?'Unknown':String(broker.position_id)}<div className="text-muted">Deal {broker.deal_ticket == null?'Unknown':String(broker.deal_ticket)}</div></td>
-            <td className="px-2 py-3">{value('entry_time')}<div className="text-muted">{value('exit_time')}</div></td>
-            <td className="px-2 py-3">{value('direction')}</td>
-            <td className="px-2 py-3 font-mono">{value('lot_size')}</td>
-            <td className="px-2 py-3 font-mono">{value('entry_price')}<div className="text-muted">{value('exit_price')}</div></td>
-            <td className="px-2 py-3 font-mono">{r.stop_loss == null?'Not recorded':String(r.stop_loss)}<div className="text-muted">Original SL not proven by legacy fill scan</div></td>
-            <td className="px-2 py-3">Unavailable unless order evidence establishes original risk</td>
-            <td className="px-2 py-3 font-mono">Fees: {value('fees')}<div className="text-muted">Swap: {broker.swap==null?'Unknown':String(broker.swap)}</div></td>
-            <td className="px-2 py-3 font-mono font-semibold">{value('pnl')}</td>
-          </tr>;
-        })}</tbody>
-      </table></div>
-      <p className="text-xs text-muted">This preview shows broker fill-level history, not yet a consolidated lifecycle. Opening order SL, original risk and R remain unverified when the history source cannot prove them. Only reviewed fills can be approved for import.</p>
-      {preview.more && <button disabled={historyBusy} className="btn-secondary" onClick={()=>{setHistoryBusy(true);void run(async()=>{
-        const next=await action('history-preview',{link:historyLink,offset:preview.nextOffset});
-        setPreview(previous=>previous?{...next,rows:[...previous.rows,...next.rows]}:next);
-      }).finally(()=>setHistoryBusy(false));}}>Review next 100 fills</button>}
-      <button disabled={historyBusy || preview.more} className="btn-primary" onClick={()=>{setHistoryBusy(true);void run(async()=>{const link=links.find(l=>l.id===historyLink);let more=true;while(more){more=(await action('history-import',{link:historyLink,request:link?.history_id,expected_count:preview.rows.length})).more;}setPreview(null);await fetchTrades();}).finally(()=>setHistoryBusy(false));}}>Import {preview.rows.length} reviewed fills</button>
-      <button disabled={historyBusy} className="btn-secondary" onClick={()=>run(async()=>{await action('history-decline',{link:historyLink,request:links.find(l=>l.id===historyLink)?.history_id});setPreview(null);})}>Skip import</button>
-    </section>}
+    {historyScan && <HistoryReview key={historyScan.link+'/'+historyScan.request} scan={historyScan}
+      status={historyAccount?.history_id === historyScan.request ? historyAccount.history_status : undefined}
+      onClose={()=>setHistoryScan(current=>current===historyScan ? null : current)}
+      onFinished={async imported=>{
+        setHistoryScan(current=>current===historyScan ? null : current);
+        await run(async()=>{if(imported) await fetchTrades();});
+      }}/>}
     </section>
     <section className="card p-5 sm:p-6 space-y-4" aria-label="Rich position lifecycles">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -215,3 +198,100 @@ export function Mt5Connections() {
   </main>;
 }
 
+interface HistoryReviewProps {
+  scan: SelectedScan;
+  status?: string;
+  onClose: () => void;
+  onFinished: (imported: boolean) => Promise<void>;
+}
+
+async function loadHistoryPage(scan: HistoryScan, offset: number, signal?: AbortSignal): Promise<HistoryPage> {
+  const page = await action('history-preview', {link:scan.link, request:scan.request, offset}, signal);
+  if (page.link !== scan.link || page.request !== scan.request || !Array.isArray(page.rows) ||
+      !Number.isSafeInteger(page.nextOffset) || page.nextOffset !== offset + page.rows.length ||
+      (page.more && page.rows.length === 0)) {
+    throw new Error('The preview changed. Reopen this account’s history.');
+  }
+  return page;
+}
+
+function HistoryReview({scan, status, onClose, onFinished}: HistoryReviewProps) {
+  const [preview, setPreview] = useState<HistoryPage | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+  const current = status === 'ready' || status === 'imported';
+  useEffect(() => {
+    if (!current) return;
+    const controller = new AbortController();
+    setPreview(null);
+    setError('');
+    void loadHistoryPage(scan, 0, controller.signal).then(page => {
+      if (!controller.signal.aborted) setPreview(page);
+    }).catch((cause: unknown) => {
+      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not open these fills.');
+    });
+    return () => controller.abort();
+  }, [scan, current, attempt]);
+
+  async function perform(operation: () => Promise<void>) {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try { await operation(); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not complete the request.'); }
+    finally { setBusy(false); }
+  }
+
+  return <section className="rounded-xl border border-themed p-4 space-y-3" aria-label={'Earlier trades for '+scan.name}>
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div><h3 className="font-semibold">Earlier trades for {scan.name}</h3>
+        {scan.brokerAccount && <p className="text-xs text-secondary">{scan.brokerAccount}</p>}</div>
+      <button type="button" className="btn-ghost" onClick={onClose}>Close preview</button>
+    </div>
+    {!current ? <p role="status">This scan is no longer current. Open the latest preview for this account.</p> :
+      !preview ? (error ? <p role="alert">{error} <button className="btn-secondary" onClick={()=>setAttempt(n=>n+1)}>Retry preview</button></p>
+        : <p role="status">Loading broker fills…</p>) : <>
+      <p className="text-sm text-secondary">{preview.rows.length} broker {preview.rows.length===1?'fill':'fills'} reviewed{preview.more?' so far. Review the next page before importing.':'.'} Your latest broker balance is shown on the account.</p>
+      <div className="overflow-auto max-h-80"><table className="w-full min-w-[950px] text-xs text-left border-separate border-spacing-0">
+        <thead><tr className="text-muted uppercase tracking-wide">
+          {['Symbol','Position / deal','Entry / exit UTC','Direction','Volume','Entry / exit price','Original / close SL','Initial risk','Costs / swap','Net P&L'].map(label=><th key={label} className="border-b border-themed px-2 py-3 font-semibold whitespace-nowrap">{label}</th>)}
+        </tr></thead>
+        <tbody>{preview.rows.map((r,i)=>{
+          const broker=(r.broker_details && typeof r.broker_details==='object' ? r.broker_details : {}) as Record<string,unknown>;
+          const value=(key:string)=>r[key]==null?'Unknown':String(r[key]);
+          return <tr key={i} className="align-top hover:bg-secondary">
+            <td className="px-2 py-3 font-semibold">{value('pair')}</td>
+            <td className="px-2 py-3 font-mono">Position {broker.position_id == null?'Unknown':String(broker.position_id)}<div className="text-muted">Deal {broker.deal_ticket == null?'Unknown':String(broker.deal_ticket)}</div></td>
+            <td className="px-2 py-3">{value('entry_time')}<div className="text-muted">{value('exit_time')}</div></td>
+            <td className="px-2 py-3">{value('direction')}</td>
+            <td className="px-2 py-3 font-mono">{value('lot_size')}</td>
+            <td className="px-2 py-3 font-mono">{value('entry_price')}<div className="text-muted">{value('exit_price')}</div></td>
+            <td className="px-2 py-3 font-mono">{r.stop_loss == null?'Not recorded':String(r.stop_loss)}<div className="text-muted">Original SL not proven by legacy fill scan</div></td>
+            <td className="px-2 py-3">Unavailable unless order evidence establishes original risk</td>
+            <td className="px-2 py-3 font-mono">Fees: {value('fees')}<div className="text-muted">Swap: {broker.swap==null?'Unknown':String(broker.swap)}</div></td>
+            <td className="px-2 py-3 font-mono font-semibold">{value('pnl')}</td>
+          </tr>;
+        })}</tbody>
+      </table></div>
+      <p className="text-xs text-muted">These are individual broker fills. Opening stop, initial risk and R require supporting order evidence.</p>
+      {preview.more && <button disabled={busy} className="btn-secondary" onClick={()=>perform(async()=>{
+        const next = await loadHistoryPage(scan, preview.nextOffset);
+        setPreview({...next, rows:[...preview.rows, ...next.rows]});
+      })}>Review next 100 fills</button>}
+      <button disabled={busy || preview.more} className="btn-primary" onClick={()=>perform(async()=>{
+        let more = true;
+        while (more) {
+          const batch = await action('history-import',{link:preview.link, request:preview.request, expected_count:preview.rows.length});
+          more = batch.more;
+        }
+        await onFinished(true);
+      })}>Import {preview.rows.length} reviewed {preview.rows.length===1?'fill':'fills'}</button>
+      {status === 'ready' && <button disabled={busy} className="btn-secondary" onClick={()=>perform(async()=>{
+        await action('history-decline',{link:preview.link,request:preview.request});
+        await onFinished(false);
+      })}>Skip import</button>}
+      {error && <p role="alert">{error}</p>}
+    </>}
+  </section>;
+}

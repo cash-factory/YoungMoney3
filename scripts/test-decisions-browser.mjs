@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { checkTwoAccounts } from './check-two-accounts-browser.mjs';
 import { installDashboardFixtures } from './test-dashboard-browser.mjs';
 
 const base = process.env.YM3_PREVIEW_URL || 'http://127.0.0.1:4174/';
@@ -103,6 +104,7 @@ try {
     assert.equal(journal[0].decision_kind, 'pass');
     assert.deepEqual(errors, []);
     await page.close();
+    await checkTwoAccounts(browser, base, width);
   }
   console.log(
     'Desktop and phone passed sample reveal, strategy attribution, evidence, focus restoration, review persistence and interrupted pass capture.'

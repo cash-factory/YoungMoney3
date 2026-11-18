@@ -103,8 +103,8 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         if(link.history_status==='requested') return fail('History scan already running.',409);
         if(!timestamp(link.linked_at)) return fail('The linked account has no valid start time.',409);
         const requestId=uuid();
-        await q("UPDATE mt5_links SET history_id=?,history_status='requested',history_since=? WHERE id=?",requestId,Date.parse(link.linked_at)-days*86400000,link.id).run();
-        return json({ok:true});
+        const created = await q("UPDATE mt5_links SET history_id=?,history_status='requested',history_since=? WHERE id=? AND COALESCE(history_status,'')!='requested'",requestId,Date.parse(link.linked_at)-days*86400000,link.id).run();
+        return created.meta.changes ? json({ok:true}) : fail('History scan already running.',409);
       }
       // Previously queued long scans may still exist in staging D1 after
       // the new 90-day policy. Never preview or approve those older results.
@@ -115,18 +115,19 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         return fail('This earlier history scan exceeds the 90-day limit. Cancel it if running, then request a new scan.',409);
       const prefix='history:'+link.history_id+':';
       if(action==='history-preview') {
+        if (input.request !== undefined && input.request !== link.history_id) return fail('This scan changed. Reopen the account’s history preview.',409);
         if(!['ready','imported'].includes(link.history_status)) return fail('Wait for the scan to finish.',409);
         const offset=Number(input.offset ?? 0);
         if(!Number.isSafeInteger(offset)||offset<0||offset>1_000_000) return fail('Invalid preview page.');
         const rows=await q("SELECT event_key,payload FROM mt5_events WHERE link=? AND substr(event_key,1,?)=? ORDER BY event_key LIMIT 101 OFFSET ?",link.id,prefix.length,prefix,offset).all<{event_key:string;payload:string}>();
         const page=rows.results.slice(0,100);
-        return json({status:link.history_status,rows:page.map(row=>JSON.parse(row.payload)),more:rows.results.length>100,nextOffset:offset+page.length});
+        return json({link:link.id,request:link.history_id,status:link.history_status,rows:page.map(row=>JSON.parse(row.payload)),more:rows.results.length>100,nextOffset:offset+page.length});
       }
       if(input.request!==link.history_id) return fail('Preview changed. Reload before deciding.',409);
       if(action==='history-decline') {
         if(!['requested','ready'].includes(link.history_status)) return fail('This scan can no longer be cancelled.',409);
-        await q("UPDATE mt5_links SET history_status='declined' WHERE id=? AND history_id=?",link.id,link.history_id).run();
-        return json({ok:true});
+        const cancelled = await q("UPDATE mt5_links SET history_status='declined' WHERE id=? AND history_id=? AND history_status IN ('requested','ready')",link.id,link.history_id).run();
+        return cancelled.meta.changes ? json({ok:true}) : fail('This scan changed. Reload before deciding.',409);
       }
       if(!['ready','imported'].includes(link.history_status)) return fail('Wait for the preview to complete.',409);
       const expected=Number(input.expected_count);
@@ -138,14 +139,15 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       const statements=items.results.map(row=>{
         const key=row.event_key.slice(prefix.length),id=link.id+'/'+key;
         const data={...JSON.parse(row.payload),id,user_id:owner,account_id:link.account_id,trade_source:'mt5',capture_mode:'history',broker:link.company,settlement_currency:link.currency,historical_import:true,mistakes:[],pips:0};
-        return q("INSERT OR IGNORE INTO workspace_records(id,user_id,table_name,payload,created_at,updated_at) VALUES(?,?,'trades',?,?,?)",id,owner,JSON.stringify(data),now(),now());
+        return q(`INSERT OR IGNORE INTO workspace_records(id,user_id,table_name,payload,created_at,updated_at)
+          SELECT ?,?,'trades',?,?,? WHERE EXISTS (
+            SELECT 1 FROM mt5_links WHERE id=? AND history_id=? AND history_status IN ('ready','imported')
+          ) RETURNING id`,id,owner,JSON.stringify(data),now(),now(),link.id,link.history_id);
       });
-      let added=0;
-      for(const statement of statements) {
-        const result=await statement.run();
-        added+=result.meta.changes;
-      }
-      await q("UPDATE mt5_links SET history_status='imported' WHERE id=? AND history_id=?",link.id,link.history_id).run();
+      const finish = q("UPDATE mt5_links SET history_status='imported' WHERE id=? AND history_id=? AND history_status IN ('ready','imported')",link.id,link.history_id);
+      const results = await db.batch([...statements,finish]);
+      if (!results[results.length-1].meta.changes) return fail('This scan changed. Reload before importing.',409);
+      const added=results.slice(0,-1).reduce((total,result)=>total+result.results.length,0);
       return json({added,more:items.results.length===40});
     }
     if (action === 'pair') {

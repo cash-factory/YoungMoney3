@@ -27,7 +27,14 @@ import type { Trade, TradeInput, RiskSettingsInput } from '@/lib/types';
 import { subDays, format } from 'date-fns';
 
 import { DecisionDesk, PerformancePin, type FastCapture } from '@/components/DecisionDesk';
-export function DashboardPage({ onOpenGuide,onCapture,openWeekly }: { onOpenGuide?: () => void; onCapture:(mode:FastCapture)=>void;openWeekly:()=>void }) {
+interface DashboardProps {
+  accountFilter: string;
+  onAccountChange: (account: string) => void;
+  onOpenGuide?: () => void;
+  onCapture: (mode: FastCapture) => void;
+  openWeekly: () => void;
+}
+export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onCapture, openWeekly }: DashboardProps) {
   const { user } = useAuth();
   const { trades: liveTrades, loading, loadError, asOf, addTrade } = useTrades(user?.id);
   const { positions: lifecyclePositions } = useMt5Lifecycles(user?.id);
@@ -43,7 +50,6 @@ export function DashboardPage({ onOpenGuide,onCapture,openWeekly }: { onOpenGuid
   const [showAdd, setShowAdd] = useState(false);
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const [showRiskSettings, setShowRiskSettings] = useState(false);
-  const [accountFilter, setAccountFilter] = useState('all');
   const [tradeOrigin, setTradeOrigin] = useState('all');
   const [source, setSource] = useState<'live' | 'backtest' | 'forward'>('live');
   const pinKey='ymfx:opening-performance:'+user?.id;
@@ -199,7 +205,7 @@ export function DashboardPage({ onOpenGuide,onCapture,openWeekly }: { onOpenGuid
       <div className="ym-dash-controls card" role="group" aria-label="Performance filters">
         <div className="ym-dash-filter">
           <span>Trading account</span>
-          <ThemedSelect label="Trading account" value={accountFilter} onChange={setAccountFilter}
+          <ThemedSelect label="Trading account" value={accountFilter} onChange={onAccountChange}
             options={[{value:'all',label:'All accounts',description:'Review every journal account'},
               ...accounts.map(item=>({value:item.id,label:`${item.name} · ${item.base_currency}`,description:'Journal account'}))]} />
         </div>
@@ -242,7 +248,7 @@ export function DashboardPage({ onOpenGuide,onCapture,openWeekly }: { onOpenGuid
         <p className="ym-dash-focus-description">{sections.find(section => section.id === activeSection)?.description}</p>
       {source==='live' && <PerformancePin pinned={pinned} onChange={()=>{try { localStorage.setItem(pinKey,pinned?'0':'1'); }catch{/* optional */}setPinned(!pinned);}}/>}
       {activeSection === 'overview' && <>
-      {source==='live' && <DecisionDesk trades={trades} positions={filteredLifecyclePositions} account={account} onCapture={onCapture} openWeekly={openWeekly}/>}
+      {source==='live' && <DecisionDesk trades={trades} positions={filteredLifecyclePositions} account={account} accounts={accounts} onCapture={onCapture} openWeekly={openWeekly}/>}
       <section className="ym-dash-balance" aria-label="Account and trading result">
         <div className="ym-dash-balance-main">
           <p className="ym-dash-kicker">{source === 'live' ? 'ACCOUNT SNAPSHOT' : 'PRACTICE PERFORMANCE'}</p>
@@ -638,7 +644,7 @@ export function DashboardPage({ onOpenGuide,onCapture,openWeekly }: { onOpenGuid
       </div>
 
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add New Trade" size="lg">
-        <TradeForm onSubmit={handleSubmit} onCancel={() => setShowAdd(false)} />
+        <TradeForm preferredAccountId={accountFilter === 'all' ? undefined : accountFilter} onSubmit={handleSubmit} onCancel={() => setShowAdd(false)} />
       </Modal>
 
       <Modal

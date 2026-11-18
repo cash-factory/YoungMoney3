@@ -26,13 +26,19 @@ function localDate() {
   return localDateTime().slice(0, 10);
 }
 
-export function QuickCaptureModal({ open, onClose, initialMode='manual' }: { open: boolean; onClose: () => void; initialMode?:FastCapture }) {
+interface QuickCaptureProps {
+  open: boolean;
+  onClose: () => void;
+  initialMode?: FastCapture;
+  initialAccountId?: string;
+}
+export function QuickCaptureModal({ open, onClose, initialMode='manual', initialAccountId }: QuickCaptureProps) {
   const { user } = useAuth();
   const userId = user?.id;
   const { instruments, loading: instrumentsLoading, loadError: instrumentsError, fetchInstruments, saveInstrument } = useMarketInstruments(userId);
   const { favoriteIds, loading: favoritesLoading, toggleFavorite } = useInstrumentFavorites(userId);
-  const { accounts } = useTradingAccounts(userId);
-  const { strategies } = useStrategies(userId);
+  const { accounts, loading: accountsLoading } = useTradingAccounts(userId);
+  const { strategies, loading: strategiesLoading } = useStrategies(userId);
   const { plans } = useTradingPlans(userId);
   const { checklist: planChecklist } = useChecklist(userId);
   const { setups } = useSetups(userId);
@@ -84,7 +90,8 @@ export function QuickCaptureModal({ open, onClose, initialMode='manual' }: { ope
   const initialized = useRef(false);
   const [draftReady,setDraftReady]=useState(false);
   const [resumed,setResumed]=useState(false);
-  const draftKey='ymfx:capture-draft:'+userId+':'+initialMode;
+  const draftKey = 'ymfx:capture-draft:' + userId + ':' + initialMode
+    + (initialAccountId ? ':account:' + encodeURIComponent(initialAccountId) : '');
   const appliedSymbol = useRef('');
   const calculatedAt = useRef(new Date().toISOString());
   const draftId = useRef('');
@@ -135,7 +142,7 @@ export function QuickCaptureModal({ open, onClose, initialMode='manual' }: { ope
 
   useEffect(() => {
     if (!open) { initialized.current=false; appliedSymbol.current=''; return; }
-    if (initialized.current) return;
+    if (!userId || initialized.current || accountsLoading || strategiesLoading) return;
     initialized.current=true;
     draftId.current = crypto.randomUUID();
     instrumentPreferenceApplied.current = false;
@@ -144,7 +151,7 @@ export function QuickCaptureModal({ open, onClose, initialMode='manual' }: { ope
     setChecklistSnapshot([]); setChecklistOverrideReason(null);
     setSessionId(''); setNotes(''); setImage(''); setVoice(''); setError(''); setExampleConfirmed(false); setActualFillConfirmed(false);
     setTradeCaptureMode('live'); setExitedAt(''); setStopManual(false); setTargetManual(false);
-    const defaultAccount = accounts.find(a => a.is_active) || accounts[0];
+    const defaultAccount = initialAccountId ? accounts.find(a => a.id === initialAccountId) : accounts.find(a => a.is_active) || accounts[0];
     setAccountId(defaultAccount?.id || '');
     setStrategyId('');
     setEntryModelId('');
@@ -168,7 +175,7 @@ export function QuickCaptureModal({ open, onClose, initialMode='manual' }: { ope
       }
     }catch{/* Optional device storage. */}
     setDraftReady(true);
-  }, [open, accounts, strategies, initialMode, draftKey]);
+  }, [open, userId, accounts, accountsLoading, strategies, strategiesLoading, initialMode, initialAccountId, draftKey]);
   useEffect(()=>{
     if(!draftReady || !userId)return;
     const data={requestId:draftId.current,captureType,journalType,journalText,notes,image,voice,accountId,strategyId,planId,entryModelId,setupId,sessionId,enteredAt,exitedAt,direction,symbol,entry,exit,stop,target,quantity,conversionRate,tradeCaptureMode,checklistSnapshot,checklistOverrideReason,instrumentId:selectedInstrument?.id};
@@ -177,7 +184,7 @@ export function QuickCaptureModal({ open, onClose, initialMode='manual' }: { ope
   const finishCapture=()=>{try{localStorage.removeItem(draftKey);}catch{/* optional */}onClose();};
 
   useEffect(() => {
-    if (!open || instrumentPreferenceApplied.current || !instruments.length || favoritesLoading) return;
+    if (!open || !draftReady || instrumentPreferenceApplied.current || !instruments.length || favoritesLoading) return;
     let recentId = '';
     try { recentId = localStorage.getItem(`trade-journal:last-instrument:${userId || 'guest'}`) || ''; } catch { /* storage may be unavailable */ }
     const preferred = instruments.find(i => i.id === recentId)
@@ -186,7 +193,7 @@ export function QuickCaptureModal({ open, onClose, initialMode='manual' }: { ope
       || instruments[0];
     setSymbol(preferred.symbol);
     instrumentPreferenceApplied.current = true;
-  }, [open, instruments, favoriteIds, favoritesLoading, userId]);
+  }, [open, draftReady, instruments, favoriteIds, favoritesLoading, userId]);
 
   useEffect(() => {
     if (!selectedInstrument || appliedSymbol.current===selectedInstrument.id) return;
@@ -325,9 +332,11 @@ export function QuickCaptureModal({ open, onClose, initialMode='manual' }: { ope
   const chartControl = <ScreenshotUpload label="Chart image" onUpload={setImage} existingUrl={image || null}/>;
   const voiceControl = <VoiceRecorder onUpload={setVoice} existingUrl={voice || null}/>;
 
+  if (!draftReady) return <Modal open={open} onClose={onClose} title="Quick Capture"><p role="status">Opening your capture…</p></Modal>;
   return (
     <Modal open={open} onClose={onClose} title="Quick Capture" size="lg">
       <div className="space-y-4">
+        {selectedAccount && <p className="text-sm text-secondary">Recording for <strong>{selectedAccount.name}</strong> · {selectedAccount.base_currency}</p>}
         {resumed && <p role="status" className="text-xs text-secondary">Draft resumed on this device.</p>}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {([['trade', CandlestickChart, 'Live trade'], ['test', FlaskConical, 'Test trade'], ['journal', BookOpen, 'Journal note'], ['pass', CheckCircle2, 'Deliberate pass']] as const).map(([type, Icon, label]) => (

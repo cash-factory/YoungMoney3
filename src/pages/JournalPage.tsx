@@ -52,6 +52,7 @@ export function JournalPage() {
   const { setups } = useSetups(user?.id);
   const { instruments } = useMarketInstruments(user?.id);
   const { accounts } = useTradingAccounts(user?.id);
+  const accountNames = useMemo(() => new Map(accounts.map(a => [a.id, a.name])), [accounts]);
   const [showForm, setShowForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
   const [filterType, setFilterType] = useState<JournalType | ''>('');
@@ -98,7 +99,7 @@ export function JournalPage() {
       {savedDecisions.length > 0 && <section className="card p-4 mb-5" aria-label="Saved decision replays">
         <h2 className="text-base font-bold">Your decision replays</h2>
         <ul className="ym-review-ledger">{savedDecisions.slice(0, 12).map(review => <li key={review.id}>
-          <div><strong>{review.symbol}</strong><small className="block text-secondary">{[review.entry_time?.slice(0,10), review.strategy_name, review.model_name].filter(Boolean).join(' · ')}</small>
+          <div><strong>{review.symbol}</strong><small className="block text-secondary">{[accountNames.get(review.account_id || ''), review.entry_time?.slice(0,10), review.strategy_name, review.model_name].filter(Boolean).join(' · ')}</small>
           {review.trigger && <p>{review.trigger}</p>}{review.note && <p className="line-clamp-2">{review.note}</p>}</div>
           <ReplayButton target={targetsByReference.get(review.reference)!}/>
         </li>)}</ul>
@@ -116,7 +117,7 @@ export function JournalPage() {
               const item = row.summary;
               return <details key={row.link + ':' + row.lifecycle_id} className="rounded-lg border border-themed bg-secondary p-3 text-xs">
                 <summary className="cursor-pointer flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-semibold">{item.symbol} · {item.direction} · {item.status}</span>
+                  <span className="font-semibold">{[item.symbol, accountNames.get(row.account_id), item.direction, item.status].filter(Boolean).join(' · ')}</span>
                   <span className="font-mono text-muted">#{item.position_id}</span>
                 </summary>
                 <dl className="mt-3 grid grid-cols-2 gap-2">

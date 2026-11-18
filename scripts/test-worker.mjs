@@ -154,9 +154,13 @@ try {
   }
   assert.equal((await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json()).count,1);
   const page1=(await (await call('mt5/history-preview',{link,offset:0})).json());
+  assert.equal(page1.link,link);
+  assert.equal(page1.request,history.id);
   assert.equal(page1.rows.length,100);
   assert.equal(page1.more,true);
-  const page2=(await (await call('mt5/history-preview',{link,offset:100})).json());
+  assert.equal((await call('mt5/history-preview',{link,request:'previous-scan',offset:100})).status,409);
+  const page2=(await (await call('mt5/history-preview',{link,request:history.id,offset:100})).json());
+  assert.equal(page2.request,history.id);
   assert.equal(page2.rows.length,2);
   assert.equal(page2.more,false);
   assert.equal((await call('mt5/history-import',{link,request:history.id,expected_count:100})).status,409);
@@ -259,10 +263,40 @@ try {
   // Two independent demo/contest accounts can coexist for one journal owner.
   const secondLink=(await (await call('mt5/connect',{device:devices[0].id,envelope:{wrapped:'d',iv:'e',data:'f'}})).json()).id;
   assert.equal((await (await device('poll',{})).json()).job.id,secondLink);
-  assert.equal((await device('verified',{link:secondLink,ok:true,mode:1,trade_access:false,login:'43',server:'Contest',company:'Fixtures',currency:'EUR',balance:200})).status,200);
+  assert.equal((await device('verified',{link:secondLink,ok:true,mode:1,trade_access:false,login:'43',server:'Demo',company:'Fixtures',currency:'EUR',balance:200})).status,200);
   const linked=(await (await call('mt5/status',{})).json()).links;
   assert.equal(linked.filter(l=>l.status==='connected').length,2);
-  assert.equal(linked.find(l=>l.id===secondLink).access_level,'trading-restricted');
+  const secondAccount = linked.find(l => l.id === secondLink);
+  assert.equal(secondAccount.access_level,'trading-restricted');
+  assert.notEqual(secondAccount.account_id,linkedAccount);
+  assert.equal(secondAccount.server,verifiedAccess.server);
+  // Independent logins on a single broker server can reuse every broker ticket.
+  const secondEvents = [
+    {...evidenceEvent,fields:{...fill,price:1.3}},
+    {...rich,fields:{...projected,net_realized_profit:'-7',final_realized_r:'-0.56'}},
+  ];
+  for (let i=0; i<2; i++) {
+    const ack=await (await device('sync',{link:secondLink,events:secondEvents})).json();
+    assert.equal(ack.pending_reviews,1);
+  }
+  const separate=(await (await call('mt5/positions',{})).json()).rows;
+  assert.equal(separate.length,2);
+  const firstPosition=separate.find(p=>p.link===link), secondPosition=separate.find(p=>p.link===secondLink);
+  assert.deepEqual([firstPosition.account_id,firstPosition.summary.settlement_currency,firstPosition.summary.net_realized_profit,firstPosition.version],[linkedAccount,'USD','16',2]);
+  assert.deepEqual([secondPosition.account_id,secondPosition.summary.settlement_currency,secondPosition.summary.net_realized_profit,secondPosition.version],[secondAccount.account_id,'EUR','-7',1]);
+  const secondEvidence=(await (await call('mt5/position-evidence',{link:secondLink,lifecycle_id:'789:0'})).json()).rows;
+  assert.equal(secondEvidence[0].payload.price,1.3);
+  const firstEvidence=(await (await call('mt5/position-evidence',{link,lifecycle_id:'789:0'})).json()).rows;
+  assert.equal(firstEvidence[0].payload.price,1.1);
+  const secondRef='position/'+secondLink+'/789:0';
+  assert.equal((await call('data',{action:'insert',table:'decision_reviews',payload:{
+    id:'review/'+subject+'/'+secondRef,reference:secondRef,verdict:'changed',note:'Second demo.',
+  }})).status,200);
+  const reviewRows=(await (await call('data',{action:'select',table:'decision_reviews'})).json()).data;
+  assert.equal(reviewRows.find(r=>r.reference===brokerRef).account_id,linkedAccount);
+  assert.equal(reviewRows.find(r=>r.reference===secondRef).account_id,secondAccount.account_id);
+  assert.equal(reviewRows.find(r=>r.reference===brokerRef).verdict,'followed');
+  assert.equal(reviewRows.find(r=>r.reference===secondRef).verdict,'changed');
   assert.equal((await call('mt5/retry-session',{link:secondLink})).status,200);
   assert.equal((await device('capture-issue',{link:secondLink})).status,200);
   assert.equal((await (await call('mt5/status',{})).json()).links.find(l=>l.id===secondLink).capture_health,'needs_attention');
@@ -277,6 +311,24 @@ try {
   assert.equal((await call('mt5/history-request',{link:secondLink,days:30})).status,403);
   await db.prepare('UPDATE mt5_links SET trade_mode=1 WHERE id=?').bind(secondLink).run();
   assert.equal((await device('sync',{link:secondLink,events:[]})).status,200);
+  // Replacing a one-fill scan with another one-fill scan still invalidates its preview.
+  async function scanHistoryFill(key) {
+    assert.equal((await call('mt5/history-request',{link:secondLink,days:30})).status,200);
+    const scan=(await (await device('sync',{link:secondLink,events:[]})).json()).history;
+    const events=[{kind:'history',key:'history:'+scan.id+':close-'+key,fields:older}];
+    assert.equal((await device('sync',{link:secondLink,events,history_done:scan.id})).status,200);
+    const page=await (await call('mt5/history-preview',{link:secondLink,request:scan.id,offset:0})).json();
+    assert.equal(page.rows.length,1);
+    return page.request;
+  }
+  const replaced=await scanHistoryFill(931), replacement=await scanHistoryFill(932);
+  assert.notEqual(replaced,replacement);
+  assert.equal((await call('mt5/history-import',{link:secondLink,request:replaced,expected_count:1})).status,409);
+  assert.equal((await call('mt5/history-decline',{link:secondLink,request:replaced})).status,409);
+  const accepted=await (await call('mt5/history-import',{link:secondLink,request:replacement,expected_count:1})).json();
+  assert.equal(accepted.added,1);
+  assert.equal((await (await call('data',{action:'select',table:'trades',filters:{id:secondLink+'/close-931'}})).json()).count,0);
+  assert.equal((await (await call('data',{action:'select',table:'trades',filters:{id:secondLink+'/close-932'}})).json()).data[0].account_id,secondAccount.account_id);
   const pendingReal=(await (await call('mt5/connect',{device:devices[0].id,envelope:{wrapped:'g',iv:'h',data:'i'}})).json()).id;
   assert.equal((await (await device('poll',{})).json()).job.id,pendingReal);
   assert.equal((await device('verified',{link:pendingReal,ok:true,mode:'2',trade_access:true,login:'44',server:'Real',company:'Fixtures',currency:'USD',balance:100})).status,400);
@@ -349,7 +401,7 @@ try {
   objects.add(subject+'/voice.webm');
   assert.equal((await call('admin',{action:'delete',targetUserId:subject})).status,200);
   assert.equal(objects.size,0);
-  console.log('Local D1 passed migrations, cookie issuance, idempotent writes, stale revisions, pairing, demo sync, replay and suspension.');
+  console.log('Local D1 passed migrations, authentication, idempotent writes, account isolation, scan revisions, replay and suspension.');
 } finally {await mf.dispose();}
 
 

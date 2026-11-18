@@ -20,6 +20,7 @@ import { setupQualityFromChecklist } from '@/lib/setupQuality';
 
 interface TradeFormProps {
   initial?: Trade | null;
+  preferredAccountId?: string;
   onSubmit: (data: TradeInput) => Promise<void>;
   onCancel: () => void;
 }
@@ -42,7 +43,7 @@ function localDateTimeInputValue(date = new Date()): string {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 
-export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
+export function TradeForm({ initial, preferredAccountId, onSubmit, onCancel }: TradeFormProps) {
   const { user } = useAuth();
   const { strategies } = useStrategies(user?.id);
   const { plans } = useTradingPlans(user?.id);
@@ -110,7 +111,9 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
 
   useEffect(() => {
     if (initial || !accounts.length) return;
-    const defaultAccount = accounts.find(a => a.id === form.account_id) || accounts.find(a => a.is_active) || accounts[0];
+    const preferred = form.account_id || preferredAccountId;
+    const defaultAccount = preferred ? accounts.find(a => a.id === preferred) : accounts.find(a => a.is_active) || accounts[0];
+    if (!defaultAccount) return;
     if (!form.account_id) {
       update('account_id', defaultAccount.id);
       if (defaultAccount.broker_name) update('broker', defaultAccount.broker_name);
@@ -122,7 +125,7 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
       update('strategy_id', defaultAccount.default_strategy_id);
       update('strategy', strategies.find(s => s.id === defaultAccount.default_strategy_id)?.name || '');
     }
-  }, [initial, accounts, strategies, plans, form.account_id, form.strategy_id, form.plan_id, form.direction]);
+  }, [initial, preferredAccountId, accounts, strategies, plans, form.account_id, form.strategy_id, form.plan_id, form.direction]);
 
   const update = <Field extends keyof TradeInput>(field: Field, value: TradeInput[Field]) => {
     setForm(f => ({ ...f, [field]: value }));
@@ -509,7 +512,10 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
             <div key={s.id} className="flex items-center flex-1">
               <button
                 type="button"
-                onClick={() => !locked && navigateToStep(i)}
+                aria-label={s.label}
+                aria-current={active ? 'step' : undefined}
+                disabled={locked}
+                onClick={() => navigateToStep(i)}
                 className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   locked ? 'text-muted/50 cursor-not-allowed' :
                   active ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400' :
@@ -828,7 +834,7 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
                   update('strategy', strategies.find(strategy => strategy.id === account.default_strategy_id)?.name || '');
                   update('entry_model_id', null); setChecklistSnapshot([]);
                 }
-              }}><option value="">No account selected</option>{accounts.filter(account => account.is_active).map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}</Select>
+              }}><option value="">No account selected</option>{accounts.filter(account => account.is_active || account.id === form.account_id).map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}</Select>
             </div>
             <EntitySelect label="Setup (optional)" options={setups} value={form.setup_id} onChange={v => update('setup_id', v)} placeholder="Select a trading setup" />
           </div>

@@ -55,17 +55,21 @@ function pageFromLocation(): PageId {
 function AppContent() {
   const { session, loading, profile, signOut } = useAuth();
   const [page, setPage] = useState<PageId>(pageFromLocation);
-  const [quickAdd, setQuickAdd] = useState(false);
-  const [captureMode,setCaptureMode]=useState<FastCapture>('manual');
+  const [dashboardSelection, setDashboardSelection] = useState<{ owner: string; account: string } | null>(null);
+  const accountFilter = dashboardSelection && dashboardSelection.owner === session?.user.id
+    ? dashboardSelection.account : 'all';
+  const [quickCapture, setQuickCapture] = useState<{ mode: FastCapture; accountId?: string } | null>(null);
   const [sample,setSample]=useState(false);
-  const openCapture=(mode:FastCapture)=>{setCaptureMode(mode);setQuickAdd(true);};
+  const openCapture = (mode: FastCapture) => setQuickCapture({
+    mode, accountId: page === 'dashboard' && accountFilter !== 'all' ? accountFilter : undefined,
+  });
   const [showLanding, setShowLanding] = useState(true);
   const [onboardingNeeded, setOnboardingNeeded] = useState<boolean | null>(null);
   const [onboardingError, setOnboardingError] = useState('');
   const [onboardingAttempt, setOnboardingAttempt] = useState(0);
   const [guideOpen, setGuideOpen] = useState(false);
   const guideAutoEvaluated = useRef<string | null>(null);
-  const openGuide = () => { setQuickAdd(false); setGuideOpen(true); };
+  const openGuide = () => { setQuickCapture(null); setGuideOpen(true); };
 
   useEffect(() => {
     const restorePageFromLocation = () => setPage(pageFromLocation());
@@ -86,6 +90,8 @@ function AppContent() {
 
   useEffect(() => {
     if (!session?.user) {
+      setQuickCapture(null);
+      setDashboardSelection(null);
       setOnboardingNeeded(null);
       setOnboardingError('');
       return;
@@ -147,7 +153,9 @@ function AppContent() {
       <PageExperience key={page} page={page}>
         {page === 'workspace-setup' && <OnboardingPage onComplete={()=>{setOnboardingNeeded(false);navigateToPage('dashboard');}} />}
         {page === 'media' && <MediaLibraryPage />}
-        {page === 'dashboard' && <DashboardPage onOpenGuide={openGuide} onCapture={openCapture} openWeekly={()=>navigateToPage('weekly-reviews')}/>}
+        {page === 'dashboard' && <DashboardPage accountFilter={accountFilter}
+          onAccountChange={account => setDashboardSelection({owner: session.user.id, account})}
+          onOpenGuide={openGuide} onCapture={openCapture} openWeekly={()=>navigateToPage('weekly-reviews')}/>}
         {page === 'trades' && <TradesPage />}
         {page === 'calendar' && <CalendarPage />}
         {page === 'analytics' && <AnalyticsPage />}
@@ -170,7 +178,7 @@ function AppContent() {
         {page === 'admin-operations' && (profile?.role === 'admin' && profile.account_status === 'active' ? <AdminOperationsPage /> : <p role="alert" className="card p-4">This area is reserved for the workspace administrator.</p>)}
       </PageExperience>
       {sample && <SampleReplay onClose={()=>setSample(false)}/>}
-      {quickAdd && <QuickCaptureModal open initialMode={captureMode} onClose={() => setQuickAdd(false)} />}
+      {quickCapture && <QuickCaptureModal open initialMode={quickCapture.mode} initialAccountId={quickCapture.accountId} onClose={() => setQuickCapture(null)} />}
       <PlatformGuide onSample={()=>setSample(true)} open={guideOpen} userId={session.user.id} currentPage={page}
         onNavigate={navigateToPage}
         onDismiss={(completed, visited) => {

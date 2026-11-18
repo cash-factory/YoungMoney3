@@ -25,6 +25,7 @@ export function TradesPage() {
   const { positions: positionVersions, loading: positionsLoading, error: positionError } = useMt5Lifecycles(user?.id);
   const trades=useMemo(()=>visibleJournalTrades(storedTrades,positionVersions),[storedTrades,positionVersions]);
   const { accounts } = useTradingAccounts(user?.id);
+  const accountNames = useMemo(() => new Map(accounts.map(a => [a.id, a.name])), [accounts]);
   const [origin,setOrigin] = useState('all');
   const [showAdd, setShowAdd] = useState(false);
   const [editTrade, setEditTrade] = useState<Trade | null>(null);
@@ -263,7 +264,7 @@ export function TradesPage() {
                 <summary className="flex flex-wrap items-center justify-between gap-3 cursor-pointer">
                   <span className="flex flex-col">
                     <strong className="text-sm">{t.symbol} · {t.direction==='long'?'Long':'Short'} · {t.status}</strong>
-                    <small className="text-muted">{t.broker} · {t.first_entry_at} · Position {t.position_id}</small>
+                    <small className="text-muted">{[accountNames.get(row.account_id), t.broker, t.first_entry_at].filter(Boolean).join(' · ')} · Position {t.position_id}</small>
                   </span>
                   <span className="flex flex-col text-right">
                     <strong className="font-mono text-sm">{t.net_realized_profit ?? 'Open'} {t.settlement_currency}</strong>
