@@ -10,8 +10,16 @@ For each of Chrome/Edge desktop, mobile Safari/Chrome (or browser automation of 
 3. Two accounts with different currencies: account selector isolates positions, P&L, risk, Insights and broker balances; combined money totals must not silently merge currencies.
 4. Trades: manual creation, numeric validation, edit, delete and stale-revision warning. MT5 trades show read-only fill data and editable journal notes only.
 5. Account settings: theme, color, profile, password, backup modal, and MT5 pairing. Confirm modal ESC/close and scroll behavior on 320px / 375px / tablet / desktop widths.
-6. Walk through **all 11 curated palettes** in both light and dark modes. Confirm readable text, visual distinction, no overlapping menu, no missing button focus, persistence across navigation and browser reload.
+6. Walk through **all 12 curated palettes** in both light and dark modes. Confirm readable text, visual distinction, no overlapping menu, no missing button focus, persistence across navigation and browser reload.
 7. Force offline API errors, corrupt theme local storage or disable browser storage: the layout must remain navigable and explain failures.
 8. Accessibility: semantic labels, aria state, keyboard-only navigation, dialog focus/close, reduced-motion preferences and reasonable contrast. Record screenshots and defects before release.
 
 Record tested commit, staging URL, viewport, platform, palette, test user ID and defect links. Do not claim visual/browser acceptance based on static CI alone.
+
+## Color and contrast regression
+
+CraftyLabs uses signal red for accents and a vivid red control fill with readable white labels. Hover states use an explicit darker fill. Decorative accent colors and text colors have separate tokens.
+
+Panels that stay dark in light mode (sign-in showcase and landing footer) use local on-dark foregrounds. Avoid assigning root light-mode text tokens to these surfaces. Text gradients use readable foreground stops.
+
+`node scripts/test-color-contrast-browser.mjs` samples actual rendered backgrounds, including gradients, glass cards and illustrations, across all 12 palettes in both modes. It covers public headings and supporting copy, form controls, hover/focus states and dashboard selection controls. It requires no real account credentials.

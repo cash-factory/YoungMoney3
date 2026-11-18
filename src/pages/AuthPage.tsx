@@ -88,16 +88,16 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight">Young-Money-Fx</h1>
-              <p className="text-xs text-white/60">Accountability, not competition</p>
+              <p className="ym-auth-privacy text-xs">Accountability, not competition</p>
             </div>
           </div>
 
           <div className="max-w-md">
             <h2 className="text-4xl xl:text-5xl font-extrabold tracking-tight leading-[1.1]">
               Trade with<br />
-              <span className="text-orange-300">radical honesty.</span>
+              <span className="ym-auth-accent">radical honesty.</span>
             </h2>
-            <p className="mt-4 text-base text-white/70 leading-relaxed">
+            <p className="ym-auth-description mt-4 text-base leading-relaxed">
               A private trading journal to log every trade, review every decision,
               and build a consistent process without sharing your records.
             </p>
@@ -105,15 +105,15 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
             <div className="mt-10 grid grid-cols-2 gap-4">
               {features.map(f => (
                 <div key={f.title} className="p-4 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-colors">
-                  <f.icon size={20} className="text-orange-300 mb-2" />
+                  <f.icon size={20} className="ym-auth-accent mb-2" />
                   <p className="text-sm font-semibold">{f.title}</p>
-                  <p className="text-xs text-white/50 mt-0.5 leading-snug">{f.desc}</p>
+                  <p className="ym-auth-feature-description text-xs mt-0.5 leading-snug">{f.desc}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-white/40">
+          <div className="flex items-center gap-2 ym-auth-privacy text-xs">
             <Shield size={14} />
             Your trading journal is private to your account.
           </div>

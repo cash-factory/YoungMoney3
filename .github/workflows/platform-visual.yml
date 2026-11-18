@@ -18,7 +18,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run build
-      - name: Verify focused dashboard, controls, archive and all theme layouts
+      - name: Verify workspace layouts and rendered contrast in every theme
         shell: bash
         run: |
           set -euo pipefail
@@ -34,10 +34,13 @@ jobs:
           node scripts/test-workspace-setup-browser.mjs
           node scripts/test-page-results-browser.mjs --palettes
           node scripts/test-platform-browser.mjs
+          node scripts/test-color-contrast-browser.mjs
           node scripts/test-guide-browser.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: platform-screenshots
-          path: artifacts/platform/
+          path: |
+            artifacts/platform/
+            artifacts/color-contrast/
           retention-days: 7

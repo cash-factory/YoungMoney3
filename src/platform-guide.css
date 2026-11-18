@@ -2,7 +2,7 @@
    All colours inherit the active site palette. Typography is real HTML,
    each spotlight references a live feature and never captures account data. */
 .ym-guide-layer {
-  --guide-accent:var(--brand);
+  --guide-accent:var(--brand-text);
   --guide-surface:var(--bg-card);
   --guide-ink:var(--text-primary);
   --guide-muted:var(--text-secondary);
@@ -57,7 +57,7 @@
 .ym-guide-intro-copy > p {color:var(--guide-muted);font-size:13px;line-height:1.75;max-width:48ch;}
 .ym-guide-hub-actions {display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:23px;}
 .ym-guide-primary {display:inline-flex;align-items:center;justify-content:center;gap:10px;border-radius:9px;min-height:43px;background:var(--button-bg);padding:10px 17px;color:#fff;font-size:12px;font-weight:750;white-space:nowrap;transition:transform .18s,filter .18s;}
-.ym-guide-primary:hover {filter:brightness(1.13);transform:translateY(-1px);}
+.ym-guide-primary:hover {background:var(--button-hover-bg);transform:translateY(-1px);}
 .ym-guide-quiet {display:inline-flex;align-items:center;gap:8px;color:var(--guide-muted);font-size:12px;font-weight:650;padding:10px 4px;}
 .ym-guide-quiet:hover {color:var(--guide-ink);}
 .ym-guide-time {margin-top:14px;display:flex;align-items:center;gap:8px;color:var(--text-muted);font-size:10px;}
