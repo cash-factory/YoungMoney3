@@ -167,7 +167,7 @@ function AppContent() {
       <PlatformGuide open={guideOpen} userId={session.user.id} currentPage={page}
         onNavigate={navigateToPage}
         onDismiss={(completed, visited) => {
-          writeGuideState(session.user.id, completed ? 'completed' : 'dismissed', visited, visited.at(-1));
+          writeGuideState(session.user.id, completed ? 'completed' : 'dismissed', visited, visited[visited.length - 1]);
           setGuideOpen(false);
         }} />
     </Layout>
