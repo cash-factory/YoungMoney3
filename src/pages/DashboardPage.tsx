@@ -2,7 +2,7 @@ import { accountLedger, tradeCurrency } from '@/lib/tradeFinance';
 import { dateKeyInTimeZone } from '@/lib/riskMetrics';
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import '@/dashboard-studio.css';
-import { Wallet, Target, TrendingUp, Flame, Activity, BarChart3, ChevronDown, Plus, ArrowUpRight, ArrowDownRight, Minus, Star, Clock, Eye } from 'lucide-react';
+import { Wallet, Target, TrendingUp, Flame, Activity, BarChart3, ChevronDown, Plus, ArrowUpRight, ArrowDownRight, Minus, Star, Clock, Eye, Compass } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { useAllTestTrades, useBacktests, useForwardTrades, useTestSessions, useTrades, useTradingAccounts, useTradingAccountAdjustments } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
@@ -26,7 +26,7 @@ import { useRiskSettings, useChecklist, useTradingPlans } from '@/hooks/useData'
 import type { Trade, TradeInput, RiskSettingsInput } from '@/lib/types';
 import { subDays, format } from 'date-fns';
 
-export function DashboardPage() {
+export function DashboardPage({ onOpenGuide }: { onOpenGuide?: () => void }) {
   const { user } = useAuth();
   const { trades: liveTrades, loading, loadError, asOf, addTrade } = useTrades(user?.id);
   const { positions: lifecyclePositions } = useMt5Lifecycles(user?.id);
@@ -185,9 +185,14 @@ export function DashboardPage() {
           <h1>Trading <span className="ym-dash-title-mark">Overview</span></h1>
           <p>Everything that matters, in one clear view. Review your results, risk and next decisions.</p>
         </div>
-        <button type="button" onClick={() => setShowAdd(true)} className="btn-primary ym-dash-new-trade">
-          <Plus size={18} /> Add trade
-        </button>
+        <div className="ym-dash-heading-actions">
+          <button type="button" onClick={onOpenGuide} className="ym-dash-guide-launch" aria-label="Explore platform features">
+            <Compass size={17} /> Explore features <span className="ym-dash-guide-live">22 stops</span>
+          </button>
+          <button type="button" onClick={() => setShowAdd(true)} className="btn-primary ym-dash-new-trade">
+            <Plus size={18} /> Add trade
+          </button>
+        </div>
       </div>
 
       <div className="ym-dash-controls card" role="group" aria-label="Performance filters">
