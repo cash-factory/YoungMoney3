@@ -63,7 +63,7 @@ export function useMt5Lifecycles(userId?: string | null) {
     try {
       const gathered:Mt5PositionVersion[]=[];
       let offset=0,more=true;
-      while(more && offset<1000) {
+      while(more) {
         const response=await fetch('/api/mt5/positions',{method:'POST',
           headers:{'content-type':'application/json'},body:JSON.stringify({offset}),signal});
         if(!response.ok)throw new Error('Position summaries could not be loaded.');
@@ -71,8 +71,9 @@ export function useMt5Lifecycles(userId?: string | null) {
         if(!Array.isArray(data.rows))throw new Error('Invalid position summary response.');
         gathered.push(...data.rows);
         more=Boolean(data.more);
-        offset=data.nextOffset??offset+data.rows.length;
-        if(more && !data.rows.length)break;
+        const next=data.nextOffset??offset+data.rows.length;
+        if(more && (!Number.isSafeInteger(next) || next<=offset || !data.rows.length))throw new Error('Incomplete position summary page.');
+        offset=next;
       }
       if(!signal?.aborted){setRows(gathered);setError(null);}
     }catch(error){

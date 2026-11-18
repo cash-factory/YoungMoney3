@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { dateKeyInTimeZone } from '@/lib/riskMetrics';
 import {
   BookOpenCheck,
   Check,
@@ -236,7 +237,9 @@ function ReplayForm({
   const [rules, setRules] = useState<HistoricalRules>(EMPTY_RULES),
     [ruleState, setRuleState] = useState('loading'),
     [retry, setRetry] = useState(0);
-  const focus = focusForDay(reviews, facts.time.slice(0, 10), facts.account);
+  const account = accounts.find((a) => a.id === facts.account);
+  const entryDay = facts.clock && dateKeyInTimeZone(facts.time, account?.challenge_reset_timezone || 'UTC');
+  const focus = entryDay ? focusForDay(reviews, entryDay, facts.account) : undefined;
   const focusText = previous?.commitment_text || focus?.focus_next_week || '';
   const [commitment, setCommitment] = useState<Verdict | null>(
     draft?.commitment ?? previous?.commitment_result ?? null
@@ -298,7 +301,6 @@ function ReplayForm({
   const result = outcomeFacts(target, accounts),
     selected = strategies.find((s) => s.id === strategy),
     selectedModel = models.find((m) => m.id === model && m.strategy_id === strategy);
-  const account = accounts.find((a) => a.id === facts.account);
   const save = async () => {
     setBusy(true);
     setError('');
@@ -367,6 +369,7 @@ function ReplayForm({
           Which strategy did you use?
           <select
             className="input-field"
+            aria-label="Which strategy did you use?"
             value={strategy}
             onChange={(e) => {
               setStrategy(e.target.value);
@@ -390,6 +393,7 @@ function ReplayForm({
           Entry model
           <select
             className="input-field"
+            aria-label="Entry model"
             value={model}
             disabled={!strategy}
             onChange={(e) => setModel(e.target.value)}

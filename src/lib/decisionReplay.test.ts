@@ -119,6 +119,7 @@ test('weekly commitments are scoped to the next week and account', () => {
   } as WeeklyReview;
   assert.equal(focusForDay([r], '2026-11-09', 'a')?.id, 'week');
   assert.equal(focusForDay([r], '2026-11-09', 'b'), undefined);
+  assert.equal(focusForDay([r], '2026-11-09', null), undefined);
   assert.equal(focusForDay([r], '2026-11-16', 'a'), undefined);
 });
 test('risk capital preserves zero equity and states each fallback', () => {

@@ -119,7 +119,7 @@ export async function runDashboardChecks(page) {
   await page.getByRole('combobox', { name: 'Performance view' }).click();
   await page.getByRole('option', { name: 'Recorded trades', exact: false }).click();
   await assertPanel('overview');
-  return { panels: 5, keyboardNavigation: true, achievementRows: 12, practiceRiskIsolation: true };
+  return { panels: 5, keyboardNavigation: true, achievementRows: total, practiceRiskIsolation: true };
 }
 
 /** Entry animations must release fixed-position descendants when ordinary motion is enabled. */

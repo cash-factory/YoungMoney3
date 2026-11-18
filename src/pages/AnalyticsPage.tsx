@@ -69,7 +69,7 @@ export function AnalyticsPage() {
       {sourceFilter}{evidence}
         <label className="mb-5 block max-w-sm text-xs font-semibold text-secondary">Account view
           <Select className="input-field mt-1.5" value={selectedAccountId ?? accountId} onChange={event => setSelectedAccountId(event.target.value || '__unassigned__')}>
-            <option value="all">Whole portfolio</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} Â· {account.base_currency}</option>)}
+            <option value="all">Whole portfolio</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}
             <option value="__unassigned__">Unassigned legacy trades</option>
           </Select>
         </label>
@@ -87,7 +87,7 @@ export function AnalyticsPage() {
       {sourceFilter}{evidence}
       <label className="mb-5 block max-w-sm text-xs font-semibold text-secondary">Account view
         <Select className="input-field mt-1.5" value={selectedAccountId ?? accountId} onChange={event => setSelectedAccountId(event.target.value || '__unassigned__')}>
-          <option value="all">Whole portfolio</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} Â· {account.base_currency}</option>)}
+          <option value="all">Whole portfolio</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}
           <option value="__unassigned__">Unassigned legacy trades</option>
         </Select>
       </label>
@@ -120,7 +120,7 @@ export function AnalyticsPage() {
           {pairData.map(p => (
             <div key={p.pair} className="p-2 rounded-lg bg-secondary border border-themed">
               <p className="font-mono text-xs font-semibold">{p.pair}</p>
-              <p className="text-xs text-muted">{p.trades} trades Â· {formatPercent(p.winRate)} WR</p>
+              <p className="text-xs text-muted">{p.trades} trades · {formatPercent(p.winRate)} WR</p>
               <p className={`text-xs font-mono font-semibold ${p.pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>{formatMoney(p.pnl)}</p>
             </div>
           ))}
@@ -159,7 +159,7 @@ export function AnalyticsPage() {
             {dirData.map(d => (
               <div key={d.direction} className="flex items-center justify-between text-sm">
                 <span className="font-medium">{d.direction}</span>
-                <span className="text-muted">{d.trades} trades Â· {formatPercent(d.winRate)} WR Â· <span className={d.pnl >= 0 ? 'text-success-500' : 'text-error-500'}>{formatMoney(d.pnl)}</span></span>
+                <span className="text-muted">{d.trades} trades · {formatPercent(d.winRate)} WR · <span className={d.pnl >= 0 ? 'text-success-500' : 'text-error-500'}>{formatMoney(d.pnl)}</span></span>
               </div>
             ))}
           </div>
@@ -192,7 +192,7 @@ export function AnalyticsPage() {
               <div key={s.strategy} className="flex items-center justify-between p-3 rounded-xl bg-secondary border border-themed">
                 <div>
                   <span className="font-semibold text-sm">{s.strategy}</span>
-                  <span className="ml-2 text-xs text-muted">{s.trades} trades Â· {formatPercent(s.winRate)} WR</span>
+                  <span className="ml-2 text-xs text-muted">{s.trades} trades · {formatPercent(s.winRate)} WR</span>
                 </div>
                 <span className={`font-mono font-semibold text-sm ${s.pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>
                   {formatMoney(s.pnl)}

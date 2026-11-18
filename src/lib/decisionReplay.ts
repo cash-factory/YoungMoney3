@@ -236,7 +236,7 @@ export function focusForDay(reviews: WeeklyReview[], day: string, account?: stri
     .filter(
       (r) =>
         r.focus_next_week?.trim() &&
-        (!account || !r.account_id || r.account_id === account) &&
+        (!r.account_id || r.account_id === account) &&
         r.week_end < day &&
         Date.parse(day + 'T00:00:00Z') - Date.parse(r.week_end + 'T00:00:00Z') <= 7 * 86400000
     )
