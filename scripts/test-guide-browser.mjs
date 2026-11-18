@@ -76,7 +76,7 @@ try {
     if (width === 1440) {
       await page.getByRole('button', { name: 'Explore platform tour' }).click();
     } else {
-      await page.getByRole('button', { name: 'Open platform guide' }).first().click();
+      await page.locator('.ym-mobile-topbar').getByRole('button', { name: 'Open platform guide' }).click();
     }
     await hub.waitFor();
     await hub.getByRole('button', { name: 'Go to The Desk' }).click();
