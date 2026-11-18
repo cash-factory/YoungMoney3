@@ -40,8 +40,13 @@ try {
     await tour.getByRole('button', { name: 'Skip to...' }).click();
     const directory = page.getByRole('dialog', { name: /Make yourself at home/ });
     await directory.waitFor();
+    const directoryBeforeSearch = await directory.boundingBox();
     await directory.getByRole('textbox', { name: 'Search guide destinations' }).fill('risk');
     assert.equal(await directory.getByRole('button', { name: 'Go to Risk Control' }).count(), 1);
+    const directoryAfterSearch = await directory.boundingBox();
+    assert.ok(Math.abs(directoryBeforeSearch.y - directoryAfterSearch.y) <= 1 &&
+      Math.abs(directoryBeforeSearch.height - directoryAfterSearch.height) <= 1,
+      'Filtering keeps the guide panel and its click targets in a stable frame');
     await directory.getByRole('button', { name: 'Go to Risk Control' }).click();
     tour = page.getByRole('dialog', { name: 'Protect the next opportunity' });
     await tour.waitFor();
