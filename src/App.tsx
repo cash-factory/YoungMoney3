@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ThemeProvider } from '@/context/ThemeProvider';
 import { AuthProvider } from '@/context/AuthProvider';
 import { useAuth } from '@/context/AuthContext';
@@ -34,6 +34,8 @@ import { QuickCaptureModal } from '@/components/QuickCaptureModal';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { reportDataError } from '@/lib/recovery';
 import { Mt5Connections } from '@/components/Mt5Connections';
+import { PlatformGuide } from '@/components/PlatformGuide';
+import { guideShouldWelcome, writeGuideState } from '@/lib/platformGuide';
 
 const PAGE_IDS: PageId[] = [
   'media', 'dashboard', 'trades', 'calendar', 'analytics', 'journal', 'ai',
@@ -55,6 +57,9 @@ function AppContent() {
   const [onboardingNeeded, setOnboardingNeeded] = useState<boolean | null>(null);
   const [onboardingError, setOnboardingError] = useState('');
   const [onboardingAttempt, setOnboardingAttempt] = useState(0);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const guideAutoEvaluated = useRef<string | null>(null);
+  const openGuide = () => { setQuickAdd(false); setGuideOpen(true); };
 
   useEffect(() => {
     const restorePageFromLocation = () => setPage(pageFromLocation());
@@ -98,6 +103,17 @@ function AppContent() {
     return () => { cancelled = true; };
   }, [session, onboardingAttempt]);
 
+  // New accounts see the optional explorer once, only after session/profile and
+  // setup checks resolve. Returning users can relaunch it from the dashboard.
+  useEffect(() => {
+    if (!session?.user) { setGuideOpen(false); return; }
+    const userId = session.user.id;
+    if (!profile || profile.id !== userId || onboardingNeeded === null || page !== 'dashboard') return;
+    if (guideAutoEvaluated.current === userId) return;
+    guideAutoEvaluated.current = userId;
+    if (guideShouldWelcome(userId, profile.created_at || session.user.created_at)) setGuideOpen(true);
+  }, [session?.user?.id, session?.user?.created_at, profile, onboardingNeeded, page]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-primary flex items-center justify-center">
@@ -119,13 +135,13 @@ function AppContent() {
   }
 
   return (
-    <Layout current={page} onNavigate={navigateToPage} onQuickAdd={() => setQuickAdd(true)}>
+    <Layout current={page} onNavigate={navigateToPage} onQuickAdd={() => setQuickAdd(true)} onOpenGuide={openGuide}>
       {onboardingError && <p role="alert" className="card p-3 mb-4 text-sm">Workspace setup could not be checked. <button className="btn-secondary" onClick={()=>setOnboardingAttempt(v=>v+1)}>Retry</button></p>}
       {onboardingNeeded && page !== 'workspace-setup' && <div className="card p-4 mb-4 flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-secondary">Create your first strategy and risk settings when you’re ready.</p><button className="btn-secondary" onClick={()=>navigateToPage('workspace-setup')}>Set up workspace</button></div>}
       <PageExperience key={page} page={page}>
         {page === 'workspace-setup' && <OnboardingPage onComplete={()=>{setOnboardingNeeded(false);navigateToPage('dashboard');}} />}
         {page === 'media' && <MediaLibraryPage />}
-        {page === 'dashboard' && <DashboardPage />}
+        {page === 'dashboard' && <DashboardPage onOpenGuide={openGuide} />}
         {page === 'trades' && <TradesPage />}
         {page === 'calendar' && <CalendarPage />}
         {page === 'analytics' && <AnalyticsPage />}
@@ -148,6 +164,12 @@ function AppContent() {
         {page === 'admin-operations' && (profile?.role === 'admin' && profile.account_status === 'active' ? <AdminOperationsPage /> : <p role="alert" className="card p-4">This area is reserved for the workspace administrator.</p>)}
       </PageExperience>
       {quickAdd && <QuickCaptureModal open onClose={() => setQuickAdd(false)} />}
+      <PlatformGuide open={guideOpen} userId={session.user.id} currentPage={page}
+        onNavigate={navigateToPage}
+        onDismiss={(completed, visited) => {
+          writeGuideState(session.user.id, completed ? 'completed' : 'dismissed', visited, visited.at(-1));
+          setGuideOpen(false);
+        }} />
     </Layout>
   );
 }
