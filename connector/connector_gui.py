@@ -1082,6 +1082,12 @@ class ConnectorApp:
             self.status_var.set("Reconnecting to dashboard")
             self.device_var.set("Your pairing is saved. This PC will retry automatically.")
             self.banner_var.set("Check the PC’s internet connection. Your accounts stay saved.")
+        elif state == "pc-service-incompatible":
+            self.pc_state = state
+            self.status_var.set("Staging server needs an update")
+            self.device_var.set("This PC's pairing remains saved. The staging API did not acknowledge connector check-ins.")
+            self.banner_var.set("The dashboard server must support this connector version. Update staging before adding accounts.")
+            self._log("Connector check-in endpoint is unavailable or returned an incompatible response.")
         elif state == "pc-revoked":
             self.pc_state, self.paired = state, False
             self.connection_path.show(0)
