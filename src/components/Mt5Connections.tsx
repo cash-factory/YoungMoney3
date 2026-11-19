@@ -52,6 +52,7 @@ export function Mt5Connections() {
   const [loaded,setLoaded] = useState(false);
   const [code,setCode] = useState('');
   const [error,setError] = useState('');
+  const [setupHint,setSetupHint] = useState('');
   const [demo,setDemo] = useState(true);
   const [imported,setImported] = useState('');
   const [historyScan, setHistoryScan] = useState<SelectedScan | null>(null);
@@ -77,6 +78,20 @@ export function Mt5Connections() {
   async function run(operation: () => Promise<void>) {
     try { setError(''); await operation(); await refresh(); } catch (e) {setError(e instanceof Error ? e.message : 'Request failed.');}
   }
+  function startAccountSetup() {
+    setSetupHint('');
+    const ready = devices.filter(pc => pcOnline(pc) && pc.setup_state !== 'install');
+    if (ready.length === 1) { openLogin(ready[0].id); return; }
+    if (ready.length > 1) {
+      setSetupHint('Choose the PC to monitor this account on using Add account beside that PC.');
+    } else if (devices.some(pc => pcOnline(pc) && pc.setup_state === 'install')) {
+      setSetupHint('MetaTrader 5 is not installed on your paired PC. Install it using the connector instructions; detection runs automatically.');
+    } else if (devices.length) {
+      setSetupHint('Open the YoungMoney3 Connector on your PC. Your pairing is saved, and the login form will become available when it is online.');
+    } else {
+      setSetupHint('First download and open the Windows Connector, then choose Pair a PC. You will not need to find any MT5 program folders.');
+    }
+  }
   const source = (t: typeof trades[number]) => (t as {trade_source?:string}).trade_source;
   const historyAccount = links.find(link => link.id === historyScan?.link);
   const selected = trades.find(t=>t.id===imported);
@@ -85,7 +100,11 @@ export function Mt5Connections() {
     <SectionHeader title="MT5 Connections" subtitle="Add a broker login, check its last sync, and manage account monitoring." />
     <section className="card p-5 sm:p-6 space-y-4">
     <header className="flex flex-wrap items-center justify-between gap-3"><h2 className="flex items-center gap-2 font-bold"><Monitor size={20} className="text-brand-500"/> Paired PCs</h2>
-    <button className="btn-primary" disabled={capturePaused} onClick={()=>run(async()=>setCode((await action('pair')).code))}>Pair a PC</button></header>
+    <div className="flex flex-wrap gap-2">
+      <button className="btn-primary" disabled={capturePaused} onClick={startAccountSetup}>Add account</button>
+      <button className="btn-secondary" disabled={capturePaused} onClick={()=>run(async()=>setCode((await action('pair')).code))}>Pair a PC</button>
+    </div></header>
+    {setupHint && <p role="status" className="rounded-xl bg-secondary p-3 text-sm text-secondary">{setupHint}</p>}
     {capturePaused && <p role="status">Staging capture is paused by your administrator.</p>}
     {loaded && !devices.length && <p className="text-sm text-secondary">Run the Windows connector, then enter your pairing code on that PC.</p>}
     <div className="flex flex-wrap items-center gap-2">
