@@ -133,7 +133,8 @@ class ManagedAccounts:
         for session in self.store.snapshot():
             exe = Path(session["terminal"])
             if (session["enabled"] and path_key(str(exe)) not in used and session["name"] == slug
-                    and exe.parent.parent == self.root and (exe.parent / ".ym-managed.json").is_file() and exe.is_file()):
+                    and path_key(str(exe.parent.parent)) == path_key(str(self.root))
+                    and (exe.parent / ".ym-managed.json").is_file() and exe.is_file()):
                 return str(exe)
         target = create_terminal(source, self.root, slug, broker_directory=directory, cancel=stop)
         return self.store.add(str(target), slug)["terminal"]

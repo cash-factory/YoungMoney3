@@ -166,7 +166,7 @@ class StudioArt(tk.Canvas):
 
     def reveal(self):
         self._cleanup()
-        self._progress = 0 if self.motion() else 1
+        self._progress = 0 if self.motion() and self.variant != "Account monitor" else 1
         self.draw()
         if self._progress == 1:
             return
@@ -184,6 +184,22 @@ class StudioArt(tk.Canvas):
         dim = blend(background, self.accent, .22)
         soft = blend(background, "#ffffff", .12)
         bright = blend(self.accent, "#ffffff", .5)
+        if self.variant == "Account monitor":
+            # The overview's motion belongs to the live status rail. The header
+            # stays still even when a user returns to the page mid-verification.
+            panel = blend(background, "#9b93a6", .12)
+            edge = blend(background, "#e3dce7", .37)
+            shell = (20,24, 112,10, 130,18, 130,77, 39,91, 20,81)
+            self.create_polygon(*shell, fill=panel, outline=edge, width=1)
+            self.create_polygon(26,29,112,16,123,21,123,71,38,84,26,78,
+                                fill=background, outline=soft)
+            for offset, length in ((0,55),(10,36),(20,45)):
+                self.create_line(39,44+offset,39+length,44+offset-length*.15,fill=edge,width=2)
+            self.create_polygon(99,55,155,46,170,52,170,84,115,94,99,87,
+                                fill=blend(background,self.accent,.12),outline=self.accent,width=1)
+            self.create_line(111,68,120,75,137,58,fill=bright,width=2.5)
+            self.create_line(143,72,160,69,fill=bright,width=2)
+            return
         if self.variant == "Account sessions":
             for index in range(3):
                 x = 24 + index * 51

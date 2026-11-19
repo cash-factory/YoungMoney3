@@ -43,6 +43,7 @@ class ConnectorPresentationTests(unittest.TestCase):
             spec.loader.exec_module(module)
         module.SETTINGS = Path(self.temp.name) / "preferences.json"
         self.staging_url = module.STAGING_URL
+        self.browser = module.webbrowser
         self.settings = module.SETTINGS
         try:
             self.root = tk.Tk()
@@ -111,7 +112,7 @@ class ConnectorPresentationTests(unittest.TestCase):
             self.app.poll()
             start.assert_called_once_with([self.staging_url])
         self.app._event({"state":"pc-online","device":"fixture","setup":"ready"})
-        with patch("webbrowser.open") as navigate:
+        with patch.object(self.browser, "open") as navigate:
             self.app.add_account()
             self.assertIn("?addAccount=fixture#mt5",navigate.call_args.args[0])
 
