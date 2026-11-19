@@ -108,7 +108,7 @@ export function Mt5Connections() {
     {capturePaused && <p role="status">Staging capture is paused by your administrator.</p>}
     {loaded && !devices.length && <p className="text-sm text-secondary">Run the Windows connector, then enter your pairing code on that PC.</p>}
     <div className="flex flex-wrap items-center gap-2">
-      <a className="btn-primary inline-flex items-center gap-2" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.4.1-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer" aria-label="Download YoungMoney3 Windows Connector version 0.4.1 release candidate 1"><Download size={15}/>Download Connector v0.4.1-rc1</a>
+      <a className="btn-primary inline-flex items-center gap-2" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.4.1-rc2/YoungMoney3.Connector.exe" rel="noopener noreferrer" aria-label="Download YoungMoney3 Windows Connector version 0.4.1 release candidate 2"><Download size={15}/>Download Connector v0.4.1-rc2</a>
       <a className="btn-secondary inline-flex items-center gap-2" href="/connector-download.html">Release details &amp; SHA-256</a>
       <a className="btn-secondary inline-flex items-center gap-2" href="/mt5-connector.zip" download><Download size={15}/>Python source fallback</a>
     </div>
