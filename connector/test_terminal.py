@@ -29,7 +29,7 @@ class TerminalLoginTests(unittest.TestCase):
             self.api.initialize.side_effect=[False,True]
             self.api.last_error.return_value=(-10005,'IPC timeout')
             self.assertEqual(self.verify(),self.account)
-            launch.assert_called_once_with([str(self.slot),'/portable'],cwd=tmp)
+            launch.assert_called_once_with([str(self.slot),'/portable'],cwd=str(self.slot.parent.resolve()))
             self.assertEqual(self.api.initialize.call_count,2)
 
     def test_existing_investor_session_can_sync_without_reauthenticating(self):
@@ -92,7 +92,7 @@ class TerminalLoginTests(unittest.TestCase):
             self.assertEqual(self.api.initialize.call_count,3)
             self.assertEqual(self.api.initialize.call_args.kwargs['login'],42)
             self.assertEqual(self.api.initialize.call_args.kwargs['password'],'fixture')
-            launch.assert_called_once_with([str(self.slot),'/portable'],cwd=tmp)
+            launch.assert_called_once_with([str(self.slot),'/portable'],cwd=str(self.slot.parent.resolve()))
 
     def test_wrong_profile_is_rejected_before_login(self):
         self.api.terminal_info.return_value.data_path=str(Path.cwd())
