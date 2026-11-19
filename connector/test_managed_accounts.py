@@ -110,6 +110,32 @@ class PresenceTests(unittest.TestCase):
         self.assertEqual([r["state"] for r in posted], ["pc-online","pc-reconnecting","pc-online"])
         self.assertEqual(request.call_args.args[0]["setup"], "install")
 
+    def test_older_staging_api_is_explained_without_revoking_pairing(self):
+        missing = HTTPError("https://example.test", 404, "Not found", {}, io.BytesIO(b""))
+        reply = {"device": "pc1", "paused": [], "pending": None}
+        request = Mock(side_effect=[missing, {"error": "wrong API"}, reply])
+        stop = threading.Event()
+        posted = []
+        service = DevicePresence(request, Mock(sources=lambda: []), posted.append, stop)
+        self.assertFalse(service.check())
+        self.assertFalse(service.check())
+        self.assertTrue(service.check())
+        self.assertFalse(stop.is_set())
+        self.assertEqual([r["state"] for r in posted],
+                         ["pc-service-incompatible", "pc-online"])
+
+    def test_transient_install_discovery_error_does_not_kill_presence(self):
+        source = Mock()
+        source.sources.side_effect = [PermissionError("MT5 being updated"), []]
+        request = Mock(return_value={"device": "pc1", "paused": []})
+        stop = threading.Event()
+        posted = []
+        service = DevicePresence(request, source, posted.append, stop)
+        self.assertFalse(service.check())
+        self.assertTrue(service.check())
+        self.assertFalse(stop.is_set())
+        self.assertEqual([r["state"] for r in posted], ["pc-reconnecting", "pc-online"])
+
     def test_only_explicit_revocation_requests_repair(self):
         def denied(body):
             return HTTPError("https://example.test",403,"Forbidden",{},io.BytesIO(body))
