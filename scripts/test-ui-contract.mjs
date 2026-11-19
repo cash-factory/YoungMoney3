@@ -350,7 +350,7 @@ test('staging MT5 Connections downloads the latest published Windows installer d
   assert.ok(page.includes('href="'+executable+'"'),'Release page must provide a working link without GitHub API');
   assert.ok(page.includes('href="'+checksum+'"'),'Show the published checksum next to the executable');
   assert.ok(page.includes('id="digest"'),'The download page must show checksum verification instructions');
-  assert.ok(!page.includes('b56656885770a29f501cbcac56cd318e8927f65b03f80ddf0a680d05ce9d3618'),'A new connector cannot display the previous binary checksum');
+  assert.ok(page.includes('9a703d56ea3b6077e231c5151a4ad139adb96d199a73081a740fda42ab53476d'),'Published Windows executable checksum must match the designated release');
   assert.ok(!page.includes('fb0e1f41a59fb44899c82d2f0139871bd6d081b03bb896df0571e8aa8e644c78'),'Never reuse the old connector checksum for a new release');
   assert.ok(page.includes('fetch(\'https://api.github.com/repos/cash-factory/YoungMoney3/releases?per_page=30\''),'Keep newer release discovery available');
 });
