@@ -27,7 +27,7 @@ class HistoryResumptionTests(unittest.TestCase):
         """)
         self.now=int(time.time()*1000)
         self.start=self.now-5000
-        self.since=self.start-20*DAY
+        self.since=self.start-42*DAY
         self.request='history-fixture'
         self.status='requested'
         self.calls=[]
@@ -47,11 +47,14 @@ class HistoryResumptionTests(unittest.TestCase):
         self.db.execute("INSERT INTO links VALUES(?,?,?,?)",('link',self.start,0,0))
 
     def post(self,action,payload,token=None):
+        if action == 'history-progress':
+            self.calls.append({"progress": payload["scanned_until"]})
+            return {"ok": True}
         assert action=='sync', action
         self.calls.append(payload)
         if payload.get('history_done'):
             return {'history':{'id':self.request,'status':'ready'}}
-        return {'history':{'id':self.request,'status':self.status,'since':self.since}}
+        return {'history':{'id':self.request,'status':self.status,'since':self.since,'mode':'days'}}
 
     def scan(self):
         connect.scan('link','terminal64.exe','42','Demo',self.start,self.start,0,None,0)
@@ -59,7 +62,7 @@ class HistoryResumptionTests(unittest.TestCase):
     def test_history_scans_are_bounded_persistent_and_complete_without_fills(self):
         self.scan()
         cursor=self.db.execute("SELECT cursor FROM history_progress WHERE link='link'").fetchone()[0]
-        self.assertEqual(cursor,self.since+7*DAY)
+        self.assertEqual(cursor,self.since+28*DAY)
         self.scan()
         self.assertEqual(self.db.execute("SELECT cursor FROM history_progress WHERE link='link'").fetchone()[0],
                          self.since+14*DAY)
@@ -69,7 +72,7 @@ class HistoryResumptionTests(unittest.TestCase):
         for args,kwargs in self.api.history_deals_get.call_args_list:
             if len(args)==2:
                 width=(args[1]-args[0]).total_seconds()*1000
-                self.assertLessEqual(width,7*DAY+2500)
+                self.assertLessEqual(width,14*DAY+2500)
 
     def test_cancelled_scan_stops_after_server_decline(self):
         self.scan()

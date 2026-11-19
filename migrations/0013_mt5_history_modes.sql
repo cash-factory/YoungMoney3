@@ -5,3 +5,4 @@ ALTER TABLE mt5_links ADD COLUMN history_anchor_at INTEGER;
 ALTER TABLE mt5_links ADD COLUMN history_anchor_ticket TEXT;
 ALTER TABLE mt5_links ADD COLUMN history_anchor_amount REAL;
 ALTER TABLE mt5_links ADD COLUMN history_scanned_until INTEGER;
+ALTER TABLE mt5_links ADD COLUMN history_authorized_since INTEGER;

@@ -51,7 +51,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if (owner) {
     if (action === 'status') {
       const devices = await q('SELECT id,public_key,last_seen,setup_state,connector_version FROM mt5_devices WHERE owner=? AND revoked=0 AND public_key IS NOT NULL', owner).all();
-      const links = await q('SELECT l.device,l.monitoring_paused,l.retry_requested_at,l.capture_health,l.id,l.account_id,l.status,l.company,l.server,l.login,l.access_level,l.trade_mode,l.history_id,l.history_status,l.history_since,l.history_mode,l.history_anchor_at,l.history_anchor_ticket,l.history_anchor_amount,l.history_scanned_until,l.last_sync,l.broker_balance,l.broker_equity,l.currency,l.gap,l.last_error,l.expires,l.broker_timezone,l.timezone_confirmed_at,l.timezone_source,l.utc_conversion_status FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND d.revoked=0', owner).all();
+      const links = await q('SELECT l.device,l.monitoring_paused,l.retry_requested_at,l.capture_health,l.id,l.account_id,l.status,l.company,l.server,l.login,l.access_level,l.trade_mode,l.history_id,l.history_status,l.history_since,l.history_authorized_since,l.history_mode,l.history_anchor_at,l.history_anchor_ticket,l.history_anchor_amount,l.history_scanned_until,l.last_sync,l.broker_balance,l.broker_equity,l.currency,l.gap,l.last_error,l.expires,l.broker_timezone,l.timezone_confirmed_at,l.timezone_source,l.utc_conversion_status FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND d.revoked=0', owner).all();
       const accounts=await q("SELECT id,json_extract(payload,'$.name') AS name FROM workspace_records WHERE user_id=? AND table_name='trading_accounts' ORDER BY created_at",owner).all();
       const states=await Promise.all(links.results.map(async link=>({...link,pending_reviews:(await remainingReviews(String(link.id)))?.n??0})));
       return json({ accounts:accounts.results, devices: devices.results, links: states, demoOnly: env.MT5_ALLOW_LIVE !== 'true', capturePaused: await capturePaused() });
@@ -119,7 +119,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       return json({rows:evidence.results.slice(0,100).map(row=>({...row,payload:JSON.parse(row.payload)})),more:evidence.results.length>100});
     }
     if (['history-request','history-preview','history-import','history-decline'].includes(action)) {
-      const link=await q("SELECT l.* FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE l.id=? AND d.owner=? AND d.revoked=0 AND l.status='connected'",input.link,owner).first<{id:string;account_id:string;currency:string;company:string;linked_at:string;history_id:string;history_status:string;history_since:number|null;history_mode:string;history_anchor_at:number|null;trade_mode:number|null;monitoring_paused:number}>();
+      const link=await q("SELECT l.* FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE l.id=? AND d.owner=? AND d.revoked=0 AND l.status='connected'",input.link,owner).first<{id:string;account_id:string;currency:string;company:string;linked_at:string;history_id:string;history_status:string;history_since:number|null;history_authorized_since:number|null;history_mode:string;history_anchor_at:number|null;trade_mode:number|null;monitoring_paused:number}>();
       if(!link) return fail('Linked account unavailable.',404);
       if (action==='history-request' && link.monitoring_paused) return fail('Resume monitoring before requesting a scan.',409);
       if(['history-request','history-import'].includes(action) && await capturePaused())
@@ -151,17 +151,20 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         if(since!==null && (since<HISTORY_EPOCH||since>=linkedAt))
           return fail('History must begin before this account was linked.');
         const requestId=uuid(),status=since===null?'resolving':'requested';
-        const created=await q(`UPDATE mt5_links SET history_id=?,history_status=?,history_since=?,history_mode=?,
+        const created=await q(`UPDATE mt5_links SET history_id=?,history_status=?,history_since=?,history_authorized_since=?,history_mode=?,
           history_anchor_at=NULL,history_anchor_ticket=NULL,history_anchor_amount=NULL,history_scanned_until=NULL
           WHERE id=? AND COALESCE(history_status,'') NOT IN ('requested','resolving')`,
-          requestId,status,since,mode,link.id).run();
+          requestId,status,since,since,mode,link.id).run();
         return created.meta.changes ? json({ok:true,request:requestId,status,mode}) : fail('History scan already running.',409);
       }
       // The owner explicitly chooses a range. Never silently extend an old
       // completed scan; its immutable request ID must still match on approval.
       if(action!=='history-decline' && (link.history_since===null ||
          !timestamp(link.linked_at) || !Number.isSafeInteger(link.history_since) ||
-         link.history_since<HISTORY_EPOCH || link.history_since>=Date.parse(link.linked_at)))
+         link.history_since<HISTORY_EPOCH || link.history_since>=Date.parse(link.linked_at) ||
+         (link.history_authorized_since!==null && link.history_since!==link.history_authorized_since) ||
+         (link.history_authorized_since===null &&
+          link.history_since<Date.parse(link.linked_at)-90*86400000)))
         return fail('History start has not been established by the broker. Wait for discovery or choose a new scan.',409);
       const prefix='history:'+link.history_id+':';
       if(action==='history-preview') {
@@ -306,18 +309,18 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
        !limited(input.ticket,24)||!/^[0-9]+$/.test(input.ticket) ||
        typeof input.amount!=='number'||!Number.isFinite(input.amount)||input.amount<=0)
       return fail('Invalid broker deposit evidence.');
-    const updated=await q(`UPDATE mt5_links SET history_since=?,history_anchor_at=?,history_anchor_ticket=?,
+    const updated=await q(`UPDATE mt5_links SET history_since=?,history_authorized_since=?,history_anchor_at=?,history_anchor_ticket=?,
       history_anchor_amount=?,history_status='requested' WHERE id=? AND history_id=? AND history_status='resolving'`,
-      since,since,input.ticket,input.amount,link.id,selected.history_id).run();
+      since,since,since,input.ticket,input.amount,link.id,selected.history_id).run();
     return updated.meta.changes?json({ok:true,since}):fail('History request changed.',409);
   }
   if (action === 'device/history-progress') {
     if(!limited(input.request,64)) return fail('Missing history request.');
     const scanned=Number(input.scanned_until);
-    const selected=await q("SELECT history_id,history_since,linked_at,history_status FROM mt5_links WHERE id=? AND device=?",link.id,device.id)
-      .first<{history_id:string;history_since:number|null;linked_at:string;history_status:string}>();
+    const selected=await q("SELECT history_id,history_since,history_authorized_since,linked_at,history_status FROM mt5_links WHERE id=? AND device=?",link.id,device.id)
+      .first<{history_id:string;history_since:number|null;history_authorized_since:number|null;linked_at:string;history_status:string}>();
     if(!selected||selected.history_id!==input.request||selected.history_status!=='requested' ||
-       selected.history_since===null||!Number.isSafeInteger(scanned) ||
+       selected.history_since===null||selected.history_since!==selected.history_authorized_since||!Number.isSafeInteger(scanned) ||
        scanned<selected.history_since||scanned>Date.parse(selected.linked_at))
       return fail('Invalid history scan progress.',409);
     await q("UPDATE mt5_links SET history_scanned_until=MAX(COALESCE(history_scanned_until,?),?) WHERE id=? AND history_id=? AND history_status='requested'",
