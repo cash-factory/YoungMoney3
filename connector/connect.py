@@ -385,6 +385,17 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
         if len(page)<24: break
 
     request=response.get("history") if "response" in locals() else None
+    if request and request["status"]=="resolving":
+        from history_range import discover_deposit, clear_discovery
+        request_id = str(request["id"])
+        complete, deposit = discover_deposit(db, link, request_id, start, offset,
+                                             request["mode"], mt5)
+        if complete:
+            payload = {"link": link, "request": request_id, "found": deposit is not None}
+            if deposit:
+                payload.update(deposit)
+            post("history-anchor", payload, token)
+            clear_discovery(db, link, request_id)
     if request and request["status"]=="requested":
         request_id=str(request["id"])
         progress=db.execute("SELECT cursor FROM history_progress WHERE link=? AND request=?",(link,request_id)).fetchone()
@@ -398,8 +409,22 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
         if cursor < start:
             # Bound each request to a small UTC window; persist cursor to resume
             # after a shutdown, HTTP error or disconnected broker.
-            stop=min(start,cursor+7*86400000)
-            deals=normalize(records(mt5.history_deals_get(utc(cursor+offset-1000),utc(stop+offset+1000))))
+            # Long and all-history requests move in larger bounded windows.
+            # Progress is durable even if the connector exits mid-import.
+            window_days = 90 if request.get("mode") in ("all","since_first_deposit","since_last_deposit") else 14
+            stop=min(start,cursor+window_days*86400000)
+            raw_deals=records(mt5.history_deals_get(utc(cursor+offset-1000),utc(stop+offset+1000)))
+            raw_orders=records(mt5.history_orders_get(utc(cursor+offset-1000),utc(stop+offset+1000)))
+            deals=normalize(raw_deals)
+            orders=normalize(raw_orders)
+            with db:
+                for d,original in zip(deals,raw_deals):
+                    if cursor<=d["time_msc"]<stop:
+                        enqueue(link,"raw","deal-"+str(d["ticket"]),raw(original))
+                for order,original in zip(orders,raw_orders):
+                    at=max(order.get("time_done_msc",0),order.get("time_setup_msc",0))-offset
+                    if cursor<=at<stop:
+                        enqueue(link,"raw","order-"+str(order["ticket"]),raw(original))
             pids={d["position_id"] for d in deals if d["type"] in (0,1) and d["entry"] in (1,2,3)
                   and cursor<=d["time_msc"]<stop}
             with db:
@@ -408,14 +433,27 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
                 db.execute("UPDATE history_progress SET cursor=? WHERE link=? AND request=?",
                            (stop,link,request_id))
             cursor=stop
+            post("history-progress", {"link":link,"request":request_id,
+                                      "scanned_until":cursor}, token)
         work=db.execute("SELECT pid FROM history_work WHERE link=? AND request=? AND done=0 LIMIT 5",
                         (link,request_id)).fetchall()
         for (pid,) in work:
-            history=normalize(records(mt5.history_deals_get(position=int(pid))))
-            orders={o["ticket"]:o for o in records(mt5.history_orders_get(position=int(pid)))}
+            historical_deals=records(mt5.history_deals_get(position=int(pid)))
+            historical_orders=records(mt5.history_orders_get(position=int(pid)))
+            history=normalize(historical_deals)
+            orders={o["ticket"]:o for o in historical_orders}
             with db:
+                # Preserve broker source events, including context predating the
+                # requested lookback. Only approved closed fills enter journal.
+                for item in historical_deals:
+                    enqueue(link,"raw","deal-"+str(item["ticket"]),raw(item))
+                for item in historical_orders:
+                    enqueue(link,"raw","order-"+str(item["ticket"]),raw(item))
                 for leg in closed_legs(history,0,orders):
-                    if request["since"]<=int(datetime.fromisoformat(leg["fields"]["exit_time"]).timestamp()*1000)<start:
+                    entry_at=int(datetime.fromisoformat(leg["fields"]["entry_time"]).timestamp()*1000)
+                    exit_at=int(datetime.fromisoformat(leg["fields"]["exit_time"]).timestamp()*1000)
+                    deposit_mode=request.get("mode") in ("since_first_deposit","since_last_deposit")
+                    if request["since"]<=exit_at<start and (not deposit_mode or entry_at>=request["since"]):
                         leg["fields"]["historical_import"]=True
                         enqueue(link,"history","history:"+request_id+":"+leg["key"],leg["fields"])
                 db.execute("UPDATE history_work SET done=1 WHERE link=? AND request=? AND pid=?",
@@ -427,9 +465,11 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
             complete=post("sync",{"link":link,"events":[],"history_done":request_id},token)
             if complete.get("history",{}).get("status")!="requested":
                 with db: db.execute("DELETE FROM history_progress WHERE link=? AND request=?",(link,request_id))
-    elif request and request.get("status")!="requested":
+    elif request and request.get("status") not in ("requested","resolving"):
         # A declined/imported request must not continue scanning on this PC.
-        with db: db.execute("DELETE FROM history_progress WHERE link=?",(link,))
+        with db:
+            db.execute("DELETE FROM history_progress WHERE link=?",(link,))
+            db.execute("DELETE FROM history_anchor_scan WHERE link=?",(link,))
     return True
 
 def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
@@ -490,6 +530,7 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
         CREATE TABLE IF NOT EXISTS capital_snapshots(link TEXT,at_ms INTEGER,equity TEXT,balance TEXT,PRIMARY KEY(link,at_ms));
         CREATE TABLE IF NOT EXISTS history_seed(link TEXT,request TEXT,PRIMARY KEY(link,request));
         CREATE TABLE IF NOT EXISTS history_progress(link TEXT PRIMARY KEY,request TEXT,cursor INTEGER);
+        CREATE TABLE IF NOT EXISTS history_anchor_scan(link TEXT PRIMARY KEY,request TEXT,cursor INTEGER,candidate_at INTEGER,candidate_ticket TEXT,candidate_amount REAL);
         CREATE TABLE IF NOT EXISTS history_work(link TEXT,request TEXT,pid TEXT,done INTEGER,PRIMARY KEY(link,request,pid));
         CREATE TABLE IF NOT EXISTS latest(link TEXT,key TEXT,payload TEXT,PRIMARY KEY(link,key));
         CREATE TABLE IF NOT EXISTS outbox(seq INTEGER PRIMARY KEY,link TEXT,payload TEXT);

@@ -118,3 +118,31 @@ invent broker endpoints, save account passwords in its SQLite evidence
 database, or place trade orders. Pending add-account requests expire after
 10 minutes; claimed broker verification after 12 minutes. Failed requests can
 be resubmitted from Add account.
+
+## Detailed historical imports (staging)
+
+On a connected broker account, use **Find earlier trades** and select a
+7/14/30/60/90-day or longer custom duration, a specific UTC start date, all
+available MT5 history, or trades entered after the first/latest recorded cash
+deposit. The normal default remains 30 days. All-history scans begin from the
+Unix/MT5 epoch and advance in bounded resumable windows. The broker may not
+retain every early deal, so "all" means all records that its MT5 history API
+actually exposes, **not a guarantee of complete life-to-date statements**.
+
+Deposit-based searches inspect the broker's transaction ledger for a *positive
+DEAL_TYPE_BALANCE* record (not a credit/bonus, withdrawal, or inferred jump
+in equity). The last deposit is the latest such record before linking; the
+first deposit is the earliest record discoverable from the MT5 API. A missing
+deposit yields an explicit no-deposit state; it never chooses an approximate
+start. Verify the suggested deposit ticket, time and amount with your broker
+statement before importing. Trades entered before that deposit are excluded
+even if their exits occurred afterwards.
+
+Each scan stores raw immutable deals/orders (broker tickets, times, position
+IDs, SL/TP when available, reason, commission/fees/swap) separately from
+human-readable closed-fill previews. Opening-order SL/TP are never mislabeled
+as final SL/TP; unknown values remain unknown. Historical adjustments of
+protective orders that the broker does not expose cannot be reconstructed
+from fills alone. Reviews and manual duplicate matching are still mandatory
+before older closed fills become journal trades. Connected accounts and
+live evidence are never deleted by the failed-login cleanup controls.

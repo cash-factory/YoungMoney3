@@ -8,13 +8,15 @@ const query = [
   "(SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND name IN ('decision_playbook_insert','decision_playbook_update','decision_playbook_delete')) AS history_triggers,",
   "(SELECT COUNT(*) FROM pragma_table_info('mt5_links') WHERE name IN ('capture_health','retry_requested_at')) AS retry_columns,",
   "(SELECT COUNT(*) FROM pragma_table_info('mt5_devices') WHERE name IN ('setup_state','connector_version')) AS setup_columns,",
-  "(SELECT COUNT(*) FROM pragma_table_info('mt5_links') WHERE name='monitoring_paused') AS monitoring_column",
+  "(SELECT COUNT(*) FROM pragma_table_info('mt5_links') WHERE name='monitoring_paused') AS monitoring_column,",
+  "(SELECT COUNT(*) FROM pragma_table_info('mt5_links') WHERE name IN ('history_mode','history_anchor_at','history_anchor_ticket','history_anchor_amount','history_scanned_until')) AS extended_history_columns,",
+  "(SELECT COUNT(*) FROM d1_migrations WHERE name='0013_mt5_history_modes.sql') AS history_migration",
 ].join(' ');
 
 export function assertRichSchema(data) {
   if (!Array.isArray(data) || data[0]?.success !== true) throw new Error('Staging D1 returned an invalid schema response.');
   const row=data[0]?.results?.[0];
-  if(row?.rich_tables!==4 || row?.timezone_columns!==4 || row?.new_migration!==1 || row.history_triggers!==3 || row.retry_columns!==2 || row.setup_columns!==2 || row.monitoring_column!==1) {
+  if(row?.rich_tables!==4 || row?.timezone_columns!==4 || row?.new_migration!==1 || row.history_triggers!==3 || row.retry_columns!==2 || row.setup_columns!==2 || row.monitoring_column!==1 || row.extended_history_columns!==5 || row.history_migration!==1) {
     throw new Error('Capture or decision-review schema is incomplete. Refusing staging Worker deployment.');
   }
   return true;

@@ -155,12 +155,14 @@ try {
   assert.equal((await call('data',{action:'upsert',table:'trades',payload:{
     ...row,id:'forged-restore',account_id:'foreign-account',
   }})).status,400);
-  // Staging contract: one-month default and a server-enforced 90-day lookback ceiling.
-  // Reject crafted API requests too; limiting the select control is insufficient.
-  for (const days of [0, 91, 180, 365, 3650, 1.5]) {
-    assert.equal((await call('mt5/history-request',{link,days})).status,400,
-      'History requests outside the 1–90 day range must be rejected');
+  // Historical ranges must be explicit, owner-scoped and validated on the API.
+  for (const days of [0, 36526, 1.5]) {
+    assert.equal((await call('mt5/history-request',{link,mode:'days',days})).status,400);
   }
+  for (const since of ['2024-02-30','not-a-date','1900-01-01']) {
+    assert.equal((await call('mt5/history-request',{link,mode:'from_date',since})).status,400);
+  }
+  assert.equal((await call('mt5/history-request',{link,mode:'unrecognized'})).status,400);
   assert.equal((await call('mt5/history-request',{link,days:30})).status,200);
   const history=(await (await device('sync',{link,events:[]})).json()).history;
   const older={...row,entry_time:new Date(Date.now()-9*86400000).toISOString(),
@@ -204,8 +206,43 @@ try {
   assert.equal((await call('mt5/history-import',{link,request:history.id,expected_count:102})).status,409);
   await db.prepare('UPDATE mt5_links SET history_since=? WHERE id=?')
     .bind(approvedSince,link).run();
-  // Ninety days remains an explicit supported choice after reviewing/importing the 30-day window.
-  assert.equal((await call('mt5/history-request',{link,days:90})).status,200);
+  // An extended duration is valid after the earlier scan finishes.
+  assert.equal((await call('mt5/history-request',{link,mode:'days',days:180})).status,200);
+  let selected=(await (await device('sync',{link,events:[]})).json()).history;
+  assert.equal(selected.mode,'days');
+  assert.equal((await call('mt5/history-decline',{link,request:selected.id})).status,200);
+  assert.equal((await call('mt5/history-request',{link,mode:'all'})).status,200);
+  selected=(await (await device('sync',{link,events:[]})).json()).history;
+  assert.equal(selected.mode,'all');
+  assert.equal(selected.since,0);
+  assert.equal((await call('mt5/history-decline',{link,request:selected.id})).status,200);
+
+  assert.equal((await call('mt5/history-request',{link,mode:'from_date',since:'2025-01-15'})).status,200);
+  selected=(await (await device('sync',{link,events:[]})).json()).history;
+  assert.equal(selected.since,Date.parse('2025-01-15T00:00:00.000Z'));
+  assert.equal((await call('mt5/history-decline',{link,request:selected.id})).status,200);
+
+  assert.equal((await call('mt5/history-request',{link,mode:'since_last_deposit'})).status,200);
+  selected=(await (await device('sync',{link,events:[]})).json()).history;
+  assert.equal(selected.status,'resolving');
+  assert.equal(selected.mode,'since_last_deposit');
+  assert.equal((await call('mt5/history-preview',{link,request:selected.id})).status,409);
+  assert.equal((await device('history-anchor',{link,request:selected.id,found:true,since:-1,ticket:'1',amount:100})).status,400);
+  const boundary=Date.now()-7*86400000;
+  assert.equal((await device('history-anchor',{link,request:selected.id,found:true,since:boundary,ticket:'777',amount:100})).status,200);
+  assert.equal((await device('history-anchor',{link,request:selected.id,found:true,since:boundary,ticket:'777',amount:100})).status,409);
+  selected=(await (await device('sync',{link,events:[]})).json()).history;
+  assert.equal(selected.since,boundary);
+  assert.equal(selected.anchor_ticket,'777');
+  assert.equal((await device('history-progress',{link,request:selected.id,scanned_until:boundary-1})).status,409);
+  assert.equal((await device('history-progress',{link,request:selected.id,scanned_until:boundary+1000})).status,200);
+  assert.equal((await call('mt5/history-decline',{link,request:selected.id})).status,200);
+
+  assert.equal((await call('mt5/history-request',{link,mode:'since_first_deposit'})).status,200);
+  selected=(await (await device('sync',{link,events:[]})).json()).history;
+  assert.equal(selected.status,'resolving');
+  assert.equal((await device('history-anchor',{link,request:selected.id,found:false})).status,200);
+  assert.equal((await (await device('sync',{link,events:[]})).json()).history.status,'no_deposit');
   // Rich capture contract: immutable evidence, latest projection, owner isolation
   // and separate, explicit broker timezone/UTC conversion evidence.
   assert.equal((await call('mt5/timezone-confirm',{link,timezone:'not-a-timezone',confirm:true})).status,400);

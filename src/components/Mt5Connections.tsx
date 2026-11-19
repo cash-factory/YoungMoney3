@@ -58,6 +58,9 @@ export function Mt5Connections() {
   const [historyScan, setHistoryScan] = useState<SelectedScan | null>(null);
   const latestRefresh = useRef(0);
   const [historyDays,setHistoryDays]=useState('30');
+  const [historyCustomDays,setHistoryCustomDays]=useState('');
+  const [historyMode,setHistoryMode]=useState('days');
+  const [historyFromDate,setHistoryFromDate]=useState('');
   const [positions,setPositions]=useState<PositionRow[]>([]);
   const [positionsMore,setPositionsMore]=useState(false);
   const [timezoneDraft,setTimezoneDraft]=useState<Record<string,string>>({});
@@ -133,10 +136,38 @@ export function Mt5Connections() {
       <p className="text-sm text-secondary">{demo?'Staging supports demo and contest accounts.':'Demo, contest and real accounts are available.'} The connector prepares MetaTrader for each login and records trades and balances.</p>
       {loaded && !links.length && <p className="rounded-xl bg-secondary p-4 text-sm text-secondary">Choose Add account next to your paired PC to connect a broker login.</p>}
       {loaded && !activeLinks.length && failedLinks.length>0 && <p className="text-sm text-secondary">No active broker accounts yet. Previous failed attempts are grouped below.</p>}
-    {links.some(l=>l.status==='connected') && <label className="block text-xs text-secondary">History lookback
-      <Select className="input-field mt-1 max-w-xs" value={historyDays} onChange={e=>setHistoryDays(e.target.value)}><option value="7">7 days before linking</option><option value="14">14 days before linking</option><option value="30">30 days before linking (default)</option><option value="60">60 days before linking</option><option value="90">90 days before linking (maximum)</option></Select>
-      <span className="mt-1 block text-xs text-muted">Default: approximately one month. Historical imports are limited to the 90 days before linking. Review the broker fills before approving an import.</span>
-    </label>}
+    {links.some(l=>l.status==='connected') && <div className="grid gap-3 sm:grid-cols-2 rounded-xl border border-themed p-4">
+      <label className="block text-xs text-secondary">Find earlier trades — choose history range
+        <Select className="input-field mt-1" value={historyMode} onChange={e=>setHistoryMode(e.target.value)}>
+          <option value="days">Duration before account linking</option>
+          <option value="from_date">From a specific date</option>
+          <option value="all">All history available from broker</option>
+          <option value="since_last_deposit">After the latest recorded deposit</option>
+          <option value="since_first_deposit">After the first recorded deposit</option>
+        </Select>
+      </label>
+      {historyMode==='days' && <label className="block text-xs text-secondary">Lookback duration
+        <Select className="input-field mt-1" value={historyDays} onChange={e=>setHistoryDays(e.target.value)}>
+          <option value="7">7 days before linking</option>
+          <option value="14">14 days before linking</option>
+          <option value="30">30 days before linking (default)</option>
+          <option value="60">60 days before linking</option>
+          <option value="90">90 days before linking</option>
+          <option value="180">180 days before linking</option>
+          <option value="365">1 year before linking</option>
+          <option value="730">2 years before linking</option>
+          <option value="1825">5 years before linking</option>
+          <option value="custom">Custom number of days</option>
+        </Select>
+      </label>}
+      {historyMode==='days' && historyDays==='custom' && <label className="block text-xs text-secondary">Custom lookback (days)
+        <input type="number" className="input-field mt-1" min="1" max="36525" step="1" placeholder="e.g. 240" value={historyCustomDays} onChange={e=>setHistoryCustomDays(e.target.value)}/>
+      </label>}
+      {historyMode==='from_date' && <label className="block text-xs text-secondary">Start date (UTC)
+        <input type="date" className="input-field mt-1" min="1970-01-01" max={new Date().toISOString().slice(0,10)} value={historyFromDate} onChange={e=>setHistoryFromDate(e.target.value)}/>
+      </label>}
+      <p className="text-xs text-muted sm:col-span-2">Each scan belongs to its selected broker account. All-history and deposit-based scans may be lengthy. Deposit modes use positive MT5 balance transactions, not balance snapshots; credits and bonuses are not assumed to be deposits. Only history the broker exposes can be recovered. Review all fills before importing; unavailable historical SL/TP changes are never invented.</p>
+    </div>}
     {activeLinks.map(l=><div key={l.id} role="group" aria-label={'MT5 account '+(accountNames[l.account_id || ''] || l.company || 'Pending')+(l.login?' · '+l.login:'')} className="rounded-xl border border-themed p-4 space-y-3">
       <header className="flex flex-wrap items-start justify-between gap-3"><div>
         <h3 className="font-semibold">{accountNames[l.account_id || ''] || l.company || l.server || 'Broker account'}</h3>
@@ -165,11 +196,25 @@ export function Mt5Connections() {
         </label>
         <p className="text-xs text-muted">Timezone: {l.broker_timezone || 'Unconfirmed'} · UTC conversion: {l.utc_conversion_status || 'Unverified'} · Historical session labels remain unresolved until both are verified.</p></details>
       </div>}
-      {l.status==='connected' && <div className="flex flex-wrap gap-2"><button className="btn-secondary" disabled={l.history_status==='requested' || !!l.monitoring_paused || capturePaused} onClick={()=>run(async()=>{await action('history-request',{link:l.id,days:Number(historyDays)});})}>Find earlier trades</button>
-      {l.history_status==='requested' && <><span role="status" className="text-sm">Scanning on your PC. Keep the connector running.</span>
-        <button className="btn-secondary" onClick={()=>run(async()=>{await action('history-decline',{link:l.id,request:l.history_id});})}>Cancel scan</button></>}
-      {l.history_id && ['ready','imported'].includes(l.history_status || '') && <button className="btn-secondary"
-        onClick={()=>setHistoryScan({link:l.id, request:l.history_id!, brokerAccount:[l.server,l.login].filter(Boolean).join(' · '), name:accountNames[l.account_id || ''] || [l.company,l.login].filter(Boolean).join(' ') || 'Linked account'})}>Review earlier trades</button>}</div>}
+      {l.status==='connected' && <div className="space-y-2">
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-secondary" disabled={['requested','resolving'].includes(l.history_status||'') || !!l.monitoring_paused || capturePaused || (historyMode==='from_date'&&!historyFromDate) || (historyMode==='days'&&historyDays==='custom'&&!historyCustomDays)} onClick={()=>run(async()=>{
+            const payload:Record<string,unknown>={link:l.id,mode:historyMode};
+            if(historyMode==='days') payload.days=Number(historyDays==='custom'?historyCustomDays:historyDays);
+            if(historyMode==='from_date') payload.since=historyFromDate;
+            await action('history-request',payload);
+          })}>Find earlier trades</button>
+          {['requested','resolving'].includes(l.history_status||'') && <>
+            <span role="status" className="text-sm">{l.history_status==='resolving'?'Locating the requested deposit in broker transactions.':'Scanning broker history on your PC.'} Keep the connector running.</span>
+            <button className="btn-secondary" onClick={()=>run(async()=>{await action('history-decline',{link:l.id,request:l.history_id});})}>Cancel scan</button>
+          </>}
+          {l.history_id && ['ready','imported'].includes(l.history_status || '') && <button className="btn-secondary"
+            onClick={()=>setHistoryScan({link:l.id, request:l.history_id!, brokerAccount:[l.server,l.login].filter(Boolean).join(' · '), name:accountNames[l.account_id || ''] || [l.company,l.login].filter(Boolean).join(' ') || 'Linked account'})}>Review earlier trades</button>}
+        </div>
+        {l.history_status==='no_deposit' && <p role="status" className="text-sm">No qualifying positive broker balance deposit was found in the available MT5 history. Select another range or check your broker statement.</p>}
+        {l.history_anchor_at!=null && <p className="text-xs text-secondary">Deposit boundary: {new Date(l.history_anchor_at).toLocaleString()} · Broker deal {l.history_anchor_ticket||'Unknown'} · {l.history_anchor_amount??'Unknown'} {l.currency||''}. Confirm this matches your deposit statement.</p>}
+        {l.history_scanned_until!=null && l.history_status==='requested' && <p className="text-xs text-muted">History scanned through {new Date(l.history_scanned_until).toLocaleDateString()} (broker records permitting).</p>}
+      </div>}
     </div>)}
     {failedLinks.length>0 && <details className="rounded-xl border border-themed p-4 space-y-3">
       <summary className="cursor-pointer font-semibold">Failed or expired login attempts ({failedLinks.length})</summary>
@@ -321,7 +366,7 @@ function HistoryReview({scan, status, onClose, onFinished}: HistoryReviewProps) 
       <p className="text-sm text-secondary">{preview.rows.length} broker {preview.rows.length===1?'fill':'fills'} reviewed{preview.more?' so far. Review the next page before importing.':'.'} Your latest broker balance is shown on the account.</p>
       <div className="overflow-auto max-h-80"><table className="w-full min-w-[950px] text-xs text-left border-separate border-spacing-0">
         <thead><tr className="text-muted uppercase tracking-wide">
-          {['Symbol','Position / deal','Entry / exit UTC','Direction','Volume','Entry / exit price','Original / close SL','Initial risk','Costs / swap','Net P&L'].map(label=><th key={label} className="border-b border-themed px-2 py-3 font-semibold whitespace-nowrap">{label}</th>)}
+          {['Symbol','Position / deal','Entry / exit UTC','Direction','Volume','Entry / exit price','Opening SL / TP','Closing SL / TP','Initial risk','Costs / swap','Exit reason','Net P&L'].map(label=><th key={label} className="border-b border-themed px-2 py-3 font-semibold whitespace-nowrap">{label}</th>)}
         </tr></thead>
         <tbody>{preview.rows.map((r,i)=>{
           const broker=(r.broker_details && typeof r.broker_details==='object' ? r.broker_details : {}) as Record<string,unknown>;
@@ -333,18 +378,35 @@ function HistoryReview({scan, status, onClose, onFinished}: HistoryReviewProps) 
             <td className="px-2 py-3">{value('direction')}</td>
             <td className="px-2 py-3 font-mono">{value('lot_size')}</td>
             <td className="px-2 py-3 font-mono">{value('entry_price')}<div className="text-muted">{value('exit_price')}</div></td>
-            <td className="px-2 py-3 font-mono">{r.stop_loss == null?'Not recorded':String(r.stop_loss)}<div className="text-muted">Original SL not proven by legacy fill scan</div></td>
-            <td className="px-2 py-3">Unavailable unless order evidence establishes original risk</td>
+            <td className="px-2 py-3 font-mono">{r.stop_loss == null?'Not recorded':String(r.stop_loss)} / {r.take_profit==null?'Not recorded':String(r.take_profit)}
+              <div className="text-muted">{broker.opening_protection_provenance==='executed_open_order'?'From opening order':'Opening protection unverified'}</div></td>
+            <td className="px-2 py-3 font-mono">{broker.closing_order_sl==null?'Unavailable':String(broker.closing_order_sl)} / {broker.closing_order_tp==null?'Unavailable':String(broker.closing_order_tp)}
+              <div className="text-muted">Exit order {broker.exit_order_ticket==null?'Unknown':String(broker.exit_order_ticket)}</div></td>
+            <td className="px-2 py-3">Historical initial risk cannot be proven without the opening order, instrument specification, and capital at entry</td>
             <td className="px-2 py-3 font-mono">Fees: {value('fees')}<div className="text-muted">Swap: {broker.swap==null?'Unknown':String(broker.swap)}</div></td>
+            <td className="px-2 py-3">{broker.close_reason==null?'Not recorded':String(broker.close_reason)}
+              <div className="text-muted">{broker.close_comment==null?'':String(broker.close_comment)}</div></td>
             <td className="px-2 py-3 font-mono font-semibold">{value('pnl')}</td>
           </tr>;
         })}</tbody>
       </table></div>
-      <p className="text-xs text-muted">These are individual broker fills. Opening stop, initial risk and R require supporting order evidence.</p>
-      {preview.more && <button disabled={busy} className="btn-secondary" onClick={()=>perform(async()=>{
-        const next = await loadHistoryPage(scan, preview.nextOffset);
-        setPreview({...next, rows:[...preview.rows, ...next.rows]});
-      })}>Review next 100 fills</button>}
+      <p className="text-xs text-muted">These are individual closed broker fills, including partial exits. Original broker deals and orders (timestamps, fees, swap, reasons and known stop levels) are preserved as immutable evidence. A stop changed between observations may not be reconstructible from historical records. Initial risk and R remain unknown when broker evidence is insufficient.</p>
+      {preview.more && <div className="flex flex-wrap gap-2">
+        <button disabled={busy} className="btn-secondary" onClick={()=>perform(async()=>{
+          const next = await loadHistoryPage(scan, preview.nextOffset);
+          setPreview({...next, rows:[...preview.rows, ...next.rows]});
+        })}>Review next 100 fills</button>
+        <button disabled={busy} className="btn-secondary" onClick={()=>perform(async()=>{
+          let current=preview, rows=[...preview.rows];
+          // Reviewable batches; very large histories require another click
+          // rather than blocking the browser or silently importing unseen data.
+          for(let page=0;current.more && page<30;page++){
+            current=await loadHistoryPage(scan,current.nextOffset);
+            rows=rows.concat(current.rows);
+            setPreview({...current,rows});
+          }
+        })}>Load remaining pages for review (up to 3,000)</button>
+      </div>}
       <button disabled={busy || preview.more} className="btn-primary" onClick={()=>perform(async()=>{
         let more = true;
         while (more) {
