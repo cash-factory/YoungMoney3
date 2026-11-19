@@ -56,6 +56,22 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       return json({ accounts:accounts.results, devices: devices.results, links: states, demoOnly: env.MT5_ALLOW_LIVE !== 'true', capturePaused: await capturePaused() });
     }
     if (action === 'set-monitoring') return setMonitoring(owner);
+    if (action === 'remove-failed' || action === 'clear-failed') {
+      // Failed/expired requests are metadata, not journal accounts. Never
+      // delete a connected link, broker evidence, or already imported fills.
+      const evidenceGuard = `NOT EXISTS (SELECT 1 FROM mt5_events e WHERE e.link=mt5_links.id)
+        AND NOT EXISTS (SELECT 1 FROM mt5_raw_evidence r WHERE r.link=mt5_links.id)
+        AND NOT EXISTS (SELECT 1 FROM mt5_position_versions v WHERE v.link=mt5_links.id)`;
+      if (action === 'remove-failed' && !limited(input.link,64)) return fail('Choose a failed account attempt.');
+      const sql = `DELETE FROM mt5_links WHERE owner=? AND status IN ('failed','expired')
+        AND device IN (SELECT id FROM mt5_devices WHERE owner=? AND revoked=0)
+        ${action === 'remove-failed' ? 'AND id=?' : ''}
+        AND ${evidenceGuard}`;
+      const result = await q(sql,...(action==='remove-failed'?[owner,owner,input.link]:[owner,owner])).run();
+      if (action==='remove-failed' && !result.meta.changes)
+        return fail('Only your failed or expired attempts without broker evidence can be removed.',409);
+      return json({ok:true,removed:result.meta.changes});
+    }
     if(action==='retry-session'){
       if(!limited(input.link,64))return fail('Choose a linked account.');
       if(await capturePaused())return fail('Capture is paused in staging.',409);

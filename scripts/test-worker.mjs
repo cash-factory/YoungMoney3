@@ -109,6 +109,14 @@ try {
   const loginRequest={device:devices[0].id,server:'Demo',envelope:{wrapped:'a',iv:'b',data:'c'}};
   assert.equal((await call('mt5/connect',loginRequest)).status,409);
   assert.equal((await presence()).pending,null);
+  const failedAttempt=(await (await call('mt5/connect',loginRequest)).json()).id;
+  await db.prepare("UPDATE mt5_links SET status='failed',last_error='Simulated login failure' WHERE id=?").bind(failedAttempt).run();
+  assert.equal((await call('mt5/remove-failed',{link:'not-my-link'})).status,409);
+  assert.equal((await (await call('mt5/remove-failed',{link:failedAttempt})).json()).removed,1);
+  assert.equal((await (await call('mt5/status',{})).json()).links.some(l=>l.id===failedAttempt),false);
+  const stale=(await (await call('mt5/connect',loginRequest)).json()).id;
+  await db.prepare("UPDATE mt5_links SET status='expired' WHERE id=?").bind(stale).run();
+  assert.equal((await (await call('mt5/clear-failed',{})).json()).removed,1);
   const link=(await (await call('mt5/connect',loginRequest)).json()).id;
   const pendingExpiry=await db.prepare('SELECT expires FROM mt5_links WHERE id=?').bind(link).first();
   assert.ok(pendingExpiry.expires-Date.now()>9*60*1000,'Slow MT5 preparation needs a ten-minute pending window');
@@ -122,6 +130,8 @@ try {
   const verifiedAccess=(await (await call('mt5/status',{})).json()).links.find(l=>l.id===link);
   assert.equal(verifiedAccess.access_level,'trading-enabled');
   assert.equal(verifiedAccess.trade_mode,0);
+  assert.equal((await call('mt5/remove-failed',{link})).status,409,'Connected accounts must never be removed using cleanup.');
+  assert.equal((await (await call('mt5/clear-failed',{})).json()).removed,0);
   const liveBalance=await device('sync',{link,events:[],balance:165.5,equity:178.25});
   assert.equal(liveBalance.status,200);
   const linkedAccount=(await (await call('mt5/status',{})).json()).links[0].account_id;

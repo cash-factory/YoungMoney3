@@ -94,6 +94,8 @@ export function Mt5Connections() {
   }
   const source = (t: typeof trades[number]) => (t as {trade_source?:string}).trade_source;
   const historyAccount = links.find(link => link.id === historyScan?.link);
+  const failedLinks = links.filter(link => ['failed','expired'].includes(link.status));
+  const activeLinks = links.filter(link => !['failed','expired'].includes(link.status));
   const selected = trades.find(t=>t.id===imported);
   const matches = trades.filter(t=>selected && source(t)!=='mt5' && selected.pair===t.pair && t.account_id===selected.account_id && t.direction===selected.direction);
   return <main className="space-y-5">
@@ -130,11 +132,12 @@ export function Mt5Connections() {
       <h2 className="flex items-center gap-2 font-bold"><Link2 size={20} className="text-brand-500"/>Linked accounts</h2>
       <p className="text-sm text-secondary">{demo?'Staging supports demo and contest accounts.':'Demo, contest and real accounts are available.'} The connector prepares MetaTrader for each login and records trades and balances.</p>
       {loaded && !links.length && <p className="rounded-xl bg-secondary p-4 text-sm text-secondary">Choose Add account next to your paired PC to connect a broker login.</p>}
+      {loaded && !activeLinks.length && failedLinks.length>0 && <p className="text-sm text-secondary">No active broker accounts yet. Previous failed attempts are grouped below.</p>}
     {links.some(l=>l.status==='connected') && <label className="block text-xs text-secondary">History lookback
       <Select className="input-field mt-1 max-w-xs" value={historyDays} onChange={e=>setHistoryDays(e.target.value)}><option value="7">7 days before linking</option><option value="14">14 days before linking</option><option value="30">30 days before linking (default)</option><option value="60">60 days before linking</option><option value="90">90 days before linking (maximum)</option></Select>
       <span className="mt-1 block text-xs text-muted">Default: approximately one month. Historical imports are limited to the 90 days before linking. Review the broker fills before approving an import.</span>
     </label>}
-    {links.map(l=><div key={l.id} role="group" aria-label={'MT5 account '+(accountNames[l.account_id || ''] || l.company || 'Pending')+(l.login?' · '+l.login:'')} className="rounded-xl border border-themed p-4 space-y-3">
+    {activeLinks.map(l=><div key={l.id} role="group" aria-label={'MT5 account '+(accountNames[l.account_id || ''] || l.company || 'Pending')+(l.login?' · '+l.login:'')} className="rounded-xl border border-themed p-4 space-y-3">
       <header className="flex flex-wrap items-start justify-between gap-3"><div>
         <h3 className="font-semibold">{accountNames[l.account_id || ''] || l.company || l.server || 'Broker account'}</h3>
         <p className="text-xs text-secondary">{[l.server,l.login,l.trade_mode===0?'Demo':l.trade_mode===1?'Contest':l.trade_mode===2?'Real':null].filter(Boolean).join(' · ')}</p>
@@ -168,6 +171,21 @@ export function Mt5Connections() {
       {l.history_id && ['ready','imported'].includes(l.history_status || '') && <button className="btn-secondary"
         onClick={()=>setHistoryScan({link:l.id, request:l.history_id!, brokerAccount:[l.server,l.login].filter(Boolean).join(' · '), name:accountNames[l.account_id || ''] || [l.company,l.login].filter(Boolean).join(' ') || 'Linked account'})}>Review earlier trades</button>}</div>}
     </div>)}
+    {failedLinks.length>0 && <details className="rounded-xl border border-themed p-4 space-y-3">
+      <summary className="cursor-pointer font-semibold">Failed or expired login attempts ({failedLinks.length})</summary>
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
+        <p className="text-sm text-secondary">These are unsuccessful connection requests, not monitored trading accounts. Clearing them will not delete your connected accounts or journal.</p>
+        <button className="btn-secondary" onClick={()=>{if(window.confirm('Remove all failed and expired MT5 login attempts without broker evidence? Connected accounts will stay.')) void run(async()=>{await action('clear-failed');});}}>Clear failed attempts</button>
+      </div>
+      {failedLinks.map(l=><div key={l.id} role="group" aria-label={'Failed MT5 attempt '+(l.server||l.company||'Unknown broker')} className="rounded-lg border border-themed p-3 space-y-2">
+        <div className="flex flex-wrap justify-between gap-3">
+          <div><strong className="text-sm">{l.company||l.server||'Broker login attempt'}</strong>
+            <p className="text-xs text-secondary">{[l.server,l.login].filter(Boolean).join(' · ')||'Unverified broker login'}</p></div>
+          <button className="btn-secondary" onClick={()=>{if(window.confirm('Remove this failed MT5 attempt? Any connected broker account and its trading history will remain.')) void run(async()=>{await action('remove-failed',{link:l.id});});}}>Remove attempt</button>
+        </div>
+        <p className="text-xs text-secondary">{l.last_error|| (l.status==='expired'?'The login request expired.':'Broker login failed.')}</p>
+      </div>)}
+    </details>}
     <datalist id="broker-timezones">
       <option value="Etc/UTC"/><option value="Europe/Athens"/><option value="Europe/Helsinki"/>
       <option value="Europe/London"/><option value="Africa/Johannesburg"/><option value="America/New_York"/>
