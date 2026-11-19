@@ -9,7 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from studio_ui import action_rows, blend, AnimatedButton
+from studio_ui import action_rows, blend, AnimatedButton, restart_wait_seconds
 
 
 class ActionLayoutTests(unittest.TestCase):
@@ -20,6 +20,12 @@ class ActionLayoutTests(unittest.TestCase):
         for row in rows:
             self.assertLessEqual(sum(max(164, requested[i]) for i in row) + 8 * (len(row) - 1), 430)
         self.assertEqual(action_rows(800, requested, minimum=164), [[0, 1, 2]])
+
+    def test_unexpected_service_restart_has_bounded_backoff(self):
+        self.assertEqual(restart_wait_seconds(0, 0), 3)
+        self.assertEqual(restart_wait_seconds(3, 2), 6)
+        self.assertEqual(restart_wait_seconds(60, 2), 60)
+        self.assertEqual(restart_wait_seconds(48, 100), 3)
 
     def test_dpi_scaled_labels_drive_wrapping_instead_of_fixed_button_width(self):
         self.assertEqual(action_rows(500, [260, 270, 280]), [[0], [1], [2]])
@@ -115,6 +121,26 @@ class ConnectorPresentationTests(unittest.TestCase):
         with patch.object(self.browser, "open") as navigate:
             self.app.add_account()
             self.assertIn("?addAccount=fixture#mt5",navigate.call_args.args[0])
+
+    def test_capture_exit_retries_except_manual_stop_or_revocation(self):
+        self.app.paired = True
+        self.app.busy_since = time.monotonic() - 1
+        self.app._event({"state": "worker-exit", "mode": "capture"})
+        self.assertIsNotNone(self.app.restart_due)
+        with patch.object(self.app, "start") as start:
+            self.app.restart_due = time.monotonic() - 1
+            self.app.poll()
+            start.assert_called_once()
+        self.app.busy_since = time.monotonic() - 1
+        self.app._event({"state": "worker-exit", "mode": "capture"})
+        self.app.stop()
+        self.assertIsNone(self.app.restart_due)
+        self.app._event({"state": "worker-exit", "mode": "capture"})
+        self.assertIsNone(self.app.restart_due)
+        self.app.stop_event.clear()
+        self.app._event({"state": "pc-revoked"})
+        self.app._event({"state": "worker-exit", "mode": "capture"})
+        self.assertIsNone(self.app.restart_due)
 
     def test_quick_setup_navigation_and_motion_toggle_do_not_start_capture(self):
         self.app.quick_setup_actions.buttons[0].invoke()
