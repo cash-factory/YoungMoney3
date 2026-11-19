@@ -18,6 +18,13 @@ def windows_motion_enabled():
     return True
 
 
+def restart_wait_seconds(previous_delay, running_seconds):
+    """Bound unexpected service-exit retries without rapid relaunch loops."""
+    if previous_delay <= 0 or running_seconds >= 90:
+        return 3
+    return min(60, previous_delay * 2)
+
+
 def blend(start, end, amount):
     amount = max(0.0, min(1.0, amount))
     a = [int(start[i:i + 2], 16) for i in (1, 3, 5)]
