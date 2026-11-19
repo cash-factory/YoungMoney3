@@ -21,6 +21,7 @@ class HistoryResumptionTests(unittest.TestCase):
             CREATE TABLE capital_snapshots(link TEXT,at_ms INTEGER,equity TEXT,balance TEXT,PRIMARY KEY(link,at_ms));
             CREATE TABLE position_observations(link TEXT,position_id TEXT,at_ms INTEGER,sl TEXT,tp TEXT,PRIMARY KEY(link,position_id,at_ms));
             CREATE TABLE history_progress(link TEXT PRIMARY KEY,request TEXT,cursor INTEGER);
+            CREATE TABLE history_anchor_scan(link TEXT PRIMARY KEY,request TEXT,cursor INTEGER,candidate_at INTEGER,candidate_ticket TEXT,candidate_amount REAL);
             CREATE TABLE history_work(link TEXT,request TEXT,pid TEXT,done INTEGER,PRIMARY KEY(link,request,pid));
             CREATE TABLE latest(link TEXT,key TEXT,payload TEXT,PRIMARY KEY(link,key));
             CREATE TABLE outbox(seq INTEGER PRIMARY KEY,link TEXT,payload TEXT);
@@ -62,10 +63,10 @@ class HistoryResumptionTests(unittest.TestCase):
     def test_history_scans_are_bounded_persistent_and_complete_without_fills(self):
         self.scan()
         cursor=self.db.execute("SELECT cursor FROM history_progress WHERE link='link'").fetchone()[0]
-        self.assertEqual(cursor,self.since+28*DAY)
+        self.assertEqual(cursor,self.since+14*DAY)
         self.scan()
         self.assertEqual(self.db.execute("SELECT cursor FROM history_progress WHERE link='link'").fetchone()[0],
-                         self.since+14*DAY)
+                         self.since+28*DAY)
         self.scan()
         self.assertIsNone(self.db.execute("SELECT cursor FROM history_progress WHERE link='link'").fetchone())
         self.assertEqual(sum(bool(call.get('history_done')) for call in self.calls),1)
