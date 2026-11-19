@@ -473,6 +473,9 @@ class ConnectorApp:
         if not self.paired:
             self.show_page("pair")
             return
+        if self.pc_state == "pc-service-incompatible":
+            self.banner_var.set("Staging needs a connector API update. Your PC pairing is saved; retry after the dashboard is updated.")
+            return
         if self.pc_state != "pc-online":
             self.banner_var.set("Contacting your dashboard. The login will open when this PC is online.")
             if not self._worker_busy():
@@ -532,9 +535,9 @@ class ConnectorApp:
         self.pair_button.pack(anchor="w")
         self.pair_progress = ttk.Progressbar(confirmation, mode="indeterminate",
                                             style="YM.Horizontal.TProgressbar")
-        self._label(confirmation, "When it says 'PC paired successfully', return to Sessions, "
-                    "add a terminal, arm it and connect its broker account on the website. "
-                    "No broker password is entered here.", color=MUTED,
+        self._label(confirmation, "When it says 'PC paired successfully', choose Add account. "
+                    "The connector will find MetaTrader and prepare an isolated broker session for you. "
+                    "Enter the broker login securely on the dashboard, not here.", color=MUTED,
                     wrap=770, size=9).pack(anchor="w", pady=(15, 0))
 
     def _build_activity(self):
