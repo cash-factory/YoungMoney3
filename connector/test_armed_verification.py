@@ -67,7 +67,20 @@ class ArmedVerificationTests(unittest.TestCase):
                                               verify_password=True)
         self.assertEqual(self.events[-1]["state"], "account-linked")
         self.assertEqual(self.events[-1]["slot"], self.two)
+        self.assertTrue(self.events[-1]["acknowledged"])
+        self.assertIsNone(self.db.execute("SELECT verified FROM links WHERE link='link-1'").fetchone()[0])
         self.assertNotIn("hidden", json.dumps(self.events))
+
+    def test_acknowledgement_network_loss_preserves_retry_receipt(self):
+        with patch.object(connect, "post", side_effect=OSError("offline")):
+            connect.verify(self.job, slot_override=self.two, report=self.events.append)
+        row = self.db.execute("SELECT verified FROM links WHERE link='link-1'").fetchone()
+        self.assertIsNotNone(row)
+        self.assertIsNotNone(row[0])
+        self.assertEqual(self.events[-1]["state"], "account-linked")
+        self.assertFalse(self.events[-1]["acknowledged"])
+        self.assertNotIn("hidden", json.dumps(self.events))
+
 
     def test_already_linked_slot_fails_closed_without_using_other_slot(self):
         self.db.execute("INSERT INTO links VALUES(?,?,?,?,?,?,?,?,?)",

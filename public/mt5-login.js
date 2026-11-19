@@ -43,7 +43,7 @@ document.querySelector('form').addEventListener('submit',async event=>{
     document.querySelector('form').hidden=true;
     byId('view-accounts').hidden=false;
     status.textContent='Your PC is preparing MetaTrader. You can follow this request in your account list.';
-    const deadline=Date.now()+8*60*1000;
+    const deadline=Date.now()+15*60*1000;
     while(Date.now()<deadline) {
       await new Promise(resolve=>setTimeout(resolve,3000));
       let snapshot;
@@ -59,7 +59,9 @@ document.querySelector('form').addEventListener('submit',async event=>{
         document.querySelector('form').hidden=false;
         throw Error(link.last_error || 'This login request expired. Check the connector, then try again.');
       } else {
-        status.textContent=link.status==='verifying'?'Your broker is checking the login details.':'Your PC is preparing MetaTrader for this login.';
+        status.textContent=link.status==='verifying'
+          ?'Your PC is authenticating with the broker. Terminal startup and first-time server setup may take several minutes.'
+          :'Your PC is preparing an isolated MetaTrader session for this account.';
       }
     }
     status.textContent='Open your account list for the latest status.';

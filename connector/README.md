@@ -93,3 +93,28 @@ broker operation starts because of navigation, animation or resizing.
 ## Per-account capture status in v0.3.3-rc1
 
 Each session shows its latest sync acknowledged by staging and the number of positions awaiting review. Select a session and choose Retry to wake that account. A retry requested on the dashboard is picked up by its paired PC when that session is running.
+
+## Broker login and IPC recovery (staging)
+
+The connector first attaches to the specific portable terminal **without**
+passing credentials, validates its data folder, then explicitly calls
+MetaTrader's login API with the exact assigned server. A new managed terminal
+with no IPC listener is launched from its own folder and retried. Only if the
+isolated first-run terminal still cannot provide IPC does the connector use
+credential-bearing initialize() as a compatibility fallback.
+
+A Windows PC being **paired / online** does not mean the broker has accepted an
+account. **Broker verified** means MetaTrader returned the matching account and
+live connection; **staging accepted** means the server acknowledged the login;
+**journal synced** means an upload was received. A failed HTTPS acknowledgement
+preserves the local encrypted-credential reference and broker verification
+receipt for retry, without repeating the user's login entry.
+
+Automatic detection of the installed MT5 program is not the same as discovering
+every broker's proprietary server. Where a new terminal has no knowledge of a
+requested server, the user may still need to use MT5's native **File → Open an
+Account** broker search to obtain the assigned server. YoungMoney3 does not
+invent broker endpoints, save account passwords in its SQLite evidence
+database, or place trade orders. Pending add-account requests expire after
+10 minutes; claimed broker verification after 12 minutes. Failed requests can
+be resubmitted from Add account.

@@ -115,40 +115,94 @@ class LoginFailure(Exception):
         self.api_code = api_code
 
 
+def _terminal_start_issue(code):
+    """IPC errors are not proof that the account password was rejected."""
+    return "terminal_ipc_timeout" if code in (-10003, -10005) else "terminal_start"
+
+
 def terminal_account(slot, login, server, password, verify_password):
-    """Attach to this portable terminal; authenticate with its broker server directory."""
-    # MT5 can wait for a broker session before completing its Python IPC handshake.
-    # Supply the requested identity during startup, including on an empty terminal profile.
+    """Attach to the assigned portable profile, then authenticate separately.
+
+    A blank managed terminal can fail its first IPC handshake. Try launching
+    exactly that executable, then retry the unauthenticated attach. Only as a
+    compatibility fallback on a marked, isolated terminal may initialize()
+    receive account credentials. Do not send a password to a terminal whose
+    data_path fails the identity check on the ordinary path.
+    """
+    import subprocess
+
     mt5.shutdown()
+    target = Path(slot).resolve().parent
+    managed = (target / ".ym-managed.json").is_file()
+
     def attach():
-        return mt5.initialize(slot, portable=True, timeout=60000, login=login, password=password, server=server)
+        try:
+            return mt5.initialize(slot, portable=True, timeout=60000)
+        except TimeoutError as error:
+            raise LoginFailure("terminal_ipc_timeout", -10005) from error
 
     if not attach():
         code = mt5.last_error()[0]
-        managed = Path(slot).parent / ".ym-managed.json"
-        if verify_password and code in (-10003, -10005) and managed.is_file():
-            import subprocess
+        if not managed or code not in (-10003, -10005):
+            raise LoginFailure(_terminal_start_issue(code), code)
+        # A fresh portable clone can still be extracting its broker configuration
+        # or waiting for the first GUI startup. Never launch a different MT5.
+        mt5.shutdown()
+        try:
+            subprocess.Popen([slot, "/portable"], cwd=str(target))
+        except OSError as error:
+            raise LoginFailure("terminal_start", code) from error
+        if not attach():
+            code = mt5.last_error()[0]
+            if code not in (-10003, -10005):
+                raise LoginFailure(_terminal_start_issue(code), code)
+            # Some MT5 builds do not expose IPC from a completely empty profile
+            # until an account is supplied at startup. This is a last resort,
+            # limited to a marked managed instance, not the default login path.
             mt5.shutdown()
             try:
-                subprocess.Popen([slot, "/portable"], cwd=str(Path(slot).parent))
-            except OSError as error:
-                raise LoginFailure("terminal_start", code) from error
-            if not attach():
+                ready = mt5.initialize(slot, portable=True, timeout=60000,
+                                       login=login, password=password, server=server)
+            except TimeoutError as error:
+                raise LoginFailure("terminal_ipc_timeout", -10005) from error
+            if not ready:
                 code = mt5.last_error()[0]
-                raise LoginFailure("broker_rejected" if code == -6 else "terminal_start", code)
-        else:
-            raise LoginFailure("broker_rejected" if code == -6 else "terminal_start", code)
+                raise LoginFailure("broker_rejected" if code == -6 else
+                                   _terminal_start_issue(code), code)
+
     terminal = mt5.terminal_info()
-    if not terminal or Path(terminal.data_path).resolve() != Path(slot).resolve().parent:
+    if not terminal:
+        raise LoginFailure("terminal_start")
+    if Path(terminal.data_path).resolve() != target:
         raise LoginFailure("wrong_terminal")
+
     info = mt5.account_info()
+    # A monitoring worker may reuse the already authenticated session only
+    # after checking both identity fields and its actual broker connection.
+    same_account = (info is not None and info.login == login
+                    and info.server.casefold() == server.casefold())
+    if verify_password or not same_account or not terminal.connected:
+        try:
+            logged_in = mt5.login(login, password=password, server=server, timeout=60000)
+        except TimeoutError as error:
+            raise LoginFailure("broker_login_timeout", -10005) from error
+        if not logged_in:
+            code = mt5.last_error()[0]
+            if code == -6:
+                raise LoginFailure("broker_rejected", code)
+            if code in (-10003, -10005):
+                raise LoginFailure("broker_login_timeout", code)
+            raise LoginFailure("broker_login", code)
+
     terminal = mt5.terminal_info()
-    if not info or not terminal or not terminal.connected:
+    info = mt5.account_info()
+    if not terminal or Path(terminal.data_path).resolve() != target:
+        raise LoginFailure("wrong_terminal")
+    if not info or not terminal.connected:
         raise LoginFailure("disconnected")
     if info.login != login or info.server.casefold() != server.casefold():
         raise LoginFailure("identity_mismatch")
-    # Standard broker credentials are permitted for observation only.
-    # Trading permissions in the local MT5 terminal remain outside this app.
+    # Standard and investor credentials are both capture-only in this program.
     return info
 
 
@@ -174,7 +228,14 @@ def verify(job, slot_override=None, report=None):
         if report:
             report({"state": "account-error", "slot": slot_override, "message":
                     "Account connection failed: " + reason + (f" (MT5 {code})" if code is not None else "")})
-        post("verified",{"link":job["id"],"ok":False,"reason":reason,"api_code":code},token)
+        try:
+            post("verified",{"link":job["id"],"ok":False,"reason":reason,"api_code":code},token)
+        except (OSError, ValueError):
+            # No secrets are kept in this failed request on the PC. The
+            # claimed server job expires if acknowledgement is unavailable.
+            if report:
+                report({"state": "account-error", "slot": slot_override,
+                        "message": "Login failed locally; staging acknowledgement is pending."})
         return
     finally:
         mt5.shutdown()
@@ -186,10 +247,24 @@ def verify(job, slot_override=None, report=None):
     keyring.set_password(service,job["id"],settings["password"])
     with db:
         db.execute("INSERT INTO links VALUES(?,?,?,?,?,?,?,?,?)",(job["id"],slot,str(login),server,start,start,0,json.dumps(msg),0))
+    # Acknowledge immediately, instead of reporting a successful broker login
+    # and waiting for the next capture child to finish starting. If HTTPS
+    # fails, the stored verification receipt is replayed by scan().
+    acknowledged = False
+    try:
+        post("verified", msg, token)
+    except (OSError, ValueError):
+        pass
+    else:
+        with db:
+            db.execute("UPDATE links SET verified=NULL WHERE link=?", (job["id"],))
+        acknowledged = True
     if report:
         report({"state": "account-linked", "slot": slot, "link": job["id"],
                 "login": str(login), "server": server, "company": info.company,
-                "message": "Broker account verified. Waiting for next sync cycle."})
+                "acknowledged": acknowledged,
+                "message": "Staging accepted the broker login; journal sync is next."
+                if acknowledged else "Broker login verified locally; awaiting staging acknowledgement."})
 
 def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
     if verified:

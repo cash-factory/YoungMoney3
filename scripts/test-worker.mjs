@@ -110,9 +110,13 @@ try {
   assert.equal((await call('mt5/connect',loginRequest)).status,409);
   assert.equal((await presence()).pending,null);
   const link=(await (await call('mt5/connect',loginRequest)).json()).id;
+  const pendingExpiry=await db.prepare('SELECT expires FROM mt5_links WHERE id=?').bind(link).first();
+  assert.ok(pendingExpiry.expires-Date.now()>9*60*1000,'Slow MT5 preparation needs a ten-minute pending window');
   assert.deepEqual((await presence()).pending,{id:link,server:'Demo'});
   assert.equal((await (await device('poll',{request:'different-request'})).json()).job,null);
   assert.equal((await (await device('poll',{request:link})).json()).job.id,link);
+  const claimedExpiry=await db.prepare('SELECT expires FROM mt5_links WHERE id=?').bind(link).first();
+  assert.ok(claimedExpiry.expires-Date.now()>11*60*1000,'Broker IPC/login needs a twelve-minute verification window');
   assert.equal((await (await device('poll',{})).json()).job,null);
   assert.equal((await device('verified',{link,ok:true,mode:0,trade_access:true,login:'42',server:'Demo',company:'Fixtures',currency:'USD',balance:100})).status,200);
   const verifiedAccess=(await (await call('mt5/status',{})).json()).links.find(l=>l.id===link);

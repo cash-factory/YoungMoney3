@@ -1165,7 +1165,9 @@ class ConnectorApp:
             self.connection_path.show(max(2, self.connection_path.level))
             self.status_var.set("Broker verified")
             self.store.clear_arm(slot)
-            self.banner_var.set("Broker login verified locally. Staging acknowledgement will follow on the next sync cycle.")
+            self.banner_var.set("Staging accepted the broker login. First journal sync pending."
+                                if item.get("acknowledged") else
+                                "Broker verified locally. Dashboard acknowledgement will retry without re-entering the password.")
             self._log("Broker account linked to selected terminal " +
                       str(Path(slot).parent.name) + ".")
         elif state == "arm-consumed":

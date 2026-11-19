@@ -184,7 +184,10 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       if(input.account && (!limited(input.account,100) || !await q("SELECT id FROM workspace_records WHERE user_id=? AND table_name='trading_accounts' AND id=?",owner,input.account).first())) return fail('Unknown journal account.');
       const accountId=input.account || uuid();
       if(await q("SELECT id FROM mt5_links WHERE account_id=? AND (status='connected' OR (status IN ('pending','verifying') AND expires>?))",accountId,unix).first()) return fail('This journal account already has a connection.',409);
-      const expires = unix + (device.setup_state ? 300000 : 90000);
+      // MT5 can spend several minutes copying a clean portable installation,
+      // starting its IPC channel, and downloading a broker directory.
+      // Pending credentials are encrypted to the paired PC's public key.
+      const expires = unix + 10 * 60 * 1000;
       await q('INSERT INTO mt5_links(id,owner,device,account_id,envelope,expires,server) VALUES(?,?,?,?,?,?,?)',
         id,owner,input.device,accountId,JSON.stringify(input.envelope),expires,input.server || null).run();
       return json({ id });
@@ -243,7 +246,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     const job=await q("SELECT id,envelope FROM mt5_links WHERE device=? AND status='pending' AND expires>? AND (? IS NULL OR id=?) ORDER BY expires,id LIMIT 1",
       device.id,unix,input.request??null,input.request??null).first<{id:string;envelope:string}>();
     if (!job) return json({job:null});
-    const claimed=await q("UPDATE mt5_links SET status='verifying',envelope=NULL,expires=? WHERE id=? AND status='pending'",unix+(input.request?180000:90000),job.id).run();
+    const claimed=await q("UPDATE mt5_links SET status='verifying',envelope=NULL,expires=? WHERE id=? AND status='pending'",unix+12*60*1000,job.id).run();
     return json({ job: claimed.meta.changes ? {id:job.id,envelope:JSON.parse(job.envelope)} : null });
   }
   if (!limited(input.link,64)) return fail('Missing link.');
@@ -269,9 +272,11 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     if (!input.ok || (env.MT5_ALLOW_LIVE!=='true' && input.mode===2)) {
       const reasons: Record<string,string> = {
         terminal_start:'MetaTrader could not start. Open the connector on your PC, finish any MetaTrader update, then choose Add account again.',
+        terminal_ipc_timeout:'MetaTrader did not respond to the connector in time. Close any stalled MT5 update or login dialogs on the paired PC, then retry.',
         wrong_terminal:'MetaTrader opened the wrong profile. Close the extra MetaTrader window and retry from Add account.',
         broker_rejected:'MT5 rejected authorization. Check the account number, investor or standard password, and exact assigned server.',
         broker_login:'MT5 could not log in to this server. In the dedicated terminal use File → Open an Account, find your broker and select its assigned server, then retry.',
+        broker_login_timeout:'MetaTrader timed out while contacting your broker. Check the exact server and broker connectivity, then retry.',
         disconnected:'MetaTrader could not reach the broker. Check the connection on your PC and confirm the server name.',
         identity_mismatch:'The connected login or broker server differs from the requested account.',
         no_slot:'Account setup is busy. Try Add account again once the current request finishes.',
