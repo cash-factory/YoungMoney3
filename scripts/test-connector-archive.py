@@ -2,7 +2,7 @@ from pathlib import Path
 from zipfile import ZipFile
 
 root=Path(__file__).resolve().parent.parent
-mapping={'README.md':'connector/README.md','connect.py':'connector/connect.py','ledger.py':'connector/ledger.py','lifecycle.py':'connector/lifecycle.py','connector_gui.py':'connector/connector_gui.py','studio_ui.py':'connector/studio_ui.py','sessions.py':'connector/sessions.py','terminal_factory.py':'connector/terminal_factory.py','concurrent_capture.py':'connector/concurrent_capture.py','requirements.txt':'connector/requirements.txt','assets/connector-scene.svg':'connector/assets/connector-scene.svg'}
+mapping={'README.md':'connector/README.md','connect.py':'connector/connect.py','ledger.py':'connector/ledger.py','lifecycle.py':'connector/lifecycle.py','connector_gui.py':'connector/connector_gui.py','studio_ui.py':'connector/studio_ui.py','managed_accounts.py':'connector/managed_accounts.py','presence.py':'connector/presence.py','sessions.py':'connector/sessions.py','terminal_factory.py':'connector/terminal_factory.py','concurrent_capture.py':'connector/concurrent_capture.py','requirements.txt':'connector/requirements.txt','assets/connector-scene.svg':'connector/assets/connector-scene.svg'}
 with ZipFile(root/'public/mt5-connector.zip') as archive:
     assert archive.testzip() is None, 'Connector ZIP is corrupt'
     assert set(archive.namelist()) == set(mapping), 'Connector ZIP contents differ from supported package'

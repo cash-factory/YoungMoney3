@@ -227,6 +227,62 @@ class StudioArt(tk.Canvas):
                          fill=bright, outline="")
 
 
+class ConnectionPath(tk.Canvas):
+    """Animate the distance between acknowledged milestones, then come to rest."""
+    labels = ("PC paired", "Broker verified", "Journal synced")
+
+    def __init__(self, parent, *, background, motion):
+        super().__init__(parent, height=72, highlightthickness=0, bg=background, takefocus=False)
+        self.motion = motion
+        self.level = 0
+        self.position = 0.0
+        self._job = None
+        self.bind("<Configure>", lambda _: self.draw())
+        self.bind("<Destroy>", lambda _: self.cancel())
+
+    def cancel(self):
+        if self._job is not None:
+            self.after_cancel(self._job)
+            self._job = None
+
+    def show(self, level):
+        if level == self.level and self.motion():
+            return
+        self.cancel()
+        self.level = level
+        start = self.position
+        def frame(i):
+            self._job = None
+            self.position = start + (level - start) * (1 - (1 - i / 14) ** 3)
+            self.draw()
+            if i < 14:
+                self._job = self.after(22, frame, i + 1)
+        frame(1 if self.motion() and level > start else 14)
+
+    def draw(self):
+        self.delete("all")
+        width = max(160, self.winfo_width())
+        margin = min(60, width // 6)
+        points = (margin, width / 2, width - margin)
+        y = 24
+        for i in range(2):
+            self.create_line(points[i], y, points[i+1], y, fill="#544652", width=2)
+            progress = max(0, min(1, self.position - i - 1))
+            if progress:
+                self.create_line(points[i], y, points[i] + (points[i+1] - points[i]) * progress,
+                                 y, fill="#a7ddc2", width=3)
+        for i, x in enumerate(points):
+            done = self.position >= i + .99
+            current = i == self.level
+            tone = "#a7ddc2" if done else "#f2adbd" if current else "#9e95a1"
+            self.create_oval(x-8, y-8, x+8, y+8, fill=tone if done else self.cget("bg"), outline=tone, width=2)
+            if done:
+                self.create_line(x-4,y,x-1,y+3,x+4,y-4,fill="#19281f",width=2)
+            elif current:
+                self.create_oval(x-2,y-2,x+2,y+2,fill=tone,outline="")
+            self.create_text(x, 51, text=self.labels[i], font=("Segoe UI", 9), fill=tone)
+
+
 def brand_mark(parent, background):
     """The selected Signal Monogram, using the website's exact vector points."""
     canvas = tk.Canvas(parent, width=40, height=40, bg=background,

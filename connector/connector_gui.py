@@ -26,7 +26,8 @@ import connect
 from sessions import SessionError, SessionStore
 from terminal_factory import TerminalCopyError, create_terminal
 from concurrent_capture import run_parallel_smoke
-from studio_ui import AnimatedButton, ResponsiveActions, StudioArt, brand_mark, windows_motion_enabled
+from managed_accounts import ManagedAccounts, discover_installations, INSTALL_PAGE
+from studio_ui import AnimatedButton, ResponsiveActions, ConnectionPath, StudioArt, brand_mark, windows_motion_enabled
 
 STAGING_URL = "https://ym-fx-staging.ethical-hacker263.workers.dev"
 ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "YMFX" / "staging-gui"
@@ -42,46 +43,19 @@ ACCENT = "#ff365c"
 WARM = "#f9c9ab"
 DANGER = "#ff8da7"
 FONT = "Segoe UI"
-VERSION = "0.3.3-rc1"
+VERSION = "0.4.0-rc1"
 
 
 def terminal_candidates():
-    paths = []
-    roots = [Path(os.environ.get("PROGRAMFILES", "C:/Program Files")),
-             Path(os.environ.get("PROGRAMFILES(X86)", "C:/Program Files (x86)")),
-             Path.home() / "Documents", Path.home() / "Downloads"]
-    for root in roots:
-        if not root.exists():
-            continue
-        if root.name.lower() in ("documents", "downloads"):
-            choices = [root / "MT5" / "terminal64.exe",
-                       root / "MetaTrader 5" / "terminal64.exe"]
-        else:
-            choices = [root / "MetaTrader 5" / "terminal64.exe",
-                       root / "MT5 Weltrade" / "terminal64.exe"]
-            try:
-                choices.extend(path / "terminal64.exe" for path in list(root.iterdir())[:120]
-                               if path.is_dir() and ("mt5" in path.name.lower()
-                                                     or "metatrader" in path.name.lower()))
-            except OSError:
-                pass
-        for candidate in choices:
-            try:
-                if candidate.is_file():
-                    resolved = str(candidate.resolve())
-                    if resolved not in paths:
-                        paths.append(resolved)
-            except OSError:
-                pass
-    return paths
+    return [str(exe) for exe, _ in discover_installations()]
 
 
 class ConnectorApp:
-    NAV = (("overview", "Overview"), ("sessions", "Sessions"),
+    NAV = (("overview", "Overview"), ("sessions", "Accounts"),
            ("pair", "Pair this PC"), ("activity", "Activity"),
            ("help", "Setup & help"))
 
-    def __init__(self, root):
+    def __init__(self, root, *, restore=True):
         self.root = root
         self.events = queue.Queue()
         self.worker = None
@@ -94,6 +68,14 @@ class ConnectorApp:
         self.stopping = False
         self.pair_ok = False
         self.paired = False
+        self.resume_after_pair = False
+        self.login_requested = False
+        self.focus_setup = False
+        self.focus_slot = None
+        self.pc_state = "starting"
+        self.device_id = None
+        self.setup_state = None
+        self.remote_paused = set()
         self.busy_since = None
         self.status_by_slot = {}
         self.sync_by_slot = {}
@@ -110,12 +92,13 @@ class ConnectorApp:
         self._poll_job = None
         self.motion_var = tk.BooleanVar(value=windows_motion_enabled())
         self.store = SessionStore(SETTINGS)
+        self.managed_accounts = ManagedAccounts(self.store, ROOT.parent / "terminals")
         # Restore just the paired/unpaired UI state. No token is displayed,
         # logged, cached in preferences or sent over the network.
         try:
             service = "YMFX MT5 " + hashlib.sha256(STAGING_URL.encode()).hexdigest()[:16]
             connect.keyring.set_keyring(connect.WinVaultKeyring())
-            self.paired = bool(connect.keyring.get_password(service, "token"))
+            self.paired = restore and bool(connect.keyring.get_password(service, "token"))
         except Exception:
             self.paired = False
         self.root.title("YoungMoney3  /  MT5 Connector  /  Staging")
@@ -125,20 +108,17 @@ class ConnectorApp:
         self.root.minsize(720, 560)
         self.root.configure(bg=BACKGROUND)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
-        self.status_var = tk.StringVar(value="Ready to configure")
+        self.status_var = tk.StringVar(value="Ready to pair")
         self.device_var = tk.StringVar(value=(
             "Existing pairing found in Windows Credential Manager"
             if self.paired else "Pair this PC once to begin"))
-        self.queue_var = tk.StringVar(value="Waiting for a capture cycle")
-        self.banner_var = tk.StringVar(value="Configure a session, then connect its broker account.")
+        self.queue_var = tk.StringVar(value="Add your first account to begin.")
+        self.banner_var = tk.StringVar(value="Choose Add account to get started.")
         self.pair_stage_var = tk.StringVar(value="Step 1  •  Generate a five-minute pairing code on the dashboard.")
         self.code_var = tk.StringVar()
         self.code_error_var = tk.StringVar(value="32-character code • only used once, never stored in this app")
         self.pair_elapsed_var = tk.StringVar(value="")
         self.selected_details_var = tk.StringVar(value="Select a session to manage its account.")
-        self.overview_sessions_var = tk.StringVar(value="0 configured")
-        self.overview_active_var = tk.StringVar(value="0 enabled")
-        self.overview_linked_var = tk.StringVar(value="0 verified accounts")
         self._configure_ttk()
         self._build()
         self.root.bind("<Configure>", self._queue_responsive_layout, add="+")
@@ -148,7 +128,9 @@ class ConnectorApp:
         self.code_var.trace_add("write", lambda *_: self._validate_code())
         self._validate_code()
         self.refresh_sessions()
-        self._log("Application ready. Broker capture is not started automatically.")
+        self._log("Account monitor opened.")
+        if self.paired:
+            self.root.after_idle(self.start)
         self._poll_job = self.root.after(160, self.poll)
 
     def _configure_ttk(self):
@@ -256,7 +238,7 @@ class ConnectorApp:
             canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
 
     def _set_busy_feedback(self, active):
-        for bar in (self.progress, self.pair_progress):
+        for bar in (self.pair_progress,):
             bar.stop()
             if active and self.motion_var.get():
                 bar.configure(mode="indeterminate")
@@ -269,6 +251,7 @@ class ConnectorApp:
             self.pair_progress.pack_forget()
 
     def _refresh_motion(self):
+        self.connection_path.show(self.connection_path.level)
         self._set_busy_feedback(self._worker_busy() or bool(self.copy_worker and self.copy_worker.is_alive()))
         for art in self.header_art.values():
             if not self.motion_var.get():
@@ -410,55 +393,40 @@ class ConnectorApp:
 
     def _build_overview(self):
         page = self._scrollable_page("overview")
-        self._stack_heading(page, "Command centre",
-                            "See what's connected, what is syncing, and what needs your attention.")
-        stats = tk.Frame(page, bg=BACKGROUND)
-        stats.pack(fill="x", pady=(0, 16))
-        for title, var in (("LOCAL SESSIONS", self.overview_sessions_var),
-                           ("ENABLED SESSIONS", self.overview_active_var),
-                           ("VERIFIED ACCOUNTS", self.overview_linked_var)):
-            card = self._card(stats, 18)
-            card.pack(side="left", fill="both", expand=True, padx=(0, 10))
-            self._label(card, title, size=9, bold=True, color=MUTED).pack(anchor="w")
-            self._label(card, textvar=var, size=18, bold=True).pack(anchor="w", pady=(7, 0))
-        hero = self._card(page, 23)
+        self._stack_heading(page, "Account monitor", "Connect your broker once. Your journal updates while this app is open.")
+        hero = self._card(page, 24)
         hero.pack(fill="x", pady=(0, 16))
-        self._label(hero, "Your capture service", size=14, bold=True).pack(anchor="w")
-        self._label(hero, textvar=self.status_var, size=18, bold=True,
-                    color=ACCENT).pack(anchor="w", pady=(10, 5))
-        self._label(hero, textvar=self.queue_var, color=MUTED,
-                    size=10).pack(anchor="w")
-        self.progress = ttk.Progressbar(hero, mode="determinate", value=0,
-                                        style="YM.Horizontal.TProgressbar")
-        self.progress.pack(fill="x", pady=(17, 14))
-        self._actions(hero, [("Start syncing", self.start, {"primary": True}),
-                             ("Pause all", self.pause_all, {}),
-                             ("Stop service", self.stop, {"quiet": True})])
+        self._label(hero, "Connection status", size=11, color=MUTED).pack(anchor="w")
+        self._label(hero, textvar=self.status_var, size=20, bold=True).pack(anchor="w", pady=(4, 8))
+        self.connection_path = ConnectionPath(hero, background=PANEL, motion=self.motion_var.get)
+        self.connection_path.pack(fill="x", pady=(4, 4))
+        self._label(hero, textvar=self.device_var, size=10, color=MUTED, wrap=730).pack(anchor="w")
+        self.progress = ttk.Progressbar(hero, style="YM.Horizontal.TProgressbar")
         next_card = self._card(page, 20)
         next_card.pack(fill="x")
-        self._label(next_card, "QUICK SETUP", size=9, color=ACCENT,
-                    bold=True).pack(anchor="w")
-        self._label(next_card, textvar=self.device_var, size=11,
-                    bold=True).pack(anchor="w", pady=(8, 13))
+        self._label(next_card, "Broker accounts", size=15, bold=True).pack(anchor="w")
+        self._label(next_card, textvar=self.queue_var, color=MUTED, size=10).pack(anchor="w", pady=(6, 12))
         self.quick_setup_actions = self._actions(next_card, [
-            ("01  Pair this PC", lambda: self.show_page("pair"), {}),
-            ("02  Add a session", self.add_session, {}),
-            ("03  Manage sessions", lambda: self.show_page("sessions"), {"quiet": True})], minimum=164)
+            ("Add account", self.add_account, {"primary": True}),
+            ("Open dashboard", self.open_dashboard, {}),
+            ("View accounts", lambda: self.show_page("sessions"), {"quiet": True})], minimum=144)
 
     def _build_sessions(self):
         page = self._scrollable_page("sessions")
-        self._stack_heading(page, "Account sessions",
-                            "Create or duplicate named terminals here. Each broker account runs in a separate MT5 process, monitored concurrently.")
+        self._stack_heading(page, "Account sessions", "Monitor each broker login and its latest journal sync.")
         self.session_tools = self._actions(page, [
-            ("+ Create terminal", self.create_named_terminal, {"primary": True}),
-            ("Duplicate selected", self.duplicate_selected, {}),
-            ("Add existing", self.add_session, {}),
-            ("Detect terminals", self.detect_sessions, {"quiet": True})])
+            ("Add account", self.add_account, {"primary": True}),
+            ("Open dashboard", self.open_dashboard, {}),
+            ("Advanced setup", self.toggle_advanced, {"quiet": True})])
         self.session_tools.pack_configure(pady=(0, 8))
-        self.create_button, self.duplicate_button = self.session_tools.buttons[:2]
-        bulk = self._actions(page, [("Start all sessions", self.start_all, {}),
-                                    ("Pause all sessions", self.pause_all, {"quiet": True})])
-        bulk.pack_configure(pady=(0, 8))
+        self.advanced = self._card(page, 14)
+        self._label(self.advanced, "Manual terminal tools", size=11, bold=True).pack(anchor="w")
+        advanced = self._actions(self.advanced, [
+            ("Create terminal", self.create_named_terminal, {}), ("Duplicate selected", self.duplicate_selected, {}),
+            ("Add existing", self.add_session, {}), ("Detect terminals", self.detect_sessions, {}),
+            ("Arm selected", self.arm_selected, {}), ("Open folder", self.open_selected_folder, {}),
+            ("Open MT5", self.launch_selected, {}), ("Stop connector", self.stop, {})])
+        self.create_button, self.duplicate_button = advanced.buttons[:2]
         table_area = self._card(page, 12)
         table_area.pack(fill="both", expand=True, pady=(0, 12))
         columns = ("name", "account", "status", "location")
@@ -470,6 +438,7 @@ class ConnectorApp:
                                   ("location", "TERMINAL DIRECTORY", 270)):
             self.session_table.heading(key, text=text, anchor="w")
             self.session_table.column(key, width=width, minwidth=90, stretch=True, anchor="w")
+        self.session_table.configure(displaycolumns=("name", "account", "status"))
         bar = ttk.Scrollbar(table_area, orient="vertical", command=self.session_table.yview,
                             style="YM.Vertical.TScrollbar")
         horizontal = ttk.Scrollbar(table_area, orient="horizontal", command=self.session_table.xview,
@@ -486,15 +455,36 @@ class ConnectorApp:
         self._label(detail, textvar=self.selected_details_var, size=10,
                     color=MUTED, wrap=810).pack(anchor="w", pady=(0, 9))
         self.session_actions = self._actions(detail, [
-            ("Arm for account", self.arm_selected, {"primary": True}),
-            ("Start", self.start_selected, {}), ("Retry this account", self.retry_selected, {}), ("Pause", self.pause_selected, {}),
-            ("Rename", self.rename_selected, {"quiet": True}),
-            ("Open folder", self.open_selected_folder, {"quiet": True}),
-            ("Open MT5", self.launch_selected, {"quiet": True}),
-            ("Remove session", self.remove_selected, {"quiet": True})], minimum=126)
-        self._label(page, "ARM FOR ACCOUNT: Select a free session, arm it here, then use Connect MT5 account on the website. "
-                    "An already linked session keeps its existing broker identity.",
-                    size=9, color=MUTED, wrap=850).pack(anchor="w", pady=(6, 0))
+            ("Resume", self.start_selected, {}), ("Retry this account", self.retry_selected, {}),
+            ("Pause", self.pause_selected, {}), ("Rename locally", self.rename_selected, {"quiet": True}),
+            ("Remove local session", self.remove_selected, {"quiet": True})], minimum=126)
+
+    def toggle_advanced(self):
+        if self.advanced.winfo_manager():
+            self.advanced.pack_forget()
+        else:
+            self.advanced.pack(fill="x", after=self.session_tools, pady=(0, 8))
+
+    def open_dashboard(self):
+        webbrowser.open(STAGING_URL + "/#mt5")
+
+    def add_account(self):
+        self.login_requested = True
+        if not self.paired:
+            self.show_page("pair")
+            return
+        if self.pc_state != "pc-online":
+            self.banner_var.set("Contacting your dashboard. The login will open when this PC is online.")
+            if not self._worker_busy():
+                self.start()
+            return
+        if self.setup_state == "install":
+            self.banner_var.set("Install MetaTrader 5 and leave the connector open. Setup will continue automatically.")
+            if messagebox.askyesno("Install MetaTrader 5", "This PC needs MetaTrader 5. Open the official installer page?"):
+                webbrowser.open(INSTALL_PAGE)
+            return
+        self.login_requested = False
+        webbrowser.open(STAGING_URL + "/?addAccount=" + self.device_id + "#mt5")
 
     def _build_pairing(self):
         page = self._scrollable_page("pair")
@@ -507,7 +497,7 @@ class ConnectorApp:
                     "The code expires after five minutes.", size=10,
                     color=MUTED, wrap=770).pack(anchor="w", pady=(6, 12))
         self._button(steps, "Open MT5 Connections in staging",
-                     lambda: webbrowser.open(STAGING_URL), quiet=True).pack(anchor="w")
+                     self.open_dashboard, quiet=True).pack(anchor="w")
         field = self._card(page, 22)
         field.pack(fill="x", pady=(0, 14))
         self._label(field, "02   Paste the code", size=13, bold=True).pack(anchor="w")
@@ -577,23 +567,20 @@ class ConnectorApp:
         self._stack_heading(page, "Setup & troubleshooting",
                             "Everything needed to prepare isolated broker terminals for capture.")
         for title, desc in [
-            ("01   Create a dedicated MT5 terminal",
-             "Install MetaTrader 5. For each account, use its own writable /portable terminal directory. "
-             "Do not reuse the same terminal64.exe path for multiple simultaneous accounts."),
-            ("02   Pair this Windows user",
-             "In the staging dashboard choose MT5 Connections → Pair a PC. Paste its 32-character code here. "
-             "The app saves credentials in Windows Credential Manager, not in the session configuration."),
-            ("03   Add and arm each session",
-             "Browse to the first terminal64.exe, name its session, click Arm for account, "
-             "then enter its broker server and account login on the website. Repeat for another terminal."),
-            ("04   When a connection fails",
-             "Open each isolated terminal once using /portable and log in to the correct broker account. "
-             "Check File → Open an Account to find the exact server. MT5 IPC -10005 often means "
-             "the terminal could not attach; confirm its terminal path, startup and profile."),
-            ("05   Verify broker evidence",
-             "Use the staging dashboard to confirm each broker timezone. Review historical fills before import; "
-             "the default is 30 days and the maximum is 90 days. "
-             "Live accounts and trading commands are not enabled.")
+            ("Pair this PC once",
+             "In the dashboard, choose MT5 Connections and Pair a PC. Paste the code in this app. "
+             "The PC stays paired when you close and reopen the connector."),
+            ("Add a broker account",
+             "Choose Add account. Enter the broker server, account number and MT5 password in your dashboard. "
+             "The connector finds MetaTrader and prepares a separate workspace for each login."),
+            ("If MetaTrader is missing",
+             "Choose Add account to open the official installer. Finish installing and leave the connector open. "
+             "It checks again automatically."),
+            ("Understand the status",
+             "PC online confirms the connection to your dashboard. Broker verified confirms the login. "
+             "Journal synced means the dashboard received a capture from MT5."),
+            ("Manage accounts",
+             "Open your dashboard to see each login, pause or resume monitoring, retry a sync, or review earlier trades.")
         ]:
             card = self._card(page, 14)
             card.pack(fill="x", pady=(0, 8))
@@ -610,7 +597,7 @@ class ConnectorApp:
             button.configure(fg=ACCENT if selected else MUTED)
         if key == "sessions":
             self.refresh_sessions()
-        titles = {"overview": "Command centre", "sessions": "Account sessions",
+        titles = {"overview": "Account monitor", "sessions": "Account sessions",
                   "pair": "Connect this PC", "activity": "Activity & diagnostics",
                   "help": "Setup & troubleshooting"}
         art = self.header_art.get(titles.get(key))
@@ -713,15 +700,16 @@ class ConnectorApp:
         receipt = self.sync_by_slot.get(s["terminal"])
         if receipt:
             identity += "  •  Last sync " + receipt[0] + "  •  " + str(receipt[1]) + " decisions awaiting review"
-        self.selected_details_var.set(s["name"] + "  •  " + identity +
-                                       "  •  " + s["terminal"])
+        self.selected_details_var.set(s["name"] + "  •  " + identity)
 
     def _session_state(self, s):
         slot = s["terminal"]
         if not Path(slot).is_file():
             return "Terminal missing"
+        if self.account_by_slot.get(slot, {}).get("link") in self.remote_paused:
+            return "Paused on dashboard"
         if not s["enabled"]:
-            return "Paused"
+            return "Paused on this PC"
         if self.store.armed_terminal() == slot:
             return "Awaiting website"
         if slot not in self.account_by_slot:
@@ -746,11 +734,6 @@ class ConnectorApp:
         if selected and self.session_table.exists(selected[0]):
             self.session_table.selection_set(selected[0])
         self._selected_session_details()
-        self.overview_sessions_var.set(f"{len(entries)} configured")
-        enabled = sum(bool(s["enabled"]) and Path(s["terminal"]).is_file()
-                      for s in entries)
-        self.overview_active_var.set(f"{self.active_workers} running / {enabled} enabled")
-        self.overview_linked_var.set(f"{len(self.account_by_slot)} verified")
 
     def _safe_change(self, action):
         try:
@@ -929,11 +912,23 @@ class ConnectorApp:
             self._log("Armed " + item["name"] + " for the next website account request.")
         self._safe_change(arm)
 
+    def _queue_monitoring(self, item, paused):
+        link = self.account_by_slot.get(item["terminal"])
+        if not link:
+            return False
+        if self.pc_state != "pc-online" or not self._worker_busy():
+            raise SessionError("Open the connector and wait for PC online, then try again.")
+        self.managed_accounts.controls.put((link["link"], paused))
+        self.banner_var.set("Updating account monitoring on your dashboard…")
+        return True
+
     def start_selected(self):
         def start_one():
             if self._worker_busy() and self.worker_mode != "capture":
                 raise SessionError("Finish pairing this PC before starting broker capture.")
             item = self._selected()
+            if self._queue_monitoring(item, False):
+                return
             self.store.set_enabled(item["id"], True)
             if not self._worker_busy():
                 self.start()
@@ -955,6 +950,8 @@ class ConnectorApp:
     def pause_selected(self):
         def pause_one():
             item = self._selected()
+            if self._queue_monitoring(item, True):
+                return
             self.store.set_enabled(item["id"], False)
             self.status_by_slot[item["terminal"]] = "Paused"
             self._log(item["name"] + " paused. Other sessions continue; queued evidence remains intact.")
@@ -993,7 +990,7 @@ class ConnectorApp:
                              all_slots=self.store.all_terminals,
                              active_slots=self.store.active_terminals,
                              armed_slot=self.store.armed_terminal,
-                             parallel_capture=pairing_code is None)
+                             parallel_capture=pairing_code is None, managed_accounts=self.managed_accounts)
             except BaseException as error:
                 # Never expose exception detail: MT5/HTTP exceptions may embed
                 # a URL, account identifier or credential-bearing payload.
@@ -1017,15 +1014,11 @@ class ConnectorApp:
                 return
             self.banner_var.set("Complete PC pairing before starting capture.")
             return
-        if not self.store.all_terminals():
-            self.banner_var.set("Add a dedicated MT5 terminal session before starting capture.")
-            self.show_page("sessions")
+        if not self.paired:
+            self.show_page("pair")
             return
-        if not self.store.active_terminals():
-            self.banner_var.set("All sessions paused. Enable at least one session first.")
-            self.show_page("sessions")
-            return
-        self._log("Starting parallel account processes for enabled MT5 sessions.")
+        self.pc_state = "starting"
+        self.status_var.set("Connecting this PC…")
         self._start_worker([STAGING_URL, *self.store.all_terminals()])
 
     def stop(self):
@@ -1071,7 +1064,43 @@ class ConnectorApp:
         state = item.get("state", "unknown")
         slot = item.get("slot")
         message = item.get("message", "")
-        if state == "known-links":
+        if state == "pc-online":
+            self.pc_state = state
+            self.device_id = item["device"]
+            previous_setup = self.setup_state
+            self.setup_state = item["setup"]
+            self.status_var.set("PC online" if self.setup_state == "ready" else "MetaTrader installation needed")
+            self.device_var.set("Paired to your dashboard. Keep this app open to monitor your accounts.")
+            self.connection_path.show(3 if self.sync_by_slot else 2 if self.account_by_slot else 1)
+            self.pair_stage_var.set("PC online. You can now add a broker account.")
+            self.banner_var.set("Choose Add account to sign in to your broker." if self.setup_state == "ready"
+                                else "Choose Add account to get MetaTrader 5. This PC stays paired.")
+            if self.login_requested and (self.setup_state == "ready" or previous_setup != "install"):
+                self.add_account()
+        elif state == "pc-reconnecting":
+            self.pc_state = state
+            self.status_var.set("Reconnecting to dashboard")
+            self.device_var.set("Your pairing is saved. This PC will retry automatically.")
+            self.banner_var.set("Check the PC’s internet connection. Your accounts stay saved.")
+        elif state == "pc-revoked":
+            self.pc_state, self.paired = state, False
+            self.connection_path.show(0)
+            self.status_var.set("Pair this PC again")
+            self.device_var.set("The dashboard no longer authorizes this PC.")
+            self.banner_var.set("Open Pair this PC to reconnect.")
+        elif state in ("control-saved", "control-error"):
+            self.banner_var.set(message)
+            self._log(message)
+        elif state == "monitoring-policy":
+            self.remote_paused = set(item["paused"])
+        elif state in ("preparing-account", "setup-error"):
+            self.focus_setup = state == "preparing-account"
+            self.focus_slot = None
+            self.connection_path.show(1)
+            self.banner_var.set(message)
+            self.status_var.set("Setting up MetaTrader" if state == "preparing-account" else "Account setup needs attention")
+            self._log(message)
+        elif state == "known-links":
             previous_accounts = self.account_by_slot
             previous = set(previous_accounts)
             self.account_by_slot = {
@@ -1085,15 +1114,18 @@ class ConnectorApp:
             if self.store.armed_terminal() in self.account_by_slot:
                 self.store.clear_arm()
             if self._links_initialized and previous - set(self.account_by_slot):
-                self.banner_var.set("A broker link was rejected or removed by staging. Re-arm its terminal before retrying.")
+                self.banner_var.set("A broker login needs attention. Open its status on the dashboard, then choose Add account to retry.")
                 self._log("Broker link removed after staging verification. Existing evidence remains preserved.")
             else:
-                self._log("Verified local session assignments: " +
+                self._log("Known broker accounts: " +
                           str(len(self.account_by_slot)) + " link(s).")
             self._links_initialized = True
         elif state == "paired":
             self.pair_ok = True
             self.paired = True
+            self.resume_after_pair = True
+            self.sync_by_slot.clear()
+            self.connection_path.show(1)
             # A new device token has its own broker links and SQLite folder.
             # Do not show the old device's linked accounts after re-pairing.
             self.account_by_slot.clear()
@@ -1103,15 +1135,19 @@ class ConnectorApp:
             self.pair_stage_var.set("Success! Your PC is paired with staging.")
             self.pair_elapsed_var.set("Pairing confirmed by the staging server.")
             self.status_var.set("PC paired successfully")
-            self.banner_var.set("PC paired. Add a session and arm it before submitting broker login details.")
+            self.banner_var.set("Pairing saved. Connecting this PC to your dashboard.")
             self._log("PC pairing confirmed. No account credentials are stored in the GUI.")
         elif state == "verifying":
-            self.pair_stage_var.set("Website account request received; checking the selected terminal.")
+            self.focus_slot = slot
+            self.status_var.set("Checking broker login")
+            self.pair_stage_var.set("Your broker is checking the account details.")
             self.banner_var.set(message)
             self._log(message)
         elif state == "account-linked":
             self.account_by_slot[slot] = item
-            self.status_by_slot[slot] = "Pending server sync"
+            self.status_by_slot[slot] = "Waiting for first sync"
+            self.connection_path.show(max(2, self.connection_path.level))
+            self.status_var.set("Broker verified")
             self.store.clear_arm(slot)
             self.banner_var.set("Broker login verified locally. Staging acknowledgement will follow on the next sync cycle.")
             self._log("Broker account linked to selected terminal " +
@@ -1158,10 +1194,18 @@ class ConnectorApp:
             prior = self.status_by_slot.get(slot)
             if item.get("synced_at"):
                 self.sync_by_slot[slot] = (item["synced_at"], item.get("awaiting", 0))
+                if not self.focus_setup or self.focus_slot == slot:
+                    self.focus_setup = False
+                    self.connection_path.show(3)
+                    if self.pc_state == "pc-online":
+                        self.status_var.set("Monitoring accounts")
             self.status_by_slot[slot] = "Synced" if slot in self.sync_by_slot else "Capturing"
             if prior != self.status_by_slot[slot]:
                 self._log("Broker session " + str(Path(slot).parent.name) + " synced successfully.")
         elif state in ("session-error", "account-error"):
+            if state == "account-error" and self.focus_slot == slot:
+                self.focus_setup = False
+                self.status_var.set("Broker login needs attention")
             self.status_by_slot[slot] = "Connection issue"
             self.banner_var.set(message)
             self._log("Session attention required: " + message)
@@ -1179,19 +1223,18 @@ class ConnectorApp:
                 elif self.pair_ok:
                     self.status_var.set("PC paired successfully")
             else:
-                self.status_var.set("Capture stopped")
-                self._log("Worker stopped; outbox and paired accounts retained.")
+                if self.pc_state != "pc-revoked":
+                    self.pc_state = "stopped"
+                    self.status_var.set("Connector stopped")
+                self._log("Monitoring stopped. Pairing and saved accounts retained.")
             self.busy_since = None
         elif state == "running":
             self.active_workers = int(item.get("active_workers", 0))
-            self.status_var.set("Capture running")
             if item.get("linked") is not None:
-                self.queue_var.set("Linked accounts: " + str(item["linked"]) +
-                                   "  •  Outbox: " + str(item.get("queued", 0)) +
-                                   " queued  •  Cycle: " + str(item.get("last_sync", "—"))[:19])
-            if self.last_summary != "running":
-                self._log("Capture service online; MT5 terminals are captured in separate processes.")
-                self.last_summary = "running"
+                linked = item["linked"]
+                self.queue_var.set(f"{linked} linked  ·  {self.active_workers} monitoring  ·  {item.get('queued', 0)} items waiting to sync"
+                                   if linked else "Add your first account to begin.")
+            return
         elif state == "retrying":
             self.status_var.set("Retrying connection")
             self.banner_var.set("Broker/network issue. Retrying without losing queued events.")
@@ -1216,6 +1259,10 @@ class ConnectorApp:
             self.worker = None
             self.worker_mode = None
             self._validate_code()
+        if self.resume_after_pair and self.worker is None and not self.stopping:
+            self.resume_after_pair = False
+            self.show_page("overview")
+            self.start()
         if self.worker_mode == "pair" and self.busy_since is not None:
             self.pair_elapsed_var.set(
                 "Waiting for confirmation  •  " +
@@ -1250,7 +1297,7 @@ def main():
         window = tk.Tk()
         if smoke:
             window.withdraw()
-        app = ConnectorApp(window)
+        app = ConnectorApp(window, restore=not smoke)
         if smoke:
             # Layout needs a mapped window; full transparency keeps CI startup
             # unobtrusive while exercising the real Windows Tk geometry engine.

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { generateKeyPairSync } from 'node:crypto';
 import { installDashboardFixtures } from './test-dashboard-browser.mjs';
 
 export async function checkTwoAccounts(browser, base, width) {
@@ -73,6 +74,10 @@ export async function checkTwoAccounts(browser, base, width) {
     },
   }));
   let latestEuroScan = 'scan-euro';
+  const paused = new Set();
+  const publicKey = generateKeyPairSync('rsa',{modulusLength:2048}).publicKey.export({format:'der',type:'spki'}).toString('base64');
+  let newLogin;
+  let firstSync = false;
   const dollarStarted = Promise.withResolvers();
   const allowDollar = Promise.withResolvers();
   const dollarFinished = Promise.withResolvers();
@@ -84,6 +89,17 @@ export async function checkTwoAccounts(browser, base, width) {
         json: { rows: new URL(page.url()).hash === '#trades' ? positions : [], more: false },
       });
     if (action === 'position-evidence') return route.fulfill({ json: { rows: [], more: false } });
+    if (action === 'set-monitoring') {
+      if (input.paused) paused.add(input.link); else paused.delete(input.link);
+      return route.fulfill({json:{ok:true}});
+    }
+    if (action === 'connect') {
+      assert.equal(input.device, 'pc');
+      assert.ok(input.envelope.wrapped && input.envelope.iv && input.envelope.data);
+      assert.ok(!JSON.stringify(input).includes('fixture-password'));
+      newLogin = {id:'new-demo', device:'pc', status:'connected', server:input.server, company:'Test broker', login:'700'};
+      return route.fulfill({json:{id:newLogin.id}});
+    }
     if (action === 'status') {
       const common = {
         status: 'connected',
@@ -96,7 +112,7 @@ export async function checkTwoAccounts(browser, base, width) {
         json: {
           accounts: [first, second],
           demoOnly: true,
-          devices: [{ id: 'pc', last_seen: Date.now() }],
+          devices: [{ id: 'pc', last_seen: Date.now(), setup_state:'ready', public_key:publicKey }],
           links: [
             {
               ...common,
@@ -109,9 +125,11 @@ export async function checkTwoAccounts(browser, base, width) {
               ...common,
               id: 'euro-link',
               account_id: second.id,
+              monitoring_paused: Number(paused.has('euro-link')),
               login: '43',
               history_id: latestEuroScan,
             },
+            ...(newLogin ? [{...newLogin,last_sync:firstSync?new Date().toISOString():null}] : []),
           ],
         },
       });
@@ -204,7 +222,23 @@ export async function checkTwoAccounts(browser, base, width) {
       .waitFor();
     await tradeForm.getByRole('button', { name: 'Close dialog' }).click();
 
-    await page.goto(base + '#mt5');
+    const monitor=page.getByRole('region',{name:'Broker account monitor'});
+    await monitor.getByRole('button',{name:'Pause monitoring'}).click();
+    await monitor.getByText('Monitoring paused').waitFor();
+    assert.deepEqual([...paused],['euro-link']);
+    await monitor.getByRole('button',{name:'Resume monitoring'}).click();
+    await monitor.getByRole('button',{name:'Pause monitoring'}).waitFor();
+    await monitor.getByRole('link',{name:'Add account'}).click();
+    const login=page.frameLocator('iframe[title="MT5 broker account login"]');
+    await login.locator('#server').fill('Shared-Demo');
+    await login.locator('#login').fill('700');
+    await login.locator('#password').fill('fixture-password');
+    await login.getByRole('button',{name:'Add account',exact:true}).click();
+    await login.getByText(/Waiting for the first journal sync/).waitFor();
+    firstSync=true;
+    await login.getByText(/first sync was received/).waitFor();
+    await login.getByRole('button',{name:'View accounts'}).click();
+    await page.getByRole('dialog',{name:'Connect MT5 account'}).waitFor({state:'hidden'});
     const dollar = page.getByRole('group', { name: 'MT5 account Dollar demo · 42' });
     const euro = page.getByRole('group', { name: 'MT5 account Euro demo · 43' });
     await dollar.getByRole('button', { name: 'Review earlier trades' }).click();

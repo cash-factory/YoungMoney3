@@ -120,10 +120,24 @@ def terminal_account(slot, login, server, password, verify_password):
     # MT5 can wait for a broker session before completing its Python IPC handshake.
     # Supply the requested identity during startup, including on an empty terminal profile.
     mt5.shutdown()
-    if not mt5.initialize(slot, portable=True, timeout=60000,
-                          login=login, password=password, server=server):
+    def attach():
+        return mt5.initialize(slot, portable=True, timeout=60000, login=login, password=password, server=server)
+
+    if not attach():
         code = mt5.last_error()[0]
-        raise LoginFailure("broker_rejected" if code == -6 else "terminal_start", code)
+        managed = Path(slot).parent / ".ym-managed.json"
+        if verify_password and code in (-10003, -10005) and managed.is_file():
+            import subprocess
+            mt5.shutdown()
+            try:
+                subprocess.Popen([slot, "/portable"], cwd=str(Path(slot).parent))
+            except OSError as error:
+                raise LoginFailure("terminal_start", code) from error
+            if not attach():
+                code = mt5.last_error()[0]
+                raise LoginFailure("broker_rejected" if code == -6 else "terminal_start", code)
+        else:
+            raise LoginFailure("broker_rejected" if code == -6 else "terminal_start", code)
     terminal = mt5.terminal_info()
     if not terminal or Path(terminal.data_path).resolve() != Path(slot).resolve().parent:
         raise LoginFailure("wrong_terminal")
@@ -345,7 +359,7 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
 
 def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
          report=None, active_slots=None, armed_slot=None, all_slots=None,
-         parallel_capture=False, retry_queue=None):
+         parallel_capture=False, retry_queue=None, managed_accounts=None):
     """CLI and GUI entrypoint; MT5 and SQLite run on this one worker thread."""
     global origin, slots, opener, service, token, db, heartbeats, timezone_cache
     parser=argparse.ArgumentParser()
@@ -360,7 +374,7 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
     if parsed.scheme!="https" or not parsed.hostname or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment:
         parser.error("Use an HTTPS dashboard origin")
     slots=[str(Path(s).resolve(strict=True)) for s in args.slots]
-    if not slots and not (args.pair and args.pair_only):
+    if not slots and not (args.pair and args.pair_only) and not (parallel_capture and managed_accounts):
         parser.error("Select a dedicated terminal64.exe before syncing")
     if len(set(slots))!=len(slots) or any(Path(s).name.lower()!="terminal64.exe" for s in slots):
         parser.error("Supply different dedicated terminal64.exe paths")
@@ -410,7 +424,7 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
         from concurrent_capture import run_supervisor
         try:
             return run_supervisor(origin, db, folder/"capture.db", slots, token, report,
-                                  stop_event, armed_slot, active_slots, all_slots, retry_queue)
+                                  stop_event, armed_slot, active_slots, all_slots, retry_queue, managed_accounts)
         finally:
             db.close()
     next_poll=0

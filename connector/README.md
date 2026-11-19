@@ -1,6 +1,16 @@
 # Windows MT5 connector
 
-Use a Windows PC with 64-bit Python 3.13 and desktop MetaTrader 5. Create one separate, writable portable terminal installation per simultaneously monitored account. Open each dedicated terminal once and add the exact broker server there. Leave your normal trading terminal separate.
+## Windows app
+
+1. Download the Windows connector from **MT5 Connections**. Open it using the same Windows user as your previous version.
+2. For a new PC, choose **Pair a PC** in the dashboard and paste its code into the connector. Existing pairings reconnect when you open the app.
+3. Choose **Add account** on either screen. Enter the broker server, account number and MT5 password. The connector finds the installed MetaTrader program, prepares an isolated profile and verifies the broker login. If it finds no installation, it offers MetaTrader's Windows installer and checks again automatically.
+4. Keep the connector open. **PC online** confirms the connection to the dashboard. **Broker verified** confirms the login. **Journal synced** follows an acknowledged account upload.
+5. Use **Broker accounts** on the trading dashboard to see each login, check its last sync, or pause and resume monitoring. **Manage accounts** opens retries, timezones and historical imports.
+
+## Manual command-line setup
+
+The optional command-line client uses 64-bit Python 3.13 and desktop MetaTrader 5. Create one separate, writable portable terminal installation per simultaneously monitored account. Open each dedicated terminal once and add the exact broker server there. Leave your normal trading terminal separate.
 
 1. Extract this ZIP into a folder and open PowerShell there.
 2. Run each PowerShell command on its own line.
@@ -43,51 +53,11 @@ For a Windows 64-bit Python 3.13 fallback:
 - .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 - .\.venv\Scripts\python.exe connector_gui.py
 
-## Studio connector v0.3.1-rc1 (staging)
+## How desktop account setup works
 
-One desktop app manages multiple broker account sessions. A MetaTrader terminal
-can have one logged-in account at a time. Use **Create terminal** to generate a
-new isolated /portable installation from an installed MT5 terminal, or select a
-session and use **Duplicate selected**. Name each session by broker/account
-(e.g. Exness Demo 1) and use its row to see the actual verified broker server
-and login number. Duplicating copies only application files: never broker
-logins, account data, history, trading EAs or credentials. Launch a new copy
-with **Open MT5** and connect the broker account through staging.
+The connector checks Windows program locations, registered installations and MT5 installation markers. It creates a separate portable program for each broker login. If available, the source broker server directory is carried across. Account credentials, EAs, account databases and history are excluded from the copy. Existing linked terminal assignments and queued uploads keep their original identities. Advanced setup remains available for manually managed installations.
 
-Each enabled linked account is monitored in its own spawned Windows process,
-so MT5 sessions can be captured concurrently. One lightweight coordinator
-handles login verification and the existing durable per-device SQLite outbox.
-Even two accounts with the same broker/server need two terminal instances;
-MT5's Navigator may list several accounts but only one is active per instance.
-
-1. Open **Pair this PC**. Generate a five-minute code on your staging dashboard.
-   Paste with the Paste button, right-click context menu or Ctrl+V, then click
-   Pair this PC. Follow the visible progress and wait for **PC paired successfully**.
-2. Open **Sessions → Create terminal** to make a fresh portable installation
-   automatically, or **Duplicate selected** from an existing terminal. Enter a
-   name for each account. **Add existing** is still supported for manually
-   prepared portable terminal64.exe files.
-3. Select a session and choose **Arm for account**. In the browser open
-   **MT5 Connections → Connect MT5 account** and enter the exact broker server,
-   login and investor/standard password. Only the explicitly armed free session
-   can claim that account; otherwise pending verification is not consumed.
-4. Create or duplicate another terminal and repeat. Rename, pause and resume
-   sessions individually without affecting other running MT5 processes. **Start all** and
-   **Pause all** manage the whole local app. Remove only unlinked GUI profiles;
-   broker links, local SQLite evidence and Windows credentials are not deleted.
-5. Open **Activity** for timestamped progress and safe-to-share diagnostic
-   summaries. The UI does not print or store pairing codes, device tokens or
-   broker passwords. Settings migrate automatically from the older
-   `terminals` preference list.
-
-The native GUI and CLI still share the same staging origin, Credential Manager
-pairing, and per-device SQLite outbox. Closing the app stops capture safely and
-retains queued records. No trading commands are issued.
-
-Broker server discovery remains in MetaTrader 5 → File → Open an Account.
-If MT5 IPC -10005 occurs, launch the exact dedicated terminal with /portable,
-log in to the correct broker server, then retry. Verify full operation using
-actual Windows demo terminals before trusting financial reconciliation.
+One PC check-in runs independently of terminal preparation and capture. Temporary network loss triggers automatic retries. A revoked PC must be paired again. Closing the connector or shutting down Windows pauses monitoring until the connector reopens.
 
 Historical data defaults to 30 days (approximately one month). The available
 7/14/30/60/90-day choices require explicit preview approval; the staging server

@@ -150,7 +150,7 @@ def run_parallel_smoke():
 
 
 def run_supervisor(origin, db, database_path, slots, token, report,
-                   stop_event, armed_slot, active_slots, all_slots, retry_queue=None):
+                   stop_event, armed_slot, active_slots, all_slots, retry_queue=None, managed_accounts=None):
     """Runs in the GUI's non-Tk coordinator thread; worker processes own MT5."""
     import connect
 
@@ -164,6 +164,14 @@ def run_supervisor(origin, db, database_path, slots, token, report,
     wake_events = {}
     seen_requests = {}
     next_retry_poll = 0.0
+    presence = None
+    handled_request = None
+    previous_paused = None
+    if managed_accounts is not None:
+        from presence import DevicePresence
+        presence = DevicePresence(lambda payload: connect.post("presence", payload, token),
+                                  managed_accounts, report, stop_event)
+        presence.thread.start()
     previous_links = None
     next_poll = 0.0
     last_report = 0.0
@@ -184,6 +192,26 @@ def run_supervisor(origin, db, database_path, slots, token, report,
                 previous_links = linked
             enabled = set(active_slots()) if active_slots else set(connect.slots)
             selected = wanted_link_rows(rows, enabled)
+            commands = presence.snapshot() if presence else None
+            if presence:
+                try:
+                    account_id, paused_request = managed_accounts.controls.get_nowait()
+                except queue.Empty:
+                    pass
+                else:
+                    try:
+                        connect.post("set-monitoring", {"link":account_id, "paused":paused_request}, token)
+                        if report:
+                            report({"state":"control-saved", "message":"Monitoring change saved to your dashboard."})
+                    except Exception:
+                        if report:
+                            report({"state":"control-error", "message":"Could not change monitoring. Check the PC connection and retry."})
+                paused = set(commands["paused"]) if commands else set()
+                if commands and paused != previous_paused and report:
+                    report({"state": "monitoring-policy", "paused": list(paused)})
+                    previous_paused = paused
+                selected = {key: row for key, row in selected.items()
+                            if commands and not commands.get("capturePaused") and key not in paused}
             for link, (process, halt, slot) in list(children.items()):
                 if link not in selected or selected[link][1] != slot:
                     halt.set()  # Gracefully stop after current MT5 call.
@@ -222,7 +250,18 @@ def run_supervisor(origin, db, database_path, slots, token, report,
                     except queue.Empty:
                         break
                     requested.update(link for link, row in selected.items() if row[1] == selected_slot)
-            if selected and now >= next_retry_poll:
+            if commands:
+                for request in commands.get("retries", []):
+                    link_id = request["id"]
+                    if link_id not in selected and seen_requests.get(link_id) != request["retry_requested_at"]:
+                        slot = next((r[1] for r in rows if r[0] == link_id), None)
+                        session = next((s for s in managed_accounts.store.snapshot() if s["terminal"] == slot), None)
+                        if session and not session["enabled"]:
+                            managed_accounts.store.set_enabled(session["id"], True)
+                    if link_id in selected and seen_requests.get(link_id) != request["retry_requested_at"]:
+                        requested.add(link_id)
+                        seen_requests[link_id] = request["retry_requested_at"]
+            if not presence and selected and now >= next_retry_poll:
                 next_retry_poll = now + 12
                 try:
                     pending = connect.post("retries", {}, token).get("rows", [])
@@ -242,7 +281,37 @@ def run_supervisor(origin, db, database_path, slots, token, report,
             # terminal exists. Otherwise requests remain waiting on staging.
             candidate = armed_slot() if armed_slot else None
             used = {row[1] for row in rows}
-            if candidate and candidate in enabled and candidate in connect.slots and candidate not in used:
+            pending = commands.get("pending") if commands else None
+            if presence and pending and handled_request != pending["id"] and now >= next_poll:
+                from terminal_factory import TerminalCopyError
+                try:
+                    if report:
+                        report({"state": "preparing-account", "message": "Preparing MetaTrader for your account."})
+                    candidate = managed_accounts.prepare(pending.get("server") or "MT5", used, stop_event)
+                    if stop_event.is_set():
+                        break
+                    connect.slots = list(all_slots())
+                    job = connect.post("poll", {"request": pending["id"]}, token).get("job")
+                    if job:
+                        if report:
+                            report({"state": "verifying", "slot": candidate, "message": "Your broker is checking the login."})
+                        connect.verify(job, slot_override=candidate, report=report)
+                    handled_request = pending["id"]
+                except (TerminalCopyError, OSError) as error:
+                    if isinstance(error, TerminalCopyError) and not stop_event.is_set():
+                        try:
+                            connect.post("setup-issue", {"link":pending["id"]}, token)
+                            handled_request = pending["id"]
+                        except OSError:
+                            pass
+                    if report:
+                        report({"state": "setup-error", "message": str(error) if isinstance(error, TerminalCopyError)
+                                else "The network is unavailable. Reconnecting to the dashboard."})
+                except Exception:
+                    if report:
+                        report({"state": "setup-error", "message": "Setup was interrupted. Check this request in the dashboard."})
+                next_poll = time.monotonic() + 5
+            elif not presence and candidate and candidate in enabled and candidate in connect.slots and candidate not in used:
                 if now >= next_poll:
                     try:
                         job = connect.post("poll", {}, token)["job"]
@@ -258,7 +327,7 @@ def run_supervisor(origin, db, database_path, slots, token, report,
                             report({"state": "retrying",
                                     "message": "Account pairing service unavailable (" +
                                                type(error).__name__ + ")."})
-            else:
+            elif not presence:
                 next_poll = now
 
             # Only report safe, typed events. No account passwords or pairing
@@ -294,5 +363,8 @@ def run_supervisor(origin, db, database_path, slots, token, report,
                 proc.terminate()
                 proc.join(timeout=5)
         events.close()
+        if presence:
+            stop_event.set()
+            presence.thread.join(timeout=22)
         if report:
             report({"state": "stopped", "message": "All account processes stopped."})

@@ -102,9 +102,17 @@ try {
   const token=(await (await call('mt5/device/claim',claim)).json()).token;
   assert.ok(token);assert.equal((await call('mt5/device/claim',claim)).status,403);
   const devices=(await (await call('mt5/status',{})).json()).devices;
-  const link=(await (await call('mt5/connect',{device:devices[0].id,envelope:{wrapped:'a',iv:'b',data:'c'}})).json()).id;
   const device=(path,data)=>call('mt5/device/'+path,data,{authorization:'Bearer '+token});
-  assert.equal((await (await device('poll',{})).json()).job.id,link);
+  const presence=async(setup='ready')=>(await device('presence',{setup,version:'0.4.0-rc1'})).json();
+  await db.prepare('UPDATE mt5_devices SET last_seen=0 WHERE id=?').bind(devices[0].id).run();
+  assert.equal((await presence('install')).device,devices[0].id);
+  const loginRequest={device:devices[0].id,server:'Demo',envelope:{wrapped:'a',iv:'b',data:'c'}};
+  assert.equal((await call('mt5/connect',loginRequest)).status,409);
+  assert.equal((await presence()).pending,null);
+  const link=(await (await call('mt5/connect',loginRequest)).json()).id;
+  assert.deepEqual((await presence()).pending,{id:link,server:'Demo'});
+  assert.equal((await (await device('poll',{request:'different-request'})).json()).job,null);
+  assert.equal((await (await device('poll',{request:link})).json()).job.id,link);
   assert.equal((await (await device('poll',{})).json()).job,null);
   assert.equal((await device('verified',{link,ok:true,mode:0,trade_access:true,login:'42',server:'Demo',company:'Fixtures',currency:'USD',balance:100})).status,200);
   const verifiedAccess=(await (await call('mt5/status',{})).json()).links.find(l=>l.id===link);
@@ -270,6 +278,13 @@ try {
   assert.equal(secondAccount.access_level,'trading-restricted');
   assert.notEqual(secondAccount.account_id,linkedAccount);
   assert.equal(secondAccount.server,verifiedAccess.server);
+  assert.equal((await call('mt5/set-monitoring',{link:secondLink,paused:true})).status,200);
+  assert.deepEqual((await presence()).paused,[secondLink]);
+  assert.equal((await device('sync',{link:secondLink,events:[]})).status,423);
+  assert.equal((await device('sync',{link,events:[]})).status,200);
+  assert.equal((await device('set-monitoring',{link:secondLink,paused:false})).status,200);
+  assert.deepEqual((await presence()).paused,[]);
+  assert.equal((await device('sync',{link:secondLink,events:[]})).status,200);
   // Independent logins on a single broker server can reuse every broker ticket.
   const secondEvents = [
     {...evidenceEvent,fields:{...fill,price:1.3}},

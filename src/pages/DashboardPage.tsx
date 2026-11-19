@@ -10,6 +10,7 @@ import { computeDashboardStats, equityCurveData, dailyPnlData, formatPercent, fo
 import { StatCard } from '@/components/ui/StatCard';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { Modal } from '@/components/ui/Modal';
+import { AccountMonitor } from '@/components/AccountMonitor';
 import { TradeForm } from '@/components/TradeForm';
 import { ThemedSelect } from '@/components/ThemedSelect';
 import { TradeCalculator } from '@/components/TradeCalculator';
@@ -330,6 +331,7 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
           </div>
           <p className="text-xs text-muted mt-3">Last reported broker values are snapshots, not live streaming quotes. Review MT5 Connections for sync health and unfinished history.</p>
         </section>}
+      {source === 'live' && activeSection === 'overview' && <AccountMonitor accountId={accountFilter}/>}
       {filteredLifecyclePositions.length > 0 && <div className="mb-6">
         <RichLifecycleAnalytics positions={filteredLifecyclePositions} compact />
       </div>}

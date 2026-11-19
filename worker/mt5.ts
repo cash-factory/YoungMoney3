@@ -29,26 +29,37 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if (request.method !== 'POST') return fail('POST required.', 405);
   const db = env.DB;
   const q = (sql: string, ...args: unknown[]) => db.prepare(sql).bind(...args);
-  const input = await body(request);
-  if (!input) return fail('Invalid connector request.');
+  const parsed = await body(request);
+  if (!parsed) return fail('Invalid connector request.');
+  const input: Fields = parsed;
   const unix = Date.now();
   const capturePaused = async () => {
     const setting=await q("SELECT value FROM site_settings WHERE key='mt5_capture_paused'").first<{value:string}>();
     return setting?.value==='true';
   };
   const remainingReviews=(link:string)=>q("SELECT COUNT(DISTINCT lifecycle_id) AS n FROM mt5_position_versions v WHERE v.link=? AND NOT EXISTS (SELECT 1 FROM workspace_records w WHERE w.id='review/'||v.owner||'/position/'||v.link||'/'||v.lifecycle_id AND w.user_id=v.owner AND w.table_name='decision_reviews')",link).first<{n:number}>();
+  async function setMonitoring(ownerId: string, deviceId: string | null = null) {
+    if (!limited(input.link,64) || typeof input.paused !== 'boolean') return fail('Choose an account and monitoring state.');
+    const changed = await q(`UPDATE mt5_links SET monitoring_paused=?,
+      retry_requested_at=CASE WHEN ? THEN NULL ELSE COALESCE(retry_requested_at,?) END
+      WHERE id=? AND owner=? AND status='connected' AND (? IS NULL OR device=?) AND device IN
+      (SELECT id FROM mt5_devices WHERE owner=? AND revoked=0)`,
+      Number(input.paused),Number(input.paused),now(),input.link,ownerId,deviceId,deviceId,ownerId).run();
+    return changed.meta.changes ? json({ok:true}) : fail('Account unavailable.',404);
+  }
   if (owner) {
     if (action === 'status') {
-      const devices = await q('SELECT id,public_key,last_seen FROM mt5_devices WHERE owner=? AND revoked=0 AND public_key IS NOT NULL', owner).all();
-      const links = await q('SELECT l.device,l.retry_requested_at,l.capture_health,l.id,l.account_id,l.status,l.company,l.server,l.login,l.access_level,l.trade_mode,l.history_id,l.history_status,l.history_since,l.last_sync,l.broker_balance,l.broker_equity,l.currency,l.gap,l.last_error,l.expires,l.broker_timezone,l.timezone_confirmed_at,l.timezone_source,l.utc_conversion_status FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND d.revoked=0', owner).all();
+      const devices = await q('SELECT id,public_key,last_seen,setup_state,connector_version FROM mt5_devices WHERE owner=? AND revoked=0 AND public_key IS NOT NULL', owner).all();
+      const links = await q('SELECT l.device,l.monitoring_paused,l.retry_requested_at,l.capture_health,l.id,l.account_id,l.status,l.company,l.server,l.login,l.access_level,l.trade_mode,l.history_id,l.history_status,l.history_since,l.last_sync,l.broker_balance,l.broker_equity,l.currency,l.gap,l.last_error,l.expires,l.broker_timezone,l.timezone_confirmed_at,l.timezone_source,l.utc_conversion_status FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND d.revoked=0', owner).all();
       const accounts=await q("SELECT id,json_extract(payload,'$.name') AS name FROM workspace_records WHERE user_id=? AND table_name='trading_accounts' ORDER BY created_at",owner).all();
       const states=await Promise.all(links.results.map(async link=>({...link,pending_reviews:(await remainingReviews(String(link.id)))?.n??0})));
       return json({ accounts:accounts.results, devices: devices.results, links: states, demoOnly: env.MT5_ALLOW_LIVE !== 'true', capturePaused: await capturePaused() });
     }
+    if (action === 'set-monitoring') return setMonitoring(owner);
     if(action==='retry-session'){
       if(!limited(input.link,64))return fail('Choose a linked account.');
       if(await capturePaused())return fail('Capture is paused in staging.',409);
-      const result=await q("UPDATE mt5_links SET retry_requested_at=COALESCE(retry_requested_at,?) WHERE id=? AND owner=? AND status='connected' AND device IN (SELECT id FROM mt5_devices WHERE owner=? AND revoked=0)",now(),input.link,owner,owner).run();
+      const result=await q("UPDATE mt5_links SET retry_requested_at=COALESCE(retry_requested_at,?) WHERE id=? AND owner=? AND status='connected' AND monitoring_paused=0 AND device IN (SELECT id FROM mt5_devices WHERE owner=? AND revoked=0)",now(),input.link,owner,owner).run();
       return result.meta.changes?json({ok:true}):fail('Account unavailable.',404);
     }
     if (action === 'timezone-confirm') {
@@ -91,8 +102,9 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       return json({rows:evidence.results.slice(0,100).map(row=>({...row,payload:JSON.parse(row.payload)})),more:evidence.results.length>100});
     }
     if (['history-request','history-preview','history-import','history-decline'].includes(action)) {
-      const link=await q("SELECT l.* FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE l.id=? AND d.owner=? AND d.revoked=0 AND l.status='connected'",input.link,owner).first<{id:string;account_id:string;currency:string;company:string;linked_at:string;history_id:string;history_status:string;history_since:number|null;trade_mode:number|null}>();
+      const link=await q("SELECT l.* FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE l.id=? AND d.owner=? AND d.revoked=0 AND l.status='connected'",input.link,owner).first<{id:string;account_id:string;currency:string;company:string;linked_at:string;history_id:string;history_status:string;history_since:number|null;trade_mode:number|null;monitoring_paused:number}>();
       if(!link) return fail('Linked account unavailable.',404);
+      if (action==='history-request' && link.monitoring_paused) return fail('Resume monitoring before requesting a scan.',409);
       if(['history-request','history-import'].includes(action) && await capturePaused())
         return fail('MT5 capture is paused by the administrator.',403);
       if(link.trade_mode===2 && env.MT5_ALLOW_LIVE!=='true' && ['history-request','history-import'].includes(action))
@@ -163,14 +175,18 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     }
     if (action === 'connect') {
       if(await capturePaused()) return fail('MT5 capture is paused by the administrator.',403);
-      const device = await q('SELECT id FROM mt5_devices WHERE id=? AND owner=? AND revoked=0 AND last_seen>?', input.device, owner, unix - 90000).first();
+      const device = await q('SELECT id,setup_state FROM mt5_devices WHERE id=? AND owner=? AND revoked=0 AND last_seen>?', input.device, owner, unix - 90000).first<{id:string;setup_state:string|null}>();
       if (!device) return fail('Connector offline. Start it on your PC and retry.', 409);
+      if (device.setup_state === 'install') return fail('Install MetaTrader 5 on the paired PC, then add your account.',409);
+      if (input.server !== undefined && !limited(input.server,128)) return fail('Choose a valid broker server.');
       if (!isObject(input.envelope) || !['wrapped','iv','data'].every(k => limited((input.envelope as Fields)[k],4096))) return fail('Invalid encrypted request.');
       const id = uuid();
       if(input.account && (!limited(input.account,100) || !await q("SELECT id FROM workspace_records WHERE user_id=? AND table_name='trading_accounts' AND id=?",owner,input.account).first())) return fail('Unknown journal account.');
       const accountId=input.account || uuid();
       if(await q("SELECT id FROM mt5_links WHERE account_id=? AND (status='connected' OR (status IN ('pending','verifying') AND expires>?))",accountId,unix).first()) return fail('This journal account already has a connection.',409);
-      await q('INSERT INTO mt5_links(id,owner,device,account_id,envelope,expires) VALUES(?,?,?,?,?,?)', id,owner,input.device,accountId,JSON.stringify(input.envelope),unix+90000).run();
+      const expires = unix + (device.setup_state ? 300000 : 90000);
+      await q('INSERT INTO mt5_links(id,owner,device,account_id,envelope,expires,server) VALUES(?,?,?,?,?,?,?)',
+        id,owner,input.device,accountId,JSON.stringify(input.envelope),expires,input.server || null).run();
       return json({ id });
     }
     if (action === 'match') {
@@ -199,7 +215,21 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   const token=request.headers.get('authorization')?.match(/^Bearer (.{72})$/)?.[1];
   if (!token) return fail('Device authentication required.',401);
   const device=await q("SELECT d.id,d.owner FROM mt5_devices d JOIN users u ON u.id=d.owner WHERE token_hash=? AND revoked=0 AND u.account_status='active'",await hash(token)).first<{id:string;owner:string}>();
-  if (!device) return fail('Device access revoked.',403);
+  if (!device) return json({error:'Device access revoked.',code:'device_revoked'},403);
+  if (action === 'device/set-monitoring') return setMonitoring(device.owner, device.id);
+  if (action === 'device/presence') {
+    if (!['ready','install'].includes(String(input.setup)) || !limited(input.version,32)) return fail('Invalid connector status.');
+    const halted = await capturePaused();
+    const [, , paused, retries, pending] = await db.batch<{id:string; server?:string|null; retry_requested_at?:string}>([
+      q('UPDATE mt5_devices SET last_seen=?,setup_state=?,connector_version=? WHERE id=?',unix,input.setup,input.version,device.id),
+      q("UPDATE mt5_links SET envelope=NULL,status='expired' WHERE device=? AND status IN ('pending','verifying') AND expires<=?",device.id,unix),
+      q("SELECT id FROM mt5_links WHERE device=? AND status='connected' AND monitoring_paused=1",device.id),
+      q("SELECT id,retry_requested_at FROM mt5_links WHERE device=? AND status='connected' AND monitoring_paused=0 AND retry_requested_at IS NOT NULL",device.id),
+      q("SELECT id,server FROM mt5_links WHERE device=? AND status='pending' AND expires>? ORDER BY expires,id LIMIT 1",device.id,unix),
+    ]);
+    return json({device:device.id,capturePaused:halted,paused:paused.results.map(r=>r.id),
+      retries:halted?[]:retries.results,pending:halted?null:pending.results[0]??null});
+  }
   if(action==='device/retries'){
     await q('UPDATE mt5_devices SET last_seen=? WHERE id=?',unix,device.id).run();
     const rows=await capturePaused()?[]:(await q("SELECT id,retry_requested_at FROM mt5_links WHERE device=? AND status='connected' AND retry_requested_at IS NOT NULL",device.id).all()).results;
@@ -209,14 +239,22 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     await q('UPDATE mt5_devices SET last_seen=? WHERE id=?',unix,device.id).run();
     if(await capturePaused()) return json({job:null,capturePaused:true});
     await q("UPDATE mt5_links SET envelope=NULL,status='expired' WHERE device=? AND status IN ('pending','verifying') AND expires<=?",device.id,unix).run();
-    const job=await q("SELECT id,envelope FROM mt5_links WHERE device=? AND status='pending' AND expires>? ORDER BY expires LIMIT 1",device.id,unix).first<{id:string;envelope:string}>();
+    if (input.request !== undefined && !limited(input.request,64)) return fail('Invalid account request.');
+    const job=await q("SELECT id,envelope FROM mt5_links WHERE device=? AND status='pending' AND expires>? AND (? IS NULL OR id=?) ORDER BY expires,id LIMIT 1",
+      device.id,unix,input.request??null,input.request??null).first<{id:string;envelope:string}>();
     if (!job) return json({job:null});
-    const claimed=await q("UPDATE mt5_links SET status='verifying',envelope=NULL,expires=? WHERE id=? AND status='pending'",unix+90000,job.id).run();
+    const claimed=await q("UPDATE mt5_links SET status='verifying',envelope=NULL,expires=? WHERE id=? AND status='pending'",unix+(input.request?180000:90000),job.id).run();
     return json({ job: claimed.meta.changes ? {id:job.id,envelope:JSON.parse(job.envelope)} : null });
   }
   if (!limited(input.link,64)) return fail('Missing link.');
-  const link=await q('SELECT * FROM mt5_links WHERE id=? AND device=?',input.link,device.id).first<{id:string;account_id:string;status:string;currency:string;company:string;expires:number;trade_mode:number|null}>();
+  const link=await q('SELECT * FROM mt5_links WHERE id=? AND device=?',input.link,device.id).first<{id:string;account_id:string;status:string;currency:string;company:string;expires:number;trade_mode:number|null;monitoring_paused:number}>();
   if (!link) return fail('Unknown link.',404);
+  if (action === 'device/setup-issue') {
+    const failed = await q("UPDATE mt5_links SET status='failed',envelope=NULL,last_error=? WHERE id=? AND device=? AND status='pending'",
+      'Your PC could not prepare MetaTrader. Check the setup message in the connector, then choose Add account again.',link.id,device.id).run();
+    return failed.meta.changes ? json({ok:true}) : fail('This account request has already changed.',409);
+  }
+  if (link.monitoring_paused && ['device/sync','device/capture-issue'].includes(action)) return fail('Monitoring is paused for this account.',423);
   if(action==='device/capture-issue'){
     if(link.status!=='connected')return fail('Account unavailable.',409);
     await q("UPDATE mt5_links SET capture_health='needs_attention' WHERE id=?",link.id).run();
@@ -230,13 +268,13 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     if(input.ok && (typeof input.mode!=='number' || ![0,1,2].includes(input.mode))) return fail('Invalid MT5 account mode.');
     if (!input.ok || (env.MT5_ALLOW_LIVE!=='true' && input.mode===2)) {
       const reasons: Record<string,string> = {
-        terminal_start:'Could not attach to the dedicated terminal. Open its terminal64.exe with /portable, finish startup, then retry.',
-        wrong_terminal:'MT5 opened a different data folder. Close the dedicated copy and open it with /portable.',
+        terminal_start:'MetaTrader could not start. Open the connector on your PC, finish any MetaTrader update, then choose Add account again.',
+        wrong_terminal:'MetaTrader opened the wrong profile. Close the extra MetaTrader window and retry from Add account.',
         broker_rejected:'MT5 rejected authorization. Check the account number, investor or standard password, and exact assigned server.',
         broker_login:'MT5 could not log in to this server. In the dedicated terminal use File → Open an Account, find your broker and select its assigned server, then retry.',
-        disconnected:'MT5 did not establish a broker connection. Check the dedicated terminal’s Journal.',
+        disconnected:'MetaTrader could not reach the broker. Check the connection on your PC and confirm the server name.',
         identity_mismatch:'The connected login or broker server differs from the requested account.',
-        no_slot:'All configured terminals are in use. Add a separate portable installation for this account.',
+        no_slot:'Account setup is busy. Try Add account again once the current request finishes.',
         invalid_job:'The PC could not read this login request. Reopen the login form and retry.'
       };
       const reason=Object.hasOwn(reasons,String(input.reason)) ? reasons[String(input.reason)] : 'Login failed. Check server, account credentials and dedicated terminal availability.';
@@ -246,7 +284,10 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     }
     if (!limited(input.login,24)||!/^\d+$/.test(input.login)||!limited(input.server,128)||!limited(input.company,128)||!limited(input.currency,12)||typeof input.balance!=='number'||!Number.isFinite(input.balance)) return fail('Invalid account metadata.');
     const duplicate=await q("SELECT 1 FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND l.login=? AND l.server=? AND l.status='connected' AND d.revoked=0",device.owner,input.login,input.server).first();
-    if(duplicate) return fail('Account already linked.',409);
+    if(duplicate) {
+      await q("UPDATE mt5_links SET status='failed',last_error='This broker login is already in your account list.' WHERE id=? AND status='verifying'",link.id).run();
+      return fail('Account already linked.',409);
+    }
     const prior=await q("SELECT payload FROM workspace_records WHERE id=? AND user_id=? AND table_name='trading_accounts'",link.account_id,device.owner).first<{payload:string}>();
     if(prior){
       const account=JSON.parse(prior.payload);

@@ -54,6 +54,7 @@ def create_terminal(
     name: str,
     *,
     progress=None,
+    broker_directory: Path | None = None,
     cancel: threading.Event | None = None,
 ) -> Path:
     """Return an isolated terminal64.exe; never copy logged-in terminal data.
@@ -121,6 +122,14 @@ def create_terminal(
                     progress({"files": count, "bytes": total_bytes})
         if not (staging / "terminal64.exe").is_file():
             raise TerminalCopyError("The source does not contain required terminal files.")
+        if broker_directory is not None:
+            directory = Path(broker_directory)
+            if (directory.name.casefold() != "servers.dat" or directory.parent.name.casefold() != "config"
+                    or _is_link(directory) or _is_link(directory.parent) or not directory.is_file()
+                    or directory.stat().st_size > 32 * 1024 * 1024):
+                raise TerminalCopyError("The broker server directory changed. Try Add account again.")
+            (staging / "config").mkdir(exist_ok=True)
+            shutil.copyfile(directory, staging / "config" / "servers.dat", follow_symlinks=False)
         marker = {
             "schema": 1,
             "kind": "youngmoney3-portable-mt5",

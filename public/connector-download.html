@@ -32,21 +32,21 @@
   <section class="card" aria-labelledby="release-heading">
     <h2 id="release-heading">Download the Windows connector</h2>
     <p id="status" role="status">Verified staging executable available.</p>
-    <p id="version" class="muted">Version: staging-connector-v0.3.3-rc1 · Windows x64 · unsigned</p>
-    <p><a id="download" class="button" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.3.3-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer">Download Connector v0.3.3-rc1</a>
-       <a id="checksum" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.3.3-rc1/YoungMoney3.Connector.exe.sha256" rel="noopener noreferrer">Download SHA-256 checksum</a></p>
+    <p id="version" class="muted">Version: staging-connector-v0.4.0-rc1 · Windows x64 · unsigned</p>
+    <p><a id="download" class="button" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.4.0-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer">Download Connector v0.4.0-rc1</a>
+       <a id="checksum" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.4.0-rc1/YoungMoney3.Connector.exe.sha256" rel="noopener noreferrer">Download SHA-256 checksum</a></p>
     <p class="muted" style="font-size:.8rem">SHA-256 verification:</p>
-    <code id="digest">b56656885770a29f501cbcac56cd318e8927f65b03f80ddf0a680d05ce9d3618</code>
+    <code id="digest">See the checksum file for this Windows release.</code>
     <p id="fallback"><a href="https://github.com/cash-factory/YoungMoney3/releases" rel="noopener noreferrer">View verified GitHub releases</a></p>
     <p class="muted" style="font-size:.8rem">Downloads are hosted on the official YoungMoney3 GitHub release. This page links to the designated Studio prerelease and checks newer versions when the API is available, and checks for newer published staging versions when possible. Do not use third-party mirrors.</p>
   </section>
   <section class="card">
     <h2>Setup</h2>
     <ul>
-      <li>Install MetaTrader 5 on your Windows PC. Open the connector and choose <strong>Sessions → Create terminal</strong> or <strong>Duplicate selected</strong> to prepare named, isolated MT5 instances.</li>
-      <li>Open staging, sign in, and use <strong>MT5 Connections → Pair a PC</strong> if your Windows user is not paired yet.</li>
-      <li>In the connector, arm a session for a broker account before linking it on the website. Then use <strong>Start all</strong> to capture across separately running terminal processes.</li>
-      <li>Stop or close the app to stop capture; queued records remain available for the next launch.</li>
+      <li>Open the connector on Windows. If this PC is new, sign in to staging, choose <strong>MT5 Connections → Pair a PC</strong>, and paste the code in the connector.</li>
+      <li>Choose <strong>Add account</strong> in the connector or dashboard. Enter the account number, server, and password from your broker.</li>
+      <li>The connector finds MetaTrader and prepares each account. If MetaTrader is missing, open its installer from the connector and finish installation.</li>
+      <li>Keep the connector open while monitoring. See the latest sync, pause, resume, or retry individual accounts on the dashboard.</li>
     </ul>
     <p class="muted"><strong>Important:</strong> The executable is unsigned and Windows SmartScreen may show a warning. Compare its SHA-256 against the published checksum before launching. Real-account capture remains disabled.</p>
     <p><a href="/mt5-connector.zip" download>Python-source fallback ZIP</a></p>

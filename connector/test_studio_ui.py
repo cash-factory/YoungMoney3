@@ -42,6 +42,7 @@ class ConnectorPresentationTests(unittest.TestCase):
         with patch.dict(sys.modules, {"connect": boundary}):
             spec.loader.exec_module(module)
         module.SETTINGS = Path(self.temp.name) / "preferences.json"
+        self.staging_url = module.STAGING_URL
         self.settings = module.SETTINGS
         try:
             self.root = tk.Tk()
@@ -101,6 +102,18 @@ class ConnectorPresentationTests(unittest.TestCase):
                 self.assertGreaterEqual(self.app.code_input.winfo_width(), 300)
         self.assertIsNone(self.app.worker)
         self.assertFalse(self.settings.exists(), "Presentation inspection must not write preferences")
+
+    def test_pair_confirmation_starts_pc_service_without_any_configured_terminals(self):
+        self.assertEqual(self.app.store.all_terminals(), [])
+        with patch.object(self.app, "_start_worker") as start:
+            self.app._event({"state":"paired"})
+            self.app._event({"state":"worker-exit","mode":"pair"})
+            self.app.poll()
+            start.assert_called_once_with([self.staging_url])
+        self.app._event({"state":"pc-online","device":"fixture","setup":"ready"})
+        with patch("webbrowser.open") as navigate:
+            self.app.add_account()
+            self.assertIn("?addAccount=fixture#mt5",navigate.call_args.args[0])
 
     def test_quick_setup_navigation_and_motion_toggle_do_not_start_capture(self):
         self.app.quick_setup_actions.buttons[0].invoke()

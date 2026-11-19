@@ -5,8 +5,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useTrades } from '@/hooks/useData';
 
-type Device = { id: string; last_seen: number };
-type Link = { id: string; device?:string; pending_reviews?:number; capture_health?:string; retry_requested_at?:string; account_id?:string; company?: string; login?: string; server?: string; trade_mode?: number; access_level?: string; status: string; last_sync?: string; broker_balance?:number;broker_equity?:number;currency?:string; gap?: number; last_error?: string; expires: number;history_id?:string;history_status?:string;broker_timezone?:string;timezone_confirmed_at?:string;timezone_source?:string;utc_conversion_status?:string };
+import { mt5Action as action, monitoringStatus, pcOnline, type Device, type Link } from '@/lib/mt5Monitor';
+
 type PositionSummary = {
   lifecycle_id:string;position_id:string;symbol:string;direction:string;status:string;
   first_entry_at:string;final_exit_at?:string|null;initial_entry_price?:string|null;
@@ -24,12 +24,6 @@ type PositionRow = {link:string;account_id:string;lifecycle_id:string;version:nu
 type HistoryScan = { link: string; request: string };
 type SelectedScan = HistoryScan & { name: string; brokerAccount: string };
 type HistoryPage = HistoryScan & { rows: Record<string,unknown>[]; more: boolean; nextOffset: number };
-async function action(name: string, payload: unknown = {}, signal?: AbortSignal) {
-  const result = await fetch('/api/mt5/' + name, {method:'POST', headers:{'content-type':'application/json'},body:JSON.stringify(payload),signal});
-  const data = await result.json();
-  if (!result.ok) throw new Error(data.error || 'MT5 connection unavailable.');
-  return data;
-}
 export function Mt5Connections() {
   const { user } = useAuth();
   const { trades, fetchTrades } = useTrades(user?.id);
@@ -37,6 +31,23 @@ export function Mt5Connections() {
   const [links,setLinks] = useState<Link[]>([]);
   const dialog = useRef<HTMLDialogElement>(null);
   const [device,setDevice] = useState('');
+  const [requestedPc,setRequestedPc] = useState(()=>new URLSearchParams(window.location.search).get('addAccount'));
+  const [capturePaused,setCapturePaused] = useState(false);
+  const openLogin = useCallback((id:string) => {
+    setDevice(id);
+    setRequestedPc(null);
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('addAccount')) {
+      url.searchParams.delete('addAccount');
+      window.history.replaceState(null,'',url);
+    }
+    if (!dialog.current?.open) dialog.current?.showModal();
+  }, []);
+  useEffect(()=>{
+    if (!requestedPc || capturePaused) return;
+    const target = requestedPc==='1' ? (devices.length===1?devices[0]:undefined) : devices.find(d=>d.id===requestedPc);
+    if (target && pcOnline(target) && target.setup_state!=='install') openLogin(target.id);
+  },[devices,requestedPc,openLogin,capturePaused]);
   const [accountNames,setAccountNames]=useState<Record<string,string>>({});
   const [loaded,setLoaded] = useState(false);
   const [code,setCode] = useState('');
@@ -56,7 +67,7 @@ export function Mt5Connections() {
     const [data,rich]=await Promise.all([action('status'),action('positions').catch(()=>({rows:[],more:false}))]);
     if (revision !== latestRefresh.current) return;
     setAccountNames(Object.fromEntries((data.accounts||[]).map((a:{id:string;name:string})=>[a.id,a.name])));
-    setDevices(data.devices); setLinks(data.links); setDemo(data.demoOnly); setLoaded(true);
+    setDevices(data.devices); setLinks(data.links); setDemo(data.demoOnly); setCapturePaused(Boolean(data.capturePaused)); setLoaded(true);
     setPositions(rich.rows || []);setPositionsMore(Boolean(rich.more));
   }, []);
   useEffect(() => {
@@ -71,37 +82,55 @@ export function Mt5Connections() {
   const selected = trades.find(t=>t.id===imported);
   const matches = trades.filter(t=>selected && source(t)!=='mt5' && selected.pair===t.pair && t.account_id===selected.account_id && t.direction===selected.direction);
   return <main className="space-y-5">
-    <SectionHeader title="MT5 Connections" subtitle="Pair your Windows PC and sync broker trades to your journal." />
+    <SectionHeader title="MT5 Connections" subtitle="Add a broker login, check its last sync, and manage account monitoring." />
     <section className="card p-5 sm:p-6 space-y-4">
     <header className="flex flex-wrap items-center justify-between gap-3"><h2 className="flex items-center gap-2 font-bold"><Monitor size={20} className="text-brand-500"/> Paired PCs</h2>
-    <button className="btn-primary" onClick={()=>run(async()=>setCode((await action('pair')).code))}>Pair a PC</button></header>
+    <button className="btn-primary" disabled={capturePaused} onClick={()=>run(async()=>setCode((await action('pair')).code))}>Pair a PC</button></header>
+    {capturePaused && <p role="status">Staging capture is paused by your administrator.</p>}
     {loaded && !devices.length && <p className="text-sm text-secondary">Run the Windows connector, then enter your pairing code on that PC.</p>}
     <div className="flex flex-wrap items-center gap-2">
-      <a className="btn-primary inline-flex items-center gap-2" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.3.3-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer" aria-label="Download YoungMoney3 Windows Connector version 0.3.3 release candidate 1"><Download size={15}/>Download Connector v0.3.3-rc1</a>
+      <a className="btn-primary inline-flex items-center gap-2" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.4.0-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer" aria-label="Download YoungMoney3 Windows Connector version 0.4.0 release candidate 1"><Download size={15}/>Download Connector v0.4.0-rc1</a>
       <a className="btn-secondary inline-flex items-center gap-2" href="/connector-download.html">Release details &amp; SHA-256</a>
       <a className="btn-secondary inline-flex items-center gap-2" href="/mt5-connector.zip" download><Download size={15}/>Python source fallback</a>
     </div>
     <p className="text-xs text-muted">Official Windows x64 staging prerelease · unsigned · capture-only. Verify the executable checksum before running. Existing PC pairings remain available.</p>
     {code && <p>Enter this pairing code in the connector within five minutes: <code className="break-all select-all">{code}</code></p>}
-    {devices.map(d=><div className="flex flex-wrap items-center gap-3 border-t border-themed pt-4" key={d.id}>PC {d.id.slice(0,8)} · {Date.now()-d.last_seen<90000?'Online':'Offline'}{' '}
-      <button className="btn-primary" disabled={Date.now()-d.last_seen>=90000} onClick={()=>{setDevice(d.id);dialog.current?.showModal();}}>Connect MT5 account</button>{' '}
-      <button className="btn-secondary" onClick={()=>{if(window.confirm('Revoke this PC and stop all of its account imports?')) void run(()=>action('revoke',{device:d.id}));}}>Revoke PC</button></div>)}
+    {devices.map(d=><div className="flex flex-wrap items-center justify-between gap-3 border-t border-themed pt-4" key={d.id}>
+      <div><strong className="text-sm">PC {d.id.slice(0,8)} · {pcOnline(d)?'Online':'Paired · offline'}</strong>
+        <p className="text-xs text-secondary">{!pcOnline(d)?'Open the connector on this PC. Its pairing is saved.':
+          d.setup_state === 'install'?'Install MetaTrader 5 on this PC. The connector will detect it automatically.':
+          d.setup_state === 'ready'?'Ready to add an account.':'Use the latest connector for automatic account setup.'}</p></div>
+      <div className="flex flex-wrap gap-2"><button className="btn-primary" disabled={!pcOnline(d) || d.setup_state==='install' || capturePaused} onClick={()=>openLogin(d.id)}>Add account</button>
+      <button className="btn-secondary" onClick={()=>{if(window.confirm('Revoke this PC and stop all of its account imports?')) void run(()=>action('revoke',{device:d.id}));}}>Revoke PC</button></div></div>)}
+    {requestedPc && loaded && <p role="status" className="text-sm text-secondary">{!devices.length?'Pair this PC once to continue.':
+      requestedPc==='1' && devices.length>1?'Choose the PC where MetaTrader is installed.':
+      !devices.some(d=>requestedPc==='1' || d.id===requestedPc)?'This PC is paired with a different workspace or has been removed.':
+      'Leave the connector open on the paired PC. The login form opens when it is ready.'}</p>}
     </section>
     <section className="card p-5 sm:p-6 space-y-3">
       <h2 className="flex items-center gap-2 font-bold"><Link2 size={20} className="text-brand-500"/>Linked accounts</h2>
-      <p className="text-sm text-secondary">{demo?'Demo and contest accounts are available. Real-account capture remains disabled until independently approved.':'Demo, contest and real accounts available.'} Connect multiple accounts using a dedicated portable MT5 terminal for each. YoungMoney3 captures trades and balances only; it cannot place, change, or close orders.</p>
-      {loaded && !links.length && <p className="rounded-xl bg-secondary p-4 text-sm text-secondary">No accounts linked yet.</p>}
-    <label className="block text-xs text-secondary">History lookback
+      <p className="text-sm text-secondary">{demo?'Staging supports demo and contest accounts.':'Demo, contest and real accounts are available.'} The connector prepares MetaTrader for each login and records trades and balances.</p>
+      {loaded && !links.length && <p className="rounded-xl bg-secondary p-4 text-sm text-secondary">Choose Add account next to your paired PC to connect a broker login.</p>}
+    {links.some(l=>l.status==='connected') && <label className="block text-xs text-secondary">History lookback
       <Select className="input-field mt-1 max-w-xs" value={historyDays} onChange={e=>setHistoryDays(e.target.value)}><option value="7">7 days before linking</option><option value="14">14 days before linking</option><option value="30">30 days before linking (default)</option><option value="60">60 days before linking</option><option value="90">90 days before linking (maximum)</option></Select>
       <span className="mt-1 block text-xs text-muted">Default: approximately one month. Historical imports are limited to the 90 days before linking. Review the broker fills before approving an import.</span>
-    </label>
-    {links.map(l=><div key={l.id} role="group" aria-label={'MT5 account '+(accountNames[l.account_id || ''] || l.company || 'Pending')+(l.login?' · '+l.login:'')} className="space-y-2"><p className="rounded-xl bg-secondary p-4 text-sm" key={l.id}>{l.company || 'Account'} {l.login} {l.server ? '· '+l.server : ''} {l.trade_mode === 2 ? '· REAL' : l.trade_mode === 1 ? '· CONTEST' : l.trade_mode === 0 ? '· DEMO' : ''} {l.access_level === 'trading-enabled' ? '· External trading permission (capture-only here)' : l.access_level === 'trading-restricted' ? '· Broker trading disabled externally' : ''} {demo && l.trade_mode===2 ? ' · Real-account capture paused' : ''} · {['pending','verifying'].includes(l.status) && l.expires<Date.now()?'expired':l.status} {l.broker_balance!=null && '· Last reported balance '+l.broker_balance+' '+l.currency+' · Equity '+l.broker_equity+' '+l.currency} {l.last_sync && Date.now()-Date.parse(l.last_sync)>120000 ? ' · Snapshot may be stale; verify the connector is running.' : ''} {l.last_error} {l.last_sync && '· Last sync '+new Date(l.last_sync).toLocaleString()} {l.gap ? '· Offline interval: intermediate stop changes may be missing.' : ''}</p>
-      {l.status==='connected' && <div className="rounded-xl border border-themed p-3 space-y-2">
-        <h3 className="font-semibold">{accountNames[l.account_id || ''] || l.company || 'Linked account'}</h3>
-        <p className="text-sm">{devices.some(d=>d.id===l.device && Date.now()-d.last_seen<90000)?'PC connected':'PC offline'} · {l.capture_health==='needs_attention'?'Capture needs attention':l.gap?'History gap to check':l.last_sync?'Last sync acknowledged':'Awaiting first sync'}</p>
+    </label>}
+    {links.map(l=><div key={l.id} role="group" aria-label={'MT5 account '+(accountNames[l.account_id || ''] || l.company || 'Pending')+(l.login?' · '+l.login:'')} className="rounded-xl border border-themed p-4 space-y-3">
+      <header className="flex flex-wrap items-start justify-between gap-3"><div>
+        <h3 className="font-semibold">{accountNames[l.account_id || ''] || l.company || l.server || 'Broker account'}</h3>
+        <p className="text-xs text-secondary">{[l.server,l.login,l.trade_mode===0?'Demo':l.trade_mode===1?'Contest':l.trade_mode===2?'Real':null].filter(Boolean).join(' · ')}</p>
+      </div><strong className="text-sm">{monitoringStatus(l,devices.find(d=>d.id===l.device),capturePaused)}</strong></header>
+      {l.last_error && <p className="text-sm" role="status">{l.last_error}</p>}
+      {l.status==='connected' && <div className="space-y-3">
+        {(l.broker_balance!=null || l.broker_equity!=null) && <p className="text-sm">{[
+          l.broker_balance!=null && 'Balance '+l.broker_balance.toLocaleString()+' '+l.currency,
+          l.broker_equity!=null && 'Equity '+l.broker_equity.toLocaleString()+' '+l.currency].filter(Boolean).join(' · ')}</p>}
         <p className="text-sm">Last acknowledged {l.last_sync?new Date(l.last_sync).toLocaleString():'—'} · {l.pending_reviews??0} decisions awaiting review</p>
-        <button className="btn-secondary" disabled={!!l.retry_requested_at} onClick={()=>run(async()=>{await action('retry-session',{link:l.id});})}>{l.retry_requested_at?'Retry queued for this account':'Retry this account'}</button>
-        <p className="text-xs font-semibold">Broker timezone and historical session provenance</p>
+        {Boolean(l.gap) && <p className="text-xs text-secondary">An offline interval may have left gaps in stop changes.</p>}
+        <div className="flex flex-wrap gap-2"><button className="btn-secondary" onClick={()=>run(()=>action('set-monitoring',{link:l.id,paused:!l.monitoring_paused}))}>{l.monitoring_paused?'Resume monitoring':'Pause monitoring'}</button>
+        <button className="btn-secondary" disabled={!!l.retry_requested_at || !!l.monitoring_paused || capturePaused} onClick={()=>run(()=>action('retry-session',{link:l.id}))}>{l.retry_requested_at?'Retry queued for this account':'Retry this account'}</button></div>
+        <details className="space-y-2"><summary className="cursor-pointer text-sm">Broker timezone and permissions</summary>
+        <p className="text-xs text-secondary">{l.access_level==='trading-enabled'?'The login has broker trading permissions. YoungMoney3 uses it for capture only.':'YoungMoney3 uses this account for capture only.'}</p>
         <div className="flex flex-wrap items-end gap-2">
           <label className="flex-1 min-w-44 text-xs text-secondary">IANA timezone (broker statement)
             <input list="broker-timezones" className="input-field mt-1" placeholder="e.g. Europe/Athens" value={timezoneDraft[l.id] ?? l.broker_timezone ?? ''} onChange={event=>setTimezoneDraft(previous=>({...previous,[l.id]:event.target.value}))}/>
@@ -112,9 +141,9 @@ export function Mt5Connections() {
           <input type="checkbox" checked={Boolean(timezoneProof[l.id])} onChange={event=>setTimezoneProof(previous=>({...previous,[l.id]:event.target.checked}))}/>
           I checked a broker statement against the raw MT5 timestamps, including historical UTC conversion. Do not select this unless verified.
         </label>
-        <p className="text-xs text-muted">Timezone: {l.broker_timezone || 'Unconfirmed'} · UTC conversion: {l.utc_conversion_status || 'Unverified'} · Historical session labels remain unresolved until both are verified.</p>
+        <p className="text-xs text-muted">Timezone: {l.broker_timezone || 'Unconfirmed'} · UTC conversion: {l.utc_conversion_status || 'Unverified'} · Historical session labels remain unresolved until both are verified.</p></details>
       </div>}
-      {l.status==='connected' && <div className="flex flex-wrap gap-2"><button className="btn-secondary" disabled={l.history_status==='requested'} onClick={()=>run(async()=>{await action('history-request',{link:l.id,days:Number(historyDays)});})}>Find earlier trades</button>
+      {l.status==='connected' && <div className="flex flex-wrap gap-2"><button className="btn-secondary" disabled={l.history_status==='requested' || !!l.monitoring_paused || capturePaused} onClick={()=>run(async()=>{await action('history-request',{link:l.id,days:Number(historyDays)});})}>Find earlier trades</button>
       {l.history_status==='requested' && <><span role="status" className="text-sm">Scanning on your PC. Keep the connector running.</span>
         <button className="btn-secondary" onClick={()=>run(async()=>{await action('history-decline',{link:l.id,request:l.history_id});})}>Cancel scan</button></>}
       {l.history_id && ['ready','imported'].includes(l.history_status || '') && <button className="btn-secondary"

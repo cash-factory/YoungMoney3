@@ -1,5 +1,6 @@
 from pathlib import Path
 import ast
+import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -19,6 +20,17 @@ class TerminalLoginTests(unittest.TestCase):
     def test_new_request_authenticates_even_if_terminal_already_connected(self):
         self.assertEqual(self.verify(),self.account)
         self.api.initialize.assert_called_once_with(str(self.slot), portable=True, timeout=60000, login=42, password='fixture', server='FundedNext-Server 3')
+    def test_managed_first_login_retries_ipc_with_its_own_portable_terminal(self):
+        with tempfile.TemporaryDirectory() as tmp, patch('subprocess.Popen') as launch:
+            self.slot=Path(tmp)/'terminal64.exe'
+            (self.slot.parent/'.ym-managed.json').write_text('{}')
+            self.api.terminal_info.return_value=SimpleNamespace(data_path=tmp,connected=True)
+            self.api.initialize.side_effect=[False,True]
+            self.api.last_error.return_value=(-10005,'IPC timeout')
+            self.assertEqual(self.verify(),self.account)
+            launch.assert_called_once_with([str(self.slot),'/portable'],cwd=tmp)
+            self.assertEqual(self.api.initialize.call_count,2)
+
     def test_existing_investor_session_can_sync_without_reauthenticating(self):
         self.verify(False)
         self.api.login.assert_not_called()
