@@ -27,7 +27,7 @@ class DevicePresence:
     def check(self):
         try:
             setup = "ready" if self.setup.sources() else "install"
-            reply = self.request({"setup": setup, "version": "0.4.0-rc1"})
+            reply = self.request({"setup": setup, "version": "0.4.1-rc1"})
             if (not isinstance(reply, dict) or not reply.get("device")
                     or not isinstance(reply.get("paused"), list)):
                 self.emit("pc-service-incompatible")
