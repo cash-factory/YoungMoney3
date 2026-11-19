@@ -27,7 +27,7 @@ from sessions import SessionError, SessionStore
 from terminal_factory import TerminalCopyError, create_terminal
 from concurrent_capture import run_parallel_smoke
 from managed_accounts import ManagedAccounts, discover_installations, INSTALL_PAGE
-from studio_ui import AnimatedButton, ResponsiveActions, ConnectionPath, StudioArt, brand_mark, windows_motion_enabled
+from studio_ui import AnimatedButton, ResponsiveActions, ConnectionPath, StudioArt, brand_mark, windows_motion_enabled, restart_wait_seconds
 
 STAGING_URL = "https://ym-fx-staging.ethical-hacker263.workers.dev"
 ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "YMFX" / "staging-gui"
@@ -77,6 +77,8 @@ class ConnectorApp:
         self.setup_state = None
         self.remote_paused = set()
         self.busy_since = None
+        self.restart_due = None
+        self.restart_delay = 0
         self.status_by_slot = {}
         self.sync_by_slot = {}
         self.retry_queue = queue.Queue()
@@ -978,6 +980,7 @@ class ConnectorApp:
             return
         self.stop_event.clear()
         self.pause_event.clear()
+        self.restart_due = None
         self.busy_since = time.monotonic()
         self.worker_mode = "pair" if pairing_code is not None else "capture"
         self.status_var.set("Pairing securely…" if self.worker_mode == "pair" else
@@ -1025,6 +1028,7 @@ class ConnectorApp:
         self._start_worker([STAGING_URL, *self.store.all_terminals()])
 
     def stop(self):
+        self.restart_due = None
         self.stop_event.set()
         self.pause_event.clear()
         if self._worker_busy():
@@ -1092,6 +1096,7 @@ class ConnectorApp:
             self.banner_var.set("The dashboard server must support this connector version. Update staging before adding accounts.")
             self._log("Connector check-in endpoint is unavailable or returned an incompatible response.")
         elif state == "pc-revoked":
+            self.restart_due = None
             self.pc_state, self.paired = state, False
             self.connection_path.show(0)
             self.status_var.set("Pair this PC again")
@@ -1133,6 +1138,8 @@ class ConnectorApp:
             self.pair_ok = True
             self.paired = True
             self.resume_after_pair = True
+            self.restart_due = None
+            self.restart_delay = 0
             self.sync_by_slot.clear()
             self.connection_path.show(1)
             # A new device token has its own broker links and SQLite folder.
@@ -1232,10 +1239,24 @@ class ConnectorApp:
                 elif self.pair_ok:
                     self.status_var.set("PC paired successfully")
             else:
-                if self.pc_state != "pc-revoked":
-                    self.pc_state = "stopped"
-                    self.status_var.set("Connector stopped")
-                self._log("Monitoring stopped. Pairing and saved accounts retained.")
+                # Only an unexpected coordinator exit warrants a restart.
+                # Intentional stop, close and PC revocation must never relaunch.
+                unexpected = (not self.stopping and not self.stop_event.is_set()
+                              and self.paired and self.pc_state != "pc-revoked")
+                if unexpected:
+                    uptime = max(0, time.monotonic() - (self.busy_since or time.monotonic()))
+                    self.restart_delay = restart_wait_seconds(self.restart_delay, uptime)
+                    self.restart_due = time.monotonic() + self.restart_delay
+                    self.pc_state = "restarting"
+                    self.status_var.set("Reconnecting automatically")
+                    self.banner_var.set("Monitoring stopped unexpectedly. Reconnecting without losing your pairing or queued trades.")
+                    self._log("Capture coordinator stopped unexpectedly; a bounded automatic retry is scheduled.")
+                else:
+                    self.restart_due = None
+                    if self.pc_state != "pc-revoked":
+                        self.pc_state = "stopped"
+                        self.status_var.set("Connector stopped")
+                    self._log("Monitoring stopped. Pairing and saved accounts retained.")
             self.busy_since = None
         elif state == "running":
             self.active_workers = int(item.get("active_workers", 0))
@@ -1271,6 +1292,11 @@ class ConnectorApp:
         if self.resume_after_pair and self.worker is None and not self.stopping:
             self.resume_after_pair = False
             self.show_page("overview")
+            self.start()
+        if (self.restart_due is not None and self.worker is None
+                and not self.stopping and not self.stop_event.is_set()
+                and self.paired and time.monotonic() >= self.restart_due):
+            self.restart_due = None
             self.start()
         if self.worker_mode == "pair" and self.busy_since is not None:
             self.pair_elapsed_var.set(
