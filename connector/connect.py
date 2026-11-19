@@ -413,8 +413,8 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
             # Progress is durable even if the connector exits mid-import.
             window_days = 90 if request.get("mode") in ("all","since_first_deposit","since_last_deposit") else 14
             stop=min(start,cursor+window_days*86400000)
-            raw_deals=records(mt5.history_deals_get(utc(cursor+offset-1000),utc(stop+offset+1000)))
-            raw_orders=records(mt5.history_orders_get(utc(cursor+offset-1000),utc(stop+offset+1000)))
+            raw_deals=records(mt5.history_deals_get(utc(max(0,cursor+offset-1000)),utc(max(0,stop+offset+1000))))
+            raw_orders=records(mt5.history_orders_get(utc(max(0,cursor+offset-1000)),utc(max(0,stop+offset+1000))))
             deals=normalize(raw_deals)
             orders=normalize(raw_orders)
             with db:
