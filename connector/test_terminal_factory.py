@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import tempfile
 import threading
+from unittest.mock import patch
 import unittest
 from pathlib import Path
 
@@ -76,6 +77,55 @@ class TerminalFactoryTests(unittest.TestCase):
         with self.assertRaises(TerminalCopyError):
             create_terminal(self.exe, self.managed, "Cancelled", cancel=cancel)
         self.assertFalse(self.managed.exists())
+
+
+    def test_windows_sharing_violation_reports_locked_file_not_disk_full(self):
+        busy = PermissionError(13, "secret path in source")
+        busy.winerror = 32
+        with patch("terminal_factory.shutil.copyfile", side_effect=busy):
+            with self.assertRaises(TerminalCopyError) as caught:
+                create_terminal(self.exe, self.managed, "Demo")
+        self.assertEqual(caught.exception.code, "source_busy")
+        self.assertTrue(caught.exception.retry_source)
+        self.assertIn("locked", str(caught.exception))
+        self.assertNotIn("secret path", str(caught.exception))
+        self.assertFalse(list(self.managed.iterdir()))
+
+    def test_storage_full_is_precise_and_not_retried_from_other_installation(self):
+        full = OSError(28, "secret drive name")
+        with patch("terminal_factory.shutil.copyfile", side_effect=full):
+            with self.assertRaises(TerminalCopyError) as caught:
+                create_terminal(self.exe, self.managed, "Demo")
+        self.assertEqual(caught.exception.code, "disk_full")
+        self.assertFalse(caught.exception.retry_source)
+        self.assertIn("disk space", str(caught.exception))
+        self.assertNotIn("secret drive name", str(caught.exception))
+
+    def test_unexpected_error_reports_type_without_private_paths(self):
+        with patch("terminal_factory.shutil.copyfile", side_effect=RuntimeError("private path")):
+            with self.assertRaises(TerminalCopyError) as caught:
+                create_terminal(self.exe, self.managed, "Demo")
+        self.assertEqual(caught.exception.code, "unexpected_setup_error")
+        self.assertIn("RuntimeError", str(caught.exception))
+        self.assertNotIn("private path", str(caught.exception))
+
+    def test_locked_optional_broker_server_cache_does_not_fail_setup(self):
+        servers = self.source / "config" / "servers.dat"
+        servers.write_bytes(b"broker directory")
+        original_copy = __import__("shutil").copyfile
+        def maybe_busy(src, dest, **kwargs):
+            if Path(src).name == "servers.dat":
+                busy = PermissionError(13, "cache locked")
+                busy.winerror = 32
+                raise busy
+            return original_copy(src, dest, **kwargs)
+        with patch("terminal_factory.shutil.copyfile", side_effect=maybe_busy):
+            target = create_terminal(self.exe, self.managed, "Demo", broker_directory=servers)
+        self.assertTrue(target.is_file())
+        self.assertFalse((target.parent / "config" / "servers.dat").exists())
+        self.assertEqual(
+            json.loads((target.parent / ".ym-managed.json").read_text())["broker_cache"],
+            "unavailable")
 
     def test_reject_empty_source_executable(self):
         self.exe.write_bytes(b"")

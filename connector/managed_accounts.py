@@ -127,7 +127,6 @@ class ManagedAccounts:
             label = re.sub(r"[^a-z0-9]", "", item[0].parent.name.lower())
             words = re.findall(r"[a-z]{3,}", server.lower())
             return (sum(len(w) for w in words if w not in ("demo", "real", "live", "server") and w in label), bool(item[1]))
-        source, directory = max(sources, key=broker_match)
         # An interrupted signup or rejected password can reuse a clean slot from that broker.
         slug = server.strip()[:40] or "MT5"
         for session in self.store.snapshot():
@@ -136,5 +135,20 @@ class ManagedAccounts:
                     and path_key(str(exe.parent.parent)) == path_key(str(self.root))
                     and (exe.parent / ".ym-managed.json").is_file() and exe.is_file()):
                 return str(exe)
-        target = create_terminal(source, self.root, slug, broker_directory=directory, cancel=stop)
-        return self.store.add(str(target), slug)["terminal"]
+        last_source_issue = None
+        for source, directory in sorted(sources, key=broker_match, reverse=True):
+            if stop.is_set():
+                raise TerminalCopyError("Terminal creation was cancelled safely.", code="cancelled")
+            try:
+                target = create_terminal(source, self.root, slug,
+                                         broker_directory=directory, cancel=stop)
+            except TerminalCopyError as error:
+                if not error.retry_source:
+                    raise
+                last_source_issue = error
+                continue
+            return self.store.add(str(target), slug)["terminal"]
+        if last_source_issue is not None:
+            raise last_source_issue
+        raise TerminalCopyError("No usable MT5 installation was found.",
+                                code="no_installation")

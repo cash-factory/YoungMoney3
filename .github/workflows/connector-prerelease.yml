@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version suffix, e.g. 0.4.1-rc1'
+        description: 'Version suffix, e.g. 0.4.1-rc2'
         type: string
         required: true
       confirmation:
@@ -22,7 +22,7 @@ defaults:
     shell: pwsh
 
 env:
-  VERSION: ${{ inputs.version || '0.4.1-rc1' }}
+  VERSION: ${{ inputs.version || '0.4.1-rc2' }}
   SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 concurrency:
@@ -78,9 +78,9 @@ jobs:
       - name: Generate prerelease checksum
         shell: pwsh
         env:
-          VERSION: ${{ inputs.version || '0.4.1-rc1' }}
+          VERSION: ${{ inputs.version || '0.4.1-rc2' }}
         run: |
-          if ($env:VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$') { throw 'Use 0.4.1-rc1 format' }
+          if ($env:VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$') { throw 'Use 0.4.1-rc2 format' }
           New-Item -ItemType Directory -Force staging-release | Out-Null
           Copy-Item 'dist/YoungMoney3 Connector.exe' 'staging-release/YoungMoney3 Connector.exe'
           $digest=(Get-FileHash 'staging-release/YoungMoney3 Connector.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -89,7 +89,7 @@ jobs:
           '{"version":"' + $env:VERSION + '","commit":"' + '${{ github.event.pull_request.head.sha || github.sha }}' + '","sha256":"' + $digest + '","signed":false,"platform":"windows-x64","environment":"staging"}' | Set-Content -Encoding utf8 'staging-release/build-manifest.json'
       - uses: actions/upload-artifact@v4
         with:
-          name: youngmoney3-connector-staging-${{ inputs.version || '0.4.1-rc1' }}
+          name: youngmoney3-connector-staging-${{ inputs.version || '0.4.1-rc2' }}
           path: staging-release/*
           if-no-files-found: error
           retention-days: 30
@@ -102,7 +102,7 @@ jobs:
       # Separate VM: no checkout, setup-python or pip installation.
       - uses: actions/download-artifact@v4
         with:
-          name: youngmoney3-connector-staging-${{ inputs.version || '0.4.1-rc1' }}
+          name: youngmoney3-connector-staging-${{ inputs.version || '0.4.1-rc2' }}
           path: ${{ runner.temp }}/connector-clean
       - name: Launch standalone executable in isolated profile
         run: |
@@ -155,7 +155,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: connector-startup-evidence-${{ inputs.version || '0.4.1-rc1' }}
+          name: connector-startup-evidence-${{ inputs.version || '0.4.1-rc2' }}
           path: ${{ runner.temp }}/connector-clean/startup-*
           if-no-files-found: error
 
@@ -169,7 +169,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: youngmoney3-connector-staging-${{ inputs.version || '0.4.1-rc1' }}
+          name: youngmoney3-connector-staging-${{ inputs.version || '0.4.1-rc2' }}
           path: staging-release
       - name: Publish new immutable staging prerelease
         env:

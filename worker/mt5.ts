@@ -253,8 +253,21 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   const link=await q('SELECT * FROM mt5_links WHERE id=? AND device=?',input.link,device.id).first<{id:string;account_id:string;status:string;currency:string;company:string;expires:number;trade_mode:number|null;monitoring_paused:number}>();
   if (!link) return fail('Unknown link.',404);
   if (action === 'device/setup-issue') {
+    const setupMessages: Record<string,string> = {
+      disk_full: 'Not enough free disk space to create the MT5 terminal on this PC.',
+      source_busy: 'An installed MT5 program file is locked. Close the MetaTrader updater and retry Add account.',
+      source_changed: 'The MT5 installation changed during setup. Finish installing or updating MetaTrader, then retry.',
+      access_denied: 'Windows blocked terminal setup. Open the connector activity log and check Windows Security permissions.',
+      path_too_long: 'An MT5 installation file path is too long for Windows.',
+      copy_limit: 'The detected MT5 installation exceeded the safe 2 GB copy limit.',
+      unexpected_setup_error: 'The connector hit an unexpected terminal setup error. Open its Activity panel for the error type.',
+      no_installation: 'The connector could not find a usable installed MT5 program.',
+      copy_failed: 'The connector could not copy an MT5 program file. Check the connector Activity panel.'
+    };
+    const message = Object.hasOwn(setupMessages,String(input.reason)) ? setupMessages[String(input.reason)] :
+      'Your PC could not prepare MetaTrader. Check the connector Activity panel, then retry Add account.';
     const failed = await q("UPDATE mt5_links SET status='failed',envelope=NULL,last_error=? WHERE id=? AND device=? AND status='pending'",
-      'Your PC could not prepare MetaTrader. Check the setup message in the connector, then choose Add account again.',link.id,device.id).run();
+      message,link.id,device.id).run();
     return failed.meta.changes ? json({ok:true}) : fail('This account request has already changed.',409);
   }
   if (link.monitoring_paused && ['device/sync','device/capture-issue'].includes(action)) return fail('Monitoring is paused for this account.',423);

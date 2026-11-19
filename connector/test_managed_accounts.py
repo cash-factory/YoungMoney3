@@ -48,6 +48,48 @@ class ManagedSetupTests(unittest.TestCase):
             self.assertNotEqual(a, b)
             self.assertEqual(len(store.snapshot()), 2)
 
+
+    def test_locked_preferred_installation_uses_another_detected_mt5(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            preferred = root / "Weltrade" / "terminal64.exe"
+            alternate = root / "MetaTrader" / "terminal64.exe"
+            preferred.parent.mkdir()
+            alternate.parent.mkdir()
+            preferred.write_bytes(b"preferred")
+            alternate.write_bytes(b"working")
+            store = SessionStore(root / "sessions.json")
+            setup = ManagedAccounts(store, root / "managed",
+                                    lambda: [(preferred, None), (alternate, None)])
+            from terminal_factory import create_terminal
+            def copy_or_fail(exe, *args, **kwargs):
+                if str(exe) == str(preferred):
+                    raise TerminalCopyError("MT5 file locked",
+                                            code="source_busy", retry_source=True)
+                return create_terminal(exe, *args, **kwargs)
+            with patch("managed_accounts.create_terminal", side_effect=copy_or_fail):
+                result = setup.prepare("Weltrade-Demo", [], threading.Event())
+            self.assertEqual(Path(result).read_bytes(), b"working")
+            self.assertEqual(len(store.snapshot()), 1)
+
+    def test_disk_full_does_not_try_additional_sources(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            one = root / "Weltrade" / "terminal64.exe"
+            two = root / "Other" / "terminal64.exe"
+            one.parent.mkdir()
+            two.parent.mkdir()
+            one.write_bytes(b"program")
+            two.write_bytes(b"program")
+            store = SessionStore(root / "prefs.json")
+            setup = ManagedAccounts(store, root / "managed",
+                                    lambda: [(one, None), (two, None)])
+            with patch("managed_accounts.create_terminal",
+                       side_effect=TerminalCopyError("Out of disk space", code="disk_full")) as create:
+                with self.assertRaisesRegex(TerminalCopyError, "Out of disk space"):
+                    setup.prepare("Weltrade-Demo", [], threading.Event())
+            create.assert_called_once()
+
     def test_missing_install_is_actionable_without_creating_a_profile(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = SessionStore(Path(tmp) / "prefs.json")

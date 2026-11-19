@@ -298,12 +298,18 @@ def run_supervisor(origin, db, database_path, slots, token, report,
                         connect.verify(job, slot_override=candidate, report=report)
                     handled_request = pending["id"]
                 except (TerminalCopyError, OSError) as error:
-                    if isinstance(error, TerminalCopyError) and not stop_event.is_set():
-                        try:
-                            connect.post("setup-issue", {"link":pending["id"]}, token)
-                            handled_request = pending["id"]
-                        except OSError:
-                            pass
+                    if isinstance(error, TerminalCopyError):
+                        # Do not retry the same broken copy every five seconds
+                        # when its staging error acknowledgement is unreachable.
+                        # Only a NEW Add account request allows another attempt.
+                        handled_request = pending["id"]
+                        if not stop_event.is_set():
+                            try:
+                                connect.post("setup-issue", {
+                                    "link": pending["id"], "reason": error.code
+                                }, token)
+                            except OSError:
+                                pass
                     if report:
                         report({"state": "setup-error", "message": str(error) if isinstance(error, TerminalCopyError)
                                 else "The network is unavailable. Reconnecting to the dashboard."})
