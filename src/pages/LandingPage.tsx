@@ -289,7 +289,7 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
                 </div>
                 <div className="flex items-center justify-between gap-3 pt-2">
                   <span className="text-[10px] text-secondary">Every result has a reason, a risk level and a review.</span>
-                  <BookOpen size={15} className="text-secondary shrink-0" />
+                  <LandingIcon icon={BookOpen} size="sm" />
                 </div>
               </div>
             </div>

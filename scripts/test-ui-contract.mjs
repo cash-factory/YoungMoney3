@@ -426,7 +426,7 @@ test('staging-only populated demo uses a real read-only account and never insert
   for(const marker of ['DEMO_SHOWCASE_ENABLED','/api/demo/enter','/api/demo/available',
     "user.id===DEMO_MEMBER_ID","request.clone()","action==='select'"])assert.ok(worker.includes(marker),'Missing read-only demo server protection '+marker);
   assert.ok(staging.includes("DEMO_SHOWCASE_ENABLED:'true'"),'Only staging should enable preview');
-  assert.ok(landing.includes('Sign in to explore the populated demo'),'Landing page should lead invited members to the preview');
+  assert.ok(landing.includes('Explore sample workspace'),'Landing page should lead invited members to the preview');
   assert.ok(shell.includes('/?showcase=1#dashboard') && shell.includes('View sample trader'),'Signed-in members need a direct sample-workspace link');
   assert.ok(worker.includes("const viewer=await currentUser(request,env.DB)"),'Anonymous users cannot bypass invite-only staging');
   assert.ok(auth.includes("new URLSearchParams(window.location.search).get('showcase')==='1'"),'Direct preview URL should authenticate');
