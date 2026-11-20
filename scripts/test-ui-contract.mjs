@@ -536,4 +536,14 @@ test('connection controls, cash provenance, notifications and media layouts are 
     'Workspace setup needs composed media and concise guided steps');
   assert.ok(css.includes('ym-cash-review-card')&&css.includes('prefers-reduced-motion'),
     'Financial review and alert animation should respect motion preferences');
+  assert.ok(hub.includes('<CashFlowPanel key={l.id} link={l} />'),
+    'Switching accounts must remount the ledger so a prior account cannot leave stale review state');
+  assert.ok(account.includes("announceAction('success','Balance transaction '+ticket") &&
+    account.includes("Classification was saved, but the updated ledger could not be loaded"),
+    'A successful cash mutation must never be reported as failed merely because refresh failed');
+  assert.ok(account.includes('new Map([...current.rows,...next.rows]'),
+    'Pagination must suppress duplicate broker tickets when newer transactions arrive mid-review');
+  assert.ok(feedback.includes('last.message===item.message') &&
+    feedback.includes('Date.now()-item.createdAt'),
+    'Independent action feedback must not be hidden and toast lifetime must not restart on new events');
 });
