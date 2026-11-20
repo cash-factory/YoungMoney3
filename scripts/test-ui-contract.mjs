@@ -541,6 +541,9 @@ test('connection controls, cash provenance, notifications and media layouts are 
   assert.ok(account.includes("announceAction('success','Balance transaction '+ticket") &&
     account.includes("Classification was saved, but the updated ledger could not be loaded"),
     'A successful cash mutation must never be reported as failed merely because refresh failed');
+  assert.ok(account.includes('Reviewed non-trading balance movements') &&
+    account.includes('period.reviewedNonTradingNet'),
+    'Cash review must separate all non-trading balance movements from trading results');
   assert.ok(account.includes('new Map([...current.rows,...next.rows]'),
     'Pagination must suppress duplicate broker tickets when newer transactions arrive mid-review');
   assert.ok(feedback.includes('last.message===item.message') &&
