@@ -222,7 +222,7 @@ for(let i=0;i<2;i++)record('strategy_test_sessions','demo-session-'+i,{
 for(let i=0;i<40;i++)record('strategy_test_trades','demo-test-trade-'+i,{
   session_id:'demo-session-'+(i%3===0?1:0),direction:i%2?'long':'short',entry_price:1.15+i*.0001,
   exit_price:1.15+(i%2?1:-1)*.0003,stop_loss:1.14,take_profit:1.16,
-  position_size:.1,pnl:i%3===0?-35:68,r_multiple:i%3===0:-.7:1.4,
+  position_size:.1,pnl:i%3===0?-35:68,r_multiple:i%3===0?-.7:1.4,
   outcome:i%3===0?'loss':'win',entry_time:time(-60+i),exit_time:time(-60+i+.09),
   notes:'Rule-based synthetic test execution',screenshot_url:null,voice_note_url:null,
   account_id:accountA,plan_id:plan,entry_model_id:modelA,setup_id:setupA
