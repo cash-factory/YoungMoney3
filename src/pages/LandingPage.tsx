@@ -1,7 +1,7 @@
 import { SampleReplay } from '@/components/DecisionReplay';
 import { useEffect, useRef, useState } from 'react';
 import {
-  TrendingUp, BarChart3, BookOpen, Sparkles, Calendar, Target,
+  TrendingUp, BarChart3, BookOpen, ArrowUpRight, ArrowDownRight, Sparkles, Calendar, Target,
   Flame, Shield, ArrowRight, Zap, Award,
   CheckCircle2, ChevronRight, Activity, PenLine, Brain,
   ClipboardList, FlaskConical, ArrowRightCircle, ScrollText,
@@ -226,14 +226,13 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
             </button>
             {sampleReplay && <SampleReplay onClose={()=>setSampleReplay(false)}/>}
             {showcaseAvailable && <button type="button" onClick={onEnter} className="btn-secondary text-base px-6 py-3">
-              Sign in to explore the populated demo
+              Explore sample workspace
               <ArrowRight size={16} />
             </button>}
-            <button type="button" className="btn-secondary text-base px-6 py-3" onClick={()=>setSampleReplay(true)}>Replay an example trade</button>
-            <a href="#platform" className="btn-ghost text-base px-3 py-3">
-              Explore the Platform
-              <ChevronRight size={18} />
-            </a>
+            <button type="button" className="btn-ghost text-sm px-3 py-3" onClick={()=>setSampleReplay(true)}>
+              <BookOpen size={16} /> Replay a trade
+              <ChevronRight size={16} />
+            </button>
           </div>
 
           {/* Trust line */}
@@ -254,7 +253,7 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
 
           <div className="relative mx-auto w-full max-w-xl animate-hero-panel" aria-label="Illustrative journal dashboard preview">
             <div className="absolute -inset-4 rounded-[2rem] bg-orange-500/10 blur-3xl animate-orbit-glow" />
-            <div className="relative overflow-hidden rounded-3xl border border-themed bg-card/90 p-5 sm:p-7 shadow-2xl backdrop-blur-xl">
+            <div className="ym-landing-showcase relative overflow-hidden rounded-3xl border border-themed bg-card/90 p-5 sm:p-7 shadow-2xl backdrop-blur-xl">
               <div className="flex items-center justify-between gap-4">
                 <div><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">Weekly performance</p><p className="mt-1 text-lg font-bold">Review your process</p></div>
                 <span className="rounded-full border border-orange-500/20 bg-orange-500/10 px-2.5 py-1 text-[10px] font-semibold text-orange-700 dark:text-orange-300">DEMO VIEW</span>
@@ -273,10 +272,25 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
                 </svg>
                 <div className="mt-2 flex justify-between text-[10px] text-muted"><span>Plan</span><span>Execute</span><span>Reflect</span><span>Adjust</span></div>
               </div>
-              <div className="mt-4 flex items-center gap-3 rounded-2xl border border-themed bg-secondary/50 p-3">
-                <LandingIcon icon={BookOpen} size="sm" />
-                <div className="min-w-0 flex-1"><p className="text-xs font-semibold">One connected trading journal</p><p className="mt-0.5 truncate text-[10px] text-muted">Trades · strategies · tests · weekly reviews</p></div>
-                <ArrowRight size={15} className="text-orange-500" />
+              <div className="ym-landing-market" aria-label="Illustrative trade results">
+                <p className="ym-preview-eyebrow">RECENT TRADES <span className="font-sans font-normal normal-case tracking-normal">/ fictional examples</span></p>
+                <div className="ym-landing-market-row">
+                  <div className="min-w-0"><strong>EURUSD <span className="ym-direction-tag ml-1" data-side="long">LONG</span></strong><small>London sweep · Plan followed</small></div>
+                  <span className="ym-market-value ym-market-positive">+$82.40</span>
+                </div>
+                <div className="ym-landing-market-row">
+                  <div className="min-w-0"><strong>XAUUSD <span className="ym-direction-tag ml-1" data-side="short">SHORT</span></strong><small>New York retest · Planned stop</small></div>
+                  <span className="ym-market-value ym-market-negative">−$34.20</span>
+                </div>
+                <div className="ym-landing-sltp" aria-label="Example trade protection and targets">
+                  <span>Trade levels</span>
+                  <span className="ym-market-sl"><ArrowDownRight size={13}/> SL · 1.15200</span>
+                  <span className="ym-market-tp"><ArrowUpRight size={13}/> TP · 1.15700</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 pt-2">
+                  <span className="text-[10px] text-secondary">Every result has a reason, a risk level and a review.</span>
+                  <BookOpen size={15} className="text-secondary shrink-0" />
+                </div>
               </div>
             </div>
           </div>

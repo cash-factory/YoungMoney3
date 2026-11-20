@@ -31,6 +31,7 @@ import { AdminOperationsPage } from '@/pages/AdminOperationsPage';
 import { LoadingSpinner } from '@/components/ui/Feedback';
 import { supabase } from '@/lib/supabase';
 import '@/decision-studio.css';
+import '@/trading-semantic.css';
 import type { FastCapture } from '@/components/DecisionDesk';
 import { SampleReplay } from '@/components/DecisionReplay';
 import { QuickCaptureModal } from '@/components/QuickCaptureModal';

@@ -433,3 +433,38 @@ test('staging-only populated demo uses a real read-only account and never insert
   assert.ok(shell.includes('SAMPLE WORKSPACE · READ ONLY') && shell.includes('Exit demo'),'Every demo page must clearly label synthetic data');
   assert.ok(workflow.includes('write-staging-demo-sql.mjs') && workflow.includes('.demo-showcase-seed.sql'),'Only staging workflow may seed synthetic data');
 });
+
+test('market outcome palette is consistent on landing, dashboard, trade ledger and MT5 evidence',()=>{
+  const css=read('src/trading-semantic.css');
+  const app=read('src/App.tsx');
+  const home=read('src/pages/LandingPage.tsx');
+  const dashboard=read('src/pages/DashboardPage.tsx');
+  const trades=read('src/pages/TradesPage.tsx');
+  const mt5=read('src/components/Mt5Connections.tsx');
+  const calc=read('src/components/TradeCalculator.tsx');
+  const form=read('src/components/TradeForm.tsx');
+  const rich=read('src/components/RichLifecycleAnalytics.tsx');
+  assert.ok(app.includes("import '@/trading-semantic.css'"),'Semantic trading visuals must be loaded for all themes');
+  for(const marker of ['--ym-gain','--ym-loss','--ym-caution','ym-market-sl','ym-market-tp',
+    '.ym-direction-tag[data-side="short"]','.ym-ledger-row[data-result="loss"]','.ym-dash-pulse',
+    '@media(max-width:600px)','prefers-reduced-motion:reduce']){
+    assert.ok(css.includes(marker),'Missing themed market language '+marker);
+  }
+  assert.ok(!css.includes('data-side="short"] { color:var(--ym-loss)'),
+    'Short direction must not be styled as a losing trade');
+  assert.ok(home.includes('ym-landing-market-row') && home.includes('ym-landing-sltp'),
+    'Public home needs a clear fictional trade preview with SL and TP');
+  assert.ok(dashboard.includes('ym-dash-pulse') && dashboard.includes('signedMoney('),
+    'Dashboard should show explicit signed outcome figures for selected filters');
+  assert.ok(trades.includes('ym-trade-overview') && trades.includes('ym-direction-tag') &&
+    trades.includes('ym-market-detail') && trades.includes('signedMoney('),
+    'Journal rows need market outcome and protection hierarchy');
+  assert.ok(mt5.includes('ym-mt5-lifecycle') && mt5.includes('ym-market-sl') &&
+    mt5.includes('ym-market-tp'), 'MT5 lifecycle and history review must preserve red stop / green target semantics');
+  assert.ok(calc.includes('ym-stop-input') && calc.includes('ym-market-'),
+    'Risk calculation must distinguish estimated losses and profits');
+  assert.ok(form.includes('ym-stop-input') && form.includes('ym-target-input') &&
+    form.includes('signedMoney('),'Trade capture should have clear protective levels and signed results');
+  assert.ok(rich.includes('var(--ym-loss)') && rich.includes('var(--ym-gain)'),
+    'Lifecycle chart bins must distinguish negative and positive R');
+});

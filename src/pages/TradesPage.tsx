@@ -1,6 +1,7 @@
 import { ReplayButton, TradeReplay } from '@/components/DecisionReplay';
 import { visibleJournalTrades, reviewMoney, replayTargets, referenceFor } from '@/lib/decisionReplay';
 import { tradeCurrency } from '@/lib/tradeFinance';
+import { pnlTone, signedMoney } from '@/lib/tradingTone';
 import { Select } from '@/components/Select';
 import { useMemo, useState } from 'react';
 import { Plus, Search, Edit2, Trash2, ChevronDown, ChevronUp, Star, Download, Filter, X, Clock, CheckCircle } from 'lucide-react';
@@ -136,11 +137,19 @@ export function TradesPage() {
   const hasFilters = origin !== 'all' || search || filterPair || filterOutcome || filterDirection || filterAccount;
   const openCount = trades.filter(t => t.status === 'open').length + positionVersions.filter(row=>row.summary.status==='open').length;
   const closedCount = trades.filter(t => t.status === 'closed').length + positionVersions.filter(row=>row.summary.status==='closed').length;
+  // Counts follow the active filters. Broker position projections are separate
+  // from journal fills; never combine account currencies into one money total.
+  const visibleGains = filtered.filter(t => t.status==='closed' && t.pnl>0).length
+    + richTrades.filter(row => row.summary.status==='closed' && pnlTone(row.summary.net_realized_profit)==='positive').length;
+  const visibleLosses = filtered.filter(t => t.status==='closed' && t.pnl<0).length
+    + richTrades.filter(row => row.summary.status==='closed' && pnlTone(row.summary.net_realized_profit)==='negative').length;
+  const visibleOpen = filtered.filter(t=>t.status==='open').length
+    + richTrades.filter(row=>row.summary.status==='open').length;
 
   if (loading) return <LoadingSpinner label="Loading trades..." />;
 
   return (
-    <div>
+    <div className="ym-trades-page">
       <SectionHeader
         title="Trades"
         subtitle={String(filtered.length+richTrades.length)+' of '+String(trades.length+positionVersions.length)+' trades / broker lifecycles'}
@@ -156,6 +165,17 @@ export function TradesPage() {
         }
       />
 
+      <div className="ym-trade-overview" aria-label="Results for the current filters">
+        <article data-tone="positive"><small>Winning trades</small><strong>{visibleGains}</strong><p>Closed results above zero</p></article>
+        <article data-tone="negative"><small>Losing trades</small><strong>{visibleLosses}</strong><p>Closed results below zero</p></article>
+        <article data-tone="pending"><small>Still open</small><strong>{visibleOpen}</strong><p>Unrealized outcomes are not counted</p></article>
+      </div>
+      <div className="ym-market-legend mb-5" aria-label="Trade colour guide">
+        <span data-kind="gain"><i aria-hidden="true"/>Profit / take profit</span>
+        <span data-kind="loss"><i aria-hidden="true"/>Loss / stop loss</span>
+        <span data-kind="risk"><i aria-hidden="true"/>Open / risk attention</span>
+        <span data-kind="direction"><i aria-hidden="true"/>Direction is not an outcome</span>
+      </div>
       {linkedDecision && <TradeReplay target={linkedDecision} onClose={closeDecision}/>}
       {decisionRef && !linkedDecision && !positionsLoading && <div role="status" className="card p-4 mb-4 text-sm">This decision is currently unavailable in this account. <button className="btn-secondary" onClick={closeDecision}>Dismiss</button></div>}
       {linkedTradeId && !linkedTrade && <div role="status" className="card p-4 mb-4 text-sm"><p>This linked trade is no longer available in your account.</p><button type="button" className="btn-secondary mt-2" onClick={closeLinkedTrade}>Dismiss</button></div>}
@@ -260,14 +280,14 @@ export function TradesPage() {
           <div className="space-y-2">
             {richTrades.map(row=>{
               const t=row.summary;
-              return <details key={row.link+'/'+t.lifecycle_id} className="rounded-xl border border-themed px-3 py-3">
+              return <details key={row.link+'/'+t.lifecycle_id} className="ym-mt5-lifecycle rounded-xl border border-themed px-3 py-3" data-result={t.status==='open'?'open':pnlTone(t.net_realized_profit)==='positive'?'win':pnlTone(t.net_realized_profit)==='negative'?'loss':'neutral'}>
                 <summary className="flex flex-wrap items-center justify-between gap-3 cursor-pointer">
                   <span className="flex flex-col">
-                    <strong className="text-sm">{t.symbol} · {t.direction==='long'?'Long':'Short'} · {t.status}</strong>
+                    <strong className="text-sm flex flex-wrap items-center gap-2">{t.symbol} <span className="ym-direction-tag" data-side={t.direction}>{t.direction==='long'?'Long':'Short'}</span> <span className="text-muted font-normal text-xs">{t.status==='open'?'Open position':'Closed position'}</span></strong>
                     <small className="text-muted">{[accountNames.get(row.account_id), t.broker, t.first_entry_at].filter(Boolean).join(' · ')} · Position {t.position_id}</small>
                   </span>
                   <span className="flex flex-col text-right">
-                    <strong className="font-mono text-sm">{t.net_realized_profit ?? 'Open'} {t.settlement_currency}</strong>
+                    <strong className={`ym-market-value text-sm ym-market-${pnlTone(t.net_realized_profit,t.status==='open')}`}>{t.status==='open'?'Unrealized / unavailable':t.net_realized_profit == null?'Unavailable':signedMoney(Number(t.net_realized_profit),String(t.net_realized_profit))} {t.settlement_currency}</strong>
                     <small className="text-muted">{t.movement ?? '—'} {t.movement_unit} · Net R {t.final_realized_r ?? t.realized_r ?? 'unavailable'}</small>
                   </span>
                 </summary>
@@ -277,14 +297,16 @@ export function TradesPage() {
                     ['Original SL',t.initial_sl ?? 'Unavailable'],
                     ['Stop provenance',t.initial_sl_provenance || 'Unknown'],
                     ['First observed stop',t.initial_sl_observed_at || '—'],
-                    ['Current SL / TP',String(t.current_sl ?? '—')+' / '+String(t.current_tp ?? '—')],
+                    ['Original TP',t.initial_tp ?? 'Unavailable'],
+                    ['Current SL',t.current_sl ?? '—'],
+                    ['Current TP',t.current_tp ?? '—'],
                     ['Initial account risk',t.initial_risk_account ?? 'Unavailable'],
                     ['Current stop exposure',t.current_stop_exposure_account ?? 'Unavailable'],
                     ['Remaining volume',t.remaining_volume ?? 'Unknown'],
                     ['Closed volume',t.closed_volume ?? '0'],
                     ['Duration',t.holding_seconds ? (Number(t.holding_seconds)/3600).toFixed(2)+' hours' : 'Open/unknown'],
                     ['VW duration',t.weighted_holding_seconds ? (Number(t.weighted_holding_seconds)/3600).toFixed(2)+' hours' : 'Unknown'],
-                  ].map(([label,value])=><div key={label} className="rounded-lg bg-secondary p-3 text-xs"><span className="text-muted">{label}</span><strong className="font-mono block mt-1 break-words">{value}</strong></div>)}
+                  ].map(([label,value])=><div key={label} className="ym-market-detail" data-level={label==='Original SL'||label==='Current SL'?'sl':label==='Original TP'||label==='Current TP'?'tp':label.toLowerCase().includes('risk')||label.toLowerCase().includes('exposure')?'risk':undefined}><span>{label}</span><strong>{value}</strong></div>)}
                 </div>
                 <p className="mt-3 text-xs text-secondary">Session: {t.sessions?.status==='confirmed'?t.sessions.sessions?.join(', ')||'Outside named windows':'Unresolved — broker timezone or UTC conversion needs verification'} · Risk: {t.capture_completeness?.original_risk || 'unknown'} · Calculation v{t.calculation_version}</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
@@ -334,14 +356,15 @@ export function TradesPage() {
           </div>
 
           {filtered.map(t => (
-            <div key={t.id} className="border-b border-themed/50 last:border-0">
+            <div key={t.id} className="ym-ledger-row border-b border-themed/50 last:border-0" data-result={t.status==='open'?'open':t.pnl>0?'win':t.pnl<0?'loss':'neutral'}>
               {/* Row */}
               <div
                 className="grid grid-cols-12 gap-2 px-4 py-3 hover:bg-secondary transition-colors cursor-pointer lg:items-center"
                 onClick={() => setExpandedId(expandedId === t.id ? null : t.id)}
               >
-                <div className="col-span-12 lg:col-span-3 text-xs text-muted">
-                  {formatDateTime(t.entry_time)}
+                <div className="col-span-12 lg:col-span-3 ym-ledger-entry">
+                  <span className="ym-ledger-date">{formatDateTime(t.entry_time)}</span>
+                  <span className="ym-ledger-time">{accountNames.get(t.account_id || '') || 'Unassigned account'}</span>
                 </div>
                 <div className="col-span-6 lg:col-span-2 font-mono font-semibold text-sm">
                   {t.pair}
@@ -352,33 +375,33 @@ export function TradesPage() {
                   )}
                 </div>
                 <div className="col-span-3 lg:col-span-1">
-                  <span className={`badge ${t.direction === 'long' ? 'badge-success' : 'badge-error'}`}>
+                  <span className="ym-direction-tag" data-side={t.direction}>
                     {t.direction === 'long' ? 'Long' : 'Short'}
                   </span>
                 </div>
                 <div className="col-span-3 lg:col-span-1">
                   {t.status === 'open' ? (
-                    <span className="badge bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20">
+                    <span className="ym-market-chip" data-tone="pending">
                       <Clock size={10} /> Open
                     </span>
                   ) : (
-                    <span className={`badge ${t.outcome === 'win' ? 'badge-success' : t.outcome === 'loss' ? 'badge-error' : 'badge-neutral'}`}>
-                      {t.outcome || '—'}
+                    <span className="ym-market-chip" data-tone={pnlTone(t.pnl)}>
+                      {t.outcome === 'win' ? 'Win' : t.outcome === 'loss' ? 'Loss' : 'Break-even'}
                     </span>
                   )}
                 </div>
                 <div className="hidden lg:block col-span-1 text-xs text-muted capitalize">
                   {t.session ? t.session.replace('_', ' ') : '—'}
                 </div>
-                <div className="col-span-6 lg:col-span-2 text-right font-mono font-semibold text-sm">
+                <div className="col-span-6 lg:col-span-2 text-right">
                   {t.status === 'open' ? (
-                    <span className="text-orange-500 text-xs">Pending</span>
+                    <span className="ym-market-chip" data-tone="pending">Awaiting close</span>
                   ) : (
                     <>
-                      <span className={t.pnl >= 0 ? 'text-success-500' : 'text-error-500'}>
-                        {reviewMoney(t.pnl,tradeCurrency(t,accounts))}
+                      <span className={`ym-ledger-pnl ym-market-${pnlTone(t.pnl)}`}>
+                        {signedMoney(t.pnl,reviewMoney(t.pnl,tradeCurrency(t,accounts)))}
                       </span>
-                      <span className="block text-xs text-muted">{formatPips(t.pips)}</span>
+                      <span className="block ym-ledger-subline">{t.pips>0?'+':''}{formatPips(t.pips)}</span>
                     </>
                   )}
                 </div>
@@ -398,21 +421,21 @@ export function TradesPage() {
 
               {/* Expanded detail */}
               {expandedId === t.id && (
-                <div className="px-4 pb-4 pt-2 bg-secondary/50 animate-slide-up">
+                <div className="ym-ledger-expand px-4 pb-4 pt-4 animate-slide-up">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <DetailItem label="Entry Price" value={t.entry_price?.toString() || '—'} />
                         <DetailItem label="Exit Price" value={t.exit_price?.toString() || '—'} />
-                        <DetailItem label="Stop Loss" value={t.stop_loss?.toString() || '—'} />
+                        <DetailItem label="Stop Loss · SL" value={t.stop_loss?.toString() || '—'} tone="sl" />
                         <DetailItem label="Fees" value={t.fees?.toString() || '—'} />
                         <DetailItem label="Deal Ticket" value={String(t.broker_details?.deal_ticket || '—')} />
                         <DetailItem label="Position ID" value={String(t.broker_details?.position_id || '—')} />
                         <DetailItem label="Swap" value={String(t.broker_details?.swap ?? '—')} />
                         <DetailItem label="Closed At" value={t.exit_time ? formatDateTime(t.exit_time) : '—'} />
-                        <DetailItem label="Take Profit" value={t.take_profit?.toString() || '—'} />
+                        <DetailItem label="Take Profit · TP" value={t.take_profit?.toString() || '—'} tone="tp" />
                         <DetailItem label="Lot Size" value={t.lot_size?.toString() || '—'} />
-                        <DetailItem label="Risk %" value={t.risk_percent?.toString() || '—'} />
+                        <DetailItem label="Risk %" value={t.risk_percent?.toString() || '—'} tone="risk" />
                         <DetailItem label="R:R Ratio" value={t.risk_reward_ratio ? `1:${t.risk_reward_ratio.toFixed(2)}` : '—'} />
                         <DetailItem label="Broker" value={t.broker || '—'} />
                         <DetailItem label="Strategy" value={t.strategy || '—'} />
@@ -481,11 +504,11 @@ export function TradesPage() {
   );
 }
 
-function DetailItem({ label, value }: { label: string; value: string }) {
+function DetailItem({ label, value, tone }: { label: string; value: string; tone?: 'sl' | 'tp' | 'risk' }) {
   return (
-    <div>
-      <span className="text-xs text-muted block">{label}</span>
-      <span className="font-mono text-sm">{value}</span>
+    <div className="ym-market-detail" data-level={tone}>
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }

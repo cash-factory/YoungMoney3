@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, LineChart, Line } from 'recharts';
+import { pnlTone } from '@/lib/tradingTone';
 import type { Mt5PositionVersion } from '@/hooks/useMt5Lifecycles';
 
 type RichProps = {
@@ -90,7 +91,8 @@ export function RichLifecycleAnalytics({positions,accountId='all',compact=false}
         ['Avg weighted holding',avgHours===null?'Unavailable':fmt(avgHours)+' hours',holding.length+' / '+closed.length+' eligible'],
         ['Confirmed sessions',String(sessionConfirmed.length),sessionConfirmed.length+' / '+closed.length+' closed trades'],
       ].map(([label,value,note])=><div key={label} className="rounded-xl border border-themed bg-secondary p-3">
-        <p className="text-xs text-muted">{label}</p><p className="font-mono font-bold text-base mt-2 break-words">{value}</p>
+        <p className="text-xs text-muted">{label}</p>
+        <p className={`ym-market-value font-bold text-base mt-2 break-words ${label==='Net R (known)'&&knownR.length?`ym-market-${pnlTone(totalR)}`:label==='Average net R'&&avgR!==null?`ym-market-${pnlTone(avgR)}`:''}`}>{value}</p>
         <p className="text-xs text-muted mt-1">{note}</p>
       </div>)}
     </div>
@@ -104,7 +106,9 @@ export function RichLifecycleAnalytics({positions,accountId='all',compact=false}
             <XAxis dataKey="range" tick={{fill:'var(--text-muted)',fontSize:10}} axisLine={false} tickLine={false}/>
             <YAxis tick={{fill:'var(--text-muted)',fontSize:10}} allowDecimals={false} axisLine={false} tickLine={false}/>
             <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)'}}/>
-            <Bar dataKey="count" fill="var(--brand)" radius={[3,3,0,0]}/>
+            <Bar dataKey="count" radius={[3,3,0,0]}>
+              {distribution.map((d,i)=><Cell key={d.range} fill={i<3?'var(--ym-loss)':'var(--ym-gain)'}/>)}
+            </Bar>
           </BarChart></ResponsiveContainer>}
         </div>
         <div className="rounded-xl border border-themed p-3">
@@ -115,7 +119,7 @@ export function RichLifecycleAnalytics({positions,accountId='all',compact=false}
             <XAxis dataKey="label" tick={{fill:'var(--text-muted)',fontSize:10}} axisLine={false} tickLine={false}/>
             <YAxis tick={{fill:'var(--text-muted)',fontSize:10}} axisLine={false} tickLine={false}/>
             <Tooltip contentStyle={{background:'var(--bg-card)',border:'1px solid var(--border)'}}/>
-            <Line dataKey="total" stroke="var(--brand)" strokeWidth={2} dot={false}/>
+            <Line dataKey="total" stroke={totalR<0?'var(--ym-loss)':'var(--ym-gain)'} strokeWidth={2.5} dot={false}/>
           </LineChart></ResponsiveContainer>}
         </div>
       </div>
@@ -142,7 +146,7 @@ export function RichLifecycleAnalytics({positions,accountId='all',compact=false}
       <div className="rounded-xl bg-secondary p-3">
         <p className="text-xs font-bold">Realized P&amp;L, grouped by currency</p>
         <div className="flex flex-wrap gap-4 mt-2 text-sm">
-          {currencyBreakdown.map(([currency,group])=><span key={currency} className="font-mono">{currency} {fmt(group.amount)} <small className="text-muted">({group.count} closed)</small></span>)}
+          {currencyBreakdown.map(([currency,group])=><span key={currency} className={`ym-market-value ym-market-${pnlTone(group.amount)}`}>{currency} {group.amount>0?'+':''}{fmt(group.amount)} <small className="text-muted">({group.count} closed)</small></span>)}
           {!currencyBreakdown.length&&<span className="text-xs text-muted">No completed broker lifecycles yet.</span>}
         </div>
       </div>

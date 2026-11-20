@@ -1,5 +1,6 @@
 import { accountLedger, tradeCurrency } from '@/lib/tradeFinance';
 import { dateKeyInTimeZone } from '@/lib/riskMetrics';
+import { pnlTone, signedMoney } from '@/lib/tradingTone';
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import '@/dashboard-studio.css';
 import { Wallet, Target, TrendingUp, Flame, Activity, BarChart3, ChevronDown, Plus, ArrowUpRight, ArrowDownRight, Minus, Star, Clock, Eye, AlertCircle, Compass } from 'lucide-react';
@@ -168,7 +169,9 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
   }, [trades]);
 
   const topPairs = useMemo(() => groupByPair(trades).slice(0, 5), [trades]);
-  const recentTrades = useMemo(() => trades.slice(0, 6), [trades]);
+  const recentTrades = useMemo(() => [...trades].sort((a,b) =>
+    Date.parse(b.entry_time) - Date.parse(a.entry_time)).slice(0, 6), [trades]);
+  const openInView = trades.filter(t=>t.status==='open').length;
 
   const handleSubmit = async (data: TradeInput) => {
     await addTrade(data);
@@ -229,6 +232,30 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
               {value:'mt5',label:'MT5 imports',description:'Trades captured from the connector'}]} />
         </div> : <div className="ym-dash-filter-note">Practice results are separate from recorded account balances.</div>}
       </div>
+
+      <section className="ym-dash-pulse" aria-label="Filtered performance at a glance">
+        <button type="button" data-tone={mixedCurrencyView?'neutral':pnlTone(stats.totalPnl)}
+          onClick={()=>setSelectedSection('performance')} aria-label="Open net realized performance">
+          <span className="ym-pulse-label"><Wallet size={14} /> NET CLOSED RESULT</span>
+          <strong className="ym-pulse-number">{mixedCurrencyView?'By currency':signedMoney(stats.totalPnl,formatCurrency(stats.totalPnl))}</strong>
+          <span className="ym-pulse-foot">{mixedCurrencyView?'Select an account to see one currency':'Realized trades · selected filters'}</span>
+        </button>
+        <button type="button" data-tone="positive" onClick={()=>setSelectedSection('recent')} aria-label="Review winning trades">
+          <span className="ym-pulse-label"><ArrowUpRight size={14} /> WINS</span>
+          <strong className="ym-pulse-number">{stats.wins}</strong>
+          <span className="ym-pulse-foot">Closed with profit</span>
+        </button>
+        <button type="button" data-tone="negative" onClick={()=>setSelectedSection('recent')} aria-label="Review losing trades">
+          <span className="ym-pulse-label"><ArrowDownRight size={14} /> LOSSES</span>
+          <strong className="ym-pulse-number">{stats.losses}</strong>
+          <span className="ym-pulse-foot">Closed with loss</span>
+        </button>
+        <button type="button" data-tone="pending" onClick={()=>setSelectedSection('recent')} aria-label="Review recent trades">
+          <span className="ym-pulse-label"><Clock size={14} /> OPEN TRADES</span>
+          <strong className="ym-pulse-number">{openInView}</strong>
+          <span className="ym-pulse-foot">No realized outcome yet</span>
+        </button>
+      </section>
 
       {(trades.some(t=>t.status==='closed' && (!t.exit_time || tradeCurrency(t,accounts)==='Unknown' || t.realized_r == null)) || (account?.broker_balance != null && (!account.broker_balance_at || Date.now()-Date.parse(account.broker_balance_at)>120000))) && <aside className="ym-dash-data-quality" aria-label="Dashboard data quality" role="status">
         {trades.some(t=>t.status==='closed' && (!t.exit_time || tradeCurrency(t,accounts)==='Unknown' || t.realized_r == null)) && <details className="ym-dash-quality-notice"><summary><AlertCircle size={16} aria-hidden="true" /><span><strong>Some trade data needs review</strong><small>Daily risk and R figures may be incomplete.</small></span><ChevronDown size={15} aria-hidden="true" /></summary><p>Some closed trades need review for close time, currency or initial risk. Daily risk and R statistics may be incomplete.</p></details>}
@@ -292,13 +319,14 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
             <span>Realized trading result</span>
             <span className="ym-dash-result-period">Current filters</span>
           </div>
-          <p className={stats.totalPnl < 0 && !mixedCurrencyView ? 'ym-dash-result-value is-negative' : 'ym-dash-result-value'}>
-            {mixedCurrencyView ? 'By currency' : formatCurrency(stats.totalPnl)}
+          <p className={stats.totalPnl < 0 && !mixedCurrencyView ? 'ym-dash-result-value is-negative' : 'ym-dash-result-value'}
+            data-neutral={mixedCurrencyView || stats.totalPnl===0}>
+            {mixedCurrencyView ? 'By currency' : signedMoney(stats.totalPnl,formatCurrency(stats.totalPnl))}
           </p>
           {mixedCurrencyView ? (
             <div className="ym-dash-currency-results">
               {currencyTotals.map(([code, amount]) => (
-                <div key={code}><span>{code}</span><strong className={amount < 0 ? 'is-negative' : ''}>{formatAccountMoney(amount, code)}</strong></div>
+                <div key={code}><span>{code}</span><strong className={amount < 0 ? 'is-negative' : ''} data-neutral={amount===0}>{signedMoney(amount,formatAccountMoney(amount, code))}</strong></div>
               ))}
             </div>
           ) : (
@@ -350,7 +378,7 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
       {source === 'live' && account?.account_type === 'propfirm' && <div className="card p-4 mb-6 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold">Challenge progress</h3><span className="text-xs text-muted">Resets daily at midnight {account.challenge_reset_timezone || 'UTC'}</span></div>
         {account.challenge_target_pct != null ? <><div className="flex items-center justify-between text-xs"><span className="text-secondary">Profit target · {account.challenge_target_pct}%</span><strong>{challengeProgress.toFixed(0)}% complete</strong></div><div className="h-2 rounded-full bg-secondary overflow-hidden"><div className="h-full rounded-full bg-orange-500 transition-[width]" style={{ width: `${challengeProgress}%` }} /></div></> : <p className="text-xs text-muted">Set a profit target in account settings to track challenge progress.</p>}
-        <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs"><span>Today: <strong className={accountTodayPnl < 0 ? 'text-error-500' : 'text-secondary'}>{formatAccountMoney(accountTodayPnl, account.base_currency)}</strong>{account.daily_loss_limit_pct != null && <> · Daily loss limit {formatAccountMoney(account.balance * account.daily_loss_limit_pct / 100, account.base_currency)}</>}</span><span>Current balance: <strong>{formatAccountMoney(currentBalance || 0, account.base_currency)}</strong>{account.max_loss_limit_pct != null && <> · Max loss limit {formatAccountMoney(account.balance * account.max_loss_limit_pct / 100, account.base_currency)}</>}</span></div>
+        <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs"><span>Today: <strong className={`ym-market-${pnlTone(accountTodayPnl)}`}>{formatAccountMoney(accountTodayPnl, account.base_currency)}</strong>{account.daily_loss_limit_pct != null && <> · Daily loss limit {formatAccountMoney(account.balance * account.daily_loss_limit_pct / 100, account.base_currency)}</>}</span><span>Current balance: <strong>{formatAccountMoney(currentBalance || 0, account.base_currency)}</strong>{account.max_loss_limit_pct != null && <> · Max loss limit {formatAccountMoney(account.balance * account.max_loss_limit_pct / 100, account.base_currency)}</>}</span></div>
         {(account.daily_loss_limit_pct != null && accountTodayPnl <= -(account.balance * account.daily_loss_limit_pct / 100) || account.max_loss_limit_pct != null && accountPnl <= -(account.balance * account.max_loss_limit_pct / 100)) && <p role="alert" className="text-xs font-semibold text-error-500">One of this account’s configured loss limits has been reached or exceeded.</p>}
       </div>}
 
@@ -371,7 +399,7 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
         <span>Closed trades · selected view</span>
       </div>
       <div className="ym-dash-metric-grid">
-        <StatCard label="Net P&L" value={mixedCurrencyView ? 'By currency' : formatCurrency(stats.totalPnl)}
+        <StatCard label="Net P&L" value={mixedCurrencyView ? 'By currency' : signedMoney(stats.totalPnl,formatCurrency(stats.totalPnl))}
           icon={<Wallet size={19} />} trend={mixedCurrencyView ? 'neutral' : stats.totalPnl >= 0 ? 'up' : 'down'}
           trendValue={mixedCurrencyView ? 'See the currency breakdown above' : String(stats.totalTrades) + ' closed trades'} accent="blue" />
         <StatCard label="Win rate" value={formatPercent(stats.winRate)} icon={<Target size={19} />}
@@ -397,8 +425,8 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
               <AreaChart data={equity} margin={{ left: -10, right: 10, top: 5, bottom: 0 }}>
                 <defs>
                   <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--brand)" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="var(--brand)" stopOpacity={0} />
+                    <stop offset="0%" stopColor={stats.totalPnl<0?'var(--ym-loss)':'var(--ym-gain)'} stopOpacity={0.23} />
+                    <stop offset="100%" stopColor={stats.totalPnl<0?'var(--ym-loss)':'var(--ym-gain)'} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
@@ -407,7 +435,7 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
                   contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 12 }}
                   formatter={(v) => [formatCurrency(Number(v)), 'Cumulative P&L']}
                 />
-                <Area type="monotone" dataKey="equity" stroke="var(--brand)" strokeWidth={2} fill="url(#equityGrad)" />
+                <Area type="monotone" dataKey="equity" stroke={stats.totalPnl<0?'var(--ym-loss)':'var(--ym-gain)'} strokeWidth={2.5} fill="url(#equityGrad)" />
               </AreaChart>
             </ResponsiveContainer>
           ) : (
@@ -428,7 +456,7 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
                 />
                 <Bar dataKey="pnl" radius={[6, 6, 0, 0]}>
                   {last7Days.map((d, i) => (
-                    <Cell key={i} fill={d.pnl >= 0 ? '#10b981' : '#f87171'} />
+                    <Cell key={i} fill={d.pnl > 0 ? 'var(--ym-gain)' : d.pnl<0?'var(--ym-loss)':'var(--text-muted)'} />
                   ))}
                 </Bar>
               </BarChart>
@@ -465,30 +493,30 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
               </thead>
               <tbody>
                 {recentTrades.map(t => (
-                  <tr key={t.id} className="border-b border-themed/50 hover:bg-secondary transition-colors">
+                  <tr key={t.id} className="border-b border-themed/50 hover:bg-secondary transition-colors" data-result={t.status==='open'?'open':t.pnl>0?'win':t.pnl<0?'loss':'neutral'}>
                     <td className="py-2.5 px-2 text-xs text-muted">{formatDateTime(t.entry_time)}</td>
                     <td className="py-2.5 px-2 font-mono font-semibold">{t.pair}</td>
                     <td className="py-2.5 px-2">
-                      <span className={`badge ${t.direction === 'long' ? 'badge-success' : 'badge-error'}`}>
+                      <span className="ym-direction-tag" data-side={t.direction}>
                         {t.direction === 'long' ? 'Long' : 'Short'}
                       </span>
                     </td>
                     <td className="py-2.5 px-2">
                       {t.status === 'open' ? (
-                        <span className="badge bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20">
+                        <span className="ym-market-chip" data-tone="pending">
                           <Clock size={12} /> Open
                         </span>
                       ) : (
-                        <span className={`badge ${t.outcome === 'win' ? 'badge-success' : t.outcome === 'loss' ? 'badge-error' : 'badge-neutral'}`}>
-                          {t.outcome === 'win' ? <ArrowUpRight size={12} /> : t.outcome === 'loss' ? <ArrowDownRight size={12} /> : <Minus size={12} />}
-                          {t.outcome || '—'}
+                        <span className="ym-market-chip" data-tone={pnlTone(t.pnl)}>
+                          {t.pnl>0 ? <ArrowUpRight size={12} /> : t.pnl<0 ? <ArrowDownRight size={12} /> : <Minus size={12} />}
+                          {t.pnl>0?'Win':t.pnl<0?'Loss':'Break-even'}
                         </span>
                       )}
                     </td>
-                    <td className={`py-2.5 px-2 text-right font-mono font-semibold ${t.status === 'open' ? 'text-orange-500' : t.pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>
-                      {t.status === 'open' ? 'Pending' : mixedCurrencyView ? formatAccountMoney(t.pnl, tradeCurrency(t, accounts)) : account ? formatAccountMoney(t.pnl, account.base_currency) : formatCurrency(t.pnl)}
+                    <td className={`py-2.5 px-2 text-right font-semibold ym-market-value ym-market-${pnlTone(t.pnl,t.status==='open')}`}>
+                      {t.status === 'open' ? 'Pending' : signedMoney(t.pnl,mixedCurrencyView ? formatAccountMoney(t.pnl, tradeCurrency(t, accounts)) : account ? formatAccountMoney(t.pnl, account.base_currency) : formatCurrency(t.pnl))}
                     </td>
-                    <td className="py-2.5 px-2 text-right font-mono text-muted">{t.pips?.toFixed(1) || '0.0'}</td>
+                    <td className={`py-2.5 px-2 text-right ym-market-value text-xs ym-market-${pnlTone(t.pips,t.status==='open')}`}>{t.status==='open'?'—':(t.pips>0?'+':'')+(t.pips?.toFixed(1)||'0.0')}</td>
                     <td className="py-2.5 px-2 text-right">
                       <button
                         type="button"
@@ -566,7 +594,7 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
           <div className="ym-dash-section-title"><div><p className="ym-dash-kicker">THE DETAILS</p><h2>Patterns &amp; behavior</h2></div></div>
       {/* Best/Worst day + Top pairs */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        {mixedCurrencyView ? <div className="card p-5"><h3 className="text-sm font-semibold mb-4">Currency Breakdown</h3><div className="space-y-2">{currencyTotals.length ? currencyTotals.map(([currency, pnl]) => <div key={currency} className="flex items-center justify-between rounded-lg bg-secondary px-3 py-2"><span className="text-sm font-medium">{currency}</span><span className={`font-mono text-sm font-semibold ${pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>{pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}</span></div>) : <p className="text-sm text-muted">No closed trades in this view.</p>}</div></div> : <div className="card p-5">
+        {mixedCurrencyView ? <div className="card p-5"><h3 className="text-sm font-semibold mb-4">Currency Breakdown</h3><div className="space-y-2">{currencyTotals.length ? currencyTotals.map(([currency, pnl]) => <div key={currency} className="flex items-center justify-between rounded-lg bg-secondary px-3 py-2"><span className="text-sm font-medium">{currency}</span><span className={`ym-market-value text-sm font-semibold ym-market-${pnlTone(pnl)}`}>{pnl > 0 ? '+' : ''}{pnl.toFixed(2)}</span></div>) : <p className="text-sm text-muted">No closed trades in this view.</p>}</div></div> : <div className="card p-5">
           <h3 className="text-sm font-semibold mb-4">Best & Worst Days</h3>
           <div className="space-y-3">
             {stats.bestDay ? (

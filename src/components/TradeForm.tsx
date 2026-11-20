@@ -1,5 +1,6 @@
 import { Select } from '@/components/Select';
 import { riskCapital, settlement, validateTradeTimes } from '@/lib/tradeFinance';
+import { pnlTone, signedMoney } from '@/lib/tradingTone';
 import { useState, useEffect } from 'react';
 import { Save, X, Calculator, TrendingUp, TrendingDown, Zap, ChevronRight, ChevronLeft, CheckCircle2, Target, Brain, AlertTriangle, Clock, CheckCircle, ListChecks, Camera, Lock, Star } from 'lucide-react';
 import type { Trade, TradeInput, TradeDirection, TradeSession, AccountType, EmotionalState, TradeStatus, TradeChecklistSnapshot, TradeCalculationSnapshot } from '@/lib/types';
@@ -552,8 +553,8 @@ export function TradeForm({ initial, preferredAccountId, onSubmit, onCancel }: T
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold text-muted uppercase">P&L (auto)</p>
-                  <p className={`text-sm font-mono font-bold ${liveCalc.pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>
-                    {formatAccountCurrency(liveCalc.pnl)}
+                  <p className={`text-sm ym-market-value font-bold ym-market-${pnlTone(liveCalc.pnl)}`}>
+                    {signedMoney(liveCalc.pnl,formatAccountCurrency(liveCalc.pnl))}
                   </p>
                 </div>
               </div>
@@ -606,8 +607,8 @@ export function TradeForm({ initial, preferredAccountId, onSubmit, onCancel }: T
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold text-muted uppercase">Potential P&L</p>
-                  <p className="text-sm font-mono font-bold text-success-500">
-                    {form.take_profit && form.lot_size ? formatAccountCurrency(liveCalc.potentialPnl) : '—'}
+                  <p className={`text-sm ym-market-value font-bold ym-market-${form.take_profit && form.lot_size ? pnlTone(liveCalc.potentialPnl) : 'neutral'}`}>
+                    {form.take_profit && form.lot_size ? signedMoney(liveCalc.potentialPnl,formatAccountCurrency(liveCalc.potentialPnl)) : '—'}
                   </p>
                 </div>
               </div>
@@ -740,14 +741,14 @@ export function TradeForm({ initial, preferredAccountId, onSubmit, onCancel }: T
               {form.capture_mode === 'live' ? <label className="mt-2 flex items-start gap-2 rounded-lg bg-amber-500/10 p-2 text-[11px] text-amber-700 dark:text-amber-300"><input className="mt-0.5" type="checkbox" checked={actualFillConfirmed} onChange={e => setActualFillConfirmed(e.target.checked)} /> I replaced the example with the actual fill from my broker.</label> : isExamplePrice && <label className="mt-2 flex items-start gap-2 rounded-lg bg-amber-500/10 p-2 text-[11px] text-amber-700 dark:text-amber-300"><input className="mt-0.5" type="checkbox" checked={exampleConfirmed} onChange={e => setExampleConfirmed(e.target.checked)} /> I checked this historical price against my source data.</label>}
             </div>
             <div>
-              <label className={labelCls}>Stop Loss {selectedInstrument && <span className="normal-case text-muted">· default {selectedInstrument.default_stop_ticks ?? 20} {instrumentDistanceLabel(selectedInstrument)}</span>}</label>
-              <input type="number" step={selectedInstrument?.price_increment || 0.00001} className={inputCls} placeholder="Enter stop price"
+              <label className={`${labelCls} ym-market-sl`}>Stop Loss · SL {selectedInstrument && <span className="normal-case text-muted">· default {selectedInstrument.default_stop_ticks ?? 20} {instrumentDistanceLabel(selectedInstrument)}</span>}</label>
+              <input type="number" step={selectedInstrument?.price_increment || 0.00001} className={`${inputCls} ym-stop-input`} placeholder="Enter stop price"
                 value={stopLoss} onChange={e => { setStopManuallyEdited(true); setStopLoss(e.target.value); update('stop_loss', e.target.value ? Number(e.target.value) : null); }} />
               {selectedInstrument && form.entry_price != null && <div className="mt-1.5"><p className="mb-1 text-[10px] text-muted">Quick distances · {instrumentDistanceLabel(selectedInstrument)}</p><div className="flex flex-wrap gap-1">{distancePresets(selectedInstrument).map(distance => <button key={distance} type="button" aria-label={`Stop loss ${distance} ${instrumentDistanceLabel(selectedInstrument)}`} onClick={() => { const price = priceAtDistance(selectedInstrument, form.entry_price!, form.direction, distance, 'stop'); setStopManuallyEdited(true); setStopLoss(String(price)); update('stop_loss', price); if (!targetManuallyEdited) { const targetPrice = priceAtDistance(selectedInstrument, form.entry_price!, form.direction, distance * (selectedInstrument.default_target_r ?? 2), 'target'); update('take_profit', targetPrice); } }} className="px-2 py-1 rounded bg-secondary text-[10px]">{distance}</button>)}</div></div>}
             </div>
             <div>
-              <label className={labelCls}>Take Profit {selectedInstrument && <span className="normal-case text-muted">· default {selectedInstrument.default_target_r ?? 2}R</span>}</label>
-              <input type="number" step={selectedInstrument?.price_increment || 0.00001} className={inputCls} placeholder="Enter target price"
+              <label className={`${labelCls} ym-market-tp`}>Take Profit · TP {selectedInstrument && <span className="normal-case text-muted">· default {selectedInstrument.default_target_r ?? 2}R</span>}</label>
+              <input type="number" step={selectedInstrument?.price_increment || 0.00001} className={`${inputCls} ym-target-input`} placeholder="Enter target price"
                 value={form.take_profit ?? ''} onChange={e => { setTargetManuallyEdited(true); update('take_profit', e.target.value ? parseFloat(e.target.value) : null); }} />
               {selectedInstrument && form.entry_price != null && <div className="mt-1.5"><p className="mb-1 text-[10px] text-muted">Quick distances · {instrumentDistanceLabel(selectedInstrument)}</p><div className="flex flex-wrap gap-1">{distancePresets(selectedInstrument).map(distance => <button key={distance} type="button" aria-label={`Take profit ${distance} ${instrumentDistanceLabel(selectedInstrument)}`} onClick={() => { const price = priceAtDistance(selectedInstrument, form.entry_price!, form.direction, distance, 'target'); setTargetManuallyEdited(true); update('take_profit', price); }} className="px-2 py-1 rounded bg-secondary text-[10px]">{distance}</button>)}</div></div>}
             </div>

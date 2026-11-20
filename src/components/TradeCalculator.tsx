@@ -1,4 +1,5 @@
 import { riskCapital } from '@/lib/tradeFinance';
+import { pnlTone, signedMoney } from '@/lib/tradingTone';
 import type { Trade, TradingAccountAdjustment } from '@/lib/types';
 import { useEffect, useMemo, useState } from 'react';
 import { Calculator, RotateCcw, ShieldAlert, Target } from 'lucide-react';
@@ -116,8 +117,8 @@ export function TradeCalculator({ trades, adjustments }: { trades: Trade[]; adju
           <input type="number" min="0" step={instrument?.price_increment || 'any'} className={inputCls} value={exit} onChange={event => setExit(event.target.value)} />
         </div>
         <div>
-          <label className={labelCls}>Stop Loss</label>
-          <input type="number" min="0" step={instrument?.price_increment || 'any'} className={inputCls} value={stopLoss} onChange={event => setStopLoss(event.target.value)} />
+          <label className={`${labelCls} ym-market-sl`}>Stop Loss · SL</label>
+          <input type="number" min="0" step={instrument?.price_increment || 'any'} className={`${inputCls} ym-stop-input`} value={stopLoss} onChange={event => setStopLoss(event.target.value)} />
         </div>
         {conversionRequired && <div>
           <label className={labelCls}>{instrument?.quote_currency} to {account?.base_currency} rate</label>
@@ -132,9 +133,9 @@ export function TradeCalculator({ trades, adjustments }: { trades: Trade[]; adju
       {instrument?.example_price != null && <p className="mb-3 text-[11px] text-amber-600">Catalog values are illustrative, not live quotes. Verify contract terms and conversion with your broker.</p>}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
         <Result label={instrument ? instrumentDistanceLabel(instrument) : 'Distance'} value={result.hasData && instrument ? `${result.distance.toFixed(1)} ${instrumentDistanceLabel(instrument)}` : '—'} icon={<Target size={14} />} />
-        <Result label="Est. net P&L" value={result.hasData ? formatMoney(result.pnl) : '—'} icon={<Calculator size={14} />} />
-        <Result label="Est. risk at stop" value={result.stopRisk > 0 ? formatMoney(result.stopRisk) : '—'} icon={<ShieldAlert size={14} />} />
-        <Result label="Risk %" value={result.riskPercent > 0 ? `${result.riskPercent.toFixed(2)}%` : '—'} icon={<ShieldAlert size={14} />} />
+        <Result label="Est. net P&L" value={result.hasData ? signedMoney(result.pnl,formatMoney(result.pnl)) : '—'} icon={<Calculator size={14} />} tone={result.hasData ? pnlTone(result.pnl) : 'neutral'} />
+        <Result label="Est. risk at stop" value={result.stopRisk > 0 ? formatMoney(result.stopRisk) : '—'} icon={<ShieldAlert size={14} />} tone="risk" />
+        <Result label="Risk %" value={result.riskPercent > 0 ? `${result.riskPercent.toFixed(2)}%` : '—'} icon={<ShieldAlert size={14} />} tone="risk" />
         <Result label="Suggested size" value={result.suggestedSize != null ? String(result.suggestedSize) : '—'} icon={<Calculator size={14} />} />
       </div>
 
@@ -144,10 +145,10 @@ export function TradeCalculator({ trades, adjustments }: { trades: Trade[]; adju
   );
 }
 
-function Result({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
-  return <div className="p-3 rounded-lg bg-secondary border border-themed text-center">
+function Result({ label, value, icon, tone }: { label: string; value: string; icon: React.ReactNode; tone?: 'positive'|'negative'|'neutral'|'pending'|'risk' }) {
+  return <div className="p-3 rounded-lg bg-secondary border border-themed text-center" data-level={tone==='risk'?'risk':undefined}>
     <div className="inline-flex p-1.5 rounded-md bg-orange-500/10 text-orange-500 mb-1.5">{icon}</div>
     <p className="text-[10px] font-semibold text-muted uppercase mb-0.5">{label}</p>
-    <p className="text-sm font-mono font-bold">{value}</p>
+    <p className={`text-sm ym-market-value font-bold ${tone==='risk'?'ym-market-warning':`ym-market-${tone||'neutral'}`}`}>{value}</p>
   </div>;
 }

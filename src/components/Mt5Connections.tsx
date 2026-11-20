@@ -1,4 +1,5 @@
 import { Select } from '@/components/Select';
+import { pnlTone, signedMoney } from '@/lib/tradingTone';
 import { Monitor, Link2, Download, X } from 'lucide-react';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -256,36 +257,39 @@ export function Mt5Connections() {
         {positions.map(item=>{
           const x=item.summary;
           const broker=links.find(link=>link.id===item.link);
-          return <details key={item.link+'/'+item.lifecycle_id} className="rounded-xl border border-themed p-3 sm:p-4">
+          return <details key={item.link+'/'+item.lifecycle_id} className="ym-mt5-lifecycle rounded-xl border border-themed p-3 sm:p-4" data-result={x.status==='open'?'open':pnlTone(x.net_realized_profit)==='positive'?'win':pnlTone(x.net_realized_profit)==='negative'?'loss':'neutral'}>
             <summary className="cursor-pointer list-none flex flex-wrap gap-3 items-center justify-between">
-              <span className="flex flex-col"><strong className="text-sm">{x.symbol} · {x.direction==='long'?'Long':'Short'}</strong>
-                <small className="text-muted">{broker?.company || 'Broker'} · {broker?.login || item.account_id} · {x.status.toUpperCase()} · Version {item.version}</small></span>
-              <span className="flex flex-col text-right"><strong className="font-mono text-sm">{x.net_realized_profit ?? 'Unrealized'} {broker?.currency || ''}</strong>
+              <span className="flex flex-col gap-1"><strong className="text-sm flex flex-wrap items-center gap-2">{x.symbol}
+                  <span className="ym-direction-tag" data-side={x.direction}>{x.direction==='long'?'Long':'Short'}</span>
+                  <span className="text-muted text-xs font-normal">{x.status==='open'?'Open':'Closed'}</span></strong>
+                <small className="text-muted">{broker?.company || 'Broker'} · {broker?.login || item.account_id} · Version {item.version}</small></span>
+              <span className="flex flex-col text-right"><strong className={`ym-market-value text-sm ym-market-${pnlTone(x.net_realized_profit,x.status==='open')}`}>{x.status==='open'?'Unrealized / unknown':x.net_realized_profit==null?'Unavailable':signedMoney(Number(x.net_realized_profit),String(x.net_realized_profit))} {broker?.currency || ''}</strong>
                 <small className="text-muted">Net R: {x.realized_r ?? 'Unavailable'} · {x.movement ?? '—'} {x.movement_unit || 'units'}</small></span>
             </summary>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-xs">
               {[
                 ['First entry',x.first_entry_at],['Final exit',x.final_exit_at || 'Open'],
-                ['Original stop',x.initial_sl ?? 'Not captured'],['Stop source',x.initial_sl_provenance || 'Unverified'],
-                ['First observed',x.initial_sl_observed_at || '—'],['Current SL / TP',(x.current_sl ?? '—')+' / '+(x.current_tp ?? '—')],
+                ['Original SL',x.initial_sl ?? 'Not captured'],['Original TP',x.initial_tp ?? 'Not captured'],
+                ['Stop source',x.initial_sl_provenance || 'Unverified'],
+                ['First observed',x.initial_sl_observed_at || '—'],['Current SL',x.current_sl ?? '—'],['Current TP',x.current_tp ?? '—'],
                 ['Initial risk',x.initial_risk_account ?? 'Unavailable'],['Capital source',x.capital_at_entry?.source || 'Unavailable'],
                 ['Final net R',x.final_realized_r ?? 'Unavailable'],['Remaining volume',x.remaining_volume ?? 'Unknown'],
                 ['Total holding',x.holding_seconds ? (Number(x.holding_seconds)/3600).toFixed(2)+' hours' : 'Open/unknown'],
                 ['VW holding',x.weighted_holding_seconds ? (Number(x.weighted_holding_seconds)/3600).toFixed(2)+' hours' : 'Unavailable'],
-              ].map(([label,value])=><div key={String(label)} className="rounded-lg bg-secondary p-3"><p className="text-muted">{label}</p><strong className="block mt-1 break-words font-mono">{value}</strong></div>)}
+              ].map(([label,value])=><div key={String(label)} className="ym-market-detail" data-level={label==='Original SL'||label==='Current SL'?'sl':label==='Original TP'||label==='Current TP'?'tp':label.toLowerCase().includes('risk')?'risk':undefined}><span>{label}</span><strong>{value}</strong></div>)}
             </div>
             <p className="text-xs text-secondary mt-3">Sessions: {x.sessions?.status==='confirmed' ? x.sessions.sessions?.join(', ') || 'None' : 'Unresolved — '+(x.sessions?.reason || 'broker timezone not confirmed')} · Initial risk: {x.capture_completeness?.original_risk || 'unknown'}</p>
             <div className="grid md:grid-cols-2 gap-4 mt-4">
               <div><h3 className="text-xs font-bold mb-2">Entry executions ({x.entries?.length || 0})</h3>
                 {x.entries?.map((entry,index)=><div key={index} className="text-xs border-t border-themed py-2">
                   Deal {String(entry.deal_ticket || '—')} · {String(entry.volume || '?')} lots @ {String(entry.price || '?')}
-                  <p className="text-muted">{String(entry.time || '')} · Opening SL {String(entry.initial_sl || 'unknown')} · Risk {String(entry.initial_risk || 'unknown')}</p>
+                  <p className="text-muted">{String(entry.time || '')} · <span className="ym-market-sl">Opening SL {String(entry.initial_sl ?? 'unknown')}</span> · <span className="ym-market-warning">Risk {String(entry.initial_risk ?? 'unknown')}</span></p>
                 </div>)}
               </div>
               <div><h3 className="text-xs font-bold mb-2">Closes ({x.exits?.length || 0})</h3>
                 {x.exits?.map((exit,index)=><div key={index} className="text-xs border-t border-themed py-2">
                   Deal {String(exit.deal_ticket || '—')} · {String(exit.volume || '?')} lots @ {String(exit.price || '?')}
-                  <p className="text-muted">Net {String(exit.net_profit ?? 'unknown')} · R {String(exit.realized_r ?? 'unavailable')} · {String(exit.holding_seconds ?? 'unknown')} seconds</p>
+                  <p className="text-muted"><span className={`ym-market-${pnlTone(exit.net_profit as number | string | null)}`}>Net {String(exit.net_profit ?? 'unknown')}</span> · R {String(exit.realized_r ?? 'unavailable')} · {String(exit.holding_seconds ?? 'unknown')} seconds</p>
                 </div>)}
               </div>
             </div>
@@ -371,22 +375,24 @@ function HistoryReview({scan, status, onClose, onFinished}: HistoryReviewProps) 
         <tbody>{preview.rows.map((r,i)=>{
           const broker=(r.broker_details && typeof r.broker_details==='object' ? r.broker_details : {}) as Record<string,unknown>;
           const value=(key:string)=>r[key]==null?'Unknown':String(r[key]);
-          return <tr key={i} className="align-top hover:bg-secondary">
+          return <tr key={i} className="align-top hover:bg-secondary" data-result={pnlTone(r.pnl as number|string|null)}>
             <td className="px-2 py-3 font-semibold">{value('pair')}</td>
             <td className="px-2 py-3 font-mono">Position {broker.position_id == null?'Unknown':String(broker.position_id)}<div className="text-muted">Deal {broker.deal_ticket == null?'Unknown':String(broker.deal_ticket)}</div></td>
             <td className="px-2 py-3">{value('entry_time')}<div className="text-muted">{value('exit_time')}</div></td>
-            <td className="px-2 py-3">{value('direction')}</td>
+            <td className="px-2 py-3"><span className="ym-direction-tag" data-side={r.direction}>{value('direction')}</span></td>
             <td className="px-2 py-3 font-mono">{value('lot_size')}</td>
             <td className="px-2 py-3 font-mono">{value('entry_price')}<div className="text-muted">{value('exit_price')}</div></td>
-            <td className="px-2 py-3 font-mono">{r.stop_loss == null?'Not recorded':String(r.stop_loss)} / {r.take_profit==null?'Not recorded':String(r.take_profit)}
-              <div className="text-muted">{broker.opening_protection_provenance==='executed_open_order'?'From opening order':'Opening protection unverified'}</div></td>
-            <td className="px-2 py-3 font-mono">{broker.closing_order_sl==null?'Unavailable':String(broker.closing_order_sl)} / {broker.closing_order_tp==null?'Unavailable':String(broker.closing_order_tp)}
-              <div className="text-muted">Exit order {broker.exit_order_ticket==null?'Unknown':String(broker.exit_order_ticket)}</div></td>
+            <td className="px-2 py-3 font-mono"><span className="ym-market-sl">SL {r.stop_loss == null?'Not recorded':String(r.stop_loss)}</span>
+              <div className="ym-market-tp">TP {r.take_profit==null?'Not recorded':String(r.take_profit)}</div>
+              <div className="text-muted font-sans">{broker.opening_protection_provenance==='executed_open_order'?'From opening order':'Opening protection unverified'}</div></td>
+            <td className="px-2 py-3 font-mono"><span className="ym-market-sl">SL {broker.closing_order_sl==null?'Unavailable':String(broker.closing_order_sl)}</span>
+              <div className="ym-market-tp">TP {broker.closing_order_tp==null?'Unavailable':String(broker.closing_order_tp)}</div>
+              <div className="text-muted font-sans">Exit order {broker.exit_order_ticket==null?'Unknown':String(broker.exit_order_ticket)}</div></td>
             <td className="px-2 py-3">Historical initial risk cannot be proven without the opening order, instrument specification, and capital at entry</td>
             <td className="px-2 py-3 font-mono">Fees: {value('fees')}<div className="text-muted">Swap: {broker.swap==null?'Unknown':String(broker.swap)}</div></td>
             <td className="px-2 py-3">{broker.close_reason==null?'Not recorded':String(broker.close_reason)}
               <div className="text-muted">{broker.close_comment==null?'':String(broker.close_comment)}</div></td>
-            <td className="px-2 py-3 font-mono font-semibold">{value('pnl')}</td>
+            <td className={`px-2 py-3 ym-market-value font-semibold ym-market-${pnlTone(r.pnl as number|string|null)}`}>{r.pnl==null?'Unknown':signedMoney(Number(r.pnl),String(r.pnl))}</td>
           </tr>;
         })}</tbody>
       </table></div>
