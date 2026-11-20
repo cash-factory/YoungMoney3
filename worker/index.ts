@@ -18,10 +18,12 @@ export interface Env {
   MEDIA?: R2Bucket;
   PILOT_INVITE_CODE?: string;
   MT5_ALLOW_LIVE?: string;
+  DEMO_SHOWCASE_ENABLED?: string;
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
 }
 
+const DEMO_MEMBER_ID = '00000000-0000-4000-8000-00000000d3a0';
 const encoder = new TextEncoder();
 const ownedTables = new Set<string>(WORKSPACE_TABLES);
 const publicTables = new Set(['provider_catalog', 'provider_offerings', 'prop_firm_rule_versions', 'provider_change_reviews']);
@@ -126,14 +128,14 @@ async function authRoute(request: Request, env: Env, path: string) {
     if(gate?.value==='true') return response({error:'Registration is temporarily paused by the workspace administrator.'},403);
     if (!env.PILOT_INVITE_CODE) return response({ error: 'Workspace sign-up has not been configured.' }, 503);
     if (!input.invite_code || input.invite_code.trim().toLowerCase() !== env.PILOT_INVITE_CODE.trim().toLowerCase()) return response({ error: 'Invalid pilot invite code.' }, 403);
-    const accountCount = await env.DB.prepare('SELECT COUNT(*) AS total FROM users').first<{ total: number }>();
+    const accountCount = await env.DB.prepare('SELECT COUNT(*) AS total FROM users WHERE id<>?').bind(DEMO_MEMBER_ID).first<{ total: number }>();
     if ((accountCount?.total || 0) >= 10) return response({ error: 'This pilot has reached its 10-account limit.' }, 403);
     const email = input.email?.trim().toLowerCase(); const username = input.username?.trim().toLowerCase(); const password = input.password || ''; const displayName = input.display_name?.trim() || username;
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !username || !/^[a-z0-9_]{3,32}$/.test(username) || password.length < 8) return response({ error: 'Use a valid email, 3â€“32 character username, and password of at least 8 characters.' }, 400);
     const existing = await env.DB.prepare('SELECT id FROM users WHERE email=? OR username=?').bind(email, username).first(); if (existing) return response({ error: 'Email or username is already in use.' }, 409);
-    const secured = await hashPassword(password); const userId = id(); const timestamp = now(); const created = await env.DB.prepare('INSERT OR IGNORE INTO users (id,email,username,display_name,password_hash,password_salt,created_at,updated_at) SELECT ?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM users)<10').bind(userId, email, username, displayName, secured.hash, secured.salt, timestamp, timestamp).run(); if (!created.meta.changes) return response({ error: 'Account unavailable or pilot full.' }, 409); const user = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(userId).first<Record<string, unknown>>(); return issueSession(env.DB, user!);
+    const secured = await hashPassword(password); const userId = id(); const timestamp = now(); const created = await env.DB.prepare('INSERT OR IGNORE INTO users (id,email,username,display_name,password_hash,password_salt,created_at,updated_at) SELECT ?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM users WHERE id<>?)<10').bind(userId, email, username, displayName, secured.hash, secured.salt, timestamp, timestamp,DEMO_MEMBER_ID).run(); if (!created.meta.changes) return response({ error: 'Account unavailable or pilot full.' }, 409); const user = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(userId).first<Record<string, unknown>>(); return issueSession(env.DB, user!);
   }
-  if (path === '/api/auth/signin') { const user = await env.DB.prepare('SELECT * FROM users WHERE email=?').bind(input.email?.trim().toLowerCase()).first<Record<string, string>>(); if (!user) return response({ error: 'Invalid email or password.' }, 401); const secured = await hashPassword(input.password || '', user.password_salt); if (secured.hash !== user.password_hash) return response({ error: 'Invalid email or password.' }, 401); if (user.account_status === 'suspended') return response({ error: 'This account is suspended.' }, 403); return issueSession(env.DB, user); }
+  if (path === '/api/auth/signin') { const user = await env.DB.prepare('SELECT * FROM users WHERE email=?').bind(input.email?.trim().toLowerCase()).first<Record<string, string>>(); if (!user || user.id===DEMO_MEMBER_ID) return response({ error: 'Invalid email or password.' }, 401); const secured = await hashPassword(input.password || '', user.password_salt); if (secured.hash !== user.password_hash) return response({ error: 'Invalid email or password.' }, 401); if (user.account_status === 'suspended') return response({ error: 'This account is suspended.' }, 403); return issueSession(env.DB, user); }
   return response({ error: 'Unknown authentication action.' }, 404);
 }
 
@@ -781,14 +783,41 @@ export default {
       return response({ error: 'Cross-origin mutation rejected.' }, 403);
     }
     try {
+      if (request.method === 'GET' && pathname === '/api/demo/available')
+        return response({enabled:env.DEMO_SHOWCASE_ENABLED==='true'});
       if (request.method === 'GET' && pathname === '/api/health') {
         const ready = await env.DB.prepare('SELECT 1 AS ready').first<{ ready: number }>();
         return ready?.ready === 1 ? response({ status: 'ok', database: 'connected' }) : response({ status: 'unavailable' }, 503);
+      }
+      if (request.method === 'POST' && pathname === '/api/demo/enter') {
+        if (env.DEMO_SHOWCASE_ENABLED !== 'true') return response({ error: 'Preview unavailable.' }, 404);
+        // Membership stays invite-only: a valid staging member must choose
+        // to switch to the read-only preview. Never offer anonymous sessions.
+        const viewer=await currentUser(request,env.DB);
+        if(!viewer || viewer.id===DEMO_MEMBER_ID) return response({error:'Sign in with an active staging account to explore the demo.'},401);
+        const ip=request.headers.get('CF-Connecting-IP') || 'local';
+        if(!await withinAuthBudget(env.DB,'demo-preview:'+ip,40)) return throttled();
+        const sample=await env.DB.prepare("SELECT * FROM users WHERE id=? AND email=? AND role='member' AND account_status='active'")
+          .bind(DEMO_MEMBER_ID,'showcase@youngmoney3.invalid').first<Record<string,unknown>>();
+        return sample ? issueSession(env.DB,sample) : response({error:'Demo workspace has not been seeded on staging.'},503);
       }
       if (request.method === 'POST' && pathname.startsWith('/api/mt5/device/')) return await mt5Route(request, env, null);
       if (request.method === 'POST' && ['/api/auth/signup', '/api/auth/signin', '/api/auth/recover'].includes(pathname)) return await authRoute(request, env, pathname);
       const user = await currentUser(request, env.DB);
       if (!user) return response({ error: 'Authentication required.' }, 401);
+      if (user.id===DEMO_MEMBER_ID) {
+        if (env.DEMO_SHOWCASE_ENABLED!=='true') return response({error:'Preview unavailable.'},403);
+        // Read-only server-backed sample. Browser controls alone are not a security boundary.
+        const readOnlyRoute = (request.method==='GET' &&
+          (pathname==='/api/me'||pathname==='/api/account-summaries')) ||
+          (request.method==='POST' && pathname==='/api/auth/signout') ||
+          (request.method==='POST' && pathname==='/api/decision/context') ||
+          (request.method==='POST' && ['/api/mt5/status','/api/mt5/positions',
+            '/api/mt5/position-evidence'].includes(pathname)) ||
+          (request.method==='POST' && pathname==='/api/data' &&
+            (await jsonObject<{action?:string}>(request.clone())).action==='select');
+        if (!readOnlyRoute) return response({error:'This is a read-only sample workspace. Sign in with your own account to save changes.'},403);
+      }
       if(request.method==='POST' && pathname==='/api/decision/context') {
         const input=await jsonObject<Record<string,unknown>>(request);
         const source=await decisionSource(env.DB,String(user.id),input.reference);

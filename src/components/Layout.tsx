@@ -104,6 +104,15 @@ export function Layout({ current, onNavigate, onQuickAdd, onOpenGuide, children 
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
+  const isSample = profile?.id === '00000000-0000-4000-8000-00000000d3a0';
+  const [showcaseAvailable,setShowcaseAvailable]=useState(false);
+  useEffect(()=>{
+    let active=true;
+    void fetch('/api/demo/available').then(response=>response.ok?response.json():null)
+      .then(data=>{if(active)setShowcaseAvailable(data?.enabled===true);})
+      .catch(()=>{});
+    return()=>{active=false;};
+  },[]);
   const displayName = profile?.display_name || 'Trader';
   const initials = displayName.charAt(0).toUpperCase();
 
@@ -284,23 +293,41 @@ export function Layout({ current, onNavigate, onQuickAdd, onOpenGuide, children 
         </div>
 
         <main tabIndex={-1} id="workspace-content" className="ym-main-content p-4 sm:p-6 lg:p-8 xl:px-10 max-w-[1480px] mx-auto animate-fade-in pb-32 lg:pb-12">
-          <DataRecoveryNotice />
+          {isSample && <section role="status" aria-label="Fictional demo account"
+            className="mb-5 rounded-xl border border-themed bg-secondary p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
+            <div className="space-y-1">
+              <strong className="text-sm tracking-wide">SAMPLE WORKSPACE · READ ONLY</strong>
+              <p className="text-xs text-secondary max-w-2xl">
+                You're exploring Alex Morgan's fictional trading workspace. All results, journals and MT5 positions
+                are generated examples—not real trades, brokerage balances or a live connector. Changes cannot be saved.
+              </p>
+            </div>
+            <button type="button" className="btn-secondary" onClick={()=>{void signOut();}}>Exit demo</button>
+          </section>}
+          {!isSample && showcaseAvailable && current==='dashboard' && <section className="mb-5 rounded-xl border border-themed p-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <strong className="text-sm">Explore a fully populated sample workspace</strong>
+              <p className="text-xs text-secondary mt-1">Preview trades, MT5 samples, plans, journals, strategy tests, analytics and psychology notes without changing your account.</p>
+            </div>
+            <button type="button" className="btn-secondary" onClick={()=>window.location.assign('/?showcase=1#dashboard')}>View sample trader</button>
+          </section>}
+          {!isSample && <DataRecoveryNotice />}
           {children}
         </main>
 
-        <button
+        {!isSample && <button
           onClick={onQuickAdd}
           className="ym-desktop-quick-add fixed bottom-7 right-7 z-30 w-14 h-14 rounded-xl text-white shadow-lg hidden lg:flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
           title="Quick Add"
           aria-label="Quick Add"
         >
           <Plus size={26} />
-        </button>
+        </button>}
       </div>
       <nav aria-label="Mobile workspace navigation" className="ym-mobile-dock lg:hidden">
         <button type="button" className="ym-dock-item" data-active={current === 'dashboard'} aria-current={current === 'dashboard' ? 'page' : undefined} onClick={() => handleNav('dashboard')}><LayoutDashboard size={20} /><span>Today</span></button>
         <button type="button" className="ym-dock-item" data-active={current === 'strategies'} aria-current={current === 'strategies' ? 'page' : undefined} onClick={() => handleNav('strategies')}><Target size={20} /><span>Playbook</span></button>
-        <button type="button" className="ym-dock-item ym-dock-add" aria-label="Quick capture" onClick={onQuickAdd}><Plus size={22} /><span>Capture</span></button>
+        <button type="button" className="ym-dock-item ym-dock-add" aria-label={isSample?'Demo: capture disabled':'Quick capture'} disabled={isSample} onClick={onQuickAdd}><Plus size={22} /><span>Capture</span></button>
         <button type="button" className="ym-dock-item" data-active={current === 'journal'} aria-current={current === 'journal' ? 'page' : undefined} onClick={() => handleNav('journal')}><BookOpen size={20} /><span>Journal</span></button>
         <button type="button" className="ym-dock-item" data-active={current === 'weekly-reviews'} aria-current={current === 'weekly-reviews' ? 'page' : undefined} onClick={() => handleNav('weekly-reviews')}><ClipboardCheck size={20} /><span>Review</span></button>
       </nav>

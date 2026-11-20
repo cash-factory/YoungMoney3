@@ -23,15 +23,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session }, error }: { data: { session: Session | null };error?:unknown }) => {
+    // A direct showcase link opens a dedicated read-only, server-backed
+    // demo member on staging. It never inserts sample data into a real user.
+    const initialize = async () => {
+      let { data: { session }, error } = await supabase.auth.getSession() as {
+        data:{session:Session|null}; error?:unknown
+      };
+      if (new URLSearchParams(window.location.search).get('showcase')==='1') {
+        if (session?.user && session.user.id!=='00000000-0000-4000-8000-00000000d3a0') {
+          try {
+            const preview = await fetch('/api/demo/enter',{method:'POST'});
+            if (preview.ok) {
+              const restored = await supabase.auth.getSession() as {
+                data:{session:Session|null};error?:unknown
+              };
+              session = restored.data.session;
+              error = restored.error;
+            }
+          } catch { /* An unavailable preview leaves the real account untouched. */ }
+        }
+        const url = new URL(window.location.href);
+        url.searchParams.delete('showcase');
+        url.hash = session ? '#dashboard' : url.hash;
+        window.history.replaceState(null,'',url);
+      }
       if(error){setUnavailable(true);setLoading(false);return;}
       setSession(session);
-      if (session?.user) {
-        fetchProfile(session.user.id).finally(() => setLoading(false));
-      } else {
-        setLoading(false);
+      if(session?.user) {
+        await fetchProfile(session.user.id);
       }
-    });
+      setLoading(false);
+    };
+    void initialize().catch(()=>{setUnavailable(true);setLoading(false);});
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event: string, session: Session | null) => {
       setSession(session);

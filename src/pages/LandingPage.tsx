@@ -44,6 +44,14 @@ function useScrollReveal() {
 export function LandingPage({ onEnter }: { onEnter: () => void }) {
   const { session } = useAuth();
   const [sampleReplay,setSampleReplay]=useState(false);
+  const [showcaseAvailable,setShowcaseAvailable]=useState(false);
+  useEffect(()=>{
+    let active=true;
+    void fetch('/api/demo/available').then(response=>response.ok?response.json():null)
+      .then(value=>{if(active) setShowcaseAvailable(value?.enabled===true);})
+      .catch(()=>{});
+    return()=>{active=false;};
+  },[]);
   const [scrollY, setScrollY] = useState(0);
   const pageRef = useScrollReveal();
 
@@ -217,6 +225,10 @@ export function LandingPage({ onEnter }: { onEnter: () => void }) {
               <ArrowRight size={18} />
             </button>
             {sampleReplay && <SampleReplay onClose={()=>setSampleReplay(false)}/>}
+            {showcaseAvailable && <button type="button" onClick={onEnter} className="btn-secondary text-base px-6 py-3">
+              Sign in to explore the populated demo
+              <ArrowRight size={16} />
+            </button>}
             <button type="button" className="btn-secondary text-base px-6 py-3" onClick={()=>setSampleReplay(true)}>Replay an example trade</button>
             <a href="#platform" className="btn-ghost text-base px-3 py-3">
               Explore the Platform

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
+import { buildDemoStatements } from './write-staging-demo-sql.mjs';
+import { DEMO_ID, demoCounts } from './staging-demo-fixtures.mjs';
 
 const bundle=await build({entryPoints:['worker/index.ts'],bundle:true,format:'esm',write:false});
 const objects=new Set();
@@ -19,7 +21,7 @@ const storage=async req=>{
   return Response.json([...entries.values()].slice(data.offset||0,(data.offset||0)+data.limit));
 };
 const mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:'journal',modules:true,script:bundle.outputFiles[0].text,compatibilityDate:'2025-12-01',
-  outboundService:storage,d1Databases:['DB'],bindings:{PILOT_INVITE_CODE:'integration',SUPABASE_URL:'https://storage.test',SUPABASE_SERVICE_ROLE_KEY:'fixture'}}],port:0}));
+  outboundService:storage,d1Databases:['DB'],bindings:{PILOT_INVITE_CODE:'integration',SUPABASE_URL:'https://storage.test',SUPABASE_SERVICE_ROLE_KEY:'fixture',DEMO_SHOWCASE_ENABLED:'true'}}],port:0}));
 try {
   const db=await mf.getD1Database('DB');
   for(const name of (await readdir('migrations')).sort()){
@@ -467,6 +469,45 @@ try {
   objects.add(subject+'/voice.webm');
   assert.equal((await call('admin',{action:'delete',targetUserId:subject})).status,200);
   assert.equal(objects.size,0);
+  // Preview is a real isolated account on staging, but cannot mutate state.
+  const availability=await mf.dispatchFetch('https://journal.example/api/demo/available');
+  assert.equal((await availability.json()).enabled,true);
+  for(const statement of buildDemoStatements())await db.prepare(statement).run();
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM workspace_records WHERE user_id=? AND table_name='trades'").bind(DEMO_ID).first()).n,demoCounts.trades);
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM mt5_position_versions WHERE owner=?").bind(DEMO_ID).first()).n,17);
+  assert.equal((await mf.dispatchFetch('https://journal.example/api/demo/enter',{method:'POST'})).status,401,
+    'Invite-only staging must not issue anonymous preview sessions');
+  const entrance=await mf.dispatchFetch('https://journal.example/api/demo/enter',{
+    method:'POST',headers:{cookie}});
+  assert.equal(entrance.status,200);
+  const demoCookie=entrance.headers.get('set-cookie').split(';')[0];
+  const demo=async (path,payload={},method='POST')=>mf.dispatchFetch('https://journal.example/api/'+path,{
+    method,headers:{cookie:demoCookie,'content-type':'application/json'},
+    body:method==='GET'?undefined:JSON.stringify(payload)});
+  const demoUser=await (await demo('me',{},'GET')).json();
+  assert.equal(demoUser.user.id,DEMO_ID);
+  assert.equal(demoUser.user.password_hash,undefined);
+  assert.equal((await (await demo('data',{action:'select',table:'trades'})).json()).count,demoCounts.trades);
+  assert.equal((await (await demo('data',{action:'select',table:'journal_entries'})).json()).count,demoCounts.journal_entries);
+  assert.equal((await (await demo('data',{action:'select',table:'goals'})).json()).count,demoCounts.goals);
+  assert.equal((await (await demo('mt5/positions',{})).json()).rows.length,17);
+  assert.equal((await (await demo('mt5/status',{})).json()).links.length,1);
+  assert.equal((await demo('account-summaries',{},'GET')).status,200);
+  for(const [path,body] of [
+    ['data',{action:'insert',table:'trades',payload:{pair:'EURUSD'}}],
+    ['data',{action:'update',table:'notes',id:'demo-note-1',payload:{content:'tamper'}}],
+    ['data',{action:'delete',table:'journal_entries',id:'demo-journal-1'}],
+    ['mt5/pair',{}],
+    ['mt5/history-request',{link:'demo-broker-link-preview',days:30}],
+    ['mt5/revoke',{device:'demo-device-unpaired'}],
+    ['admin',{action:'overview'}],
+    ['auth/profile',{display_name:'Tampered'}],
+    ['auth/password',{password:'attempt',current_password:'unknown'}],
+  ])assert.equal((await demo(path,body)).status,403,'Read-only preview route: '+path);
+  assert.equal((await demo('media/upload',{})).status,403);
+  assert.equal((await call('auth/signin',{email:'showcase@youngmoney3.invalid',password:'anything'})).status,401);
+  assert.equal((await demo('auth/signout',{})).status,200);
+  assert.equal((await demo('me',{},'GET')).status,401);
   console.log('Local D1 passed migrations, authentication, idempotent writes, account isolation, scan revisions, replay and suspension.');
 } finally {await mf.dispose();}
 

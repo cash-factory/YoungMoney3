@@ -415,3 +415,21 @@ test('Field Guide is a real skippable and replayable journey through platform fe
   assert.ok(workflow.includes('node scripts/test-guide-browser.mjs'),
     'Browser QA must exercise the guide against real UI');
 });
+
+test('staging-only populated demo uses a real read-only account and never inserts synthetic trades into real journals',()=>{
+  const worker=read('worker/index.ts');
+  const landing=read('src/pages/LandingPage.tsx');
+  const auth=read('src/context/AuthProvider.tsx');
+  const shell=read('src/components/Layout.tsx');
+  const staging=read('scripts/prepare-staging.mjs');
+  const workflow=read('.github/workflows/rich-staging-release.yml');
+  for(const marker of ['DEMO_SHOWCASE_ENABLED','/api/demo/enter','/api/demo/available',
+    "user.id===DEMO_MEMBER_ID","request.clone()","action==='select'"])assert.ok(worker.includes(marker),'Missing read-only demo server protection '+marker);
+  assert.ok(staging.includes("DEMO_SHOWCASE_ENABLED:'true'"),'Only staging should enable preview');
+  assert.ok(landing.includes('Sign in to explore the populated demo'),'Landing page should lead invited members to the preview');
+  assert.ok(shell.includes('/?showcase=1#dashboard') && shell.includes('View sample trader'),'Signed-in members need a direct sample-workspace link');
+  assert.ok(worker.includes("const viewer=await currentUser(request,env.DB)"),'Anonymous users cannot bypass invite-only staging');
+  assert.ok(auth.includes("new URLSearchParams(window.location.search).get('showcase')==='1'"),'Direct preview URL should authenticate');
+  assert.ok(shell.includes('SAMPLE WORKSPACE · READ ONLY') && shell.includes('Exit demo'),'Every demo page must clearly label synthetic data');
+  assert.ok(workflow.includes('write-staging-demo-sql.mjs') && workflow.includes('.demo-showcase-seed.sql'),'Only staging workflow may seed synthetic data');
+});
