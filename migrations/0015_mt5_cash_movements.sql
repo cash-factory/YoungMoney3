@@ -1,5 +1,5 @@
 -- Additive, owner-scoped MT5 cash ledger. Broker deal tickets are immutable.
--- DEAL_TYPE_BALANCE=2 includes cash movements AND broker adjustments;
+-- DEAL_TYPE_BALANCE=2 includes cash movements AND broker adjustments.
 -- a positive balance operation is a deposit candidate, never automatically
 -- certified as an external deposit. Keep the original deal evidence separately.
 CREATE TABLE mt5_cash_movements (
