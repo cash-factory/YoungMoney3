@@ -1,0 +1,178 @@
+/* Focused dashboard and milestone layouts share the CraftyLabs geometry in every palette. */
+.ym-workspace .ym-dashboard .ym-dash-heading h1 {
+  display:flex;align-items:baseline;flex-wrap:wrap;gap:.22em .32em;line-height:1.25;
+}
+.ym-workspace .ym-dashboard .ym-dash-title-mark {
+  display:inline-block;padding:.05em .22em .08em;background:var(--button-bg);color:#fff;
+  border-radius:3px;transform:skewX(-4deg);letter-spacing:-.045em;
+}
+.ym-workspace .ym-dashboard .ym-dash-topic-mark {
+  display:inline-block;padding:5px 9px;background:var(--button-bg);color:#fff;
+  border-radius:3px;transform:skewX(-4deg);font-weight:850;
+}
+.ym-workspace .ym-dashboard .ym-dash-jump {
+  display:flex;gap:5px;padding:6px;margin:0 0 18px;border:1px solid var(--border);
+  border-radius:14px;background:var(--bg-card);overflow-x:auto;scrollbar-width:thin;
+  box-shadow:0 3px 18px hsl(var(--shadow-color)/.04);
+}
+.ym-workspace .ym-dashboard .ym-dash-jump button {
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;flex:1 0 auto;
+  min-height:44px;padding:10px 14px;border:1px solid transparent;border-radius:9px;
+  background:transparent;color:var(--text-secondary);font-size:12px;font-weight:700;white-space:nowrap;
+  transition:background-color 160ms ease,color 160ms ease,border-color 160ms ease;
+}
+.ym-workspace .ym-dashboard .ym-dash-jump button[aria-selected="true"] {
+  background:var(--button-bg);color:#fff;border-color:var(--button-bg);
+}
+.ym-workspace .ym-dashboard .ym-dash-jump button[aria-selected="false"]:hover {
+  background:var(--bg-secondary);border-color:var(--border);color:var(--text-primary);
+}
+.ym-dash-tab-number {font:600 10px 'JetBrains Mono',monospace;opacity:.65;}
+.ym-workspace .ym-dashboard .ym-dash-focus-panel {min-width:0;animation:dashboard-focus-in 220ms ease;}
+.ym-workspace .ym-dashboard .ym-dash-focus-description {margin:0 2px 22px;color:var(--text-secondary);font-size:12px;line-height:1.65;}
+.ym-workspace .ym-achievements {min-width:0;}
+.ym-achievements-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.ym-achievements-heading h3 {display:flex;align-items:center;gap:8px;font-size:16px;font-weight:750;margin:6px 0 0;}
+.ym-achievements-heading h3 svg {color:var(--brand-text,var(--brand));}
+.ym-achievements-count {flex:none;color:var(--text-secondary);font:500 12px 'JetBrains Mono',monospace;}
+.ym-achievements-count strong {font-size:25px;color:var(--text-primary);font-weight:700;}
+.ym-achievements-overall {height:5px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;margin-top:16px;overflow:hidden;}
+.ym-achievements-overall > span {display:block;height:100%;background:var(--brand);border-radius:6px;}
+.ym-achievements-caption {font-size:11px;line-height:1.6;color:var(--text-secondary);margin:10px 0 16px;}
+.ym-achievement-list {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,235px),1fr));gap:10px;list-style:none;padding:0;margin:0;}
+.ym-achievement {display:flex;align-items:flex-start;gap:12px;min-width:0;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--bg-secondary);}
+.ym-achievement[data-unlocked="true"] {border-color:color-mix(in srgb,var(--brand) 35%,var(--border));background:color-mix(in srgb,var(--brand) 5%,var(--bg-card));}
+.ym-achievement-icon {display:grid;place-items:center;flex:none;width:36px;height:36px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;}
+.ym-achievement-copy {flex:1;min-width:0;}
+.ym-achievement-title {display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.ym-achievement-title strong {font-size:12px;font-weight:700;line-height:1.5;word-break:normal;overflow-wrap:normal;}
+.ym-achievement-title svg {color:var(--success-text,#047857);flex:none;}
+.ym-achievement-copy p {font-size:11px;line-height:1.5;color:var(--text-secondary);margin:3px 0 0;word-break:normal;}
+.ym-achievement-progress {display:flex;align-items:center;gap:10px;margin-top:9px;}
+.ym-achievement-progress > div {height:4px;flex:1;min-width:30px;background:var(--border);border-radius:5px;overflow:hidden;}
+.ym-achievement-progress > div > span {display:block;height:100%;background:var(--brand);border-radius:5px;}
+.ym-achievement-progress > span {font:500 9px 'JetBrains Mono',monospace;color:var(--text-secondary);white-space:nowrap;}
+.ym-achievements-toggle {display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:42px;margin-top:14px;padding:10px 0 0;border-top:1px solid var(--border);font-size:12px;font-weight:650;color:var(--brand-text,var(--text-primary));text-align:left;}
+.ym-achievements-toggle:hover {color:var(--text-primary);}
+.ym-achievements-toggle span {font-size:20px;font-weight:400;}
+@keyframes dashboard-focus-in {from{opacity:.35;transform:translateY(5px)}to{opacity:1;transform:none}}
+@media(max-width:640px) {
+  .ym-workspace .ym-dashboard .ym-dash-jump {border-radius:11px;gap:4px;}
+  .ym-workspace .ym-dashboard .ym-dash-jump button {min-height:44px;padding:9px 11px;font-size:11px;}
+  .ym-dash-tab-number {display:none;}
+  .ym-workspace .ym-dashboard .ym-dash-heading h1 {font-size:clamp(24px,6.6vw,36px);}
+  .ym-workspace .ym-dashboard .ym-dash-focus-description {margin-bottom:16px;}
+}
+@media(prefers-reduced-motion:reduce) {
+  .ym-workspace .ym-dashboard .ym-dash-focus-panel {animation:none;}
+  .ym-workspace .ym-dashboard .ym-dash-jump button {transition:none;}
+}
+
+
+/* Text remains true HTML above the illustration; no branded headline is baked into media. */
+.ym-workspace .ym-dashboard .ym-dash-heading--illustrated {
+  position:relative;
+  isolation:isolate;
+  min-height:201px;
+  padding:clamp(20px,3.2vw,34px);
+  margin-bottom:20px;
+  border:1px solid var(--border-strong);
+  border-radius:13px;
+  background:var(--bg-card);
+  overflow:hidden;
+  display:flex;
+  align-items:flex-end;
+  gap:16px;
+}
+.ym-workspace .ym-dashboard .ym-dash-heading--illustrated::before {
+  content:"";
+  position:absolute;
+  z-index:1;
+  top:0;
+  left:0;
+  width:120px;
+  height:3px;
+  background:var(--brand);
+}
+.ym-workspace .ym-dashboard .ym-dash-heading-art {
+  position:absolute;
+  z-index:0;
+  inset:0 0 0 auto;
+  width:57%;
+  height:100%;
+  object-fit:cover;
+  object-position:65% center;
+  filter:grayscale(.8);
+  opacity:.37;
+  pointer-events:none;
+  mask-image:linear-gradient(to right,transparent,black 42%);
+}
+:root.dark[data-palette="craftylabs-studio"] .ym-workspace .ym-dashboard .ym-dash-heading-art {
+  filter:none;
+  opacity:.84;
+}
+.ym-workspace .ym-dashboard .ym-dash-heading-copy {
+  z-index:2;
+  position:relative;
+  min-width:0;
+  max-width:66%;
+  flex:1 1 auto;
+}
+.ym-workspace .ym-dashboard .ym-dash-new-trade {
+  z-index:2;
+  position:relative;
+  flex-shrink:0;
+}
+@media(max-width:767px) {
+  .ym-workspace .ym-dashboard .ym-dash-heading--illustrated {
+    padding:20px;
+    min-height:175px;
+    flex-wrap:wrap;
+  }
+  .ym-workspace .ym-dashboard .ym-dash-heading-art {
+    width:100%;
+    opacity:.12;
+    mask-image:linear-gradient(to right,transparent 15%,black);
+  }
+  :root.dark[data-palette="craftylabs-studio"] .ym-workspace .ym-dashboard .ym-dash-heading-art {
+    opacity:.30;
+  }
+  .ym-workspace .ym-dashboard .ym-dash-heading-copy {max-width:100%;flex-basis:100%;}
+}
+
+/* A clear reading order: introduction, filters, data quality, focused results. */
+:root[data-palette] .ym-workspace .ym-dashboard .ym-dash-eyebrow .ym-dash-topic-mark {
+  color:#101012;background:#fff;border:1px solid #fff;padding:4px 8px;
+}
+.ym-workspace .ym-dashboard .ym-dash-heading--illustrated {
+  min-height:167px;padding:26px 28px;margin-bottom:24px;align-items:center;
+}
+.ym-workspace .ym-dashboard .ym-dash-heading-copy {max-width:72%;}
+.ym-workspace .ym-dashboard .ym-dash-heading h1 {margin:12px 0 13px;line-height:1.15;}
+.ym-workspace .ym-dashboard .ym-dash-heading-copy > p:last-child {max-width:52ch;font-size:13px;line-height:1.7;}
+.ym-workspace .ym-dashboard .ym-dash-controls {margin-bottom:18px;padding:17px 18px;gap:15px;}
+.ym-dash-history-alert {margin-bottom:18px;padding:13px 16px;border:1px solid color-mix(in srgb,var(--error-text) 35%,var(--border));border-radius:10px;color:var(--error-text);background:var(--bg-card);font-size:12px;line-height:1.7;}
+.ym-dash-data-quality {display:grid;gap:8px;margin:0 0 22px;}
+.ym-dash-quality-notice {border:1px solid var(--border);border-radius:10px;background:var(--bg-card);}
+.ym-dash-quality-notice > summary {display:flex;align-items:center;gap:11px;list-style:none;cursor:pointer;min-height:58px;padding:12px 15px;}
+.ym-dash-quality-notice > summary::-webkit-details-marker {display:none;}
+.ym-dash-quality-notice > summary > svg:first-child {color:var(--warning-text);flex:none;}
+.ym-dash-quality-notice > summary > svg:last-child {color:var(--text-muted);flex:none;transition:transform .16s ease;}
+.ym-dash-quality-notice[open] > summary > svg:last-child {transform:rotate(180deg);}
+.ym-dash-quality-notice > summary > span {display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 11px;flex:1;min-width:0;}
+.ym-dash-quality-notice strong {font-size:11px;font-weight:650;color:var(--text-primary);}
+.ym-dash-quality-notice small {font-size:10px;line-height:1.6;color:var(--text-secondary);}
+.ym-dash-quality-notice > p {padding:0 15px 14px 42px;font-size:11px;line-height:1.8;color:var(--text-secondary);max-width:86ch;}
+@media(max-width:767px) {
+ .ym-workspace .ym-dashboard .ym-dash-heading--illustrated {padding:22px 20px;min-height:0;gap:20px;margin-bottom:20px;}
+ .ym-workspace .ym-dashboard .ym-dash-heading-copy {max-width:100%;}
+ .ym-workspace .ym-dashboard .ym-dash-heading h1 {margin:12px 0;}
+ .ym-workspace .ym-dashboard .ym-dash-heading-copy > p:last-child {font-size:12px;}
+ .ym-workspace .ym-dashboard .ym-dash-controls {padding:16px;gap:15px;margin-bottom:16px;}
+ .ym-dash-quality-notice > summary {align-items:flex-start;}
+ .ym-dash-quality-notice > summary > svg {margin-top:3px;}
+ .ym-dash-quality-notice > summary > span {display:block;}
+ .ym-dash-quality-notice small {display:block;margin-top:3px;}
+ .ym-dash-data-quality {margin-bottom:20px;}
+}
+@media(prefers-reduced-motion:reduce) {.ym-dash-quality-notice > summary > svg:last-child {transition:none;}}

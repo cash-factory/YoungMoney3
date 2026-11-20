@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
-import { TrendingUp, Plus, Target, ArrowRight, Check, Sparkles, Brain, Zap, Wallet, ListChecks, Trash2, ChevronRight, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Plus, Target, ArrowRight, Check, Sparkles, Wallet, ListChecks, Trash2, ChevronRight, Loader2, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { ColorPaletteControl } from '@/components/ColorPaletteControl';
+import { BrandLogo } from '@/components/BrandLogo';
+import { announceAction } from '@/lib/actionFeedback';
+import { supabase } from '@/lib/supabase';
+import '@/onboarding-studio.css';
 import { useStrategies, useStrategyChecklist, useRiskSettings } from '@/hooks/useData';
-import type { AccountType } from '@/lib/types';
 
 interface OnboardingPageProps {
   onComplete: () => void;
@@ -18,20 +20,21 @@ const DEFAULT_CHECKLIST_ITEMS: { label: string; is_required: boolean }[] = [
 ];
 
 const STEPS = [
-  { icon: Sparkles, title: 'Welcome' },
-  { icon: Wallet, title: 'Account' },
-  { icon: Target, title: 'Strategies' },
-  { icon: Check, title: 'Ready' },
+  { icon: Sparkles, title: 'Welcome', detail: 'Your starting point' },
+  { icon: Wallet, title: 'Risk', detail: 'Set a planning balance' },
+  { icon: Target, title: 'Strategies', detail: 'Define your approach' },
+  { icon: Check, title: 'Ready', detail: 'Start your journal' },
 ];
 
 export function OnboardingPage({ onComplete }: OnboardingPageProps) {
   const { user } = useAuth();
   const { strategies, addStrategy, deleteStrategy } = useStrategies(user?.id);
-  const { saveSettings } = useRiskSettings(user?.id);
+  const { settings, loading: loadingSettings, saveSettings } = useRiskSettings(user?.id);
+  const stepHeading = useRef<HTMLHeadingElement>(null);
+  const [balanceEdited, setBalanceEdited] = useState(false);
 
   const [step, setStep] = useState(0);
   const [accountBalance, setAccountBalance] = useState('10000');
-  const [accountType, setAccountType] = useState<AccountType>('personal');
   const [savingAccount, setSavingAccount] = useState(false);
 
   const [strategyName, setStrategyName] = useState('');
@@ -40,21 +43,27 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
   const [selectedStrategyId, setSelectedStrategyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const { items: checklistItems, addBatch, addItem, deleteItem } = useStrategyChecklist(selectedStrategyId);
+  const { items: checklistItems, addItem, deleteItem } = useStrategyChecklist(selectedStrategyId);
 
   const [newChecklistLabel, setNewChecklistLabel] = useState('');
   const [newChecklistRequired, setNewChecklistRequired] = useState(true);
   const [addingChecklist, setAddingChecklist] = useState(false);
 
   useEffect(() => {
-    if (strategies.length > 0 && !selectedStrategyId) {
+    if (strategies.length > 0 && !selectedStrategyId && !addingStrategy) {
       setSelectedStrategyId(strategies[0].id);
     }
-  }, [strategies, selectedStrategyId]);
+  }, [strategies, selectedStrategyId, addingStrategy]);
+
+  useEffect(() => {
+    if (settings && !balanceEdited) setAccountBalance(String(settings.account_balance));
+  }, [settings, balanceEdited]);
+  useEffect(() => { stepHeading.current?.focus({ preventScroll: true }); }, [step]);
 
   const handleSaveAccount = async (): Promise<boolean> => {
+    if (loadingSettings) return false;
     const balance = parseFloat(accountBalance);
-    if (!balance || balance <= 0) {
+    if (!Number.isFinite(balance) || balance <= 0) {
       setError('Please enter a valid account balance.');
       return false;
     }
@@ -62,17 +71,20 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
     setError(null);
     try {
       await saveSettings({
-        max_daily_loss_pct: 3.0,
-        max_daily_trades: 5,
-        max_risk_per_trade_pct: 1.0,
+        max_daily_loss_pct: settings?.max_daily_loss_pct ?? 3.0,
+        max_daily_trades: settings?.max_daily_trades ?? 5,
+        max_risk_per_trade_pct: settings?.max_risk_per_trade_pct ?? 1.0,
         account_balance: balance,
-        max_drawdown_pct: 10.0,
-        daily_loss_limit_amount: null,
+        max_drawdown_pct: settings?.max_drawdown_pct ?? 10.0,
+        daily_loss_limit_amount: settings?.daily_loss_limit_amount ?? null,
       });
       setSavingAccount(false);
+      announceAction('success','Planning balance and risk defaults saved.');
       return true;
     } catch (err: unknown) {
-      setError(err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to save account settings.');
+      const message=err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to save account settings.';
+      setError(message);
+      announceAction('error',message);
       setSavingAccount(false);
       return false;
     }
@@ -87,12 +99,15 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
     setError(null);
     try {
       const created = await addStrategy({ name: strategyName.trim(), description: strategyDesc.trim() || null, is_active: true });
+      const { error: checklistError } = await supabase.from('strategy_checklist_items').insert(DEFAULT_CHECKLIST_ITEMS.map((item, index) => ({ ...item, strategy_id: created.id, entry_model_id: null, sort_order: index, is_active: true })));
       setSelectedStrategyId(created.id);
-      await addBatch(DEFAULT_CHECKLIST_ITEMS);
+      if (checklistError) throw checklistError;
       setStrategyName('');
       setStrategyDesc('');
+      announceAction('success','Strategy created with its starter checklist.');
     } catch (err: unknown) {
-      setError(err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to add strategy.');
+      const message=err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to add strategy.';
+      setError(message);announceAction('error',message);
     }
     setAddingStrategy(false);
   };
@@ -100,12 +115,14 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
   const handleDeleteStrategy = async (id: string) => {
     try {
       await deleteStrategy(id);
+      announceAction('success','Strategy removed.');
       if (selectedStrategyId === id) {
         const remaining = strategies.filter(s => s.id !== id);
         setSelectedStrategyId(remaining.length > 0 ? remaining[0].id : null);
       }
     } catch (err: unknown) {
-      setError(err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to delete strategy.');
+      const message=err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to delete strategy.';
+      setError(message);announceAction('error',message);
     }
   };
 
@@ -116,8 +133,10 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
       await addItem(newChecklistLabel.trim(), newChecklistRequired);
       setNewChecklistLabel('');
       setNewChecklistRequired(true);
+      announceAction('success','Checklist item saved.');
     } catch (err: unknown) {
-      setError(err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to add checklist item.');
+      const message=err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to add checklist item.';
+      setError(message);announceAction('error',message);
     }
     setAddingChecklist(false);
   };
@@ -125,365 +144,99 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
   const handleDeleteChecklistItem = async (id: string) => {
     try {
       await deleteItem(id);
+      announceAction('success','Checklist item removed.');
     } catch (err: unknown) {
-      setError(err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to delete checklist item.');
+      const message=err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to delete checklist item.';
+      setError(message);announceAction('error',message);
     }
   };
 
 
-  const labelCls = 'block text-xs font-semibold text-secondary mb-1.5 uppercase tracking-wide';
+  const labelCls = 'block text-xs font-semibold text-secondary mb-1.5';
   const inputCls = 'input-field';
+  const riskPerTrade = settings?.max_risk_per_trade_pct ?? 1;
+  const dailyLoss = settings?.max_daily_loss_pct ?? 3;
+
+  const goToStep = (next: number) => { setError(null); setStep(next); };
 
   return (
-    <div className="min-h-screen bg-primary flex items-center justify-center p-4">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] rounded-full bg-orange-500/8 blur-[120px] animate-drift" />
-        <div className="absolute bottom-1/4 right-1/4 w-[300px] h-[300px] rounded-full bg-amber-500/6 blur-[100px] animate-float-slow" />
-      </div>
-
-      <div className="relative w-full max-w-2xl">
-        <div className="mb-5 flex justify-end"><ColorPaletteControl compact /></div>
-        <div className="text-center mb-8">
-          <div className="inline-flex p-3 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-700 text-white mb-3 shadow-lg shadow-orange-500/20">
-            <TrendingUp size={32} />
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight">Young-Money-Fx</h1>
-          <p className="text-sm text-muted mt-1">Let's get you set up</p>
-        </div>
-
-        <div className="flex items-center justify-center gap-2 mb-8">
-          {STEPS.map((s, i) => {
-            const Icon = s.icon;
-            const done = i < step;
-            const active = i === step;
-            return (
-              <div key={i} className="flex items-center">
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                  active ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20' :
-                  done ? 'text-success-500' : 'text-muted'
-                }`}>
-                  {done ? <Check size={14} /> : <Icon size={14} />}
-                  <span className="hidden sm:inline">{s.title}</span>
-                </div>
-                {i < STEPS.length - 1 && <div className={`w-8 h-0.5 mx-1 rounded-full ${done ? 'bg-success-500/30' : 'bg-border'}`} />}
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="card card-glass p-5 sm:p-8 shadow-xl">
-          {error && (
-            <div className="mb-4 p-3 rounded-lg bg-error-500/10 border border-error-500/20 text-sm text-error-500">
-              {error}
-            </div>
-          )}
-
-          {step === 0 && (
-            <div className="text-center animate-fade-in">
-              <div className="inline-flex p-4 rounded-2xl bg-orange-500/10 mb-5">
-                <Brain size={36} className="text-orange-500" />
-              </div>
-              <h2 className="text-xl font-bold mb-3">Welcome to your trading journal</h2>
-              <p className="text-secondary text-sm leading-relaxed max-w-md mx-auto mb-6">
-                This is your space for honest self-reflection. Before you start logging trades,
-                let's set up your account size and strategies — each with its own checklist.
-              </p>
-              <div className="grid grid-cols-3 gap-3 mb-6">
-                <div className="p-3 rounded-xl bg-secondary border border-themed">
-                  <Wallet size={20} className="text-orange-500 mx-auto mb-1.5" />
-                  <p className="text-xs font-semibold">Account</p>
-                  <p className="text-[10px] text-muted">Risk-based calc</p>
-                </div>
-                <div className="p-3 rounded-xl bg-secondary border border-themed">
-                  <Target size={20} className="text-amber-500 mx-auto mb-1.5" />
-                  <p className="text-xs font-semibold">Strategies</p>
-                  <p className="text-[10px] text-muted">Per-strategy rules</p>
-                </div>
-                <div className="p-3 rounded-xl bg-secondary border border-themed">
-                  <ListChecks size={20} className="text-success-500 mx-auto mb-1.5" />
-                  <p className="text-xs font-semibold">Checklists</p>
-                  <p className="text-[10px] text-muted">Enforce discipline</p>
-                </div>
-              </div>
-              <button onClick={() => setStep(1)} className="btn-primary mx-auto">
-                Get Started <ArrowRight size={18} />
-              </button>
-            </div>
-          )}
-
-          {step === 1 && (
-            <div className="animate-fade-in">
-              <div className="text-center mb-6">
-                <div className="inline-flex p-3 rounded-2xl bg-orange-500/10 mb-3">
-                  <Wallet size={28} className="text-orange-500" />
-                </div>
-                <h2 className="text-lg font-bold mb-2">What's your account size?</h2>
-                <p className="text-secondary text-sm max-w-md mx-auto">
-                  This is your starting balance. All risk calculations — daily loss limits,
-                  risk per trade, drawdown — are based on this number.
-                </p>
-              </div>
-
-              <div className="space-y-4 mb-6">
-                <div>
-                  <label className={labelCls}>Account Type</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setAccountType('personal')}
-                      className={`p-4 rounded-xl border-2 transition-all text-center ${
-                        accountType === 'personal'
-                          ? 'border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400'
-                          : 'border-themed bg-secondary text-secondary hover:border-muted'
-                      }`}
-                    >
-                      <Wallet size={24} className="mx-auto mb-2" />
-                      <p className="text-sm font-semibold">Personal Funds</p>
-                      <p className="text-[10px] text-muted">Your own capital</p>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAccountType('propfirm')}
-                      className={`p-4 rounded-xl border-2 transition-all text-center ${
-                        accountType === 'propfirm'
-                          ? 'border-orange-500 bg-orange-500/10 text-orange-600 dark:text-orange-400'
-                          : 'border-themed bg-secondary text-secondary hover:border-muted'
-                      }`}
-                    >
-                      <Target size={24} className="mx-auto mb-2" />
-                      <p className="text-sm font-semibold">Prop Firm</p>
-                      <p className="text-[10px] text-muted">Funded account</p>
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className={labelCls}>Account Balance ($)</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold text-muted">$</span>
-                    <input
-                      type="number"
-                      step="100"
-                      min="0"
-                      className={`${inputCls} text-2xl font-bold pl-8`}
-                      placeholder="10000"
-                      value={accountBalance}
-                      onChange={e => setAccountBalance(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && handleSaveAccount().then(ok => ok && setStep(2))}
-                    />
-                  </div>
-                  <p className="text-[11px] text-muted mt-1.5">You can change this later in Risk Guardian settings</p>
-                </div>
-
-                <div className="p-4 rounded-xl bg-orange-500/5 border border-orange-500/15">
-                  <p className="text-xs font-semibold text-secondary mb-2">Based on your balance, your defaults will be:</p>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="flex items-center gap-2">
-                      <Zap size={12} className="text-amber-500" />
-                      <span className="text-muted">Max risk/trade:</span>
-                      <span className="font-mono font-bold">${((parseFloat(accountBalance) || 0) * 0.01).toFixed(0)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Brain size={12} className="text-orange-500" />
-                      <span className="text-muted">Daily loss limit:</span>
-                      <span className="font-mono font-bold">${((parseFloat(accountBalance) || 0) * 0.03).toFixed(0)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between pt-4 border-t border-themed">
-                <button onClick={() => setStep(0)} className="btn-ghost text-sm">Back</button>
-                <button
-                  onClick={async () => {
-                    const ok = await handleSaveAccount();
-                    if (ok) setStep(2);
-                  }}
-                  disabled={savingAccount}
-                  className="btn-primary text-sm"
-                >
-                  {savingAccount ? <Loader2 size={16} className="animate-spin" /> : <ChevronRight size={16} />}
-                  {savingAccount ? 'Saving...' : 'Continue'}
+    <div className="ym-workspace-setup">
+      <header className="ym-setup-heading">
+        <div><p className="ym-setup-kicker">WORKSPACE / GETTING STARTED</p><h1>Workspace setup</h1><p>A few useful defaults. A clearer start to your next session.</p></div>
+        <BrandLogo />
+      </header>
+      <div className="ym-setup-layout">
+        <aside className="ym-setup-guide" aria-label="Setup guide">
+          <div className="ym-setup-progress-heading"><span>YOUR FOUNDATION</span><strong>0{step + 1} <small>/ 04</small></strong></div>
+          <ol className="ym-setup-steps" aria-label="Setup progress">
+            {STEPS.map((item, index) => {
+              const Icon = item.icon;
+              const done = index < step;
+              return <li key={item.title} data-active={index === step} data-done={done}>
+                <button type="button" disabled={index > step || savingAccount || addingStrategy} onClick={() => goToStep(index)} aria-current={index === step ? 'step' : undefined}>
+                  <span className="ym-setup-step-icon">{done ? <Check size={17} /> : <Icon size={17} />}</span>
+                  <span><strong>{item.title}</strong><small>{item.detail}</small></span>
                 </button>
+              </li>;
+            })}
+          </ol>
+          <details className="ym-setup-guide-help"><summary>Why these steps?</summary><p>Each step establishes a practical default. You can change your risk, strategies and checklists later.</p></details>
+        </aside>
+
+        <section className="ym-setup-panel card" aria-label={`${STEPS[step].title} setup`}>
+          {error && <p className="ym-setup-error" role="alert">{error}</p>}
+          {step === 0 && <div className="ym-setup-stage">
+            <p className="ym-setup-step-label">STEP 01 / WELCOME</p>
+            <h2 ref={stepHeading} tabIndex={-1}>Build your trading foundation.</h2>
+            <p className="ym-setup-lead">Four short steps. Your trading process stays yours.</p>
+            <div className="ym-setup-welcome-grid">
+              <div className="ym-setup-welcome-list">
+                <div><span><Wallet size={20} /></span><div><h3>Start with your capital</h3><p>Anchor your workspace risk defaults.</p></div></div>
+                <div><span><Target size={20} /></span><div><h3>Name your approach</h3><p>Keep the strategies you trade close at hand.</p></div></div>
+                <div><span><ListChecks size={20} /></span><div><h3>Make the process repeatable</h3><p>Turn entry rules into a practical checklist.</p></div></div>
               </div>
+              <figure className="ym-setup-feature-media" aria-label="Illustration of a structured trading workspace">
+                <img src="/assets/page-art/workspace-setup.svg" alt="Decorative trading workstation composition" width="960" height="540" loading="eager"/>
+                <figcaption><strong>YOUR WORKSPACE</strong><span>Risk · Strategy · Review</span></figcaption>
+              </figure>
             </div>
-          )}
+            <div className="ym-setup-footer"><p>One step at a time.</p><button type="button" onClick={() => goToStep(1)} className="btn-primary">Get started <ArrowRight size={17} /></button></div>
+          </div>}
 
-          {step === 2 && (
-            <div className="animate-fade-in">
-              <div className="text-center mb-6">
-                <div className="inline-flex p-3 rounded-2xl bg-orange-500/10 mb-3">
-                  <Target size={28} className="text-orange-500" />
-                </div>
-                <h2 className="text-lg font-bold mb-2">Define your strategies & checklists</h2>
-                <p className="text-secondary text-sm max-w-md mx-auto">
-                  Each strategy gets its own checklist. When you log a trade, the checklist
-                  for that strategy appears automatically.
-                </p>
-              </div>
-
-              <div className="space-y-3 mb-4">
-                <div>
-                  <label className={labelCls}>Strategy Name</label>
-                  <input
-                    className={inputCls}
-                    placeholder="e.g. London Breakout, Trend Following, Scalping"
-                    value={strategyName}
-                    onChange={e => setStrategyName(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleAddStrategy()}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Description (optional)</label>
-                  <input
-                    className={inputCls}
-                    placeholder="Brief description of when you use this strategy"
-                    value={strategyDesc}
-                    onChange={e => setStrategyDesc(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleAddStrategy()}
-                  />
-                </div>
-                <button onClick={handleAddStrategy} disabled={addingStrategy} className="btn-secondary w-full justify-center">
-                  <Plus size={16} /> {addingStrategy ? 'Adding...' : 'Add Strategy'}
-                </button>
-              </div>
-
-              {strategies.length > 0 && (
-                <div className="space-y-2 mb-4">
-                  <p className="text-xs font-semibold text-muted uppercase tracking-wide">Your Strategies ({strategies.length})</p>
-                  {strategies.map(s => (
-                    <div key={s.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer group ${
-                      selectedStrategyId === s.id ? 'border-orange-500 bg-orange-500/5' : 'border-themed bg-secondary hover:border-muted'
-                    }`} onClick={() => setSelectedStrategyId(s.id)}>
-                      <div className={`p-1.5 rounded-lg ${selectedStrategyId === s.id ? 'bg-orange-500/15' : 'bg-orange-500/10'}`}>
-                        <Target size={16} className="text-orange-500" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold truncate">{s.name}</p>
-                        {s.description && <p className="text-xs text-muted truncate">{s.description}</p>}
-                      </div>
-                      {selectedStrategyId === s.id && <Check size={16} className="text-orange-500" />}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDeleteStrategy(s.id); }}
-                        className="text-muted hover:text-error-500 transition-colors opacity-0 group-hover:opacity-100"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {selectedStrategyId && checklistItems.length >= 0 && (
-                <div className="p-4 rounded-xl bg-secondary border border-themed space-y-3">
-                  <div className="flex items-center gap-2">
-                    <ListChecks size={16} className="text-orange-500" />
-                    <p className="text-xs font-semibold text-secondary uppercase tracking-wide">
-                      Checklist: {strategies.find(s => s.id === selectedStrategyId)?.name}
-                    </p>
-                  </div>
-
-                  {checklistItems.length > 0 ? (
-                    <div className="space-y-2">
-                      {checklistItems.map((item, idx) => (
-                        <div key={item.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-card border border-themed group">
-                          <span className="text-xs text-muted font-mono flex-shrink-0">{idx + 1}</span>
-                          <span className="text-sm flex-1 truncate">{item.label}</span>
-                          <span className={`badge ${item.is_required ? 'badge-error' : 'badge-neutral'} flex-shrink-0`}>
-                            {item.is_required ? 'Required' : 'Optional'}
-                          </span>
-                          <button
-                            onClick={() => handleDeleteChecklistItem(item.id)}
-                            className="text-muted hover:text-error-500 transition-colors opacity-0 group-hover:opacity-100"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted text-center py-2">No checklist items yet. Add some below.</p>
-                  )}
-
-                  <div className="pt-2 border-t border-themed">
-                    <input
-                      type="text"
-                      className={inputCls}
-                      placeholder="e.g. 'Confirmed market structure on 4H chart'"
-                      value={newChecklistLabel}
-                      onChange={e => setNewChecklistLabel(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && handleAddChecklistItem()}
-                    />
-                    <div className="flex items-center gap-3 mt-2">
-                      <label className="flex items-center gap-2 text-sm cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={newChecklistRequired}
-                          onChange={e => setNewChecklistRequired(e.target.checked)}
-                          className="w-4 h-4 rounded accent-orange-500"
-                        />
-                        <span className="text-secondary">Required</span>
-                      </label>
-                      <button
-                        onClick={handleAddChecklistItem}
-                        disabled={addingChecklist || !newChecklistLabel.trim()}
-                        className="btn-primary ml-auto"
-                      >
-                        {addingChecklist ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-                        Add Item
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {strategies.length === 0 && (
-                <div className="text-center py-6 mb-4">
-                  <p className="text-xs text-muted">Add at least one strategy to continue</p>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between pt-4 border-t border-themed">
-                <button onClick={() => setStep(1)} className="btn-ghost text-sm">Back</button>
-                <button
-                  onClick={() => setStep(3)}
-                  disabled={strategies.length === 0}
-                  className="btn-primary text-sm"
-                >
-                  Continue <ArrowRight size={16} />
-                </button>
-              </div>
+          {step === 1 && <div className="ym-setup-stage">
+            <p className="ym-setup-step-label">STEP 02 / RISK BASELINE</p>
+            <h2 ref={stepHeading} tabIndex={-1}>Set your planning balance.</h2>
+            <p className="ym-setup-lead">Used for planning risk—not a live broker balance.</p><div className="ym-setup-helper-trigger"><details><summary>How does this work?</summary><p>Connected account equity and broker balances are tracked separately. Update your planning balance here when your risk baseline changes.</p></details></div>
+            <div className="ym-setup-fields">
+              <div><label htmlFor="setup-account-balance" className={labelCls}>Planning balance (USD)</label><div className="ym-setup-balance-input"><span aria-hidden="true">$</span><input id="setup-account-balance" type="number" step="100" min="0.01" className={inputCls} value={accountBalance} onChange={event => { setBalanceEdited(true); setAccountBalance(event.target.value); }} onKeyDown={event => { if (event.key === 'Enter' && !savingAccount && !loadingSettings) void handleSaveAccount().then(ok => ok && goToStep(2)); }} /></div></div>
+              <div className="ym-setup-risk-preview"><div><ShieldCheck size={17} /><strong>{settings ? 'Your current risk settings' : 'Starting risk defaults'}</strong></div><dl><div><dt>Risk per trade · {riskPerTrade}%</dt><dd>${((parseFloat(accountBalance) || 0) * riskPerTrade / 100).toFixed(0)}</dd></div><div><dt>Daily loss limit · {dailyLoss}%</dt><dd>${((parseFloat(accountBalance) || 0) * dailyLoss / 100).toFixed(0)}</dd></div></dl><p>You can adjust these limits in Risk Management.</p></div>
             </div>
-          )}
+            <div className="ym-setup-footer"><button type="button" className="btn-ghost" onClick={() => goToStep(0)}>Back</button><button type="button" className="btn-primary" disabled={savingAccount || loadingSettings} onClick={async () => { if (await handleSaveAccount()) goToStep(2); }}>{savingAccount ? <Loader2 size={16} className="animate-spin" /> : <ChevronRight size={16} />}{savingAccount ? 'Saving…' : 'Continue'}</button></div>
+          </div>}
 
-          {step === 3 && (
-            <div className="text-center animate-fade-in">
-              <div className="inline-flex p-4 rounded-2xl bg-success-500/10 mb-5">
-                <Check size={36} className="text-success-500" />
-              </div>
-              <h2 className="text-xl font-bold mb-3">You're all set!</h2>
-              <p className="text-secondary text-sm leading-relaxed max-w-md mx-auto mb-6">
-                You have {strategies.length} {strategies.length === 1 ? 'strategy' : 'strategies'} set up,
-                each with its own checklist. When you log a trade, you'll pick a strategy and
-                its checklist will guide your entry. Close the trade later to add your review.
-              </p>
+          {step === 2 && <div className="ym-setup-stage">
+            <p className="ym-setup-step-label">STEP 03 / STRATEGIES</p>
+            <h2 ref={stepHeading} tabIndex={-1}>Give your approach a name.</h2>
+            <p className="ym-setup-lead">Choose a strategy to review its checklist, or add the next approach you want to track.</p>
+            <div className="ym-setup-strategy-form"><div><label htmlFor="setup-strategy-name" className={labelCls}>Strategy name</label><input id="setup-strategy-name" className={inputCls} placeholder="e.g. London continuation" value={strategyName} onChange={event => setStrategyName(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !addingStrategy) void handleAddStrategy(); }} /></div><div><label htmlFor="setup-strategy-description" className={labelCls}>Description <span className="text-muted">(optional)</span></label><input id="setup-strategy-description" className={inputCls} placeholder="When do you use this strategy?" value={strategyDesc} onChange={event => setStrategyDesc(event.target.value)} /></div><button type="button" className="btn-secondary" onClick={handleAddStrategy} disabled={addingStrategy}>{addingStrategy ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}{addingStrategy ? 'Adding…' : 'Add strategy'}</button></div>
+            {strategies.length > 0 && <div className="ym-setup-strategy-list" aria-label="Your strategies">{strategies.map(strategy => <div key={strategy.id} data-selected={selectedStrategyId === strategy.id}><button type="button" onClick={() => setSelectedStrategyId(strategy.id)} aria-pressed={selectedStrategyId === strategy.id}><Target size={17} /><span><strong>{strategy.name}</strong>{strategy.description && <small>{strategy.description}</small>}</span>{selectedStrategyId === strategy.id && <Check size={17} />}</button><button type="button" className="ym-setup-delete" onClick={() => handleDeleteStrategy(strategy.id)} aria-label={`Delete ${strategy.name}`}><Trash2 size={15} /></button></div>)}</div>}
+            {selectedStrategyId && <section className="ym-setup-checklist" aria-label="Strategy checklist"><div className="ym-setup-checklist-title"><ListChecks size={18} /><h3>{strategies.find(strategy => strategy.id === selectedStrategyId)?.name} checklist</h3></div>
+              {checklistItems.length ? <ol>{checklistItems.map((item, index) => <li key={item.id}><span className="ym-setup-check-index">{String(index + 1).padStart(2, '0')}</span><span>{item.label}</span><small>{item.is_required ? 'Required' : 'Optional'}</small><button type="button" className="ym-setup-delete" aria-label={`Delete checklist item ${item.label}`} onClick={() => handleDeleteChecklistItem(item.id)}><Trash2 size={14} /></button></li>)}</ol> : <p className="text-sm text-muted">Add the conditions you want to check before entry.</p>}
+              <label htmlFor="setup-checklist-item" className="sr-only">New checklist item</label><input id="setup-checklist-item" className={inputCls} placeholder="Add an entry condition…" value={newChecklistLabel} onChange={event => setNewChecklistLabel(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !addingChecklist) void handleAddChecklistItem(); }} /><div className="ym-setup-checklist-actions"><label><input type="checkbox" checked={newChecklistRequired} onChange={event => setNewChecklistRequired(event.target.checked)} />Required before entry</label><button type="button" className="btn-secondary" onClick={handleAddChecklistItem} disabled={addingChecklist || !newChecklistLabel.trim()}>{addingChecklist ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}Add item</button></div>
+            </section>}
+            {!strategies.length && <p className="ym-setup-hint">Add at least one strategy to continue.</p>}
+            <div className="ym-setup-footer"><button type="button" className="btn-ghost" onClick={() => goToStep(1)}>Back</button><button type="button" className="btn-primary" disabled={!strategies.length || addingStrategy} onClick={() => goToStep(3)}>Continue <ArrowRight size={16} /></button></div>
+          </div>}
 
-              {strategies.length > 0 && (
-                <div className="flex flex-wrap justify-center gap-2 mb-6">
-                  {strategies.map(s => (
-                    <span key={s.id} className="badge badge-brand">
-                      <Target size={12} /> {s.name}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              <button onClick={onComplete} className="btn-primary mx-auto">
-                Start Journaling <ArrowRight size={18} />
-              </button>
-            </div>
-          )}
-        </div>
+          {step === 3 && <div className="ym-setup-stage ym-setup-ready">
+            <p className="ym-setup-step-label">STEP 04 / READY</p><span className="ym-setup-ready-icon"><Check size={30} /></span>
+            <h2 ref={stepHeading} tabIndex={-1}>Your workspace is ready.</h2>
+            <p className="ym-setup-lead">You have a planning balance and {strategies.length} {strategies.length === 1 ? 'strategy' : 'strategies'} to build on. Choose a strategy when you capture a trade, then return to review the decision.</p>
+            <div className="ym-setup-ready-summary"><div><span>Planning balance</span><strong>${Number(accountBalance).toLocaleString()}</strong></div><div><span>Strategies</span><strong>{strategies.length}</strong></div></div>
+            <div className="ym-setup-ready-strategies">{strategies.map(strategy => <span key={strategy.id}><Target size={13} />{strategy.name}</span>)}</div>
+            <div className="ym-setup-footer"><button type="button" className="btn-ghost" onClick={() => goToStep(2)}>Back</button><button type="button" className="btn-primary" onClick={onComplete}>Open my dashboard <ArrowRight size={17} /></button></div>
+          </div>}
+        </section>
       </div>
     </div>
   );

@@ -1,8 +1,11 @@
+import '@/page-results.css';
+import { Select } from '@/components/Select';
 import { useMemo, useState } from 'react';
 import { BookOpen, Plus, Trash2, Save, Target, Eye, CheckSquare, FileText, Calendar } from 'lucide-react';
 import { ScreenshotUpload } from '@/components/ScreenshotUpload';
 import { useJournalEntries, useTrades, useStrategies, useSetups, useMarketInstruments, useTradingAccounts } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
+import { useMt5Lifecycles } from '@/hooks/useMt5Lifecycles';
 import { formatPercent } from '@/lib/utils';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
@@ -13,6 +16,9 @@ import { SuggestInput } from '@/components/ui/SuggestInput';
 import { GOAL_SUGGESTIONS, FOCUS_SUGGESTIONS, NOTE_SUGGESTIONS } from '@/lib/suggestions';
 import { MediaAudioPlayer, MediaImage } from '@/components/MediaPreview';
 import { VoiceRecorder } from '@/components/VoiceRecorder';
+import { ReplayButton } from '@/components/DecisionReplay';
+import { useDecisionReviews } from '@/hooks/useDecisionReviews';
+import { replayTargets, referenceFor } from '@/lib/decisionReplay';
 
 const DEFAULT_CHECKLIST: ChecklistItem[] = [
   { label: 'Reviewed higher timeframe trend', checked: false },
@@ -20,13 +26,13 @@ const DEFAULT_CHECKLIST: ChecklistItem[] = [
   { label: 'Checked economic calendar for news', checked: false },
   { label: 'Defined entry and exit criteria', checked: false },
   { label: 'Set proper position size for risk', checked: false },
-  { label: 'No emotional bias or FOMO', checked: false },
+  { label: 'Named what triggered my decision', checked: false },
 ];
 
 const DEFAULT_PROMPTS: ReviewPrompt[] = [
   { question: 'Did I follow my trading plan today?', answer: '' },
   { question: 'What was my best decision?', answer: '' },
-  { question: 'What was my worst decision?', answer: '' },
+  { question: 'What made me act when I did?', answer: '' },
   { question: 'How did I manage risk?', answer: '' },
   { question: 'What will I improve tomorrow?', answer: '' },
 ];
@@ -35,22 +41,32 @@ export function JournalPage() {
   const { user } = useAuth();
   const [source, setSource] = useState('all');
   const sourceFilter = <label className="mb-4 block max-w-sm text-xs font-semibold text-secondary">Trade source
-    <select className="input-field mt-1.5" value={source} onChange={event => setSource(event.target.value)}>
+    <Select className="input-field mt-1.5" value={source} onChange={event => setSource(event.target.value)}>
       <option value="all">All sources</option><option value="manual">Manual</option><option value="mt5">MT5</option>
-    </select>
+    </Select>
   </label>;
   const { entries, loading, upsertEntry, deleteEntry } = useJournalEntries(user?.id);
   const { trades } = useTrades(user?.id);
+  const { positions: brokerLifecycles, error: lifecycleError } = useMt5Lifecycles(user?.id);
   const { strategies } = useStrategies(user?.id);
   const { setups } = useSetups(user?.id);
   const { instruments } = useMarketInstruments(user?.id);
   const { accounts } = useTradingAccounts(user?.id);
+  const accountNames = useMemo(() => new Map(accounts.map(a => [a.id, a.name])), [accounts]);
   const [showForm, setShowForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
   const [filterType, setFilterType] = useState<JournalType | ''>('');
 
   const [accountFilter, setAccountFilter] = useState('all');
   const visibleTrades = useMemo(() => trades.filter(t => (source === 'all' || (t.trade_source ?? 'manual') === source) && (accountFilter === 'all' || (t.account_id || 'unassigned') === accountFilter)), [trades, source, accountFilter]);
+  const { rows: decisionReviews } = useDecisionReviews(user?.id);
+  const targetsByReference = useMemo(() => new Map(replayTargets(visibleTrades, brokerLifecycles.filter(p =>
+    source !== 'manual' && (accountFilter === 'all' || p.account_id === accountFilter)
+  )).map(t => [referenceFor(t), t])), [visibleTrades, brokerLifecycles, source, accountFilter]);
+  const savedDecisions = decisionReviews.filter(review => targetsByReference.has(review.reference));
+  const journalLifecycles = useMemo(() => brokerLifecycles.filter(row =>
+    source !== 'manual' && (accountFilter === 'all' || row.account_id === accountFilter)
+  ).slice(0, 12), [brokerLifecycles, source, accountFilter]);
   const filtered = useMemo(() => {
     return entries.filter(entry => (!filterType || entry.entry_type === filterType) && (accountFilter === 'all' || (entry.account_id || 'unassigned') === accountFilter));
   }, [entries, filterType, accountFilter]);
@@ -80,11 +96,48 @@ export function JournalPage() {
       />
 
       {sourceFilter}
+      {savedDecisions.length > 0 && <section className="card p-4 mb-5" aria-label="Saved decision replays">
+        <h2 className="text-base font-bold">Your decision replays</h2>
+        <ul className="ym-review-ledger">{savedDecisions.slice(0, 12).map(review => <li key={review.id}>
+          <div><strong>{review.symbol}</strong><small className="block text-secondary">{[accountNames.get(review.account_id || ''), review.entry_time?.slice(0,10), review.strategy_name, review.model_name].filter(Boolean).join(' · ')}</small>
+          {review.trigger && <p>{review.trigger}</p>}{review.note && <p className="line-clamp-2">{review.note}</p>}</div>
+          <ReplayButton target={targetsByReference.get(review.reference)!}/>
+        </li>)}</ul>
+      </section>}
+      {source !== 'manual' && <section className="card p-4 sm:p-5 mb-5 space-y-3" aria-label="Broker execution context for journaling">
+        <div>
+          <p className="text-[10px] uppercase font-bold tracking-wider text-muted">CAPTURED EXECUTION CONTEXT</p>
+          <h2 className="text-base font-bold mt-1">Broker position lifecycles</h2>
+          <p className="text-xs text-muted mt-1">Use these verified identifiers and execution details when writing journal notes. Existing entries, tags, attachments and manual trade matches remain unchanged.</p>
+        </div>
+        {lifecycleError && <p role="status" className="text-xs text-muted">Broker execution summaries are temporarily unavailable; your journal entries are unaffected.</p>}
+        {journalLifecycles.length === 0 ? <p className="text-xs text-muted">No broker position lifecycles match the current filters yet.</p> :
+          <div className="grid gap-2 sm:grid-cols-2">
+            {journalLifecycles.map(row => {
+              const item = row.summary;
+              return <details key={row.link + ':' + row.lifecycle_id} className="rounded-lg border border-themed bg-secondary p-3 text-xs">
+                <summary className="cursor-pointer flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-semibold">{[item.symbol, accountNames.get(row.account_id), item.direction, item.status].filter(Boolean).join(' · ')}</span>
+                  <span className="font-mono text-muted">#{item.position_id}</span>
+                </summary>
+                <dl className="mt-3 grid grid-cols-2 gap-2">
+                  <div><dt className="text-muted">Entry</dt><dd className="font-mono">{item.first_entry_at}</dd></div>
+                  <div><dt className="text-muted">Final exit</dt><dd className="font-mono">{item.final_exit_at || 'Still open'}</dd></div>
+                  <div><dt className="text-muted">Original SL</dt><dd className="font-mono">{item.initial_sl ?? 'Unavailable'}</dd></div>
+                  <div><dt className="text-muted">Risk source</dt><dd>{item.initial_sl_provenance || 'Unverified'}</dd></div>
+                  <div><dt className="text-muted">Net realized R</dt><dd className="font-mono">{item.realized_r == null ? 'Unavailable' : item.realized_r + 'R'}</dd></div>
+                  <div><dt className="text-muted">Movement</dt><dd className="font-mono">{item.movement == null ? 'Unknown' : item.movement + ' ' + item.movement_unit}</dd></div>
+                </dl>
+                <p className="text-muted my-3">Execution ID {row.lifecycle_id}</p><ReplayButton target={{kind:'position', position:row}}/>
+              </details>;
+            })}
+          </div>}
+      </section>}
       <label className="mb-4 block max-w-sm text-xs font-semibold text-secondary">Journal account
-        <select className="input-field mt-1.5" value={accountFilter} onChange={event => setAccountFilter(event.target.value)}>
+        <Select className="input-field mt-1.5" value={accountFilter} onChange={event => setAccountFilter(event.target.value)}>
           <option value="all">All accounts</option><option value="unassigned">Unassigned</option>
           {accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}
-        </select>
+        </Select>
       </label>
       <div className="flex gap-2 mb-4">
         {(['', 'daily', 'weekly', 'monthly'] as const).map(t => (
@@ -105,7 +158,7 @@ export function JournalPage() {
           <EmptyState icon={<BookOpen size={40} />} title="No journal entries yet" message="Create a daily, weekly, or monthly journal entry to plan your sessions and reflect on your trading." />
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="ym-journal-timeline">
           {filtered.map(entry => (
             <JournalCard key={entry.id} entry={entry} trades={visibleTrades} accounts={accounts} onEdit={() => { setEditingEntry(entry); setShowForm(true); }} onDelete={() => handleDelete(entry.id)} />
           ))}
@@ -148,11 +201,11 @@ function JournalCard({ entry, trades, accounts, onEdit, onDelete }: { entry: Jou
   };
 
   return (
-    <div className="card p-5 card-hover">
+    <article className="ym-journal-spread"><aside className="ym-journal-date"><time dateTime={entry.entry_date}><strong>{format(parseISO(entry.entry_date), 'dd')}</strong><span>{format(parseISO(entry.entry_date), 'MMM yyyy')}</span><small>{format(parseISO(entry.entry_date), 'EEEE')}</small></time></aside><div className="ym-journal-sheet card p-5">
       <div className="flex items-start justify-between mb-3">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className={`badge ${typeColors[entry.entry_type]}`}>{entry.entry_type}</span>
+            <span className={`badge ${typeColors[entry.entry_type]}`}>{entry.decision_kind === 'pass' ? 'Deliberate pass' : entry.entry_type}</span>
             <span className="text-sm font-semibold">{format(parseISO(entry.entry_date), 'MMM d, yyyy')}</span>
           </div>
           {entryTrades.length > 0 && (
@@ -160,12 +213,12 @@ function JournalCard({ entry, trades, accounts, onEdit, onDelete }: { entry: Jou
           )}
         </div>
         <div className="flex gap-1">
-          <button onClick={onEdit} className="btn-ghost p-1.5"><FileText size={16} /></button>
-          <button onClick={onDelete} className="btn-ghost p-1.5 text-error-500 hover:bg-error-500/10"><Trash2 size={16} /></button>
+          <button type="button" aria-label={`Edit journal entry for ${entry.entry_date}`} onClick={onEdit} className="btn-ghost p-1.5"><FileText size={16} /></button>
+          <button type="button" aria-label={`Delete journal entry for ${entry.entry_date}`} onClick={onDelete} className="btn-ghost p-1.5 text-error-500 hover:bg-error-500/10"><Trash2 size={16} /></button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="ym-journal-reflections">
         {entry.daily_goals && (
           <div>
             <p className="text-xs font-semibold text-secondary mb-1 flex items-center gap-1"><Target size={12} /> Goals</p>
@@ -223,7 +276,7 @@ function JournalCard({ entry, trades, accounts, onEdit, onDelete }: { entry: Jou
         </div>
       )}
       {entry.voice_note_url && <div className="mt-3"><MediaAudioPlayer source={entry.voice_note_url} /></div>}
-    </div>
+    </div></article>
   );
 }
 
@@ -295,19 +348,19 @@ function JournalForm({ initial, trades, strategies, setups, instruments, account
         </div>
         <div>
           <label className={labelCls}>Entry Type</label>
-          <select className={inputCls} value={type} onChange={e => setType(e.target.value as JournalType)}>
+          <Select className={inputCls} value={type} onChange={e => setType(e.target.value as JournalType)}>
             <option value="daily">Daily</option>
             <option value="weekly">Weekly</option>
             <option value="monthly">Monthly</option>
-          </select>
+          </Select>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div><label className={labelCls}>Strategy practiced</label><select className={inputCls} value={strategyId} onChange={e => setStrategyId(e.target.value)}><option value="">None</option>{strategies.map(strategy => <option key={strategy.id} value={strategy.id}>{strategy.name}</option>)}</select></div>
-        <div><label className={labelCls}>Setup</label><select className={inputCls} value={setupId} onChange={e => setSetupId(e.target.value)}><option value="">None</option>{setups.map(setup => <option key={setup.id} value={setup.id}>{setup.name}</option>)}</select></div>
-        <div><label className={labelCls}>Instrument</label><select className={inputCls} value={instrumentId} onChange={e => setInstrumentId(e.target.value)}><option value="">None</option>{instruments.map(item => <option key={item.id} value={item.id}>{item.symbol}</option>)}</select></div>
-        <div><label className={labelCls}>Account</label><select className={inputCls} value={accountId} onChange={e => setAccountId(e.target.value)}><option value="">None</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}</select></div>
+        <div><label className={labelCls}>Strategy practiced</label><Select className={inputCls} value={strategyId} onChange={e => setStrategyId(e.target.value)}><option value="">None</option>{strategies.map(strategy => <option key={strategy.id} value={strategy.id}>{strategy.name}</option>)}</Select></div>
+        <div><label className={labelCls}>Setup</label><Select className={inputCls} value={setupId} onChange={e => setSetupId(e.target.value)}><option value="">None</option>{setups.map(setup => <option key={setup.id} value={setup.id}>{setup.name}</option>)}</Select></div>
+        <div><label className={labelCls}>Instrument</label><Select className={inputCls} value={instrumentId} onChange={e => setInstrumentId(e.target.value)}><option value="">None</option>{instruments.map(item => <option key={item.id} value={item.id}>{item.symbol}</option>)}</Select></div>
+        <div><label className={labelCls}>Account</label><Select className={inputCls} value={accountId} onChange={e => setAccountId(e.target.value)}><option value="">None</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}</Select></div>
         <div><label className={labelCls}>Trades linked ({linkedTradeIds.length})</label><div className="max-h-36 overflow-y-auto rounded-lg border border-themed p-2 space-y-1">{trades.slice(0, 30).map(trade => <label key={trade.id} className="flex gap-2 items-center text-xs"><input type="checkbox" checked={linkedTradeIds.includes(trade.id)} onChange={e => setLinkedTradeIds(ids => e.target.checked ? [...ids, trade.id] : ids.filter(id => id !== trade.id))} />{trade.pair} · {format(parseISO(trade.entry_time), 'MMM d')} · {trade.outcome || trade.status}</label>)}</div></div>
       </div>
 

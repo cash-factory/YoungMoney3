@@ -1,7 +1,9 @@
-import { accountLedger } from '@/lib/tradeFinance';
+import { riskCapital } from '@/lib/tradeFinance';
+import { pnlTone, signedMoney } from '@/lib/tradingTone';
 import type { Trade, TradingAccountAdjustment } from '@/lib/types';
 import { useEffect, useMemo, useState } from 'react';
 import { Calculator, RotateCcw, ShieldAlert, Target } from 'lucide-react';
+import { ThemedSelect } from '@/components/ThemedSelect';
 import { useAuth } from '@/context/AuthContext';
 import { useMarketInstruments, useTradingAccounts } from '@/hooks/useData';
 import { calculatePositionSize, instrumentDistanceLabel, instrumentDistanceStep, instrumentPnl } from '@/lib/instrumentMath';
@@ -32,7 +34,8 @@ export function TradeCalculator({ trades, adjustments }: { trades: Trade[]; adju
 
   const account = accounts.find(item => item.id === accountId) || null;
   const instrument = instruments.find(item => item.id === instrumentId) || null;
-  const balance = account ? accountLedger(account, trades, adjustments).balance : 0;
+  const capital = account ? riskCapital(account, trades, adjustments) : null;
+  const balance = capital?.value ?? 0;
   const conversionRequired = !!account && !!instrument && instrument.quote_currency !== account.base_currency;
   const conversionRate = conversionRequired ? Number(conversion) : 1;
 
@@ -88,22 +91,18 @@ export function TradeCalculator({ trades, adjustments }: { trades: Trade[]; adju
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
         <div>
           <label className={labelCls}>Account</label>
-          <select className={inputCls} value={accountId} onChange={event => { setAccountId(event.target.value); setConversion(''); }}>
-            {accounts.map(item => <option key={item.id} value={item.id}>{item.name} · {item.base_currency}</option>)}
-          </select>
+          <ThemedSelect label="Account" value={accountId} onChange={value => { setAccountId(value); setConversion(''); }}
+            options={accounts.map(item => ({ value:item.id, label:`${item.name} · ${item.base_currency}` }))} />
         </div>
         <div>
           <label className={labelCls}>Instrument</label>
-          <select className={inputCls} value={instrumentId} onChange={event => { setInstrumentId(event.target.value); setConversion(''); }}>
-            {instruments.map(item => <option key={item.id} value={item.id}>{item.symbol}</option>)}
-          </select>
+          <ThemedSelect label="Instrument" value={instrumentId} onChange={value => { setInstrumentId(value); setConversion(''); }}
+            options={instruments.map(item => ({ value:item.id, label:item.symbol, description:item.display_name }))} />
         </div>
         <div>
           <label className={labelCls}>Direction</label>
-          <select className={inputCls} value={direction} onChange={e => setDirection(e.target.value as 'long' | 'short')}>
-            <option value="long">Long</option>
-            <option value="short">Short</option>
-          </select>
+          <ThemedSelect label="Direction" value={direction} onChange={value=>setDirection(value as 'long' | 'short')}
+            options={[{value:'long',label:'Long / Buy'},{value:'short',label:'Short / Sell'}]} />
         </div>
         <div>
           <label className={labelCls}>Quantity {instrument ? `(${instrument.quantity_unit})` : ''}</label>
@@ -118,8 +117,8 @@ export function TradeCalculator({ trades, adjustments }: { trades: Trade[]; adju
           <input type="number" min="0" step={instrument?.price_increment || 'any'} className={inputCls} value={exit} onChange={event => setExit(event.target.value)} />
         </div>
         <div>
-          <label className={labelCls}>Stop Loss</label>
-          <input type="number" min="0" step={instrument?.price_increment || 'any'} className={inputCls} value={stopLoss} onChange={event => setStopLoss(event.target.value)} />
+          <label className={`${labelCls} ym-market-sl`}>Stop Loss · SL</label>
+          <input type="number" min="0" step={instrument?.price_increment || 'any'} className={`${inputCls} ym-stop-input`} value={stopLoss} onChange={event => setStopLoss(event.target.value)} />
         </div>
         {conversionRequired && <div>
           <label className={labelCls}>{instrument?.quote_currency} to {account?.base_currency} rate</label>
@@ -134,21 +133,22 @@ export function TradeCalculator({ trades, adjustments }: { trades: Trade[]; adju
       {instrument?.example_price != null && <p className="mb-3 text-[11px] text-amber-600">Catalog values are illustrative, not live quotes. Verify contract terms and conversion with your broker.</p>}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
         <Result label={instrument ? instrumentDistanceLabel(instrument) : 'Distance'} value={result.hasData && instrument ? `${result.distance.toFixed(1)} ${instrumentDistanceLabel(instrument)}` : '—'} icon={<Target size={14} />} />
-        <Result label="Est. net P&L" value={result.hasData ? formatMoney(result.pnl) : '—'} icon={<Calculator size={14} />} />
-        <Result label="Est. risk at stop" value={result.stopRisk > 0 ? formatMoney(result.stopRisk) : '—'} icon={<ShieldAlert size={14} />} />
-        <Result label="Risk %" value={result.riskPercent > 0 ? `${result.riskPercent.toFixed(2)}%` : '—'} icon={<ShieldAlert size={14} />} />
+        <Result label="Est. net P&L" value={result.hasData ? signedMoney(result.pnl,formatMoney(result.pnl)) : '—'} icon={<Calculator size={14} />} tone={result.hasData ? pnlTone(result.pnl) : 'neutral'} />
+        <Result label="Est. risk at stop" value={result.stopRisk > 0 ? formatMoney(result.stopRisk) : '—'} icon={<ShieldAlert size={14} />} tone="risk" />
+        <Result label="Risk %" value={result.riskPercent > 0 ? `${result.riskPercent.toFixed(2)}%` : '—'} icon={<ShieldAlert size={14} />} tone="risk" />
         <Result label="Suggested size" value={result.suggestedSize != null ? String(result.suggestedSize) : '—'} icon={<Calculator size={14} />} />
       </div>
 
+      <details className="ym-decision-details mt-3"><summary>How these estimates were calculated</summary><p>Account: {account?.name || 'Choose an account'} · {account?.base_currency || 'Currency unconfirmed'}. Instrument: {instrument?.symbol || 'Unselected'}. The calculation uses the selected instrument contract, the prices and fees entered above, and {conversionRequired?'your supplied exchange rate':'same-currency settlement'}. {capital && <>Risk percentage uses {formatMoney(balance)} from {capital.source.toLowerCase()}{capital.observedAt ? ' observed ' + new Date(capital.observedAt).toLocaleString() : ''}.</>}</p></details>
       {!result.hasData && <p className="mt-3 text-xs text-muted text-center">Select an account and instrument, then enter positive prices and quantity{conversionRequired && !result.validConversion ? ' and a valid conversion rate' : ''}.</p>}
     </div>
   );
 }
 
-function Result({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
-  return <div className="p-3 rounded-lg bg-secondary border border-themed text-center">
+function Result({ label, value, icon, tone }: { label: string; value: string; icon: React.ReactNode; tone?: 'positive'|'negative'|'neutral'|'pending'|'risk' }) {
+  return <div className="p-3 rounded-lg bg-secondary border border-themed text-center" data-level={tone==='risk'?'risk':undefined}>
     <div className="inline-flex p-1.5 rounded-md bg-orange-500/10 text-orange-500 mb-1.5">{icon}</div>
     <p className="text-[10px] font-semibold text-muted uppercase mb-0.5">{label}</p>
-    <p className="text-sm font-mono font-bold">{value}</p>
+    <p className={`text-sm ym-market-value font-bold ${tone==='risk'?'ym-market-warning':`ym-market-${tone||'neutral'}`}`}>{value}</p>
   </div>;
 }

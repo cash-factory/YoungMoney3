@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { TrendingUp, Mail, Lock, User, Eye, EyeOff, AlertCircle, Loader2, BarChart3, Users, BookOpen, Sparkles, Shield, ArrowLeft } from 'lucide-react';
+import { BrandLogo } from '@/components/BrandLogo';
 import { useAuth } from '@/context/AuthContext';
 import { ColorPaletteControl } from '@/components/ColorPaletteControl';
 
@@ -71,6 +72,7 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
     <div className="min-h-screen flex">
       {/* Left showcase panel */}
       <div className="ym-auth-showcase hidden lg:flex lg:w-1/2 relative overflow-hidden">
+        <img src="/assets/page-art/journal.svg" className="ym-auth-showcase-art" alt="" aria-hidden="true" width="1200" height="680" loading="lazy" />
         <div className="absolute inset-0 opacity-[0.07]" style={{
           backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
           backgroundSize: '48px 48px',
@@ -86,16 +88,16 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight">Young-Money-Fx</h1>
-              <p className="text-xs text-white/60">Accountability, not competition</p>
+              <p className="ym-auth-privacy text-xs">Accountability, not competition</p>
             </div>
           </div>
 
           <div className="max-w-md">
             <h2 className="text-4xl xl:text-5xl font-extrabold tracking-tight leading-[1.1]">
               Trade with<br />
-              <span className="text-orange-300">radical honesty.</span>
+              <span className="ym-auth-accent">radical honesty.</span>
             </h2>
-            <p className="mt-4 text-base text-white/70 leading-relaxed">
+            <p className="ym-auth-description mt-4 text-base leading-relaxed">
               A private trading journal to log every trade, review every decision,
               and build a consistent process without sharing your records.
             </p>
@@ -103,15 +105,15 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
             <div className="mt-10 grid grid-cols-2 gap-4">
               {features.map(f => (
                 <div key={f.title} className="p-4 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-colors">
-                  <f.icon size={20} className="text-orange-300 mb-2" />
+                  <f.icon size={20} className="ym-auth-accent mb-2" />
                   <p className="text-sm font-semibold">{f.title}</p>
-                  <p className="text-xs text-white/50 mt-0.5 leading-snug">{f.desc}</p>
+                  <p className="ym-auth-feature-description text-xs mt-0.5 leading-snug">{f.desc}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-white/40">
+          <div className="flex items-center gap-2 ym-auth-privacy text-xs">
             <Shield size={14} />
             Your trading journal is private to your account.
           </div>
@@ -120,12 +122,13 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
 
       {/* Right auth form */}
       <div className="ym-auth-form flex-1 flex items-center justify-center p-5 sm:p-8 bg-primary relative overflow-hidden">
+        <img src="/assets/page-art/sign-in.svg" className="ym-auth-form-art" alt="" aria-hidden="true" width="900" height="1200" />
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute top-1/4 right-1/4 w-64 h-64 rounded-full bg-orange-500/5 blur-3xl" />
           <div className="absolute bottom-1/4 left-1/4 w-64 h-64 rounded-full bg-amber-500/5 blur-3xl" />
         </div>
 
-        <div className="relative w-full max-w-md">
+        <div className="relative z-10 w-full max-w-md">
           <div className="mb-4 flex justify-end"><ColorPaletteControl compact /></div>
           {onBack && (
             <button onClick={onBack} className="btn-ghost mb-6 -ml-2 text-sm">
@@ -134,9 +137,7 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
           )}
 
           <div className="lg:hidden text-center mb-8">
-            <div className="inline-flex p-3 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-700 text-white mb-3 shadow-lg shadow-orange-500/20">
-              <TrendingUp size={28} />
-            </div>
+            <BrandLogo />
             <h1 className="text-xl font-bold tracking-tight">Young-Money-Fx</h1>
           </div>
 

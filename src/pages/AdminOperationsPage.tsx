@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 
 type Member={id:string;email:string;username?:string;display_name?:string;role?:string;account_status?:'active'|'suspended';created_at:string;trade_count:number;plan_count:number};
 type Audit={id:string;action:string;outcome:string;target_user_id?:string;created_at:string;metadata?:Record<string,unknown>};
-type Overview={users?:{total:number;members:number;suspended:number};devices?:{total:number;active:number};links?:{total:number;connected:number};signupPaused:boolean;mt5CapturePaused:boolean;latestAdminActionAt?:string|null;database:string;backupAutomation:string};
+type Overview={users?:{total:number;members:number;suspended:number};devices?:{total:number;active:number};links?:{total:number;connected:number;needs_attention?:number;retries_pending?:number};signupPaused:boolean;mt5CapturePaused:boolean;latestAdminActionAt?:string|null;database:string;backupAutomation:string};
 type Recovery={code:string;email:string;expires_at:string};
 async function adminCall(payload:Record<string,unknown>):Promise<Record<string,unknown>> {
   const response=await fetch('/api/admin',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
@@ -75,6 +75,8 @@ export function AdminOperationsPage(){
         ['Members',overview?.users?.members??'—'],
         ['Suspended',overview?.users?.suspended??'—'],
         ['Linked MT5 accounts',overview?.links?.connected??'—'],
+        ['Accounts needing sync attention',overview?.links?.needs_attention??0],
+        ['Queued sync retries',overview?.links?.retries_pending??0],
         ['Active connector PCs',overview?.devices?.active??'—'],
       ].map(([title,value])=><div className="card p-4" key={title}><p className="text-xs text-muted">{title}</p><p className="mt-2 text-2xl font-bold font-mono">{value}</p></div>)}
     </div>

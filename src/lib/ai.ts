@@ -60,12 +60,6 @@ function buildSummary(stats: DashboardStats, trades: Trade[], periodType: string
     parts.push(`Profit factor: ${stats.profitFactor.toFixed(2)}.`);
   }
 
-  if (stats.currentStreak.type === 'win') {
-    parts.push(`You are currently on a ${stats.currentStreak.count}-trade winning streak.`);
-  } else if (stats.currentStreak.type === 'loss') {
-    parts.push(`You are currently on a ${stats.currentStreak.count}-trade losing streak — consider stepping back to review.`);
-  }
-
   if (stats.bestDay && stats.worstDay) {
     parts.push(`Best day: ${money(stats.bestDay.pnl)}, worst day: ${money(stats.worstDay.pnl)}.`);
   }
@@ -76,72 +70,12 @@ function buildSummary(stats: DashboardStats, trades: Trade[], periodType: string
 function buildSuggestions(trades: Trade[], stats: DashboardStats, money: MoneyFormatter): string[] {
   const suggestions: string[] = [];
 
-  // Win rate analysis
-  if (stats.winRate < 40 && stats.totalTrades >= 5) {
-    suggestions.push('Your win rate is below 40%. Focus on higher-quality setups and consider waiting for A+ entries rather than forcing trades.');
-  } else if (stats.winRate >= 60 && stats.totalTrades >= 5) {
-    suggestions.push('Excellent win rate! Make sure your position sizing reflects this edge — consider scaling up on your highest-conviction setups.');
-  }
-
-  // Risk-reward
-  if (stats.avgRiskReward > 0 && stats.avgRiskReward < 1 && stats.totalTrades >= 5) {
-    suggestions.push('Your average risk-reward ratio is below 1:1. Even with a good win rate, this makes it hard to stay profitable. Aim for at least 1:2 R:R on new trades.');
-  }
-
-  // Emotional state patterns
-  const emotionMap = new Map<string, { count: number; pnl: number }>();
-  trades.forEach(t => {
-    if (!t.emotional_state) return;
-    const ex = emotionMap.get(t.emotional_state) || { count: 0, pnl: 0 };
-    ex.count++;
-    ex.pnl += t.pnl;
-    emotionMap.set(t.emotional_state, ex);
-  });
-  emotionMap.forEach((v, emotion) => {
-    if (v.count >= 3 && v.pnl < 0) {
-      suggestions.push(`Trades taken while feeling "${emotion}" have lost ${money(Math.abs(v.pnl))} across ${v.count} trades. Consider avoiding trading when in this emotional state.`);
-    }
-  });
-
-  // Mistake frequency
-  const mistakeMap = new Map<string, number>();
-  trades.forEach(t => t.mistakes.forEach(m => mistakeMap.set(m, (mistakeMap.get(m) || 0) + 1)));
-  mistakeMap.forEach((count, mistake) => {
-    if (count >= 3) {
-      suggestions.push(`"${mistake}" has been flagged ${count} times. This is a recurring issue — make it a primary focus to eliminate.`);
-    }
-  });
-
-  // Overtrading
-  if (stats.totalTrades >= 10) {
-    suggestions.push('You took a high number of trades. Check if any were impulsive or outside your trading plan.');
-  }
-
-  // Setup quality vs outcome
-  const lowQualityTrades = trades.filter(t => t.setup_quality != null && t.setup_quality <= 2);
-  if (lowQualityTrades.length >= 3) {
-    const lowQualityPnl = lowQualityTrades.reduce((s, t) => s + t.pnl, 0);
-    if (lowQualityPnl < 0) {
-      suggestions.push(`You took ${lowQualityTrades.length} trades rated 1-2 stars, which lost ${money(Math.abs(lowQualityPnl))}. Consider only taking 3+ star setups.`);
-    }
-  }
-
-  // Session analysis
-  const sessionData = groupBySession(trades);
-  const bestSession = sessionData.filter(s => s.trades >= 3).sort((a, b) => b.pnl - a.pnl)[0];
-  if (bestSession && bestSession.pnl > 0) {
-    suggestions.push(`The ${bestSession.session} session is your most profitable (${money(bestSession.pnl)} over ${bestSession.trades} trades). Consider focusing more of your activity here.`);
-  }
-
-  // Streak warning
-  if (stats.currentStreak.type === 'loss' && stats.currentStreak.count >= 3) {
-    suggestions.push(`You've lost ${stats.currentStreak.count} trades in a row. Reduce your risk per trade or take a break to reset mentally before the next entry.`);
-  }
-
-  if (suggestions.length === 0) {
-    suggestions.push('Your trading looks disciplined. Keep maintaining your process and journaling consistently.');
-  }
-
+  if (stats.totalTrades) suggestions.push(stats.wins+' of '+stats.totalTrades+' closed trades finished positive. Replay an entry to review the decision.');
+  const moods=trades.filter(t=>t.emotional_state);
+  if(moods.length) suggestions.push('You recorded how you felt on '+moods.length+' of '+trades.length+' trades. Compare their entry notes.');
+  const flagged=trades.filter(t=>t.mistakes?.length);
+  if(flagged.length) suggestions.push('You marked something to revisit on '+flagged.length+' trades. Choose one example for your weekly review.');
+  if (stats.avgLoss>0) suggestions.push('Average loss on this selection: '+money(stats.avgLoss)+'. Open the underlying trades to check their original risk.');
   return suggestions;
 }
 
@@ -155,15 +89,15 @@ function detectPatterns(trades: Trade[], money: MoneyFormatter): PatternInsight[
   const worstPair = [...pairData].sort((a, b) => a.pnl - b.pnl)[0];
   if (bestPair && bestPair.pnl > 0) {
     patterns.push({
-      title: `Best performing pair: ${bestPair.pair}`,
+      title: `Highest net result by pair: ${bestPair.pair}`,
       detail: `${money(bestPair.pnl)} over ${bestPair.trades} trades with a ${formatPercent(bestPair.winRate)} win rate.`,
       type: 'positive',
     });
   }
   if (worstPair && worstPair.pnl < 0 && worstPair.pair !== bestPair?.pair) {
     patterns.push({
-      title: `Worst performing pair: ${worstPair.pair}`,
-      detail: `${money(worstPair.pnl)} over ${worstPair.trades} trades with a ${formatPercent(worstPair.winRate)} win rate. Consider reducing activity on this pair.`,
+      title: `Lowest net result by pair: ${worstPair.pair}`,
+      detail: `${money(worstPair.pnl)} over ${worstPair.trades} trades with a ${formatPercent(worstPair.winRate)} win rate.`,
       type: 'negative',
     });
   }
@@ -174,15 +108,15 @@ function detectPatterns(trades: Trade[], money: MoneyFormatter): PatternInsight[
   const worstDay = [...dayData].sort((a, b) => a.pnl - b.pnl)[0];
   if (bestDay && bestDay.pnl > 0) {
     patterns.push({
-      title: `Most profitable day: ${bestDay.day}`,
+      title: `Highest net result by weekday: ${bestDay.day}`,
       detail: `${money(bestDay.pnl)} over ${bestDay.trades} trades.`,
       type: 'positive',
     });
   }
   if (worstDay && worstDay.pnl < 0 && worstDay.day !== bestDay?.day) {
     patterns.push({
-      title: `Least profitable day: ${worstDay.day}`,
-      detail: `${money(worstDay.pnl)} over ${worstDay.trades} trades. Consider being more selective on this day.`,
+      title: `Lowest net result by weekday: ${worstDay.day}`,
+      detail: `${money(worstDay.pnl)} over ${worstDay.trades} trades.`,
       type: 'negative',
     });
   }
@@ -192,19 +126,11 @@ function detectPatterns(trades: Trade[], money: MoneyFormatter): PatternInsight[
   const longPerf = dirData.find(d => d.direction === 'Long');
   const shortPerf = dirData.find(d => d.direction === 'Short');
   if (longPerf && shortPerf && longPerf.trades >= 2 && shortPerf.trades >= 2) {
-    if (longPerf.pnl > shortPerf.pnl + Math.abs(shortPerf.pnl) * 0.5) {
-      patterns.push({
-        title: 'Long bias detected',
-        detail: `Long trades (${money(longPerf.pnl)}) significantly outperform short trades (${money(shortPerf.pnl)}). You may have a directional bias to explore.`,
-        type: 'neutral',
-      });
-    } else if (shortPerf.pnl > longPerf.pnl + Math.abs(longPerf.pnl) * 0.5) {
-      patterns.push({
-        title: 'Short bias detected',
-        detail: `Short trades (${money(shortPerf.pnl)}) significantly outperform long trades (${money(longPerf.pnl)}). You may have a directional bias to explore.`,
-        type: 'neutral',
-      });
-    }
+    patterns.push({
+      title: 'Long and short entries',
+      detail: `${longPerf.trades} long trades settled at ${money(longPerf.pnl)} in total. ${shortPerf.trades} short trades settled at ${money(shortPerf.pnl)}.`,
+      type: 'neutral',
+    });
   }
 
   // Strategy performance
@@ -212,7 +138,7 @@ function detectPatterns(trades: Trade[], money: MoneyFormatter): PatternInsight[
   const bestStrat = [...stratData].sort((a, b) => b.pnl - a.pnl)[0];
   if (bestStrat && bestStrat.pnl > 0) {
     patterns.push({
-      title: `Top strategy: ${bestStrat.strategy}`,
+      title: `Highest net result by strategy: ${bestStrat.strategy}`,
       detail: `${money(bestStrat.pnl)} over ${bestStrat.trades} trades with a ${formatPercent(bestStrat.winRate)} win rate.`,
       type: 'positive',
     });
@@ -223,7 +149,7 @@ function detectPatterns(trades: Trade[], money: MoneyFormatter): PatternInsight[
   const bestSession = [...sessionData].sort((a, b) => b.pnl - a.pnl)[0];
   if (bestSession && bestSession.pnl > 0) {
     patterns.push({
-      title: `Best trading session: ${bestSession.session}`,
+      title: `Highest net result by session: ${bestSession.session}`,
       detail: `${money(bestSession.pnl)} over ${bestSession.trades} trades with a ${formatPercent(bestSession.winRate)} win rate.`,
       type: 'positive',
     });

@@ -13,6 +13,7 @@ const destinations: Destination[] = [
   { id: 'mt5', label: 'MT5 Connections', section: 'Workspace', keywords: 'pair PC MetaTrader broker login' },
   { id: 'dashboard', label: 'Overview', section: 'Workspace', keywords: 'home performance' },
   { id: 'trades', label: 'Trade ledger', section: 'Journal', keywords: 'transactions capture' },
+  { id: 'media', label: 'Media Library', section: 'Journal', keywords: 'photos pictures images screenshots audio voice recordings attachments' },
   { id: 'journal', label: 'Journal', section: 'Journal', keywords: 'reflection' },
   { id: 'calendar', label: 'Trading calendar', section: 'Journal' },
   { id: 'weekly-reviews', label: 'Weekly reviews', section: 'Journal' },

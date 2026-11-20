@@ -47,7 +47,7 @@ test('UI requires confirmed server and exposes accessible broker suggestions',()
   assert.match(html,/aria-autocomplete="list"/);
   assert.match(html,/id="server"[^>]*required/);
   assert.match(source,/Select(ed)? broker|Selected broker/);
-  assert.match(html,/not MT5's live global directory/);
+  assert.match(html,/Suggestions come from known broker servers/);
   assert.match(html,/Capture only:/);
 });
 

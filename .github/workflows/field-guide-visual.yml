@@ -1,0 +1,41 @@
+name: Field Guide interaction QA
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/components/PlatformGuide.tsx'
+      - 'src/lib/platformGuide.ts'
+      - 'src/platform-guide.css'
+      - 'src/App.tsx'
+      - 'src/components/Layout.tsx'
+      - 'src/pages/DashboardPage.tsx'
+      - 'src/context/AuthProvider.tsx'
+      - 'scripts/test-guide-browser.mjs'
+      - '.github/workflows/field-guide-visual.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tour:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Validate real guided navigation, skip, replay and signup invitation
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx vite preview --host 127.0.0.1 --port 4174 > "$RUNNER_TEMP/guide-preview.log" 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4174/ >/dev/null; then break; fi
+            sleep 1
+          done
+          YM3_PREVIEW_URL=http://127.0.0.1:4174/ node scripts/test-guide-browser.mjs

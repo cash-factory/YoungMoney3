@@ -1,3 +1,5 @@
+import { Select } from '@/components/Select';
+import { StrategyEvidence } from '@/components/DecisionEvidence';
 import { useState, useMemo } from 'react';
 import { Layers, Plus, Trash2, Save, Search, TrendingUp, Eye } from 'lucide-react';
 import { ScreenshotUpload } from '@/components/ScreenshotUpload';
@@ -9,7 +11,7 @@ import { MediaAudioPlayer } from '@/components/MediaPreview';
 import { VoiceRecorder } from '@/components/VoiceRecorder';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { Modal } from '@/components/ui/Modal';
-import { StatCard } from '@/components/ui/StatCard';
+import '@/page-results.css';
 import type { TradingSetup, TradingSetupInput } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
 
@@ -33,17 +35,16 @@ export function SetupsPage() {
   const [editingSetup, setEditingSetup] = useState<TradingSetup | null>(null);
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('');
+  const [selectedId, setSelectedId] = useState('');
 
   const winRateBySetup = useMemo(() => {
     const map: Record<string, { wins: number; total: number }> = {};
-    for (const t of trades) {
-      if (!t.strategy) continue;
-      if (!map[t.strategy]) map[t.strategy] = { wins: 0, total: 0 };
-      map[t.strategy].total++;
-      if (t.outcome === 'win') map[t.strategy].wins++;
+    for (const setup of setups) {
+      const linked = trades.filter(trade => trade.status === 'closed' && trade.setup_id === setup.id);
+      map[setup.id] = { wins: linked.filter(trade => trade.outcome === 'win').length, total: linked.length };
     }
     return map;
-  }, [trades]);
+  }, [setups, trades]);
 
   const filtered = setups.filter(s => {
     if (filterCat && s.category !== filterCat) return false;
@@ -75,10 +76,10 @@ export function SetupsPage() {
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <StatCard label="Total Setups" value={String(setups.length)} icon={<Layers size={20} />} accent="blue" />
-        <StatCard label="Active Setups" value={String(setups.filter(s => s.is_active).length)} icon={<TrendingUp size={20} />} accent="emerald" />
-        <StatCard label="Categories" value={String(new Set(setups.map(s => s.category)).size)} icon={<Eye size={20} />} accent="amber" />
+      <div className="ym-setup-collection-meta" aria-label="Setup collection summary">
+        <span><Layers size={16} /><strong>{setups.length}</strong> playbook setups</span>
+        <span><TrendingUp size={16} /><strong>{setups.filter(setup => setup.is_active).length}</strong> active</span>
+        <span><Eye size={16} /><strong>{new Set(setups.map(setup => setup.category)).size}</strong> market approaches</span>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
@@ -86,27 +87,32 @@ export function SetupsPage() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
           <input className="input-field pl-10" placeholder="Search setups..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <select className="input-field sm:w-48" value={filterCat} onChange={e => setFilterCat(e.target.value)}>
+        <Select className="input-field sm:w-48" value={filterCat} onChange={e => setFilterCat(e.target.value)}>
           <option value="">All Categories</option>
           {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-        </select>
+        </Select>
       </div>
 
       {filtered.length === 0 ? (
-        <div className="card p-8">
-          <EmptyState icon={<Layers size={40} />} title="No setups yet" message="Document your trading setups with entry/exit criteria, market conditions, and track their win rates from your journal." />
+        <div className="ym-setup-empty card p-8">
+          <EmptyState icon={<Layers size={40} />} title={setups.length ? 'No matching setups' : 'Build your visual playbook'} message={setups.length ? 'Try another category or search term.' : 'Save a chart example alongside the conditions, entry trigger and exit plan you want to repeat.'} />
+          {!!setups.length && <button type="button" className="btn-secondary" onClick={() => { setSearch(''); setFilterCat(''); }}>Clear filters</button>}
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filtered.map(setup => {
-            const wr = winRateBySetup[setup.name];
-            const winRate = wr && wr.total > 0 ? Math.round((wr.wins / wr.total) * 100) : null;
-            return (
-              <SetupCard key={setup.id} setup={setup} winRate={winRate} tradeCount={wr?.total || 0} onEdit={() => { setEditingSetup(setup); setShowForm(true); }} onDelete={() => handleDelete(setup.id)} />
-            );
-          })}
-        </div>
-      )}
+      ) : <div className="ym-setup-workbench">
+        <nav className="ym-setup-index" aria-label="Setup playbook">
+          <p className="ym-output-eyebrow">YOUR SETUPS / {filtered.length}</p>
+          {filtered.map((setup, index) => <button type="button" key={setup.id} aria-pressed={(filtered.find(item => item.id === selectedId) || filtered[0]).id === setup.id} onClick={() => setSelectedId(setup.id)}>
+            <span className="ym-setup-index-number">{String(index + 1).padStart(2, '0')}</span>
+            <span><strong>{setup.name}</strong><small>{CATEGORY_LABELS[setup.category] || setup.category}{setup.timeframes ? ` · ${setup.timeframes}` : ''}</small></span>
+            <span className={`ym-setup-state ${setup.is_active ? 'is-active' : ''}`} aria-label={setup.is_active ? 'Active setup' : 'Inactive setup'} />
+          </button>)}
+        </nav>
+        {(() => {
+          const setup = filtered.find(item => item.id === selectedId) || filtered[0];
+          const result = winRateBySetup[setup.id];
+          return <div key={setup.id}><SetupCard setup={setup} winRate={result?.total ? Math.round(result.wins / result.total * 100) : null} tradeCount={result?.total || 0} onEdit={() => { setEditingSetup(setup); setShowForm(true); }} onDelete={() => handleDelete(setup.id)} /><StrategyEvidence setup={setup.id}/></div>;
+        })()}
+      </div>}
 
       <Modal open={showForm} onClose={() => { setShowForm(false); setEditingSetup(null); }} title={editingSetup ? 'Edit Setup' : 'New Setup'} size="lg">
         <SetupForm initial={editingSetup} onSave={handleSave} onCancel={() => { setShowForm(false); setEditingSetup(null); }} />
@@ -116,70 +122,15 @@ export function SetupsPage() {
 }
 
 function SetupCard({ setup, winRate, tradeCount, onEdit, onDelete }: { setup: TradingSetup; winRate: number | null; tradeCount: number; onEdit: () => void; onDelete: () => void }) {
-  return (
-    <div className="card p-5 card-hover">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-sm font-bold">{setup.name}</h3>
-            <span className="badge badge-brand">{CATEGORY_LABELS[setup.category] || setup.category}</span>
-            {!setup.is_active && <span className="badge badge-neutral">Inactive</span>}
-          </div>
-          {setup.description && <p className="text-xs text-secondary">{setup.description}</p>}
-        </div>
-        <div className="flex gap-1 ml-2">
-          <button onClick={onEdit} className="btn-ghost p-1.5 text-xs">Edit</button>
-          <button onClick={onDelete} className="btn-ghost p-1.5 text-error-500 hover:bg-error-500/10"><Trash2 size={14} /></button>
-        </div>
-      </div>
-
-      {setup.screenshot_url && (
-        <div className="mt-3 rounded-lg overflow-hidden border border-themed">
-          <MediaImage source={setup.screenshot_url} alt={setup.name} className="w-full max-h-48 object-cover" />
-        </div>
-      )}
-      {setup.voice_note_url && <div className="mt-3"><MediaAudioPlayer source={setup.voice_note_url} /></div>}
-
-      <div className="grid grid-cols-2 gap-3 text-xs">
-        {setup.market_conditions && (
-          <div>
-            <p className="font-semibold text-muted mb-0.5">Market Conditions</p>
-            <p className="text-secondary">{setup.market_conditions}</p>
-          </div>
-        )}
-        {setup.timeframes && (
-          <div>
-            <p className="font-semibold text-muted mb-0.5">Timeframes</p>
-            <p className="text-secondary">{setup.timeframes}</p>
-          </div>
-        )}
-        {setup.entry_criteria && (
-          <div>
-            <p className="font-semibold text-muted mb-0.5">Entry Criteria</p>
-            <p className="text-secondary whitespace-pre-wrap">{setup.entry_criteria}</p>
-          </div>
-        )}
-        {setup.exit_criteria && (
-          <div>
-            <p className="font-semibold text-muted mb-0.5">Exit Criteria</p>
-            <p className="text-secondary whitespace-pre-wrap">{setup.exit_criteria}</p>
-          </div>
-        )}
-      </div>
-
-      <div className="mt-3 pt-3 border-t border-themed flex items-center gap-4">
-        {winRate != null ? (
-          <div className="flex items-center gap-2">
-            <span className={`text-sm font-bold ${winRate >= 50 ? 'text-success-500' : 'text-error-500'}`}>{winRate}%</span>
-            <span className="text-xs text-muted">win rate ({tradeCount} trades)</span>
-          </div>
-        ) : (
-          <span className="text-xs text-muted">No trades linked yet</span>
-        )}
-        <span className="text-xs text-muted ml-auto">{format(parseISO(setup.created_at), 'MMM d, yyyy')}</span>
-      </div>
-    </div>
-  );
+  const rules = [{ number: '01', title: 'Read the conditions', value: setup.market_conditions }, { number: '02', title: 'Wait for the entry', value: setup.entry_criteria }, { number: '03', title: 'Manage the exit', value: setup.exit_criteria }];
+  return <article className="ym-setup-playbook" aria-label={`${setup.name} playbook`}>
+    <header className="ym-setup-detail-heading"><div><p className="ym-output-eyebrow">{CATEGORY_LABELS[setup.category] || setup.category} / {setup.is_active ? 'ACTIVE PLAYBOOK' : 'ARCHIVED APPROACH'}</p><h2>{setup.name}</h2>{setup.description && <p>{setup.description}</p>}</div><div className="ym-output-actions"><button type="button" onClick={onEdit} className="btn-secondary">Edit setup</button><button type="button" aria-label={`Delete ${setup.name}`} onClick={onDelete} className="btn-ghost text-error-500"><Trash2 size={16} /></button></div></header>
+    <div className="ym-setup-chart">{setup.screenshot_url ? <MediaImage source={setup.screenshot_url} alt={`${setup.name} chart example`} className="ym-setup-chart-image" /> : <div className="ym-setup-chart-empty"><Layers size={35} /><strong>Your reference chart belongs here</strong><p>Add an annotated example when you edit this setup.</p></div>}<span className="ym-setup-chart-label">{setup.timeframes || 'Timeframe not set'} / CHART REFERENCE</span></div>
+    <ol className="ym-setup-rules">{rules.map(rule => <li key={rule.number}><span>{rule.number}</span><div><h3>{rule.title}</h3><p>{rule.value || 'No rules recorded yet. Add the criteria you want to follow.'}</p></div></li>)}</ol>
+    {setup.example_notes && <div className="ym-setup-example"><p className="ym-output-eyebrow">EXAMPLE NOTES</p><p>{setup.example_notes}</p></div>}
+    {setup.voice_note_url && <div className="ym-setup-recording"><p className="ym-output-eyebrow">AUDIO WALKTHROUGH</p><MediaAudioPlayer source={setup.voice_note_url} /></div>}
+    <footer className="ym-setup-evidence"><div><strong>{winRate == null ? '—' : `${winRate}%`}</strong><span>{tradeCount ? `win rate · ${tradeCount} closed journal trades` : 'No closed trades linked yet'}</span></div><small>Added {format(parseISO(setup.created_at), 'MMM d, yyyy')}</small></footer>
+  </article>;
 }
 
 function SetupForm({ initial, onSave, onCancel }: { initial: TradingSetup | null; onSave: (data: TradingSetupInput, id?: string) => void; onCancel: () => void }) {
@@ -226,9 +177,9 @@ function SetupForm({ initial, onSave, onCancel }: { initial: TradingSetup | null
         </div>
         <div>
           <label className={labelCls}>Category</label>
-          <select className={inputCls} value={category} onChange={e => setCategory(e.target.value)}>
+          <Select className={inputCls} value={category} onChange={e => setCategory(e.target.value)}>
             {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-          </select>
+          </Select>
         </div>
       </div>
 

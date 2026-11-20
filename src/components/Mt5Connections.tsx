@@ -1,92 +1,520 @@
-import { Monitor, Link2, Download, X } from 'lucide-react';
+import { Select } from '@/components/Select';
+import { pnlTone, signedMoney } from '@/lib/tradingTone';
+import { Monitor, Link2, X, ChevronDown, CheckCircle2, AlertTriangle, CircleHelp, RefreshCw, Wallet, Clock3, History, Laptop, ArrowRight } from 'lucide-react';
+import { announceAction } from '@/lib/actionFeedback';
+import { CashFlowPanel } from '@/components/CashFlowPanel';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useTrades } from '@/hooks/useData';
 
-type Device = { id: string; last_seen: number };
-type Link = { id: string; company?: string; login?: string; server?: string; trade_mode?: number; access_level?: string; status: string; last_sync?: string; broker_balance?:number;broker_equity?:number;currency?:string; gap?: number; last_error?: string; expires: number;history_id?:string;history_status?:string };
-async function action(name: string, payload: unknown = {}) {
-  const result = await fetch('/api/mt5/' + name, {method:'POST', headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
-  const data = await result.json();
-  if (!result.ok) throw new Error(data.error || 'MT5 connection unavailable.');
-  return data;
-}
+import { mt5Action as action, monitoringStatus, pcOnline, pairedPcName, type Device, type Link } from '@/lib/mt5Monitor';
+
+type PositionSummary = {
+  lifecycle_id:string;position_id:string;symbol:string;direction:string;status:string;
+  first_entry_at:string;final_exit_at?:string|null;initial_entry_price?:string|null;
+  net_realized_profit?:string|null;realized_r?:string|null;final_realized_r?:string|null;
+  initial_risk_account?:string|null;initial_sl?:string|null;initial_stop_provenance?:string;
+  initial_sl_provenance?:string;initial_sl_observed_at?:string|null;initial_tp?:string|null;
+  current_sl?:string|null;current_tp?:string|null;remaining_volume?:string|null;
+  movement?:string|null;movement_unit?:string;holding_seconds?:string|null;
+  weighted_holding_seconds?:string|null;entries?:Record<string,unknown>[];exits?:Record<string,unknown>[];
+  sessions?:{status:string;sessions?:string[];overlaps?:string[];reason?:string};
+  capture_completeness?:{original_risk?:string;risk_reason?:string;session_status?:string};
+  capital_at_entry?:{value?:string|null;source?:string;observed_at?:string|null};
+};
+type PositionRow = {link:string;account_id:string;lifecycle_id:string;version:number;recorded_at:string;summary:PositionSummary};
+type HistoryScan = { link: string; request: string };
+type SelectedScan = HistoryScan & { name: string; brokerAccount: string };
+type HistoryPage = HistoryScan & { rows: Record<string,unknown>[]; more: boolean; nextOffset: number };
 export function Mt5Connections() {
   const { user } = useAuth();
   const { trades, fetchTrades } = useTrades(user?.id);
   const [devices,setDevices] = useState<Device[]>([]);
+  const [editingPc,setEditingPc] = useState<string | null>(null);
+  const [pcNameDraft,setPcNameDraft] = useState('');
   const [links,setLinks] = useState<Link[]>([]);
   const dialog = useRef<HTMLDialogElement>(null);
   const [device,setDevice] = useState('');
+  const [selectedPcId,setSelectedPcId] = useState<string|null>(null);
+  const [selectedAccountId,setSelectedAccountId] = useState<string|null>(null);
+  const [accountPanel,setAccountPanel] = useState<'overview'|'history'|'timezone'|'cash'>('overview');
+  const [busyAction,setBusyAction] = useState<string|null>(null);
+  const [feedback,setFeedback] = useState<{kind:'success'|'error'|'info';message:string}|null>(null);
+  const [requestedPc,setRequestedPc] = useState(()=>new URLSearchParams(window.location.search).get('addAccount'));
+  const [capturePaused,setCapturePaused] = useState(false);
+  const openLogin = useCallback((id:string) => {
+    setDevice(id);
+    setRequestedPc(null);
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('addAccount')) {
+      url.searchParams.delete('addAccount');
+      window.history.replaceState(null,'',url);
+    }
+    if (!dialog.current?.open) dialog.current?.showModal();
+  }, []);
+  useEffect(()=>{
+    if (!requestedPc || capturePaused) return;
+    const target = requestedPc==='1' ? (devices.length===1?devices[0]:undefined) : devices.find(d=>d.id===requestedPc);
+    if (target && pcOnline(target) && target.setup_state!=='install') openLogin(target.id);
+  },[devices,requestedPc,openLogin,capturePaused]);
+  const [accountNames,setAccountNames]=useState<Record<string,string>>({});
   const [loaded,setLoaded] = useState(false);
   const [code,setCode] = useState('');
   const [error,setError] = useState('');
-  const [demo,setDemo] = useState(true);
+  const [setupHint,setSetupHint] = useState('');
+  const [,setDemo] = useState(true);
   const [imported,setImported] = useState('');
-  const [historyLink,setHistoryLink]=useState('');
+  const [historyScan, setHistoryScan] = useState<SelectedScan | null>(null);
+  const latestRefresh = useRef(0);
   const [historyDays,setHistoryDays]=useState('30');
-  const [preview,setPreview]=useState<{rows:Record<string,unknown>[];more:boolean;status:string;nextOffset:number}|null>(null);
-  const [historyBusy,setHistoryBusy]=useState(false);
+  const [historyCustomDays,setHistoryCustomDays]=useState('');
+  const [historyMode,setHistoryMode]=useState('days');
+  const [historyFromDate,setHistoryFromDate]=useState('');
+  const [positions,setPositions]=useState<PositionRow[]>([]);
+  const [positionsMore,setPositionsMore]=useState(false);
+  const [timezoneDraft,setTimezoneDraft]=useState<Record<string,string>>({});
+  const [timezoneProof,setTimezoneProof]=useState<Record<string,boolean>>({});
   const [manual,setManual] = useState('');
   const refresh = useCallback(async () => {
-    const data = await action('status');
-    setDevices(data.devices); setLinks(data.links); setDemo(data.demoOnly); setLoaded(true);
+    const revision = ++latestRefresh.current;
+    const [data,rich]=await Promise.all([action('status'),action('positions').catch(()=>({rows:[],more:false}))]);
+    if (revision !== latestRefresh.current) return;
+    setAccountNames(Object.fromEntries((data.accounts||[]).map((a:{id:string;name:string})=>[a.id,a.name])));
+    setDevices(data.devices); setLinks(data.links); setDemo(data.demoOnly); setCapturePaused(Boolean(data.capturePaused)); setLoaded(true);
+    setPositions(rich.rows || []);setPositionsMore(Boolean(rich.more));
   }, []);
   useEffect(() => {
     const read = () => { if (!document.hidden) void refresh().catch(e=>setError(e.message)); };
     read(); const timer = window.setInterval(read,15000); return () => clearInterval(timer);
   }, [refresh]);
-  async function run(operation: () => Promise<void>) {
-    try { setError(''); await operation(); await refresh(); } catch (e) {setError(e instanceof Error ? e.message : 'Request failed.');}
+  async function run(operation: () => Promise<void>, success='Action completed.', actionKey='request') {
+    if(busyAction) return;
+    setBusyAction(actionKey);
+    setFeedback({kind:'info',message:'Working on your request…'});
+    try {
+      setError('');
+      await operation();
+      setFeedback({kind:'success',message:success});
+      announceAction('success',success);
+      try { await refresh(); } catch {
+        setFeedback({kind:'info',message:'Change saved, but account details could not refresh. Retry shortly.'});
+        announceAction('warning','Change saved; the latest account details could not be fetched.');
+      }
+    } catch (e) {
+      const message=e instanceof Error?e.message:'Request failed. Please try again.';
+      setError(message);
+      setFeedback({kind:'error',message});
+      announceAction('error',message);
+    } finally {
+      setBusyAction(null);
+    }
+  }
+  function startAccountSetup() {
+    setSetupHint('');
+    const ready = devices.filter(pc => pcOnline(pc) && pc.setup_state !== 'install');
+    if (ready.length === 1) { openLogin(ready[0].id); return; }
+    if (ready.length > 1) {
+      setSetupHint('Choose the PC to monitor this account on using Add account beside that PC.');
+    } else if (devices.some(pc => pcOnline(pc) && pc.setup_state === 'install')) {
+      setSetupHint('MetaTrader 5 is not installed on your paired PC. Install it using the connector instructions; detection runs automatically.');
+    } else if (devices.length) {
+      setSetupHint('Open the YoungMoney3 Connector on your PC. Your pairing is saved, and the login form will become available when it is online.');
+    } else {
+      setSetupHint('First download and open the Windows Connector, then choose Pair a PC. You will not need to find any MT5 program folders.');
+    }
   }
   const source = (t: typeof trades[number]) => (t as {trade_source?:string}).trade_source;
+  const historyAccount = links.find(link => link.id === historyScan?.link);
+  const failedLinks = links.filter(link => ['failed','expired'].includes(link.status));
+  const activeLinks = links.filter(link => !['failed','expired'].includes(link.status));
+  const visibleLinks = selectedPcId ? activeLinks.filter(link=>link.device===selectedPcId):activeLinks;
+  const selectedPc=devices.find(pc=>pc.id===selectedPcId);
   const selected = trades.find(t=>t.id===imported);
   const matches = trades.filter(t=>selected && source(t)!=='mt5' && selected.pair===t.pair && t.account_id===selected.account_id && t.direction===selected.direction);
-  return <main className="space-y-5">
-    <SectionHeader title="MT5 Connections" subtitle="Pair your Windows PC and sync broker trades to your journal." />
-    <section className="card p-5 sm:p-6 space-y-4">
-    <header className="flex flex-wrap items-center justify-between gap-3"><h2 className="flex items-center gap-2 font-bold"><Monitor size={20} className="text-brand-500"/> Paired PCs</h2>
-    <button className="btn-primary" onClick={()=>run(async()=>setCode((await action('pair')).code))}>Pair a PC</button></header>
-    {loaded && !devices.length && <p className="text-sm text-secondary">Run the Windows connector, then enter your pairing code on that PC.</p>}
-    <a className="btn-secondary inline-flex" href="/mt5-connector.zip" download><Download size={15}/>Download Windows connector</a>
-    {code && <p>Enter this pairing code in the connector within five minutes: <code className="break-all select-all">{code}</code></p>}
-    {devices.map(d=><div className="flex flex-wrap items-center gap-3 border-t border-themed pt-4" key={d.id}>PC {d.id.slice(0,8)} · {Date.now()-d.last_seen<90000?'Online':'Offline'}{' '}
-      <button className="btn-primary" disabled={Date.now()-d.last_seen>=90000} onClick={()=>{setDevice(d.id);dialog.current?.showModal();}}>Connect MT5 account</button>{' '}
-      <button className="btn-secondary" onClick={()=>{if(window.confirm('Revoke this PC and stop all of its account imports?')) void run(()=>action('revoke',{device:d.id}));}}>Revoke PC</button></div>)}
+  return <main className="ym-connection-hub space-y-5">
+    <SectionHeader title="MT5 Connections" subtitle="Your connected computers and broker accounts — one place to manage them." />
+    <div className="ym-connection-summary" aria-label="Connection overview">
+      <div><Monitor size={17}/><span><strong>{devices.length}</strong><small>Paired PCs</small></span></div>
+      <div><Link2 size={17}/><span><strong>{activeLinks.filter(l=>l.status==='connected').length}</strong><small>Linked accounts</small></span></div>
+      <div><AlertTriangle size={17}/><span><strong>{activeLinks.filter(l=>monitoringStatus(l,devices.find(d=>d.id===l.device),capturePaused)!=='Monitoring').length}</strong><small>Need attention</small></span></div>
+    </div>
+    {feedback && <div role={feedback.kind==='error'?'alert':'status'} className="ym-action-feedback" data-kind={feedback.kind}>
+      {feedback.kind==='success'?<CheckCircle2 size={19}/>:feedback.kind==='error'?<AlertTriangle size={19}/>:<RefreshCw className="animate-spin" size={17}/>}
+      <span>{feedback.message}</span>
+      <button type="button" aria-label="Dismiss notification" onClick={()=>setFeedback(null)}><X size={16}/></button>
+    </div>}
+    {setupHint && <div className="ym-action-feedback" data-kind="info" role="status"><CircleHelp size={17}/><span>{setupHint}</span><button type="button" aria-label="Dismiss" onClick={()=>setSetupHint('')}><X size={16}/></button></div>}
+    {error && !feedback && <div className="ym-action-feedback" data-kind="error" role="alert"><AlertTriangle size={16}/>{error}</div>}
+    {capturePaused && <div className="ym-action-feedback" data-kind="warning" role="alert"><AlertTriangle size={17}/>Capture paused by your staging administrator.</div>}
+    <section className="card ym-connection-section" aria-labelledby="paired-pc-title">
+      <header className="ym-connection-heading">
+        <div><p className="ym-connection-eyebrow">01 / YOUR DEVICES</p><h2 id="paired-pc-title">Paired PCs</h2></div>
+        <div className="ym-connection-actions">
+          <button type="button" className="btn-primary" disabled={capturePaused||!!busyAction} onClick={startAccountSetup}>Add account <ArrowRight size={15}/></button>
+          <button type="button" className="btn-secondary" disabled={capturePaused||!!busyAction} onClick={()=>{
+            if(devices.length && !window.confirm('Pair a different computer? If it is this same PC, reopen its existing connector instead.'))return;
+            void run(async()=>setCode((await action('pair')).code),'Pairing code created. Enter it in the connector within five minutes.','pair');
+          }}>Pair another PC</button>
+        </div>
+      </header>
+      {code && <div className="ym-connection-code" role="status"><span>Enter this code in your connector within five minutes</span><strong className="select-all">{code}</strong><button type="button" className="btn-secondary" onClick={()=>{void navigator.clipboard.writeText(code).then(()=>announceAction('success','Pairing code copied.')).catch(()=>announceAction('error','Clipboard unavailable. Select and copy the code manually.'));}}>Copy code</button></div>}
+      {loaded && !devices.length && <div className="ym-connection-empty"><Laptop size={27}/><strong>No paired computers yet</strong><p>Install the connector, then pair this computer once.</p></div>}
+      <div className="ym-selectable-stack" role="list" aria-label="Select a paired PC">
+        {devices.map(d=>{
+          const online=pcOnline(d);
+          const deviceLinks=activeLinks.filter(l=>l.device===d.id);
+          const count=deviceLinks.filter(l=>l.status==='connected').length;
+          const expanded=selectedPcId===d.id;
+          return <div key={d.id} role="listitem" className="ym-selectable-card" data-selected={expanded}>
+            <button type="button" aria-expanded={expanded} aria-controls={'ym-pc-details-'+d.id} className="ym-selectable-trigger" onClick={()=>{setSelectedPcId(expanded?null:d.id);setSelectedAccountId(null);setEditingPc(null);}}>
+              <span className="ym-selection-icon"><Monitor size={20}/></span>
+              <span className="ym-selection-primary"><strong>{pairedPcName(d)}</strong><small>PC {d.id.slice(0,8)} · {count} {count===1?'account':'accounts'}</small></span>
+              <span className="ym-connection-badge" data-tone={online?'success':'neutral'}>{online?'Online':'Offline'}</span>
+              <ChevronDown className="ym-selectable-chevron" size={18} aria-hidden="true"/>
+            </button>
+            {expanded && <div className="ym-selection-details" id={'ym-pc-details-'+d.id}>
+              <div className="ym-detail-grid">
+                <div><span>Connector</span><strong>{d.connector_version||'Version unknown'}</strong></div>
+                <div><span>Last check-in</span><strong>{d.last_seen?new Date(d.last_seen).toLocaleString():'Never'}</strong></div>
+                <div><span>MetaTrader setup</span><strong>{d.setup_state==='ready'?'Ready':d.setup_state==='install'?'Install MT5':'Unknown'}</strong></div>
+                <div><span>Connected accounts</span><strong>{count}</strong></div>
+              </div>
+              {editingPc===d.id ? <div className="ym-edit-row"><label>Computer name<input className="input-field" maxLength={48} value={pcNameDraft} onChange={e=>setPcNameDraft(e.target.value)} placeholder="Trading Laptop"/></label><button type="button" className="btn-primary" disabled={pcNameDraft.trim().length<2||!!busyAction} onClick={()=>void run(async()=>{await action('rename-pc',{device:d.id,name:pcNameDraft.trim()});setEditingPc(null);},'PC renamed. The connector will display the new name at its next check-in.','rename-pc')}>{busyAction==='rename-pc'?'Saving…':'Save name'}</button><button type="button" className="btn-secondary" onClick={()=>setEditingPc(null)}>Cancel</button></div> :
+                <div className="ym-connection-actions">
+                  <button type="button" className="btn-primary" disabled={!online||d.setup_state==='install'||capturePaused} onClick={()=>openLogin(d.id)}>Add broker account</button>
+                  <button type="button" className="btn-secondary" onClick={()=>{setEditingPc(d.id);setPcNameDraft(pairedPcName(d));}}>Rename PC</button>
+                  <button type="button" className="btn-secondary" onClick={()=>{if(window.confirm('Unpair '+pairedPcName(d)+'? This revokes its connected broker sessions. Do not unpair the PC currently capturing your trades.'))void run(()=>action('revoke',{device:d.id}),'PC unpaired. Historical trade evidence was retained.','revoke-pc');}}>Unpair PC</button>
+                </div>}
+              <details className="ym-context-help"><summary><CircleHelp size={15}/>Connection and safety details</summary><p>Use Add broker account to connect more logins without pairing again. Unpairing revokes monitoring for accounts on this PC. An offline PC retains its saved pairing; reopen the Windows connector on that computer.</p><div className="ym-connection-actions"><a href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.3-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer">Download Windows Connector</a><a href="/connector-download.html">Release details and checksum</a></div></details>
+              <div className="ym-pc-accounts">
+                <div className="ym-pc-accounts-header"><strong>Accounts on this PC</strong><span className="ym-section-count">{deviceLinks.length}</span></div>
+                {deviceLinks.length?deviceLinks.map(link=>{
+                  const accountStatus=monitoringStatus(link,d,capturePaused);
+                  return <button type="button" className="ym-pc-account-link" key={link.id}
+                    onClick={()=>{
+                      setSelectedAccountId(link.id);setAccountPanel('overview');
+                      window.requestAnimationFrame(()=>document.getElementById('ym-linked-accounts')?.scrollIntoView({behavior:'smooth',block:'start'}));
+                    }}>
+                    <span><strong>{accountNames[link.account_id||'']||link.company||link.server||'Broker account'}</strong>
+                      <small>{link.server||'Server pending'} · {link.login||'Login pending'}</small></span>
+                    <span className="ym-connection-badge" data-tone={accountStatus==='Monitoring'?'success':accountStatus.includes('attention')?'danger':'warning'}>{accountStatus}</span>
+                    <ArrowRight size={15} className="text-muted"/>
+                  </button>;
+                }):<p className="ym-pc-accounts-empty">No linked accounts yet. Use Add broker account to connect a demo login.</p>}
+              </div>
+              {count>0 && <button type="button" className="ym-select-account-jump" onClick={()=>document.getElementById('ym-linked-accounts')?.scrollIntoView({behavior:'smooth',block:'start'})}>Open account manager <ArrowRight size={15}/></button>}
+            </div>}
+          </div>;
+        })}
+      </div>
+      <details className="ym-context-help ym-connector-downloads"><summary><CircleHelp size={15}/>Connector downloads and setup</summary>
+        <div className="ym-connection-actions">
+          <a href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.3-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer">Download Connector v0.5.3-rc1</a>
+          <a href="/connector-download.html">Release details &amp; SHA-256</a>
+          <a href="/mt5-connector.zip" download>Python source fallback</a>
+        </div>
+        <p>Use the Windows connector on the computer that runs MT5. Staging builds are unsigned and capture-only. Check the release checksum before opening the executable.</p>
+      </details>
+      {requestedPc && loaded && <p className="ym-context-short" role="status">{!devices.length?'Pair a PC once to continue.':requestedPc==='1'&&devices.length>1?'Select the PC to add this account to.':'Keep the connector open; the login will open when the selected PC is ready.'}</p>}
     </section>
-    <section className="card p-5 sm:p-6 space-y-3">
-      <h2 className="flex items-center gap-2 font-bold"><Link2 size={20} className="text-brand-500"/>Linked accounts</h2>
-      <p className="text-sm text-secondary">{demo?'Demo and contest accounts are available. Real-account capture remains disabled until independently approved.':'Demo, contest and real accounts available.'} Connect multiple accounts using a dedicated portable MT5 terminal for each. YoungMoney3 captures trades and balances only; it cannot place, change, or close orders.</p>
-      {loaded && !links.length && <p className="rounded-xl bg-secondary p-4 text-sm text-secondary">No accounts linked yet.</p>}
-    <label className="block text-xs text-secondary">History lookback
-      <select className="input-field mt-1 max-w-xs" value={historyDays} onChange={e=>setHistoryDays(e.target.value)}><option value="30">30 days before linking</option><option value="365">1 year before linking</option><option value="3650">Up to 10 years before linking</option></select>
-    </label>
-    {links.map(l=><div key={l.id} className="space-y-2"><p className="rounded-xl bg-secondary p-4 text-sm" key={l.id}>{l.company || 'Account'} {l.login} {l.server ? '· '+l.server : ''} {l.trade_mode === 2 ? '· REAL' : l.trade_mode === 1 ? '· CONTEST' : l.trade_mode === 0 ? '· DEMO' : ''} {l.access_level === 'trading-enabled' ? '· External trading permission (capture-only here)' : l.access_level === 'trading-restricted' ? '· Broker trading disabled externally' : ''} {demo && l.trade_mode===2 ? ' · Real-account capture paused' : ''} · {['pending','verifying'].includes(l.status) && l.expires<Date.now()?'expired':l.status} {l.broker_balance!=null && '· Last reported balance '+l.broker_balance+' '+l.currency+' · Equity '+l.broker_equity+' '+l.currency} {l.last_sync && Date.now()-Date.parse(l.last_sync)>120000 ? ' · Snapshot may be stale; verify the connector is running.' : ''} {l.last_error} {l.last_sync && '· Last sync '+new Date(l.last_sync).toLocaleString()} {l.gap ? '· Offline interval: intermediate stop changes may be missing.' : ''}</p>
-      {l.status==='connected' && <div className="flex flex-wrap gap-2"><button className="btn-secondary" disabled={historyBusy || l.history_status==='requested'} onClick={()=>run(async()=>{await action('history-request',{link:l.id,days:Number(historyDays)});setPreview(null);})}>Find earlier trades</button>
-      {l.history_status==='requested' && <><span role="status" className="text-sm">Scanning on your PC. Keep the connector running.</span>
-        <button className="btn-secondary" onClick={()=>run(async()=>{await action('history-decline',{link:l.id,request:l.history_id});setPreview(null);})}>Cancel scan</button></>}
-      {['ready','imported'].includes(l.history_status || '') && <button className="btn-secondary" onClick={()=>run(async()=>{setHistoryLink(l.id);setPreview(await action('history-preview',{link:l.id,offset:0}));})}>Review earlier trades</button>}</div>}
-    </div>)}
-    {preview && <section className="rounded-xl border border-themed p-4 space-y-3"><h3 className="font-semibold">Load these earlier trades for analysis?</h3><p className="text-sm text-secondary">Previewed {preview.rows.length} broker fills{preview.more?' (more pages remain)':''}. Open every page before importing; only the reviewed request will be imported. Review possible manual matches afterward. Your broker balance remains the latest reported balance.</p>
-      <div className="overflow-auto max-h-64"><table className="w-full text-sm text-left"><thead><tr><th>Asset</th><th>Closed</th><th>Lots</th><th>Net P&amp;L</th></tr></thead><tbody>{preview.rows.map((r,i)=><tr key={i}><td>{String(r.pair)}</td><td>{String(r.exit_time)}</td><td>{String(r.lot_size)}</td><td>{String(r.pnl)}</td></tr>)}</tbody></table></div>
-      {preview.more && <button disabled={historyBusy} className="btn-secondary" onClick={()=>{setHistoryBusy(true);void run(async()=>{
-        const next=await action('history-preview',{link:historyLink,offset:preview.nextOffset});
-        setPreview(previous=>previous?{...next,rows:[...previous.rows,...next.rows]}:next);
-      }).finally(()=>setHistoryBusy(false));}}>Review next 100 fills</button>}
-      <button disabled={historyBusy || preview.more} className="btn-primary" onClick={()=>{setHistoryBusy(true);void run(async()=>{const link=links.find(l=>l.id===historyLink);let more=true;while(more){more=(await action('history-import',{link:historyLink,request:link?.history_id,expected_count:preview.rows.length})).more;}setPreview(null);await fetchTrades();}).finally(()=>setHistoryBusy(false));}}>Import {preview.rows.length} reviewed fills</button>
-      <button disabled={historyBusy} className="btn-secondary" onClick={()=>run(async()=>{await action('history-decline',{link:historyLink,request:links.find(l=>l.id===historyLink)?.history_id});setPreview(null);})}>Skip import</button>
-    </section>}
+    <section id="ym-linked-accounts" className="card ym-connection-section" aria-labelledby="linked-accounts-title">
+      <header className="ym-connection-heading">
+        <div><p className="ym-connection-eyebrow">02 / BROKER CONNECTIONS</p><h2 id="linked-accounts-title">Linked accounts <span className="ym-section-count">{visibleLinks.length}</span></h2></div>
+        {selectedPc && <button type="button" className="btn-secondary" onClick={()=>{setSelectedPcId(null);setSelectedAccountId(null);}}>Show all PCs <X size={14}/></button>}
+      </header>
+      {selectedPc && <p className="ym-context-short">Showing accounts on <strong>{pairedPcName(selectedPc)}</strong>.</p>}
+      {loaded && !visibleLinks.length && <div className="ym-connection-empty"><Link2 size={26}/><strong>No accounts in this view</strong><p>Select a different PC or add your first broker login.</p></div>}
+      <div className="ym-selectable-stack" role="list" aria-label="Select a broker account">
+        {visibleLinks.map(l=>{
+          const pc=devices.find(d=>d.id===l.device),expanded=selectedAccountId===l.id;
+          const status=monitoringStatus(l,pc,capturePaused),isGood=status==='Monitoring';
+          return <div key={l.id} role="listitem" className="ym-selectable-card" data-selected={expanded}>
+            <button type="button" className="ym-selectable-trigger" aria-expanded={expanded} aria-controls={'ym-account-details-'+l.id} onClick={()=>{setSelectedAccountId(expanded?null:l.id);setAccountPanel('overview');}}>
+              <span className="ym-selection-icon"><Wallet size={20}/></span>
+              <span className="ym-selection-primary"><strong>{accountNames[l.account_id||'']||l.company||l.server||'Pending broker account'}</strong><small>{l.server||'Server unknown'} · {l.login||'Login pending'} · {pairedPcName(pc)}</small></span>
+              <span className="ym-connection-badge" data-tone={isGood?'success':status.toLowerCase().includes('attention')?'danger':'warning'}>{status}</span>
+              <ChevronDown className="ym-selectable-chevron" size={18}/>
+            </button>
+            {expanded && <div className="ym-selection-details" id={'ym-account-details-'+l.id}>
+              {l.status==='connected' ? <>
+                <div className="ym-account-overview-figures">
+                  <div><small>Broker balance</small><strong>{l.broker_balance==null?'—':l.broker_balance.toLocaleString()} <span>{l.currency}</span></strong></div>
+                  <div><small>Broker equity</small><strong>{l.broker_equity==null?'—':l.broker_equity.toLocaleString()} <span>{l.currency}</span></strong></div>
+                  <div><small>Decisions for review</small><strong>{l.pending_reviews||0}</strong></div>
+                </div>
+                <div className="ym-account-tabs" role="tablist" aria-label="Account management">
+                  {([{id:'overview',label:'Overview',Icon:Monitor},{id:'history',label:'Trade history',Icon:History},{id:'cash',label:'Cash movements',Icon:Wallet},{id:'timezone',label:'Timezone',Icon:Clock3}] as const).map(({id,label,Icon})=><button type="button" key={id} role="tab" aria-selected={accountPanel===id} onClick={()=>setAccountPanel(id)}><Icon size={15}/>{label}</button>)}
+                </div>
+                {accountPanel==='overview' && <div className="ym-account-pane" role="tabpanel">
+                  <div className="ym-detail-grid">
+                    <div><span>Device</span><strong>{pairedPcName(pc)}</strong></div>
+                    <div><span>Broker login</span><strong>{l.login||'—'}</strong></div>
+                    <div><span>Last sync</span><strong>{l.last_sync?new Date(l.last_sync).toLocaleString():'Awaiting first sync'}</strong></div>
+                    <div><span>Account class</span><strong>{l.trade_mode===0?'Demo':l.trade_mode===1?'Contest':l.trade_mode===2?'Real':'Unknown'}</strong></div>
+                  </div>
+                  {l.last_error && <div className="ym-action-feedback" data-kind="warning" role="alert"><AlertTriangle size={16}/><span>{l.last_error}</span></div>}
+                  {Boolean(l.gap)&&<div className="ym-action-feedback" data-kind="warning">An offline interval may have left gaps in observed stop changes.</div>}
+                  <div className="ym-connection-actions">
+                    <button type="button" className="btn-secondary" disabled={!!busyAction} onClick={()=>void run(()=>action('set-monitoring',{link:l.id,paused:!l.monitoring_paused}),l.monitoring_paused?'Monitoring resumed.':'Monitoring paused.','monitoring')}>{busyAction==='monitoring'?'Updating…':l.monitoring_paused?'Resume monitoring':'Pause monitoring'}</button>
+                    <button type="button" className="btn-secondary" disabled={!!l.retry_requested_at||!!l.monitoring_paused||capturePaused||!!busyAction} onClick={()=>void run(()=>action('retry-session',{link:l.id}),'Retry queued. The connector will retry this login.','retry')}>{busyAction==='retry'?'Queuing…':l.retry_requested_at?'Retry queued':'Retry account'}</button>
+                  </div>
+                  <details className="ym-context-help"><summary><CircleHelp size={15}/>Permissions and capture safety</summary><p>{l.access_level==='trading-enabled'?'The broker login has trading privileges, but this dashboard captures records only.':'This integration is capture-only.'} No orders are placed from YoungMoney3.</p></details>
+                </div>}
+                {accountPanel==='history' && <div className="ym-account-pane" role="tabpanel">
+                  <div className="ym-account-pane-heading"><div><strong>Earlier trades</strong><span>Choose how far back to collect broker-available records.</span></div><History size={19}/></div>
+                  <div className="ym-history-inputs">
+                    <label>History starting point
+                      <Select className="input-field" value={historyMode} onChange={e=>setHistoryMode(e.target.value)}>
+                        <option value="days">Lookback duration</option><option value="from_date">From a date</option><option value="all">All broker-available history</option><option value="since_last_deposit">After latest balance credit</option><option value="since_first_deposit">After earliest balance credit</option>
+                      </Select>
+                    </label>
+                    {historyMode==='days'&&<label>Lookback
+                      <Select className="input-field" value={historyDays} onChange={e=>setHistoryDays(e.target.value)}>
+                        {['7','14','30','60','90','180','365','730','1825'].map(days=><option key={days} value={days}>{days} days{days==='30'?' · default':''}</option>)}<option value="custom">Custom duration</option>
+                      </Select>
+                    </label>}
+                    {historyMode==='days'&&historyDays==='custom'&&<label>Days<input type="number" className="input-field" min={1} max={36525} step={1} value={historyCustomDays} onChange={e=>setHistoryCustomDays(e.target.value)} placeholder="e.g. 240"/></label>}
+                    {historyMode==='from_date'&&<label>Starting date (UTC)<input type="date" className="input-field" min="1970-01-01" max={new Date().toISOString().slice(0,10)} value={historyFromDate} onChange={e=>setHistoryFromDate(e.target.value)}/></label>}
+                  </div>
+                  <div className="ym-connection-actions">
+                    <button className="btn-primary" disabled={!!busyAction||!!l.monitoring_paused||capturePaused||['requested','resolving'].includes(l.history_status||'')||(historyMode==='from_date'&&!historyFromDate)||(historyMode==='days'&&historyDays==='custom'&&!historyCustomDays)} onClick={()=>void run(async()=>{const payload:Record<string,unknown>={link:l.id,mode:historyMode};if(historyMode==='days')payload.days=Number(historyDays==='custom'?historyCustomDays:historyDays);if(historyMode==='from_date')payload.since=historyFromDate;await action('history-request',payload);},'History scan requested. Progress will appear here.','history')}>{busyAction==='history'?'Requesting…':'Find earlier trades'}</button>
+                    {['requested','resolving'].includes(l.history_status||'')&&<button className="btn-secondary" disabled={!!busyAction} onClick={()=>void run(()=>action('history-decline',{link:l.id,request:l.history_id}),'History scan cancelled.','cancel-history')}>Cancel scan</button>}
+                    {l.history_id&&['ready','imported'].includes(l.history_status||'')&&<button className="btn-secondary" onClick={()=>setHistoryScan({link:l.id,request:l.history_id!,brokerAccount:[l.server,l.login].filter(Boolean).join(' · '),name:accountNames[l.account_id||'']||l.company||'Linked account'})}>Review earlier trades</button>}
+                  </div>
+                  {['requested','resolving'].includes(l.history_status||'')&&<div className="ym-account-progress" role="status"><RefreshCw size={16} className="animate-spin"/><span>{l.history_status==='resolving'?'Finding the selected balance transaction…':'Scanning broker history…'}</span></div>}
+                  {l.history_status==='no_deposit'&&<div className="ym-action-feedback" data-kind="warning" role="status">No qualifying balance credit was found in available broker history.</div>}
+                  {l.history_anchor_at!=null&&<div className="ym-detail-grid"><div><span>Balance transaction</span><strong>{new Date(l.history_anchor_at).toLocaleString()}</strong></div><div><span>Broker deal ticket</span><strong>{l.history_anchor_ticket||'—'}</strong></div></div>}
+                  {l.history_scanned_until!=null&&<p className="ym-context-short">Scanned through {new Date(l.history_scanned_until).toLocaleDateString()}.</p>}
+                  <details className="ym-context-help"><summary><CircleHelp size={15}/>What can the connector recover?</summary><p>Only records retained by the broker. Some balance entries can be broker adjustments rather than actual deposits. Historical stop changes and original risk are shown only when supporting records exist. Review fills before importing.</p></details>
+                </div>}
+                {accountPanel==='cash'&&<div className="ym-account-pane" role="tabpanel">
+                  <CashFlowPanel key={l.id} link={l} />
+                </div>}
+                {accountPanel==='timezone'&&<div className="ym-account-pane" role="tabpanel">
+                  <div className="ym-account-pane-heading"><div><strong>Broker timezone</strong><span>Confirm the broker's statement time, not your current PC time.</span></div><Clock3 size={19}/></div>
+                  <div className="ym-history-inputs"><label>IANA timezone
+                    <input list="broker-timezones" className="input-field" placeholder="Europe/Athens" value={timezoneDraft[l.id]??l.broker_timezone??''} onChange={e=>setTimezoneDraft(old=>({...old,[l.id]:e.target.value}))}/>
+                  </label></div>
+                  <label className="ym-proof-check"><input type="checkbox" checked={Boolean(timezoneProof[l.id])} onChange={e=>setTimezoneProof(old=>({...old,[l.id]:e.target.checked}))}/>I verified a broker statement against raw MT5 timestamps.</label>
+                  <div className="ym-connection-actions">
+                    <button className="btn-primary" disabled={!!busyAction||!(timezoneDraft[l.id]??l.broker_timezone??'').trim()} onClick={()=>void run(async()=>{const zone=(timezoneDraft[l.id]??l.broker_timezone??'').trim();await action('timezone-confirm',{link:l.id,timezone:zone,confirm:true,utcEvidence:timezoneProof[l.id]?'broker_statement_checked':undefined});},'Timezone saved for this broker account. UTC evidence remains '+(timezoneProof[l.id]?'confirmed.':'unverified.'),'timezone')}>{busyAction==='timezone'?'Confirming…':'Confirm timezone'}</button>
+                    {l.timezone_confirmed_at&&<span className="ym-confirmation-stamp" role="status"><CheckCircle2 size={15}/>Confirmed {new Date(l.timezone_confirmed_at).toLocaleString()}</span>}
+                  </div>
+                  <div className="ym-detail-grid"><div><span>Saved timezone</span><strong>{l.broker_timezone||'Unconfirmed'}</strong></div><div><span>UTC conversion</span><strong>{l.utc_conversion_status||'Not verified'}</strong></div></div>
+                  <details className="ym-context-help"><summary><CircleHelp size={15}/>Why verify timezone?</summary><p>Incorrect offsets can mislabel sessions and distort the interpretation of historical trade timestamps. Confirm against the broker's statement before relying on session reports.</p></details>
+                </div>}
+              </> : <div className="ym-account-pane"><span className="ym-connection-badge" data-tone="warning">{status}</span>{l.last_error&&<p className="ym-context-short">{l.last_error}</p>}<div className="ym-connection-actions"><button className="btn-secondary" onClick={()=>void run(()=>action('retry-session',{link:l.id}),'Retry queued.','retry')}>Retry setup</button></div></div>}
+            </div>}
+          </div>;
+        })}
+      </div>
+      {failedLinks.length>0&&<details className="ym-context-help ym-failed-archive"><summary><AlertTriangle size={15}/>Failed and expired attempts <span>{failedLinks.length}</span></summary>
+        <p>Old unsuccessful attempts are kept apart from live accounts.</p>
+        <button className="btn-secondary" onClick={()=>{if(window.confirm('Remove all failed attempts that have no broker evidence?'))void run(()=>action('clear-failed'),'Failed attempts cleared. Connected accounts were kept.','clear-failed');}}>Clear failed attempts</button>
+        {failedLinks.map(l=><div key={l.id} className="ym-failed-row"><div><strong>{l.company||l.server||'Login attempt'}</strong><small>{l.server} · {l.login}</small></div><button type="button" className="btn-secondary" onClick={()=>{if(window.confirm('Remove this failed login attempt?'))void run(()=>action('remove-failed',{link:l.id}),'Failed attempt removed.','remove-failed');}}>Remove</button></div>)}
+      </details>}
     </section>
+    <datalist id="broker-timezones">
+      <option value="Etc/UTC"/><option value="Europe/Athens"/><option value="Europe/Helsinki"/>
+      <option value="Europe/London"/><option value="Africa/Johannesburg"/><option value="America/New_York"/>
+      <option value="Europe/Berlin"/><option value="Asia/Dubai"/>
+    </datalist>
+    {historyScan && <HistoryReview key={historyScan.link+'/'+historyScan.request} scan={historyScan}
+      status={historyAccount?.history_id === historyScan.request ? historyAccount.history_status : undefined}
+      onClose={()=>setHistoryScan(current=>current===historyScan ? null : current)}
+      onFinished={async imported=>{
+        setHistoryScan(current=>current===historyScan ? null : current);
+        await run(async()=>{if(imported) await fetchTrades();});
+      }}/>}
+    <details className="card p-5 sm:p-6 ym-position-archives" aria-label="Rich position lifecycles">
+      <summary className="cursor-pointer list-none flex flex-wrap items-center justify-between gap-3" aria-label="Expand broker position lifecycles">
+        <span className="font-bold text-sm">Broker position evidence</span>
+        <span className="ym-section-count">{positions.length} lifecycles</span>
+        <ChevronDown size={17} />
+      </summary>
+      <div className="mt-4 pt-4 border-t border-themed space-y-3">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div><h2 className="text-base font-bold">Position lifecycles</h2>
+          <p className="text-xs text-muted mt-1">A position lifecycle contains its entries, scale-ins and partial closes. Raw broker records are kept separately for audit.</p>
+        </div>
+        <span className="badge badge-neutral">{positions.length} projected positions</span>
+      </header>
+      {loaded && positions.length===0 && <p className="rounded-xl bg-secondary p-4 text-sm text-secondary">No rich broker position summaries have synced yet. Start the staging Windows connector and leave it running with a demo account.</p>}
+      <div className="space-y-2">
+        {positions.map(item=>{
+          const x=item.summary;
+          const broker=links.find(link=>link.id===item.link);
+          return <details key={item.link+'/'+item.lifecycle_id} className="ym-mt5-lifecycle rounded-xl border border-themed p-3 sm:p-4" data-result={x.status==='open'?'open':pnlTone(x.net_realized_profit)==='positive'?'win':pnlTone(x.net_realized_profit)==='negative'?'loss':'neutral'}>
+            <summary className="cursor-pointer list-none flex flex-wrap gap-3 items-center justify-between">
+              <span className="flex flex-col gap-1"><strong className="text-sm flex flex-wrap items-center gap-2">{x.symbol}
+                  <span className="ym-direction-tag" data-side={x.direction}>{x.direction==='long'?'Long':'Short'}</span>
+                  <span className="text-muted text-xs font-normal">{x.status==='open'?'Open':'Closed'}</span></strong>
+                <small className="text-muted">{broker?.company || 'Broker'} · {broker?.login || item.account_id} · Version {item.version}</small></span>
+              <span className="flex flex-col text-right"><strong className={`ym-market-value text-sm ym-market-${pnlTone(x.net_realized_profit,x.status==='open')}`}>{x.status==='open'?'Unrealized / unknown':x.net_realized_profit==null?'Unavailable':signedMoney(Number(x.net_realized_profit),String(x.net_realized_profit))} {broker?.currency || ''}</strong>
+                <small className="text-muted">Net R: {x.realized_r ?? 'Unavailable'} · {x.movement ?? '—'} {x.movement_unit || 'units'}</small></span>
+            </summary>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-xs">
+              {[
+                ['First entry',x.first_entry_at],['Final exit',x.final_exit_at || 'Open'],
+                ['Original SL',x.initial_sl ?? 'Not captured'],['Original TP',x.initial_tp ?? 'Not captured'],
+                ['Stop source',x.initial_sl_provenance || 'Unverified'],
+                ['First observed',x.initial_sl_observed_at || '—'],['Current SL',x.current_sl ?? '—'],['Current TP',x.current_tp ?? '—'],
+                ['Initial risk',x.initial_risk_account ?? 'Unavailable'],['Capital source',x.capital_at_entry?.source || 'Unavailable'],
+                ['Final net R',x.final_realized_r ?? 'Unavailable'],['Remaining volume',x.remaining_volume ?? 'Unknown'],
+                ['Total holding',x.holding_seconds ? (Number(x.holding_seconds)/3600).toFixed(2)+' hours' : 'Open/unknown'],
+                ['VW holding',x.weighted_holding_seconds ? (Number(x.weighted_holding_seconds)/3600).toFixed(2)+' hours' : 'Unavailable'],
+              ].map(([label,value])=><div key={String(label)} className="ym-market-detail" data-level={label==='Original SL'||label==='Current SL'?'sl':label==='Original TP'||label==='Current TP'?'tp':label.toLowerCase().includes('risk')?'risk':undefined}><span>{label}</span><strong>{value}</strong></div>)}
+            </div>
+            <p className="text-xs text-secondary mt-3">Sessions: {x.sessions?.status==='confirmed' ? x.sessions.sessions?.join(', ') || 'None' : 'Unresolved — '+(x.sessions?.reason || 'broker timezone not confirmed')} · Initial risk: {x.capture_completeness?.original_risk || 'unknown'}</p>
+            <div className="grid md:grid-cols-2 gap-4 mt-4">
+              <div><h3 className="text-xs font-bold mb-2">Entry executions ({x.entries?.length || 0})</h3>
+                {x.entries?.map((entry,index)=><div key={index} className="text-xs border-t border-themed py-2">
+                  Deal {String(entry.deal_ticket || '—')} · {String(entry.volume || '?')} lots @ {String(entry.price || '?')}
+                  <p className="text-muted">{String(entry.time || '')} · <span className="ym-market-sl">Opening SL {String(entry.initial_sl ?? 'unknown')}</span> · <span className="ym-market-warning">Risk {String(entry.initial_risk ?? 'unknown')}</span></p>
+                </div>)}
+              </div>
+              <div><h3 className="text-xs font-bold mb-2">Closes ({x.exits?.length || 0})</h3>
+                {x.exits?.map((exit,index)=><div key={index} className="text-xs border-t border-themed py-2">
+                  Deal {String(exit.deal_ticket || '—')} · {String(exit.volume || '?')} lots @ {String(exit.price || '?')}
+                  <p className="text-muted"><span className={`ym-market-${pnlTone(exit.net_profit as number | string | null)}`}>Net {String(exit.net_profit ?? 'unknown')}</span> · R {String(exit.realized_r ?? 'unavailable')} · {String(exit.holding_seconds ?? 'unknown')} seconds</p>
+                </div>)}
+              </div>
+            </div>
+          </details>;
+        })}
+      </div>
+      {positionsMore && <button className="btn-secondary" onClick={async()=>{try {
+        const page=await action('positions',{offset:positions.length});
+        setPositions(previous=>[...previous,...page.rows]);setPositionsMore(Boolean(page.more));
+      } catch(e){setError(e instanceof Error?e.message:'Could not load more lifecycles.');}}}>Load more lifecycles</button>}
+      </div>
+    </details>
     <dialog ref={dialog} aria-labelledby="mt5-dialog-title" className="mt5-dialog" onClose={()=>{setDevice('');void refresh().catch(e=>setError(e.message));}}>
       <header className="flex items-center justify-between border-b border-themed px-5 py-4"><h2 id="mt5-dialog-title" className="font-bold">Connect MT5 account</h2><button className="btn-ghost p-2" aria-label="Close login" onClick={()=>dialog.current?.close()}><X size={18}/></button></header>
       {device && <iframe title="MT5 broker account login" className="w-full border-0" style={{height:'min(530px,70dvh)'}} src={'/mt5-login.html#'+encodeURIComponent(device)}/>}
     </dialog>
     {trades.some(t=>source(t)==='mt5') && <details className="card p-5 space-y-3"><summary>Review manual and imported trade matches</summary>
-      <label>Broker trade <select value={imported} onChange={e=>{setImported(e.target.value);setManual('');}}><option value="">Choose a trade</option>{trades.filter(t=>source(t)==='mt5' && t.status==='closed').map(t=><option key={t.id} value={t.id}>{t.pair} · {t.direction} · {t.entry_time} · {t.pnl}</option>)}</select></label>
-      {selected && <label>Manual entry <select value={manual} onChange={e=>setManual(e.target.value)}><option value="">Choose a matching entry</option>{matches.map(t=><option key={t.id} value={t.id}>{t.pair} · {t.entry_time} · {t.pnl}</option>)}</select></label>}
+      <label>Broker trade <Select value={imported} onChange={e=>{setImported(e.target.value);setManual('');}}><option value="">Choose a trade</option>{trades.filter(t=>source(t)==='mt5' && t.status==='closed').map(t=><option key={t.id} value={t.id}>{t.pair} · {t.direction} · {t.entry_time} · {t.pnl}</option>)}</Select></label>
+      {selected && <label>Manual entry <Select value={manual} onChange={e=>setManual(e.target.value)}><option value="">Choose a matching entry</option>{matches.map(t=><option key={t.id} value={t.id}>{t.pair} · {t.entry_time} · {t.pnl}</option>)}</Select></label>}
       <button disabled={!manual} onClick={()=>run(async()=>{await action('match',{imported,manual});setManual('');setImported('');await fetchTrades();})}>Confirm match and retain journal notes</button></details>}
     {error && <p role="alert">{error}</p>}
   </main>;
 }
 
+interface HistoryReviewProps {
+  scan: SelectedScan;
+  status?: string;
+  onClose: () => void;
+  onFinished: (imported: boolean) => Promise<void>;
+}
+
+async function loadHistoryPage(scan: HistoryScan, offset: number, signal?: AbortSignal): Promise<HistoryPage> {
+  const page = await action('history-preview', {link:scan.link, request:scan.request, offset}, signal);
+  if (page.link !== scan.link || page.request !== scan.request || !Array.isArray(page.rows) ||
+      !Number.isSafeInteger(page.nextOffset) || page.nextOffset !== offset + page.rows.length ||
+      (page.more && page.rows.length === 0)) {
+    throw new Error('The preview changed. Reopen this account’s history.');
+  }
+  return page;
+}
+
+function HistoryReview({scan, status, onClose, onFinished}: HistoryReviewProps) {
+  const [preview, setPreview] = useState<HistoryPage | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+  const current = status === 'ready' || status === 'imported';
+  useEffect(() => {
+    if (!current) return;
+    const controller = new AbortController();
+    setPreview(null);
+    setError('');
+    void loadHistoryPage(scan, 0, controller.signal).then(page => {
+      if (!controller.signal.aborted) setPreview(page);
+    }).catch((cause: unknown) => {
+      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not open these fills.');
+    });
+    return () => controller.abort();
+  }, [scan, current, attempt]);
+
+  async function perform(operation: () => Promise<void>) {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try { await operation(); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not complete the request.'); }
+    finally { setBusy(false); }
+  }
+
+  return <section className="rounded-xl border border-themed p-4 space-y-3" aria-label={'Earlier trades for '+scan.name}>
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div><h3 className="font-semibold">Earlier trades for {scan.name}</h3>
+        {scan.brokerAccount && <p className="text-xs text-secondary">{scan.brokerAccount}</p>}</div>
+      <button type="button" className="btn-ghost" onClick={onClose}>Close preview</button>
+    </div>
+    {!current ? <p role="status">This scan is no longer current. Open the latest preview for this account.</p> :
+      !preview ? (error ? <p role="alert">{error} <button className="btn-secondary" onClick={()=>setAttempt(n=>n+1)}>Retry preview</button></p>
+        : <p role="status">Loading broker fills…</p>) : <>
+      <p className="text-sm text-secondary">{preview.rows.length} broker {preview.rows.length===1?'fill':'fills'} reviewed{preview.more?' so far. Review the next page before importing.':'.'} Your latest broker balance is shown on the account.</p>
+      <div className="overflow-auto max-h-80"><table className="w-full min-w-[950px] text-xs text-left border-separate border-spacing-0">
+        <thead><tr className="text-muted uppercase tracking-wide">
+          {['Symbol','Position / deal','Entry / exit UTC','Direction','Volume','Entry / exit price','Opening SL / TP','Closing SL / TP','Initial risk','Costs / swap','Exit reason','Net P&L'].map(label=><th key={label} className="border-b border-themed px-2 py-3 font-semibold whitespace-nowrap">{label}</th>)}
+        </tr></thead>
+        <tbody>{preview.rows.map((r,i)=>{
+          const broker=(r.broker_details && typeof r.broker_details==='object' ? r.broker_details : {}) as Record<string,unknown>;
+          const value=(key:string)=>r[key]==null?'Unknown':String(r[key]);
+          return <tr key={i} className="align-top hover:bg-secondary" data-result={pnlTone(r.pnl as number|string|null)}>
+            <td className="px-2 py-3 font-semibold">{value('pair')}</td>
+            <td className="px-2 py-3 font-mono">Position {broker.position_id == null?'Unknown':String(broker.position_id)}<div className="text-muted">Deal {broker.deal_ticket == null?'Unknown':String(broker.deal_ticket)}</div></td>
+            <td className="px-2 py-3">{value('entry_time')}<div className="text-muted">{value('exit_time')}</div></td>
+            <td className="px-2 py-3"><span className="ym-direction-tag" data-side={r.direction}>{value('direction')}</span></td>
+            <td className="px-2 py-3 font-mono">{value('lot_size')}</td>
+            <td className="px-2 py-3 font-mono">{value('entry_price')}<div className="text-muted">{value('exit_price')}</div></td>
+            <td className="px-2 py-3 font-mono"><span className="ym-market-sl">SL {r.stop_loss == null?'Not recorded':String(r.stop_loss)}</span>
+              <div className="ym-market-tp">TP {r.take_profit==null?'Not recorded':String(r.take_profit)}</div>
+              <div className="text-muted font-sans">{broker.opening_protection_provenance==='executed_open_order'?'From opening order':'Opening protection unverified'}</div></td>
+            <td className="px-2 py-3 font-mono"><span className="ym-market-sl">SL {broker.closing_order_sl==null?'Unavailable':String(broker.closing_order_sl)}</span>
+              <div className="ym-market-tp">TP {broker.closing_order_tp==null?'Unavailable':String(broker.closing_order_tp)}</div>
+              <div className="text-muted font-sans">Exit order {broker.exit_order_ticket==null?'Unknown':String(broker.exit_order_ticket)}</div></td>
+            <td className="px-2 py-3">Historical initial risk cannot be proven without the opening order, instrument specification, and capital at entry</td>
+            <td className="px-2 py-3 font-mono">Fees: {value('fees')}<div className="text-muted">Swap: {broker.swap==null?'Unknown':String(broker.swap)}</div></td>
+            <td className="px-2 py-3">{broker.close_reason==null?'Not recorded':String(broker.close_reason)}
+              <div className="text-muted">{broker.close_comment==null?'':String(broker.close_comment)}</div></td>
+            <td className={`px-2 py-3 ym-market-value font-semibold ym-market-${pnlTone(r.pnl as number|string|null)}`}>{r.pnl==null?'Unknown':signedMoney(Number(r.pnl),String(r.pnl))}</td>
+          </tr>;
+        })}</tbody>
+      </table></div>
+      <p className="text-xs text-muted">These are individual closed broker fills, including partial exits. Original broker deals and orders (timestamps, fees, swap, reasons and known stop levels) are preserved as immutable evidence. A stop changed between observations may not be reconstructible from historical records. Initial risk and R remain unknown when broker evidence is insufficient.</p>
+      {preview.more && <div className="flex flex-wrap gap-2">
+        <button disabled={busy} className="btn-secondary" onClick={()=>perform(async()=>{
+          const next = await loadHistoryPage(scan, preview.nextOffset);
+          setPreview({...next, rows:[...preview.rows, ...next.rows]});
+        })}>Review next 100 fills</button>
+        <button disabled={busy} className="btn-secondary" onClick={()=>perform(async()=>{
+          let current=preview, rows=[...preview.rows];
+          // Reviewable batches; very large histories require another click
+          // rather than blocking the browser or silently importing unseen data.
+          for(let page=0;current.more && page<30;page++){
+            current=await loadHistoryPage(scan,current.nextOffset);
+            rows=rows.concat(current.rows);
+            setPreview({...current,rows});
+          }
+        })}>Load remaining pages for review (up to 3,000)</button>
+      </div>}
+      <button disabled={busy || preview.more} className="btn-primary" onClick={()=>perform(async()=>{
+        let more = true;
+        while (more) {
+          const batch = await action('history-import',{link:preview.link, request:preview.request, expected_count:preview.rows.length});
+          more = batch.more;
+        }
+        await onFinished(true);
+      })}>Import {preview.rows.length} reviewed {preview.rows.length===1?'fill':'fills'}</button>
+      {status === 'ready' && <button disabled={busy} className="btn-secondary" onClick={()=>perform(async()=>{
+        await action('history-decline',{link:preview.link,request:preview.request});
+        await onFinished(false);
+      })}>Skip import</button>}
+      {error && <p role="alert">{error}</p>}
+    </>}
+  </section>;
+}

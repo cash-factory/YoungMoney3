@@ -1,4 +1,6 @@
-import { accountLedger, settlement, validateTradeTimes } from '@/lib/tradeFinance';
+import { Select } from '@/components/Select';
+import { riskCapital, settlement, validateTradeTimes } from '@/lib/tradeFinance';
+import { pnlTone, signedMoney } from '@/lib/tradingTone';
 import { useState, useEffect } from 'react';
 import { Save, X, Calculator, TrendingUp, TrendingDown, Zap, ChevronRight, ChevronLeft, CheckCircle2, Target, Brain, AlertTriangle, Clock, CheckCircle, ListChecks, Camera, Lock, Star } from 'lucide-react';
 import type { Trade, TradeInput, TradeDirection, TradeSession, AccountType, EmotionalState, TradeStatus, TradeChecklistSnapshot, TradeCalculationSnapshot } from '@/lib/types';
@@ -11,6 +13,7 @@ import { ScreenshotUpload } from './ScreenshotUpload';
 import { SuggestInput } from './ui/SuggestInput';
 import { PreTradeChecklist } from './PreTradeChecklist';
 import { EntitySelect } from './EntitySelect';
+import { ThemedSelect } from '@/components/ThemedSelect';
 import { InstrumentPicker } from './InstrumentPicker';
 import { TradingViewChart } from './TradingViewChart';
 import { calculatePositionSize, createTradeCalculationSnapshot, defaultTradeLevels, distancePresets, examplePriceIsUnconfirmed, instrumentDistanceLabel, instrumentPnl, instrumentPnlFromSnapshot, priceAtDistance, quantityStep, validQuantity, SIZE_PRESETS } from '@/lib/instrumentMath';
@@ -18,6 +21,7 @@ import { setupQualityFromChecklist } from '@/lib/setupQuality';
 
 interface TradeFormProps {
   initial?: Trade | null;
+  preferredAccountId?: string;
   onSubmit: (data: TradeInput) => Promise<void>;
   onCancel: () => void;
 }
@@ -40,7 +44,7 @@ function localDateTimeInputValue(date = new Date()): string {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 
-export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
+export function TradeForm({ initial, preferredAccountId, onSubmit, onCancel }: TradeFormProps) {
   const { user } = useAuth();
   const { strategies } = useStrategies(user?.id);
   const { plans } = useTradingPlans(user?.id);
@@ -108,7 +112,9 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
 
   useEffect(() => {
     if (initial || !accounts.length) return;
-    const defaultAccount = accounts.find(a => a.id === form.account_id) || accounts.find(a => a.is_active) || accounts[0];
+    const preferred = form.account_id || preferredAccountId;
+    const defaultAccount = preferred ? accounts.find(a => a.id === preferred) : accounts.find(a => a.is_active) || accounts[0];
+    if (!defaultAccount) return;
     if (!form.account_id) {
       update('account_id', defaultAccount.id);
       if (defaultAccount.broker_name) update('broker', defaultAccount.broker_name);
@@ -120,7 +126,7 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
       update('strategy_id', defaultAccount.default_strategy_id);
       update('strategy', strategies.find(s => s.id === defaultAccount.default_strategy_id)?.name || '');
     }
-  }, [initial, accounts, strategies, plans, form.account_id, form.strategy_id, form.plan_id, form.direction]);
+  }, [initial, preferredAccountId, accounts, strategies, plans, form.account_id, form.strategy_id, form.plan_id, form.direction]);
 
   const update = <Field extends keyof TradeInput>(field: Field, value: TradeInput[Field]) => {
     setForm(f => ({ ...f, [field]: value }));
@@ -204,7 +210,8 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
   const effectiveRiskPercent = configuredRiskLimits.length ? Math.min(...configuredRiskLimits) : null;
   const isExamplePrice = examplePriceIsUnconfirmed(form.entry_price, selectedInstrument);
   const sizePresets = selectedInstrument ? SIZE_PRESETS[selectedInstrument.asset_class] || SIZE_PRESETS.custom : SIZE_PRESETS.fx;
-  const currentBalance = selectedAccount ? accountLedger(selectedAccount, accountTrades, adjustments).balance : 0;
+  const capital = selectedAccount ? riskCapital(selectedAccount, accountTrades, adjustments) : null;
+  const currentBalance = capital?.value ?? null;
   // Legacy edits retain their recorded risk when the entry capital is unknown.
   const entryCapital = initial && form.account_id === initial.account_id ? initial.risk_capital_at_entry ?? null : currentBalance;
   const effectiveBalance = entryCapital ?? 0;
@@ -373,6 +380,8 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
       settlement_currency: currency,
       planned_r: liveCalc.potentialRr,
       risk_capital_at_entry: entryCapital,
+      risk_capital_source: initial && form.account_id === initial.account_id ? initial.risk_capital_source ?? null : capital?.source ?? null,
+      risk_capital_observed_at: initial && form.account_id === initial.account_id ? initial.risk_capital_observed_at ?? null : capital?.observedAt ?? null,
       client_request_id: initial ? undefined : draftId,
       expected_revision: initial?.updated_at,
       instrument_id: selectedInstrument && !selectedInstrument.id.startsWith('seed:') && !selectedInstrument.id.startsWith('custom-local:') ? selectedInstrument.id : null,
@@ -504,7 +513,10 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
             <div key={s.id} className="flex items-center flex-1">
               <button
                 type="button"
-                onClick={() => !locked && navigateToStep(i)}
+                aria-label={s.label}
+                aria-current={active ? 'step' : undefined}
+                disabled={locked}
+                onClick={() => navigateToStep(i)}
                 className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   locked ? 'text-muted/50 cursor-not-allowed' :
                   active ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400' :
@@ -523,7 +535,7 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
       </div>
 
       {liveCalc.hasData && step === 2 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-xl bg-gradient-to-br from-orange-500/5 to-amber-500/10 border border-orange-500/20 animate-slide-up">
+        <div className="ym-trade-summary grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-xl animate-slide-up">
           {liveCalc.isClosed ? (
             <>
               <div className="flex items-center gap-2">
@@ -541,8 +553,8 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold text-muted uppercase">P&L (auto)</p>
-                  <p className={`text-sm font-mono font-bold ${liveCalc.pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>
-                    {formatAccountCurrency(liveCalc.pnl)}
+                  <p className={`text-sm ym-market-value font-bold ym-market-${pnlTone(liveCalc.pnl)}`}>
+                    {signedMoney(liveCalc.pnl,formatAccountCurrency(liveCalc.pnl))}
                   </p>
                 </div>
               </div>
@@ -577,7 +589,7 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold text-muted uppercase">Status</p>
-                  <p className="text-sm font-bold text-orange-500">OPEN</p>
+                  <p className="ym-trade-status text-sm font-bold">OPEN</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -595,8 +607,8 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
                 </div>
                 <div>
                   <p className="text-[10px] font-semibold text-muted uppercase">Potential P&L</p>
-                  <p className="text-sm font-mono font-bold text-success-500">
-                    {form.take_profit && form.lot_size ? formatAccountCurrency(liveCalc.potentialPnl) : '—'}
+                  <p className={`text-sm ym-market-value font-bold ym-market-${form.take_profit && form.lot_size ? pnlTone(liveCalc.potentialPnl) : 'neutral'}`}>
+                    {form.take_profit && form.lot_size ? signedMoney(liveCalc.potentialPnl,formatAccountCurrency(liveCalc.potentialPnl)) : '—'}
                   </p>
                 </div>
               </div>
@@ -624,19 +636,19 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
           </div>
           {plans.length > 0 && <div>
             <label className={labelCls}>Trading plan (optional)</label>
-            <select className={inputCls} value={form.plan_id || ''} onChange={e => {
+            <Select className={inputCls} value={form.plan_id || ''} onChange={e => {
               const planId = e.target.value || null;
               update('plan_id', planId);
               const currentStrategy = strategies.find(s => s.id === form.strategy_id);
               if (currentStrategy && currentStrategy.plan_id !== planId) {
                 update('strategy_id', null); update('strategy', ''); update('entry_model_id', null); setChecklistSnapshot([]);
               }
-            }}><option value="">No plan linked</option>{plans.map(plan => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</select>
+            }}><option value="">No plan linked</option>{plans.map(plan => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</Select>
           </div>}
           <div>
             <label className={labelCls}>Strategy (optional)</label>
             {strategiesForPlan.length > 0 ? (
-              <select
+              <Select
                 className={inputCls}
                 value={form.strategy_id || ''}
                 onChange={e => {
@@ -650,7 +662,7 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
               >
                 <option value="">Select strategy</option>
                 {strategiesForPlan.map(s => <option key={s.id} value={s.id}>{s.name}{!s.plan_id ? ' · needs plan' : ''}</option>)}
-              </select>
+              </Select>
             ) : (
               <p className="text-xs text-muted py-2">Choose a plan first, then add strategies to it in Strategy Library. You can still save this trade and link it later.</p>
             )}
@@ -658,10 +670,10 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
 
           {form.strategy_id && entryModels.length > 0 && <div>
             <label className={labelCls}>Entry model (optional)</label>
-            <select className={inputCls} value={form.entry_model_id || ''} onChange={e => { update('entry_model_id', e.target.value || null); setChecklistSnapshot([]); }}>
+            <Select className={inputCls} value={form.entry_model_id || ''} onChange={e => { update('entry_model_id', e.target.value || null); setChecklistSnapshot([]); }}>
               <option value="">General strategy checklist</option>
               {entryModels.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
-            </select>
+            </Select>
           </div>}
 
           {applicableChecklistItems.length > 0 && (
@@ -696,12 +708,12 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
         <div className="space-y-4 animate-fade-in">
           {!initial && <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl border border-themed bg-secondary/40 p-3">
             <div><p className="text-xs font-semibold">Capture type</p><p className="text-[11px] text-muted">Live trades require the actual broker fill. Historical records allow past dates.</p></div>
-            <select className={`${inputCls} sm:max-w-48`} value={form.capture_mode || 'live'} onChange={e => {
-              const mode = e.target.value as 'live' | 'historical';
+            <ThemedSelect className="sm:max-w-48" label="Capture type" value={form.capture_mode || 'live'} onChange={value => {
+              const mode = value as 'live' | 'historical';
               update('capture_mode', mode);
               setActualFillConfirmed(false);
               if (mode === 'live') update('entry_time', localDateTimeInputValue());
-            }}><option value="live">Live capture</option><option value="historical">Historical / past trade</option></select>
+            }} options={[{value:'live',label:'Live capture'},{value:'historical',label:'Historical / past trade'}]} />
           </div>}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
@@ -712,11 +724,8 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
             </div>
             <div>
               <label className={labelCls}>Direction *</label>
-              <select className={inputCls} value={form.direction}
-                onChange={e => changeDirection(e.target.value as TradeDirection)}>
-                <option value="long">Long (Buy)</option>
-                <option value="short">Short (Sell)</option>
-              </select>
+              <ThemedSelect label="Direction" value={form.direction} onChange={value => changeDirection(value as TradeDirection)}
+                options={[{value:'long',label:'Long (Buy)'},{value:'short',label:'Short (Sell)'}]} />
             </div>
             <div>
               <label className={labelCls}>Size {selectedInstrument ? `(${selectedInstrument.quantity_unit})` : ''} *</label>
@@ -732,14 +741,14 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
               {form.capture_mode === 'live' ? <label className="mt-2 flex items-start gap-2 rounded-lg bg-amber-500/10 p-2 text-[11px] text-amber-700 dark:text-amber-300"><input className="mt-0.5" type="checkbox" checked={actualFillConfirmed} onChange={e => setActualFillConfirmed(e.target.checked)} /> I replaced the example with the actual fill from my broker.</label> : isExamplePrice && <label className="mt-2 flex items-start gap-2 rounded-lg bg-amber-500/10 p-2 text-[11px] text-amber-700 dark:text-amber-300"><input className="mt-0.5" type="checkbox" checked={exampleConfirmed} onChange={e => setExampleConfirmed(e.target.checked)} /> I checked this historical price against my source data.</label>}
             </div>
             <div>
-              <label className={labelCls}>Stop Loss {selectedInstrument && <span className="normal-case text-muted">· default {selectedInstrument.default_stop_ticks ?? 20} {instrumentDistanceLabel(selectedInstrument)}</span>}</label>
-              <input type="number" step={selectedInstrument?.price_increment || 0.00001} className={inputCls} placeholder="Enter stop price"
+              <label className={`${labelCls} ym-market-sl`}>Stop Loss · SL {selectedInstrument && <span className="normal-case text-muted">· default {selectedInstrument.default_stop_ticks ?? 20} {instrumentDistanceLabel(selectedInstrument)}</span>}</label>
+              <input type="number" step={selectedInstrument?.price_increment || 0.00001} className={`${inputCls} ym-stop-input`} placeholder="Enter stop price"
                 value={stopLoss} onChange={e => { setStopManuallyEdited(true); setStopLoss(e.target.value); update('stop_loss', e.target.value ? Number(e.target.value) : null); }} />
               {selectedInstrument && form.entry_price != null && <div className="mt-1.5"><p className="mb-1 text-[10px] text-muted">Quick distances · {instrumentDistanceLabel(selectedInstrument)}</p><div className="flex flex-wrap gap-1">{distancePresets(selectedInstrument).map(distance => <button key={distance} type="button" aria-label={`Stop loss ${distance} ${instrumentDistanceLabel(selectedInstrument)}`} onClick={() => { const price = priceAtDistance(selectedInstrument, form.entry_price!, form.direction, distance, 'stop'); setStopManuallyEdited(true); setStopLoss(String(price)); update('stop_loss', price); if (!targetManuallyEdited) { const targetPrice = priceAtDistance(selectedInstrument, form.entry_price!, form.direction, distance * (selectedInstrument.default_target_r ?? 2), 'target'); update('take_profit', targetPrice); } }} className="px-2 py-1 rounded bg-secondary text-[10px]">{distance}</button>)}</div></div>}
             </div>
             <div>
-              <label className={labelCls}>Take Profit {selectedInstrument && <span className="normal-case text-muted">· default {selectedInstrument.default_target_r ?? 2}R</span>}</label>
-              <input type="number" step={selectedInstrument?.price_increment || 0.00001} className={inputCls} placeholder="Enter target price"
+              <label className={`${labelCls} ym-market-tp`}>Take Profit · TP {selectedInstrument && <span className="normal-case text-muted">· default {selectedInstrument.default_target_r ?? 2}R</span>}</label>
+              <input type="number" step={selectedInstrument?.price_increment || 0.00001} className={`${inputCls} ym-target-input`} placeholder="Enter target price"
                 value={form.take_profit ?? ''} onChange={e => { setTargetManuallyEdited(true); update('take_profit', e.target.value ? parseFloat(e.target.value) : null); }} />
               {selectedInstrument && form.entry_price != null && <div className="mt-1.5"><p className="mb-1 text-[10px] text-muted">Quick distances · {instrumentDistanceLabel(selectedInstrument)}</p><div className="flex flex-wrap gap-1">{distancePresets(selectedInstrument).map(distance => <button key={distance} type="button" aria-label={`Take profit ${distance} ${instrumentDistanceLabel(selectedInstrument)}`} onClick={() => { const price = priceAtDistance(selectedInstrument, form.entry_price!, form.direction, distance, 'target'); setTargetManuallyEdited(true); update('take_profit', price); }} className="px-2 py-1 rounded bg-secondary text-[10px]">{distance}</button>)}</div></div>}
             </div>
@@ -783,15 +792,9 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label className={labelCls}>Session</label>
-              <select className={inputCls} value={form.session || ''}
-                onChange={e => update('session', (e.target.value || null) as TradeSession)}>
-                <option value="">—</option>
-                <option value="sydney">Sydney</option>
-                <option value="asian">Asian</option>
-                <option value="london">London</option>
-                <option value="new_york">New York</option>
-                <option value="overlap">London/NY Overlap</option>
-              </select>
+              <ThemedSelect label="Session" value={form.session || ''} onChange={value => update('session', (value || null) as TradeSession)}
+                options={[{value:'',label:'Not selected'},{value:'sydney',label:'Sydney'},{value:'asian',label:'Asian'},
+                  {value:'london',label:'London'},{value:'new_york',label:'New York'},{value:'overlap',label:'London / NY Overlap'}]} />
             </div>
             <div>
               <label className={labelCls}>Broker / Prop Firm</label>
@@ -799,12 +802,8 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
             </div>
             <div>
               <label className={labelCls}>Account Type</label>
-              <select className={inputCls} value={form.account_type || ''}
-                onChange={e => update('account_type', (e.target.value || null) as AccountType)}>
-                <option value="">—</option>
-                <option value="personal">Personal Funds</option>
-                <option value="propfirm">Prop Firm</option>
-              </select>
+              <ThemedSelect label="Account Type" value={form.account_type || ''} onChange={value => update('account_type', (value || null) as AccountType)}
+                options={[{value:'',label:'Not selected'},{value:'personal',label:'Personal Funds'},{value:'propfirm',label:'Prop Firm'}]} />
             </div>
             <div>
               <label className={labelCls}>Risk %</label>
@@ -819,7 +818,7 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
             </div>
             <div>
               <label className={labelCls}>Trading account</label>
-              <select className={inputCls} value={form.account_id || ''} onChange={e => {
+              <Select className={inputCls} value={form.account_id || ''} onChange={e => {
                 const id = e.target.value || null;
                 const account = accounts.find(a => a.id === id);
                 update('account_id', id);
@@ -836,7 +835,7 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
                   update('strategy', strategies.find(strategy => strategy.id === account.default_strategy_id)?.name || '');
                   update('entry_model_id', null); setChecklistSnapshot([]);
                 }
-              }}><option value="">No account selected</option>{accounts.filter(account => account.is_active).map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}</select>
+              }}><option value="">No account selected</option>{accounts.filter(account => account.is_active || account.id === form.account_id).map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}</Select>
             </div>
             <EntitySelect label="Setup (optional)" options={setups} value={form.setup_id} onChange={v => update('setup_id', v)} placeholder="Select a trading setup" />
           </div>
@@ -844,18 +843,10 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Emotional State</label>
-              <select className={inputCls} value={form.emotional_state || ''}
-                onChange={e => update('emotional_state', (e.target.value || null) as EmotionalState)}>
-                <option value="">—</option>
-                <option value="calm">Calm</option>
-                <option value="confident">Confident</option>
-                <option value="focused">Focused</option>
-                <option value="rushed">Rushed</option>
-                <option value="frustrated">Frustrated</option>
-                <option value="anxious">Anxious</option>
-                <option value="greedy">Greedy</option>
-                <option value="fearful">Fearful</option>
-              </select>
+              <ThemedSelect label="Emotional State" value={form.emotional_state || ''} onChange={value => update('emotional_state', (value || null) as EmotionalState)}
+                options={[{value:'',label:'Not selected'},{value:'calm',label:'Calm'},{value:'confident',label:'Confident'},
+                  {value:'focused',label:'Focused'},{value:'rushed',label:'Rushed'},{value:'frustrated',label:'Frustrated'},
+                  {value:'anxious',label:'Anxious'},{value:'greedy',label:'Greedy'},{value:'fearful',label:'Fearful'}]} />
             </div>
             <div>
               <label className={labelCls}>Setup Quality · checklist score</label>
@@ -954,16 +945,12 @@ export function TradeForm({ initial, onSubmit, onCancel }: TradeFormProps) {
               <div>
                 <label className={labelCls}>Mistake Checklist</label>
                 <p className="text-xs text-muted mb-2.5 -mt-1">Be honest. This is between you and your accountability partner.</p>
-                <div className="flex flex-wrap gap-2">
+                <div className="ym-mistake-checklist">
                   {MISTAKE_OPTIONS.map(m => (
-                    <button key={m} type="button" onClick={() => toggleMistake(m)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                        form.mistakes.includes(m)
-                          ? 'bg-error-500/15 border-error-500/30 text-error-500'
-                          : 'bg-secondary border-themed text-secondary hover:border-muted'
-                      }`}>
-                      {m}
-                    </button>
+                    <label key={m} className="ym-mistake-option">
+                      <input type="checkbox" checked={form.mistakes.includes(m)} onChange={() => toggleMistake(m)} />
+                      <span>{m}</span>
+                    </label>
                   ))}
                 </div>
               </div>

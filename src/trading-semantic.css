@@ -1,0 +1,147 @@
+/* YoungMoney3 market language.
+   Market outcomes are semantic, not palette accents: all 12 themes preserve
+   profitable green, losing red, caution amber and legible direction labels.
+   A SHORT is a direction and must never be conflated with a losing trade. */
+:root[data-palette] {
+  --ym-gain: var(--success-text, #047857);
+  --ym-loss: var(--error-text, #b91c1c);
+  --ym-caution: var(--warning-text, #92400e);
+  --ym-long: #0b718a;
+  --ym-short: #7442a8;
+  --ym-market-track: color-mix(in srgb,var(--text-primary) 10%,var(--bg-card));
+}
+:root.dark[data-palette] {
+  --ym-long: #72cde9;
+  --ym-short: #d5a9ff;
+}
+.ym-market-positive { color:var(--ym-gain)!important; }
+.ym-market-negative { color:var(--ym-loss)!important; }
+.ym-market-neutral { color:var(--text-secondary); }
+.ym-market-pending { color:var(--ym-caution); }
+.ym-market-warning { color:var(--ym-caution)!important; }
+.ym-market-sl { color:var(--ym-loss)!important; }
+.ym-stop-input { border-left:3px solid var(--ym-loss)!important; }
+.ym-target-input { border-left:3px solid var(--ym-gain)!important; }
+.ym-stop-input:focus { border-color:var(--ym-loss);box-shadow:0 0 0 3px color-mix(in srgb,var(--ym-loss) 12%,transparent); }
+.ym-target-input:focus { border-color:var(--ym-gain);box-shadow:0 0 0 3px color-mix(in srgb,var(--ym-gain) 12%,transparent); }
+
+.ym-market-tp { color:var(--ym-gain)!important; }
+.ym-market-value { font-variant-numeric:tabular-nums; font-feature-settings:"tnum"; font-family:'JetBrains Mono',monospace; letter-spacing:-.025em; }
+.ym-market-chip { display:inline-flex; align-items:center; gap:5px; border-radius:6px; padding:4px 8px; border:1px solid transparent; font-size:11px; font-weight:750; line-height:1.25; white-space:nowrap; }
+.ym-market-chip[data-tone="positive"] { color:var(--ym-gain); background:color-mix(in srgb,var(--ym-gain) 10%,var(--bg-card)); border-color:color-mix(in srgb,var(--ym-gain) 30%,var(--border)); }
+.ym-market-chip[data-tone="negative"] { color:var(--ym-loss); background:color-mix(in srgb,var(--ym-loss) 9%,var(--bg-card)); border-color:color-mix(in srgb,var(--ym-loss) 30%,var(--border)); }
+.ym-market-chip[data-tone="pending"] { color:var(--ym-caution); background:color-mix(in srgb,var(--ym-caution) 9%,var(--bg-card)); border-color:color-mix(in srgb,var(--ym-caution) 29%,var(--border)); }
+.ym-market-chip[data-tone="neutral"] { color:var(--text-secondary);background:var(--bg-secondary);border-color:var(--border); }
+.ym-direction-tag { display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:4px 7px;font-size:10px;font-weight:750;line-height:1.2;letter-spacing:.025em;border:1px solid var(--border); }
+.ym-direction-tag[data-side="long"] { color:var(--ym-long);border-color:color-mix(in srgb,var(--ym-long) 28%,var(--border));background:color-mix(in srgb,var(--ym-long) 8%,var(--bg-card)); }
+.ym-direction-tag[data-side="short"] { color:var(--ym-short);border-color:color-mix(in srgb,var(--ym-short) 28%,var(--border));background:color-mix(in srgb,var(--ym-short) 8%,var(--bg-card)); }
+.ym-market-price-pair { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px; }
+.ym-market-price-card { min-width:0; border:1px solid var(--border);border-radius:9px;padding:10px 12px;background:var(--bg-card); }
+.ym-market-price-card[data-level="sl"] {border-inline-start:3px solid var(--ym-loss);}
+.ym-market-price-card[data-level="tp"] {border-inline-start:3px solid var(--ym-gain);}
+.ym-market-price-card .ym-price-caption { display:block;color:var(--text-secondary);font-size:10px;line-height:1.4;font-weight:700; }
+.ym-market-price-card strong {display:block;margin-top:5px;font:650 clamp(12px,1.5vw,15px)/1.3 'JetBrains Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ym-market-detail {min-width:0;padding:12px 13px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;}
+.ym-market-detail > span {display:block;font-size:10px;font-weight:650;color:var(--text-secondary);margin-bottom:5px;}
+.ym-market-detail > strong {display:block;font:600 12px/1.5 'JetBrains Mono',monospace;color:var(--text-primary);overflow-wrap:anywhere;}
+.ym-market-detail[data-level="sl"] { border-left:3px solid var(--ym-loss);}
+.ym-market-detail[data-level="tp"] { border-left:3px solid var(--ym-gain);}
+.ym-market-detail[data-level="risk"] { border-left:3px solid var(--ym-caution);}
+.ym-market-detail[data-level="sl"] strong {color:var(--ym-loss);}
+.ym-market-detail[data-level="tp"] strong {color:var(--ym-gain);}
+.ym-market-detail[data-level="risk"] strong {color:var(--ym-caution);}
+
+/* Trade ledger: economical typography, clearer outcome edges and keyboard cues. */
+.ym-trades-page .ym-ledger-row {position:relative;transition:background-color .16s ease;}
+.ym-trades-page .ym-ledger-row:hover,.ym-trades-page .ym-ledger-row:focus-within {background:color-mix(in srgb,var(--brand) 4%,var(--bg-card));}
+.ym-ledger-row::before {content:"";position:absolute;inset-block:10px;inset-inline-start:0;width:3px;background:transparent;border-radius:0 3px 3px 0;}
+.ym-ledger-row[data-result="win"]::before {background:var(--ym-gain);}
+.ym-ledger-row[data-result="loss"]::before {background:var(--ym-loss);}
+.ym-ledger-row[data-result="open"]::before {background:var(--ym-caution);}
+.ym-ledger-row .ym-ledger-entry {display:flex;flex-direction:column;gap:3px;min-width:0;}
+.ym-ledger-row .ym-ledger-date {font-weight:600;color:var(--text-primary);font-size:12px;}
+.ym-ledger-row .ym-ledger-time {font-size:10px;color:var(--text-secondary);}
+.ym-ledger-row .ym-ledger-pnl {font:700 14px/1.25 'JetBrains Mono',monospace;letter-spacing:-.03em;font-variant-numeric:tabular-nums;}
+.ym-ledger-row .ym-ledger-subline {font:500 10px/1.3 'JetBrains Mono',monospace;color:var(--text-secondary);margin-top:4px;}
+.ym-ledger-row .ym-ledger-expand {background:color-mix(in srgb,var(--bg-secondary) 74%,var(--bg-card));border-top:1px solid var(--border);}
+
+/* Small review summary uses actual filtered records, not mixed-currency sums. */
+.ym-trade-overview {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 20px;}
+.ym-trade-overview article {position:relative;padding:16px 18px;min-width:0;border:1px solid var(--border);border-radius:12px;background:var(--bg-card);overflow:hidden;}
+.ym-trade-overview article::before {content:"";position:absolute;inset-block:0;inset-inline-start:0;width:3px;background:var(--brand);}
+.ym-trade-overview article[data-tone="positive"]::before {background:var(--ym-gain);}
+.ym-trade-overview article[data-tone="negative"]::before {background:var(--ym-loss);}
+.ym-trade-overview article[data-tone="pending"]::before {background:var(--ym-caution);}
+.ym-trade-overview small {display:block;font-size:10px;letter-spacing:.04em;color:var(--text-secondary);font-weight:700;}
+.ym-trade-overview strong {display:block;margin-top:6px;font:750 clamp(21px,3vw,28px)/1.1 'JetBrains Mono',monospace;letter-spacing:-.05em;}
+.ym-trade-overview article[data-tone="positive"] strong {color:var(--ym-gain);}
+.ym-trade-overview article[data-tone="negative"] strong {color:var(--ym-loss);}
+.ym-trade-overview article[data-tone="pending"] strong {color:var(--ym-caution);}
+.ym-trade-overview p {font-size:10px;color:var(--text-secondary);margin-top:7px;line-height:1.45;}
+.ym-market-legend {display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;font-size:11px;color:var(--text-secondary);}
+.ym-market-legend i {display:inline-block;width:7px;height:7px;border-radius:2px;vertical-align:middle;margin-right:5px;}
+.ym-market-legend [data-kind="gain"] i {background:var(--ym-gain);}
+.ym-market-legend [data-kind="loss"] i {background:var(--ym-loss);}
+.ym-market-legend [data-kind="risk"] i {background:var(--ym-caution);}
+.ym-market-legend [data-kind="direction"] i {background:var(--ym-short);}
+
+/* Dashboard: performance first, without equating cash balance to live broker equity. */
+.ym-workspace .ym-dashboard .ym-dash-heading--illustrated {border-radius:16px;box-shadow:0 12px 36px hsl(var(--shadow-color)/.07);}
+.ym-workspace .ym-dashboard .ym-dash-heading--illustrated::after {content:"";position:absolute;z-index:1;inset-inline-end:0;inset-block-start:0;width:min(28%,165px);height:3px;background:var(--accent);opacity:.75;}
+.ym-dash-pulse {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 20px;}
+.ym-dash-pulse button {text-align:start;position:relative;min-width:0;min-height:112px;border-radius:12px;border:1px solid var(--border);background:var(--bg-card);padding:15px 16px;overflow:hidden;transition:border-color .17s ease,transform .17s ease,box-shadow .17s ease;}
+.ym-dash-pulse button:focus-visible {outline:2px solid var(--brand);outline-offset:3px;}
+.ym-dash-pulse button:hover {transform:translateY(-2px);border-color:var(--border-strong);box-shadow:0 8px 20px hsl(var(--shadow-color)/.08);}
+.ym-dash-pulse button::after {content:"";position:absolute;inset-block-end:0;inset-inline:0;height:2px;background:var(--brand);opacity:.65;}
+.ym-dash-pulse button[data-tone="positive"]::after {background:var(--ym-gain);}
+.ym-dash-pulse button[data-tone="negative"]::after {background:var(--ym-loss);}
+.ym-dash-pulse button[data-tone="pending"]::after {background:var(--ym-caution);}
+.ym-dash-pulse .ym-pulse-label {display:flex;align-items:center;gap:7px;font-size:10px;font-weight:750;letter-spacing:.04em;color:var(--text-secondary);}
+.ym-dash-pulse .ym-pulse-number {display:block;margin-top:12px;font:750 clamp(18px,2.4vw,26px)/1.2 'JetBrains Mono',monospace;letter-spacing:-.05em;overflow-wrap:anywhere;font-variant-numeric:tabular-nums;}
+.ym-dash-pulse button[data-tone="positive"] .ym-pulse-number {color:var(--ym-gain);}
+.ym-dash-pulse button[data-tone="negative"] .ym-pulse-number {color:var(--ym-loss);}
+.ym-dash-pulse .ym-pulse-foot {display:block;margin-top:5px;font-size:10px;line-height:1.4;color:var(--text-secondary);}
+.ym-workspace .ym-dashboard .ym-dash-result-value:not(.is-negative) {color:var(--ym-gain);}
+.ym-workspace .ym-dashboard .ym-dash-result-value.is-negative {color:var(--ym-loss);}
+.ym-workspace .ym-dashboard .ym-dash-result-value[data-neutral="true"] {color:var(--text-primary);}
+.ym-workspace .ym-dashboard .ym-dash-currency-results strong:not(.is-negative) {color:var(--ym-gain);}
+.ym-workspace .ym-dashboard .ym-dash-currency-results strong.is-negative {color:var(--ym-loss);}
+.ym-workspace .ym-dashboard .ym-dash-currency-results strong[data-neutral="true"] {color:var(--text-primary);}
+.ym-dash-recent-card tr[data-result="win"] {box-shadow:inset 3px 0 var(--ym-gain);}
+.ym-dash-recent-card tr[data-result="loss"] {box-shadow:inset 3px 0 var(--ym-loss);}
+.ym-dash-recent-card tr[data-result="open"] {box-shadow:inset 3px 0 var(--ym-caution);}
+.ym-dash-chart-card {border-radius:14px;}
+
+/* Landing: restrained product screenshot details communicate the market language. */
+.ym-studio-landing .ym-landing-showcase {border-radius:16px!important;box-shadow:0 16px 44px hsl(var(--shadow-color)/.15);}
+.ym-studio-landing .ym-landing-showcase .ym-preview-eyebrow {font:700 10px/1.4 'JetBrains Mono',monospace;letter-spacing:.09em;color:var(--text-secondary);}
+.ym-landing-market {display:grid;gap:8px;margin-top:16px;}
+.ym-landing-market-row {display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:10px;}
+.ym-landing-market-row strong {font-size:11px;font-weight:750;}
+.ym-landing-market-row small {display:block;font-size:10px;color:var(--text-secondary);margin-top:3px;}
+.ym-landing-market-row .ym-market-value {font-size:13px;font-weight:750;}
+.ym-landing-sltp {display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:var(--bg-card);font-size:10px;font-weight:650;}
+.ym-landing-sltp > span {display:inline-flex;align-items:center;gap:4px;}
+
+/* MT5: life's evidence remains visible and colour never implies an estimate. */
+.ym-mt5-lifecycle[data-result="win"] {border-left:3px solid var(--ym-gain);}
+.ym-mt5-lifecycle[data-result="loss"] {border-left:3px solid var(--ym-loss);}
+.ym-mt5-lifecycle[data-result="open"] {border-left:3px solid var(--ym-caution);}
+
+@media(max-width:900px) {
+  .ym-dash-pulse {grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media(max-width:600px) {
+  .ym-trade-overview {gap:7px;}
+  .ym-trade-overview article {padding:12px 10px;}
+  .ym-trade-overview strong {font-size:20px;}
+  .ym-dash-pulse {gap:8px;}
+  .ym-dash-pulse button {min-height:100px;padding:13px;}
+  .ym-dash-pulse .ym-pulse-number {font-size:20px;}
+  .ym-market-price-pair {grid-template-columns:repeat(2,minmax(0,1fr));}
+  .ym-market-legend {gap:7px 12px;}
+}
+@media(prefers-reduced-motion:reduce) {
+  .ym-dash-pulse button, .ym-ledger-row {transition:none!important;}
+  .ym-dash-pulse button:hover {transform:none;}
+}

@@ -1,30 +1,32 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { LayoutDashboard, CandlestickChart, Calendar, BarChart3, BookOpen, Sparkles, Menu, X, TrendingUp, Plus, LogOut, ChevronDown, ChevronRight, ClipboardList, Target, FlaskConical, Shield, CalendarClock, LayoutTemplate, BookMarked, StickyNote, GraduationCap, CreditCard, ClipboardCheck, MoreHorizontal, Archive, Settings, Search, Monitor } from 'lucide-react';
+import { LayoutDashboard, CandlestickChart, Calendar, BarChart3, BookOpen, Sparkles, Menu, X, Plus, LogOut, ChevronDown, ChevronRight, ClipboardList, Target, FlaskConical, Shield, CalendarClock, LayoutTemplate, BookMarked, StickyNote, GraduationCap, CreditCard, ClipboardCheck, MoreHorizontal, Archive, Settings, Search, Monitor, Images, Compass } from 'lucide-react';
+import { BrandLogo } from './BrandLogo';
 import { CommandPalette } from '@/components/CommandPalette';
 import { ColorPaletteControl } from '@/components/ColorPaletteControl';
 import { DataBackupModal } from '@/components/DataBackupModal';
 import { DataRecoveryNotice } from '@/components/ui/DataRecoveryNotice';
 import { useAuth } from '@/context/AuthContext';
 
-export type PageId = 'dashboard' | 'trades' | 'calendar' | 'analytics' | 'journal' | 'ai' | 'trading-plan' | 'goals' | 'risk-management' | 'market-sessions' | 'setups' | 'strategy-testing' | 'strategies' | 'resources' | 'notes' | 'study-material' | 'brokers-charting' | 'weekly-reviews' | 'account-settings' | 'admin-operations' | 'mt5' | 'workspace-setup';
+export type PageId = 'media' | 'dashboard' | 'trades' | 'calendar' | 'analytics' | 'journal' | 'ai' | 'trading-plan' | 'goals' | 'risk-management' | 'market-sessions' | 'setups' | 'strategy-testing' | 'strategies' | 'resources' | 'notes' | 'study-material' | 'brokers-charting' | 'weekly-reviews' | 'account-settings' | 'admin-operations' | 'mt5' | 'workspace-setup';
 
 interface LayoutProps {
   current: PageId;
   onNavigate: (page: PageId) => void;
   onQuickAdd: () => void;
+  onOpenGuide: () => void;
   children: ReactNode;
 }
 
 const NAV_SECTIONS: { id: string; label: string; icon: typeof LayoutDashboard; items: { id: PageId; label: string; icon: typeof LayoutDashboard }[] }[] = [
-  { id: 'home', label: 'Home', icon: LayoutDashboard, items: [
+  { id: 'home', label: 'Today', icon: LayoutDashboard, items: [
     { id: 'workspace-setup', label: 'Workspace setup', icon: ClipboardList },
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   ] },
   { id: 'journal', label: 'Journal', icon: BookOpen, items: [
     { id: 'trades', label: 'Trades', icon: CandlestickChart },
+    { id: 'media', label: 'Media Library', icon: Images },
     { id: 'journal', label: 'Journal', icon: BookOpen },
     { id: 'calendar', label: 'Calendar', icon: Calendar },
-    { id: 'weekly-reviews', label: 'Weekly Reviews', icon: ClipboardCheck },
   ] },
   { id: 'playbook', label: 'Playbook', icon: ClipboardList, items: [
     { id: 'trading-plan', label: 'Trading Plan', icon: ClipboardList },
@@ -33,14 +35,13 @@ const NAV_SECTIONS: { id: string; label: string; icon: typeof LayoutDashboard; i
     { id: 'risk-management', label: 'Risk Management', icon: Shield },
     { id: 'goals', label: 'Goals', icon: Target },
     { id: 'market-sessions', label: 'Market Sessions', icon: CalendarClock },
-  ] },
-  { id: 'testing', label: 'Testing', icon: FlaskConical, items: [
     { id: 'strategy-testing', label: 'Testing Workspace', icon: FlaskConical },
   ] },
   { id: 'accounts', label: 'Accounts', icon: CreditCard, items: [
     { id: 'brokers-charting', label: 'Brokers & Charting', icon: CreditCard },
   ] },
-  { id: 'insights', label: 'Insights', icon: BarChart3, items: [
+  { id: 'insights', label: 'Review', icon: BarChart3, items: [
+    { id: 'weekly-reviews', label: 'Weekly Reviews', icon: ClipboardCheck },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'ai', label: 'AI Insights', icon: Sparkles },
   ] },
@@ -51,7 +52,7 @@ const NAV_SECTIONS: { id: string; label: string; icon: typeof LayoutDashboard; i
   ] },
 ];
 
-export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProps) {
+export function Layout({ current, onNavigate, onQuickAdd, onOpenGuide, children }: LayoutProps) {
   const { profile, signOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -100,8 +101,18 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
     onNavigate(page);
     setMobileOpen(false);
     setProfileMenuOpen(false);
+    window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
+  const isSample = profile?.id === '00000000-0000-4000-8000-00000000d3a0';
+  const [showcaseAvailable,setShowcaseAvailable]=useState(false);
+  useEffect(()=>{
+    let active=true;
+    void fetch('/api/demo/available').then(response=>response.ok?response.json():null)
+      .then(data=>{if(active)setShowcaseAvailable(data?.enabled===true);})
+      .catch(()=>{});
+    return()=>{active=false;};
+  },[]);
   const displayName = profile?.display_name || 'Trader';
   const initials = displayName.charAt(0).toUpperCase();
 
@@ -113,14 +124,7 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
         }`}
       >
         <div className="ym-sidebar-brand relative flex items-center gap-3 px-5 py-5 border-b border-themed">
-          <div className="ym-brand-mark relative flex items-center justify-center text-white">
-            <TrendingUp size={22} />
-            <span className="absolute -top-0.5 -right-0.5">
-              <span className="relative flex h-2 w-2">
-                <span className="relative inline-flex w-2 h-2 rounded-full bg-amber-400 ring-2 ring-card" />
-              </span>
-            </span>
-          </div>
+          <BrandLogo />
           <div>
             <h1 className="font-bold text-[13px] tracking-[-0.025em]">Young-Money-Fx</h1>
             <p className="ym-brand-caption">THE TRADING WORKSPACE</p>
@@ -139,6 +143,12 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
           <Search size={15} />
           <span className="flex-1 text-left">Quick find</span>
           <kbd className="rounded-md border border-themed px-1.5 py-0.5 text-[10px] text-muted">Ctrl K</kbd>
+        </button>
+
+        <button type="button" className="ym-guide-sidebar-launch" onClick={() => { setMobileOpen(false); onOpenGuide(); }} aria-label="Open platform guide">
+          <span className="ym-guide-sidebar-icon"><Compass size={18} /></span>
+          <span className="ym-guide-sidebar-copy"><strong>The Field Guide</strong><small>Explore your workspace</small></span>
+          <span className="ym-guide-sidebar-trail">01—22</span>
         </button>
 
         <nav aria-label="Main navigation" className="ym-sidebar-nav relative flex-1 px-3 py-4 overflow-y-auto">
@@ -222,6 +232,7 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
                 <div className="fixed inset-0 z-40" onClick={() => setProfileMenuOpen(false)} />
                 <div className="absolute bottom-full left-0 right-0 mb-2 card border border-themed rounded-xl shadow-xl z-50 animate-scale-in">
                   <div className="border-t border-themed p-3"><ColorPaletteControl /></div>
+                  <button type="button" onClick={() => { setProfileMenuOpen(false); onOpenGuide(); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-secondary hover:bg-secondary hover:text-primary transition-colors"><Compass size={16} /> Replay platform tour</button>
                   <div className="border-t border-themed" />
                   <button onClick={() => { handleNav('account-settings'); setProfileMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-secondary hover:bg-secondary hover:text-primary transition-colors">
                     <Settings size={16} /> Account Settings
@@ -254,6 +265,7 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
           </div>
           <div className="flex items-center gap-3">
             <span className="ym-workspace-note hidden 2xl:inline">Keep the process. Review the outcome.</span>
+            <button type="button" onClick={onOpenGuide} className="ym-guide-topbar-launch" aria-label="Explore platform tour"><Compass size={16} /><span>Field Guide</span></button>
             <button type="button" onClick={() => setSearchOpen(true)} aria-label="Search workspace (Ctrl K)" className="ym-topbar-search">
               <Search size={16} /><span>Find anything</span><kbd>Ctrl K</kbd>
             </button>
@@ -265,34 +277,59 @@ export function Layout({ current, onNavigate, onQuickAdd, children }: LayoutProp
             <Menu size={20} />
           </button>
           <div className="flex items-center gap-2">
-            <TrendingUp size={18} className="ym-mobile-logo-icon" />
+            <BrandLogo />
             <span className="font-bold text-sm tracking-tight">YoungMoney3</span>
           </div>
-          <button type="button" onClick={() => setSearchOpen(true)} className="btn-ghost p-1.5" aria-label="Search workspace">
+          <div className="ym-guide-mobile-actions">
+            <button type="button" onClick={onOpenGuide} className="btn-ghost p-1.5" aria-label="Open platform guide"><Compass size={20} /></button>
+            <button type="button" onClick={() => setSearchOpen(true)} className="btn-ghost p-1.5" aria-label="Search workspace">
             <Search size={20} />
-          </button>
+            </button>
+          </div>
         </div>
 
-        <main id="workspace-content" className="ym-main-content p-4 sm:p-6 lg:p-8 xl:px-10 max-w-[1480px] mx-auto animate-fade-in pb-32 lg:pb-12">
-          <DataRecoveryNotice />
+        <div className="ym-studio-stripe" aria-hidden="true">
+          <span>PROCESS <b>•</b> PRECISION <b>•</b> DISCIPLINE <b>•</b> GROWTH</span>
+        </div>
+
+        <main tabIndex={-1} id="workspace-content" className="ym-main-content p-4 sm:p-6 lg:p-8 xl:px-10 max-w-[1480px] mx-auto animate-fade-in pb-32 lg:pb-12">
+          {isSample && <section role="status" aria-label="Fictional demo account"
+            className="mb-5 rounded-xl border border-themed bg-secondary p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
+            <div className="space-y-1">
+              <strong className="text-sm tracking-wide">SAMPLE WORKSPACE · READ ONLY</strong>
+              <p className="text-xs text-secondary max-w-2xl">
+                You're exploring Alex Morgan's fictional trading workspace. All results, journals and MT5 positions
+                are generated examples—not real trades, brokerage balances or a live connector. Changes cannot be saved.
+              </p>
+            </div>
+            <button type="button" className="btn-secondary" onClick={()=>{void signOut();}}>Exit demo</button>
+          </section>}
+          {!isSample && showcaseAvailable && current==='dashboard' && <section className="mb-5 rounded-xl border border-themed p-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <strong className="text-sm">Explore a fully populated sample workspace</strong>
+              <p className="text-xs text-secondary mt-1">Preview trades, MT5 samples, plans, journals, strategy tests, analytics and psychology notes without changing your account.</p>
+            </div>
+            <button type="button" className="btn-secondary" onClick={()=>window.location.assign('/?showcase=1#dashboard')}>View sample trader</button>
+          </section>}
+          {!isSample && <DataRecoveryNotice />}
           {children}
         </main>
 
-        <button
+        {!isSample && <button
           onClick={onQuickAdd}
           className="ym-desktop-quick-add fixed bottom-7 right-7 z-30 w-14 h-14 rounded-xl text-white shadow-lg hidden lg:flex items-center justify-center transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
           title="Quick Add"
           aria-label="Quick Add"
         >
           <Plus size={26} />
-        </button>
+        </button>}
       </div>
       <nav aria-label="Mobile workspace navigation" className="ym-mobile-dock lg:hidden">
-        <button type="button" className="ym-dock-item" data-active={current === 'dashboard'} aria-current={current === 'dashboard' ? 'page' : undefined} onClick={() => handleNav('dashboard')}><LayoutDashboard size={20} /><span>Home</span></button>
-        <button type="button" className="ym-dock-item" data-active={current === 'trades'} aria-current={current === 'trades' ? 'page' : undefined} onClick={() => handleNav('trades')}><CandlestickChart size={20} /><span>Trades</span></button>
-        <button type="button" className="ym-dock-item ym-dock-add" aria-label="Quick add trade" onClick={onQuickAdd}><Plus size={22} /><span>Add</span></button>
+        <button type="button" className="ym-dock-item" data-active={current === 'dashboard'} aria-current={current === 'dashboard' ? 'page' : undefined} onClick={() => handleNav('dashboard')}><LayoutDashboard size={20} /><span>Today</span></button>
+        <button type="button" className="ym-dock-item" data-active={current === 'strategies'} aria-current={current === 'strategies' ? 'page' : undefined} onClick={() => handleNav('strategies')}><Target size={20} /><span>Playbook</span></button>
+        <button type="button" className="ym-dock-item ym-dock-add" aria-label={isSample?'Demo: capture disabled':'Quick capture'} disabled={isSample} onClick={onQuickAdd}><Plus size={22} /><span>Capture</span></button>
         <button type="button" className="ym-dock-item" data-active={current === 'journal'} aria-current={current === 'journal' ? 'page' : undefined} onClick={() => handleNav('journal')}><BookOpen size={20} /><span>Journal</span></button>
-        <button type="button" className="ym-dock-item" data-active={current === 'analytics'} aria-current={current === 'analytics' ? 'page' : undefined} onClick={() => handleNav('analytics')}><BarChart3 size={20} /><span>Insights</span></button>
+        <button type="button" className="ym-dock-item" data-active={current === 'weekly-reviews'} aria-current={current === 'weekly-reviews' ? 'page' : undefined} onClick={() => handleNav('weekly-reviews')}><ClipboardCheck size={20} /><span>Review</span></button>
       </nav>
       <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} onNavigate={handleNav} onQuickAdd={onQuickAdd} />
       <DataBackupModal open={backupOpen} onClose={() => setBackupOpen(false)} />

@@ -1,0 +1,72 @@
+/* Decorative art shares the page's surface; controls and readable copy remain in front. */
+[data-workspace-page] .ym-page-heading {
+ display:block;position:relative;isolation:isolate;overflow:hidden;
+ min-height:156px;margin-bottom:26px;padding:0!important;
+ border:1px solid var(--border);border-radius:14px;background:var(--bg-card);box-shadow:none;
+}
+[data-workspace-page] .ym-page-heading::before {display:none;}
+[data-workspace-page] .ym-page-heading-main {
+ position:relative;z-index:2;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;
+ gap:18px;min-width:0;min-height:156px;width:76%;padding:26px 30px;
+ background:linear-gradient(90deg,var(--bg-card) 65%,transparent);
+}
+[data-workspace-page] .ym-page-heading-copy {min-width:0;width:100%;max-width:66ch;}
+[data-workspace-page] .ym-page-heading-copy h1 {font-size:clamp(1.5rem,2.6vw,2.25rem);line-height:1.12;text-wrap:balance;}
+[data-workspace-page] .ym-page-heading-copy > p.mt-2 {max-width:62ch;font-size:13px;line-height:1.65;}
+[data-workspace-page] .ym-page-heading .ym-page-chapter {margin-bottom:10px;font-size:9px;letter-spacing:.16em;}
+[data-workspace-page] .ym-page-heading .ym-page-cue {font-family:inherit;font-size:12px;}
+[data-workspace-page] .ym-page-heading-actions {position:relative;z-index:3;display:flex;gap:10px;flex-wrap:wrap;max-width:100%;}
+[data-workspace-page] .ym-page-art {
+ position:absolute;z-index:0;inset:0 0 0 auto;width:45%;height:100%;min-height:0;
+ display:block;border:0!important;border-radius:0;background:transparent;pointer-events:none;
+ mask-image:linear-gradient(90deg,transparent 0%,#000 34%,#000 90%,transparent 100%);
+ -webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 34%,#000 90%,transparent 100%);
+}
+[data-workspace-page] .ym-page-art img {display:block;width:100%;height:100%;min-height:0;object-fit:cover;object-position:74% center;filter:grayscale(1);opacity:.34;transform:none;}
+[data-workspace-page] .ym-page-art::after {content:"";position:absolute;inset:0;background:var(--brand);mix-blend-mode:color;opacity:.38;pointer-events:none;}
+[data-workspace-page] .ym-page-art-cut {display:none;}
+:root.dark[data-palette="craftylabs-studio"] [data-workspace-page] .ym-page-art img {filter:none;opacity:.58;}
+:root:not(.dark) [data-workspace-page] .ym-page-art img {filter:grayscale(.9);opacity:.26;}
+[data-page-style="blueprint"] .ym-page-heading-main,[data-page-style="lab"] .ym-page-heading-main {background:linear-gradient(90deg,var(--bg-card) 70%,transparent);}
+[data-page-style="sessions"] .ym-page-heading {text-align:start;}
+/* The same edge treatment follows decorative illustrations in public pages and archive headers. */
+.ym-studio-landing .ym-editorial-banner {gap:0;}
+:root[data-palette] .ym-studio-landing .ym-editorial-media {border:0;background:transparent;}
+.ym-studio-landing .ym-editorial-media img {mask-image:linear-gradient(90deg,transparent,#000 22%,#000 90%,transparent);-webkit-mask-image:linear-gradient(90deg,transparent,#000 22%,#000 90%,transparent);}
+.ym-studio-landing .ym-editorial-media::after {background:radial-gradient(ellipse at center,transparent 50%,var(--bg-card));mix-blend-mode:normal;}
+.ym-studio-landing .ym-editorial-media::before {opacity:.2;}
+.ym-workspace .ym-library-hero {gap:22px;padding:28px 32px;margin-bottom:26px;border-radius:14px;}
+.ym-library-hero h1 {font-size:clamp(30px,3.5vw,44px);margin:12px 0;}
+.ym-library-hero-stats {margin-top:20px;gap:28px;}
+.ym-workspace .ym-library-art {border:0;padding:0;}
+.ym-library-art img {max-height:180px;object-fit:contain;mask-image:radial-gradient(ellipse at center,#000 35%,transparent 74%);-webkit-mask-image:radial-gradient(ellipse at center,#000 35%,transparent 74%);}
+.ym-library-art span {display:none;}
+:root.dark[data-palette="craftylabs-studio"] .ym-workspace .ym-dashboard .ym-dash-heading-art {
+ opacity:.42;
+ mask-image:radial-gradient(ellipse at 72% 50%,#000 20%,transparent 76%);
+ -webkit-mask-image:radial-gradient(ellipse at 72% 50%,#000 20%,transparent 76%);
+}
+.ym-workspace .ym-main-content {padding-top:30px;}
+.ym-workspace .ym-page-experience > :is(div,section) {scroll-margin-top:22px;}
+/* Tactile feedback remains quiet enough for a trading workspace. */
+@media(hover:hover) {
+ .ym-workspace .btn-primary:not(:disabled):hover {transform:translateY(-1px);box-shadow:0 5px 16px color-mix(in srgb,var(--brand) 16%,transparent);}
+ .ym-workspace .btn-secondary:not(:disabled):hover {border-color:var(--brand);background:color-mix(in srgb,var(--brand) 5%,var(--bg-card));}
+}
+.ym-workspace :is(.btn-primary,.btn-secondary):active:not(:disabled) {transform:translateY(1px) scale(.985);}
+@media(max-width:767px) {
+ [data-workspace-page] .ym-page-heading {min-height:0;}
+ [data-workspace-page] .ym-page-heading-main {width:100%;min-height:0;padding:22px;background:linear-gradient(90deg,var(--bg-card) 60%,transparent);}
+ [data-workspace-page] .ym-page-heading-copy {max-width:100%;}
+ [data-workspace-page] .ym-page-art {width:48%;opacity:.25;}
+ [data-workspace-page] .ym-page-art img {object-position:80% center;}
+ .ym-workspace .ym-library-hero {padding:24px;}
+ .ym-workspace .ym-main-content {padding-top:22px;}
+}
+@media(max-width:639px) {
+ [data-workspace-page] .ym-page-heading-actions {width:100%;}
+ [data-workspace-page] .ym-page-heading-copy h1 {font-size:clamp(1.4rem,7vw,1.9rem);}
+ .ym-studio-landing .ym-editorial-media img {mask-image:linear-gradient(0deg,transparent,#000 30%,#000 78%,transparent);-webkit-mask-image:linear-gradient(0deg,transparent,#000 30%,#000 78%,transparent);}
+}
+@media(prefers-reduced-motion:reduce) { .ym-workspace :is(.btn-primary,.btn-secondary) {transition:none!important;transform:none!important;} }
+@media(forced-colors:active) { [data-workspace-page] .ym-page-art {display:none;} }

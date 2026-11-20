@@ -1,0 +1,197 @@
+
+/* YoungMoney3 / structured connection management — all palettes, no hardcoded surface tone */
+.ym-connection-hub{--ym-hub-round:14px;max-width:1280px;margin-inline:auto}
+.ym-connection-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:4px}
+.ym-connection-summary>div{display:flex;align-items:center;gap:13px;min-width:0;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:15px 17px}
+.ym-connection-summary>div>svg{width:18px;height:18px;color:var(--brand-text);flex:none}
+.ym-connection-summary strong{display:block;font:750 23px/1.15 'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;color:var(--text-primary)}
+.ym-connection-summary small{display:block;margin-top:4px;color:var(--text-secondary);font-size:11px}
+.ym-connection-section{padding:clamp(16px,2.6vw,26px)!important;border-radius:var(--ym-hub-round)}
+.ym-connection-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.ym-connection-eyebrow{font:750 10px/1.35 'JetBrains Mono',monospace;letter-spacing:.085em;color:var(--brand-text);margin-bottom:7px}
+.ym-connection-heading h2{display:flex;align-items:center;gap:10px;font-size:clamp(16px,2vw,20px);font-weight:800;letter-spacing:-.025em;color:var(--text-primary)}
+.ym-section-count{font:650 11px/1 'JetBrains Mono',monospace;padding:5px 7px;border-radius:6px;background:var(--bg-secondary);color:var(--text-secondary)}
+.ym-connection-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ym-connection-actions .btn-primary,.ym-connection-actions .btn-secondary{display:inline-flex;align-items:center;gap:7px;min-height:36px;min-width:auto}
+.ym-connection-code{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:16px;background:var(--bg-secondary);border:1px dashed var(--border-strong);border-radius:10px;padding:12px}
+.ym-connection-code>span{color:var(--text-secondary);font-size:11px}.ym-connection-code>strong{font:750 13px 'JetBrains Mono',monospace;letter-spacing:.06em}
+.ym-selectable-stack{display:grid;gap:9px}
+.ym-selectable-card{border:1px solid var(--border);border-radius:12px;min-width:0;background:var(--bg-card);overflow:hidden;transition:border-color .16s ease,box-shadow .16s ease}
+.ym-selectable-card[data-selected="true"]{border-color:color-mix(in srgb,var(--brand) 48%,var(--border));box-shadow:0 6px 25px hsl(var(--shadow-color)/.06)}
+.ym-selectable-trigger{width:100%;min-height:76px;display:flex;align-items:center;gap:13px;padding:13px 17px;text-align:left;cursor:pointer;transition:background-color .15s ease}
+.ym-selectable-trigger:hover,.ym-selectable-trigger:focus-visible{background:color-mix(in srgb,var(--brand) 4%,var(--bg-card))}
+.ym-selectable-trigger:focus-visible{outline:2px solid var(--brand);outline-offset:-3px}
+.ym-selection-icon{display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:color-mix(in srgb,var(--brand) 9%,var(--bg-card));border:1px solid color-mix(in srgb,var(--brand) 17%,var(--border));color:var(--brand-text);flex:none}
+.ym-selection-primary{display:block;min-width:0;flex:1}
+.ym-selection-primary strong{display:block;font-size:13px;font-weight:750;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary)}
+.ym-selection-primary small{display:block;margin-top:5px;font-size:11px;color:var(--text-secondary);line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ym-connection-badge{display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:5px 9px;border-radius:999px;border:1px solid var(--border);font-size:10px;line-height:1.3;font-weight:750;white-space:normal;text-align:center;max-width:190px;color:var(--text-secondary);background:var(--bg-secondary)}
+.ym-connection-badge[data-tone="success"]{color:var(--success-text);background:color-mix(in srgb,var(--success-text) 9%,var(--bg-card));border-color:color-mix(in srgb,var(--success-text) 27%,var(--border))}
+.ym-connection-badge[data-tone="warning"]{color:var(--warning-text);background:color-mix(in srgb,var(--warning-text) 9%,var(--bg-card));border-color:color-mix(in srgb,var(--warning-text) 25%,var(--border))}
+.ym-connection-badge[data-tone="danger"]{color:var(--error-text);background:color-mix(in srgb,var(--error-text) 9%,var(--bg-card));border-color:color-mix(in srgb,var(--error-text) 25%,var(--border))}
+.ym-selectable-chevron{color:var(--text-muted);flex:none;transition:transform .17s ease}
+.ym-selectable-trigger[aria-expanded="true"] .ym-selectable-chevron{transform:rotate(180deg)}
+.ym-selection-details{border-top:1px solid var(--border);padding:clamp(14px,2vw,20px);background:color-mix(in srgb,var(--bg-secondary) 40%,var(--bg-card));animation:ym-hub-open .19s ease-out both}
+.ym-detail-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-bottom:17px}
+.ym-detail-grid>div{min-width:0;border:1px solid var(--border);background:var(--bg-card);border-radius:9px;padding:12px}
+.ym-detail-grid span{font-size:10px;display:block;color:var(--text-secondary);line-height:1.35}
+.ym-detail-grid strong{font-size:12px;display:block;margin-top:6px;color:var(--text-primary);font-weight:700;overflow-wrap:anywhere;line-height:1.4}
+.ym-edit-row{display:flex;flex-wrap:wrap;align-items:end;gap:9px}
+.ym-edit-row>label{flex:1;min-width:220px;font-size:11px;color:var(--text-secondary)}
+.ym-edit-row input{margin-top:7px}
+.ym-context-short{font-size:12px;line-height:1.6;color:var(--text-secondary);margin:8px 0 13px}
+.ym-context-help{border-top:1px solid var(--border);margin-top:18px;padding-top:13px}
+.ym-context-help>summary{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;font-weight:700;color:var(--text-secondary);outline-offset:5px;width:fit-content}
+.ym-context-help>summary:hover{color:var(--brand-text)}
+.ym-context-help>p{font-size:11px;color:var(--text-secondary);max-width:80ch;line-height:1.7;margin-top:12px}
+.ym-context-help .ym-connection-actions{margin-top:10px;font-size:11px}
+.ym-context-help .ym-connection-actions a{text-decoration:underline;text-underline-offset:3px}
+.ym-select-account-jump{display:flex;gap:7px;align-items:center;padding:12px 0 0;margin-top:12px;color:var(--brand-text);font-size:11px;font-weight:750}
+.ym-connection-empty{display:grid;justify-items:center;text-align:center;gap:7px;padding:28px;border:1px dashed var(--border-strong);border-radius:12px;color:var(--text-secondary)}
+.ym-connection-empty strong{font-size:14px;color:var(--text-primary)}.ym-connection-empty p{font-size:11px;max-width:45ch;line-height:1.6}
+.ym-account-overview-figures{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-bottom:17px}
+.ym-account-overview-figures>div{padding:15px;border:1px solid var(--border);background:var(--bg-card);border-radius:10px;min-width:0}
+.ym-account-overview-figures small{font-size:10px;color:var(--text-secondary);display:block}
+.ym-account-overview-figures strong{display:block;font:700 clamp(16px,2.4vw,22px)/1.4 'JetBrains Mono',monospace;letter-spacing:-.04em;margin-top:6px;overflow-wrap:anywhere;color:var(--text-primary)}
+.ym-account-overview-figures strong>span{font-size:10px;color:var(--text-secondary)}
+.ym-account-tabs{display:flex;flex-wrap:wrap;gap:5px;border-bottom:1px solid var(--border);margin-bottom:17px}
+.ym-account-tabs button{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--text-secondary);padding:11px 13px;border-bottom:2px solid transparent;margin-bottom:-1px}
+.ym-account-tabs button:hover{background:var(--bg-secondary)}
+.ym-account-tabs button[aria-selected="true"]{border-color:var(--brand);color:var(--text-primary)}
+.ym-account-pane{padding:4px 0 2px;display:grid;gap:12px}
+.ym-account-pane>.ym-detail-grid{margin:0}
+.ym-account-pane-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ym-account-pane-heading strong{display:block;font-size:13px;color:var(--text-primary)}
+.ym-account-pane-heading span{display:block;font-size:11px;color:var(--text-secondary);margin-top:5px;line-height:1.5}
+.ym-account-pane-heading>svg{color:var(--brand-text);flex:none}
+.ym-history-inputs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.ym-history-inputs label{display:grid;gap:7px;font-size:11px;color:var(--text-secondary);font-weight:650}
+.ym-account-progress{display:flex;align-items:center;gap:9px;padding:12px;color:var(--brand-text);background:var(--bg-secondary);border-radius:9px;font-size:11px;font-weight:700}
+.ym-confirmation-stamp{display:inline-flex;align-items:center;gap:6px;color:var(--success-text);font-size:11px;font-weight:700}
+.ym-proof-check{display:flex;align-items:flex-start;gap:8px;font-size:11px;color:var(--text-secondary);max-width:70ch;line-height:1.55}
+.ym-proof-check input{margin-top:2px;flex:none}
+.ym-failed-archive{margin-top:24px}
+.ym-failed-row{display:flex;justify-content:space-between;align-items:center;gap:10px;border-top:1px solid var(--border);padding:10px 0}
+.ym-failed-row strong{display:block;font-size:11px}.ym-failed-row small{display:block;margin-top:3px;font-size:10px;color:var(--text-secondary)}
+.ym-failed-archive>summary span{padding:2px 6px;border-radius:5px;background:var(--bg-secondary)}
+.ym-cash-figures{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.ym-cash-figures>div{min-width:0;background:var(--bg-card);border:1px solid var(--border);padding:13px;border-radius:10px}
+.ym-cash-figures small{display:block;color:var(--text-secondary);font-size:10px}
+.ym-cash-figures strong{display:block;margin:9px 0 6px;font:700 clamp(14px,2vw,19px) 'JetBrains Mono',monospace;letter-spacing:-.035em;overflow-wrap:anywhere}
+.ym-cash-figures [data-tone="positive"] strong{color:var(--success-text)}
+.ym-cash-figures [data-tone="negative"] strong{color:var(--error-text)}
+.ym-cash-figures span{display:block;font-size:10px;line-height:1.5;color:var(--text-secondary)}
+.ym-cash-coverage{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:var(--bg-card)}
+.ym-cash-coverage>svg{color:var(--brand-text);flex:none}
+.ym-cash-coverage strong{display:block;font-size:11px}.ym-cash-coverage small{display:block;font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.5}
+.ym-connection-data-note{display:flex;align-items:flex-start;gap:9px;padding:13px 14px;border-radius:10px;border:1px solid color-mix(in srgb,var(--warning-text) 26%,var(--border));background:color-mix(in srgb,var(--warning-text) 6%,var(--bg-card))}
+.ym-connection-data-note>svg{flex:none;color:var(--warning-text)}
+.ym-connection-data-note strong{font-size:11px}.ym-connection-data-note p{font-size:11px;line-height:1.65;color:var(--text-secondary);margin-top:5px}
+.ym-cash-table-wrap{overflow-x:auto}
+.ym-cash-table{width:100%;border-collapse:collapse;text-align:left;font-size:11px;min-width:560px}
+.ym-cash-table th{font-weight:700;color:var(--text-secondary);font-size:10px;padding:10px;border-bottom:1px solid var(--border)}
+.ym-cash-table td{padding:11px 10px;border-bottom:1px solid var(--border)}
+.ym-cash-table td:last-child,.ym-cash-table th:last-child{text-align:right}
+.ym-cash-table tr:hover{background:var(--bg-secondary)}
+/* Consistent operation feedback: never claim success before an operation resolves. */
+.ym-action-feedback{display:flex;align-items:center;gap:10px;padding:13px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg-secondary);font-size:12px;line-height:1.5;color:var(--text-primary)}
+.ym-action-feedback>svg{flex:none;color:var(--brand-text)}
+.ym-action-feedback>span{flex:1}
+.ym-action-feedback button{flex:none}
+.ym-action-feedback[data-kind="success"]{background:color-mix(in srgb,var(--success-text) 7%,var(--bg-card));border-color:color-mix(in srgb,var(--success-text) 27%,var(--border))}
+.ym-action-feedback[data-kind="success"]>svg{color:var(--success-text)}
+.ym-action-feedback[data-kind="error"]{background:color-mix(in srgb,var(--error-text) 8%,var(--bg-card));border-color:color-mix(in srgb,var(--error-text) 34%,var(--border))}
+.ym-action-feedback[data-kind="error"]>svg{color:var(--error-text)}
+.ym-action-feedback[data-kind="warning"]{background:color-mix(in srgb,var(--warning-text) 8%,var(--bg-card));border-color:color-mix(in srgb,var(--warning-text) 34%,var(--border))}
+.ym-action-feedback[data-kind="warning"]>svg{color:var(--warning-text)}
+/* Notifications intentionally animate once, then settle. No nonstop flashing. */
+.ym-feedback-stack{position:fixed;z-index:99990;inset-inline-end:clamp(12px,3vw,28px);bottom:clamp(14px,3vw,25px);display:grid;gap:9px;width:min(380px,calc(100vw - 24px));pointer-events:none}
+.ym-feedback-toast{--ym-toast-tone:var(--brand);display:flex;align-items:flex-start;gap:10px;min-width:0;padding:15px;border:1px solid color-mix(in srgb,var(--ym-toast-tone) 39%,var(--border));border-left:4px solid var(--ym-toast-tone);background:var(--bg-card);box-shadow:0 16px 50px #00000028;border-radius:11px;color:var(--text-primary);pointer-events:auto;animation:ym-toast-arrive .27s cubic-bezier(.22,1,.36,1) both}
+.ym-feedback-toast[data-tone="success"]{--ym-toast-tone:var(--success-text)}.ym-feedback-toast[data-tone="error"]{--ym-toast-tone:var(--error-text)}.ym-feedback-toast[data-tone="warning"]{--ym-toast-tone:var(--warning-text)}
+.ym-feedback-toast-icon{display:grid;place-items:center;width:28px;height:28px;flex:none;color:var(--ym-toast-tone);background:color-mix(in srgb,var(--ym-toast-tone) 10%,var(--bg-card));border-radius:8px}
+.ym-feedback-toast p{font-size:12px;line-height:1.55;font-weight:650;flex:1;overflow-wrap:anywhere;margin-top:4px}
+.ym-feedback-toast button{padding:5px;border-radius:5px;color:var(--text-secondary)}
+.ym-feedback-toast button:hover,.ym-feedback-toast button:focus-visible{background:var(--bg-secondary)}
+/* Universal tactile response, not a false network-success animation. */
+.ym-workspace button:not(:disabled):active{transform:translateY(1px)}
+.ym-workspace button:disabled{cursor:not-allowed}
+@keyframes ym-hub-open{from{opacity:.45;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+@keyframes ym-toast-arrive{from{opacity:0;transform:translateX(15px) scale(.975)}to{opacity:1;transform:translateX(0) scale(1)}}
+@media(max-width:900px){.ym-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:640px){
+ .ym-connection-summary{gap:6px}.ym-connection-summary>div{padding:11px 9px;gap:5px;flex-direction:column;text-align:center}
+ .ym-connection-summary strong{font-size:19px}.ym-connection-summary small{font-size:10px}
+ .ym-selection-icon{width:32px;height:32px}.ym-selectable-trigger{gap:9px;padding:12px}
+ .ym-selectable-trigger .ym-selection-primary strong{font-size:12px}
+ .ym-connection-badge{font-size:9px;max-width:105px;padding:5px 7px}
+ .ym-account-overview-figures{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .ym-account-overview-figures>div:last-child{grid-column:span 2}
+ .ym-history-inputs{grid-template-columns:1fr}.ym-cash-figures{grid-template-columns:1fr}
+ .ym-account-tabs button{padding:10px 8px;font-size:10px;gap:5px}
+ .ym-connection-heading .ym-connection-actions{width:100%}
+ .ym-detail-grid{gap:7px}.ym-detail-grid>div{padding:9px}
+}
+@media(prefers-reduced-motion:reduce){.ym-feedback-toast,.ym-selection-details{animation:none}.ym-selectable-card,.ym-selectable-trigger,.ym-selectable-chevron{transition:none}.ym-workspace button:not(:disabled):active{transform:none}}
+
+/* Notifications remain noticeable without sitting over bottom navigation. */
+.ym-feedback-stack{top:clamp(12px,2vw,24px);bottom:auto}
+@media(max-width:640px){.ym-feedback-stack{top:12px;inset-inline-end:12px}}
+
+/* Action receipts: noticeable once, accessible, never an endless attention pulse. */
+.ym-feedback-toast{position:relative;overflow:hidden;gap:12px}
+.ym-feedback-toast::after{content:"";position:absolute;inset-inline-start:0;bottom:0;width:100%;height:2px;background:var(--ym-toast-tone);transform-origin:left;animation:ym-toast-track 5.8s linear both;opacity:.4}
+.ym-feedback-toast[data-tone="error"]::after{animation:none;opacity:1}
+.ym-feedback-toast[data-tone="warning"]::after{animation-duration:9s}
+.ym-feedback-toast-icon{animation:ym-toast-icon-in .4s cubic-bezier(.17,1.4,.5,1) both}
+.ym-feedback-toast-body{flex:1;min-width:0}
+.ym-feedback-toast-body>strong{font-size:11px;color:var(--ym-toast-tone);letter-spacing:.025em}
+.ym-feedback-toast-body p{margin:5px 0 0;font-weight:550;line-height:1.5}
+.ym-feedback-toast[data-tone="error"]{box-shadow:0 18px 45px #00000028,0 0 0 1px color-mix(in srgb,var(--ym-toast-tone) 23%,transparent)}
+@keyframes ym-toast-track{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes ym-toast-icon-in{from{transform:scale(.6);opacity:.4}to{transform:scale(1);opacity:1}}
+@media(prefers-reduced-motion:reduce){.ym-feedback-toast::after,.ym-feedback-toast-icon{animation:none}}
+
+/* Device → account cards keep associated broker sessions in one place. */
+.ym-pc-accounts{margin-top:15px;padding-top:15px;border-top:1px solid var(--border)}
+.ym-pc-accounts-header,.ym-cash-movements-header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:9px}
+.ym-pc-accounts-header strong,.ym-cash-movements-header h3{font-size:12px;font-weight:750}
+.ym-pc-account-link{width:100%;display:flex;align-items:center;gap:11px;text-align:left;border:1px solid var(--border);border-radius:9px;background:var(--bg-card);padding:12px;margin-top:7px;transition:border-color .15s,transform .15s}
+.ym-pc-account-link:hover,.ym-pc-account-link:focus-visible{border-color:var(--brand);transform:translateX(2px)}
+.ym-pc-account-link>span:first-child{flex:1;min-width:0}
+.ym-pc-account-link strong{display:block;font-size:12px;overflow-wrap:anywhere}
+.ym-pc-account-link small,.ym-pc-accounts-empty,.ym-cash-movements-header>span{display:block;font-size:10px;line-height:1.5;color:var(--text-secondary);margin-top:4px}
+.ym-pc-accounts-empty{background:var(--bg-card);border:1px dashed var(--border);padding:12px;border-radius:9px}
+/* Separate transfer receipts, review controls and uncertain period results. */
+.ym-cash-performance{display:grid;gap:13px;padding:clamp(14px,2vw,20px);border-radius:13px;border:1px solid var(--border);background:var(--bg-secondary)}
+.ym-cash-performance-head{display:flex;justify-content:space-between;align-items:start;gap:11px;flex-wrap:wrap}
+.ym-cash-performance-head h3{font-size:15px;font-weight:750;letter-spacing:-.025em;margin-top:4px}
+.ym-cash-performance .ym-cash-figures strong{font-size:clamp(15px,1.7vw,20px)}
+.ym-cash-review-list{display:grid;gap:8px}
+.ym-cash-review-card{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:border-color .15s}
+.ym-cash-review-card[data-open="true"]{border-color:var(--border-strong)}
+.ym-cash-review-trigger{width:100%;display:flex;align-items:center;gap:12px;text-align:left;padding:13px 15px}
+.ym-cash-review-trigger:hover,.ym-cash-review-trigger:focus-visible{background:var(--bg-secondary)}
+.ym-cash-review-trigger[aria-expanded="true"] .ym-selectable-chevron{transform:rotate(180deg)}
+.ym-cash-review-glyph{display:grid;place-items:center;width:35px;height:35px;flex:none;color:var(--success-text);border-radius:9px;background:color-mix(in srgb,var(--success-text) 8%,var(--bg-card))}
+.ym-cash-review-glyph[data-side="out"]{color:var(--error-text);background:color-mix(in srgb,var(--error-text) 8%,var(--bg-card))}
+.ym-cash-review-name{flex:1;min-width:0}
+.ym-cash-review-name strong{display:block;font-size:12px;text-transform:capitalize}
+.ym-cash-review-name small{display:block;font-size:10px;line-height:1.5;color:var(--text-secondary);margin-top:4px}
+.ym-cash-review-amount{font:750 12px 'JetBrains Mono',monospace;white-space:nowrap}
+.ym-cash-review-body{display:grid;gap:12px;border-top:1px solid var(--border);padding:16px;background:var(--bg-secondary);animation:ym-hub-open .18s ease-out both}
+.ym-cash-review-note{display:grid;gap:8px;font-size:11px;color:var(--text-secondary)}
+.ym-cash-review-note textarea{min-height:64px;resize:vertical}
+.ym-cash-review-body .ym-confirmation-stamp{margin-left:auto}
+/* Distinct, one-shot, accessible action receipts: never flash indefinitely. */
+.ym-feedback-toast{overflow:hidden;position:relative}
+.ym-feedback-toast::after{content:"";position:absolute;bottom:0;left:0;width:100%;height:2px;background:var(--ym-toast-tone);transform-origin:left;animation:ym-toast-track 5.8s linear both;opacity:.55}
+.ym-feedback-toast[data-tone="error"]::after{animation:none;opacity:1}
+.ym-feedback-toast[data-tone="warning"]::after{animation-duration:9s}
+.ym-feedback-toast-body{flex:1;min-width:0}
+.ym-feedback-toast-body strong{display:block;color:var(--ym-toast-tone);font-size:11px;letter-spacing:.025em}
+.ym-feedback-toast-body p{font-size:12px;font-weight:550;line-height:1.5;margin-top:4px}
+.ym-feedback-toast-icon{animation:ym-toast-icon-in .35s ease-out both}
+@keyframes ym-toast-track{to{transform:scaleX(0)}}
+@keyframes ym-toast-icon-in{from{transform:scale(.7);opacity:.4}to{transform:scale(1);opacity:1}}
+@media(max-width:650px){.ym-cash-review-amount{font-size:11px}.ym-cash-review-trigger{gap:8px;padding:11px}.ym-cash-review-glyph{width:29px;height:29px}.ym-cash-performance-head{display:block}}
+@media(prefers-reduced-motion:reduce){.ym-feedback-toast::after,.ym-feedback-toast-icon,.ym-cash-review-body{animation:none}.ym-pc-account-link:hover{transform:none}}

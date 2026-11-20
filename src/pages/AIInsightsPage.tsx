@@ -1,3 +1,4 @@
+import { Select } from '@/components/Select';
 import { useMemo, useState } from 'react';
 import { Sparkles, TrendingUp, Lightbulb, AlertTriangle, CheckCircle, BarChart2, RefreshCw, ArrowUp, ArrowDown, Minus } from 'lucide-react';
 import { useTrades, useTradingAccounts } from '@/hooks/useData';
@@ -83,10 +84,10 @@ export function AIInsightsPage() {
 
       <div className="card p-4 mb-5">
         <label className="block max-w-sm text-xs font-semibold text-secondary">Account
-          <select className="input-field mt-1.5" value={accountFilter} onChange={event => setAccountFilter(event.target.value)}>
+          <Select className="input-field mt-1.5" value={accountFilter} onChange={event => setAccountFilter(event.target.value)}>
             <option value="all">All accounts (one currency at a time)</option>
             {accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}
-          </select>
+          </Select>
         </label>
         <p className="mt-2 text-xs text-muted">Insights describe closed trades by their close date. Results and comparisons are kept separate by settlement currency.</p>
       </div>

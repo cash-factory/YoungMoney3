@@ -1,3 +1,4 @@
+import {decisionSource, freezeDecisionEntry, historicalRules} from './decisions';
 import {accountSummaries} from './accountSummaries';
 import {selectRecords} from './selectRecords';
 import { settleManualTrade } from '../src/lib/settleManualTrade';
@@ -17,10 +18,12 @@ export interface Env {
   MEDIA?: R2Bucket;
   PILOT_INVITE_CODE?: string;
   MT5_ALLOW_LIVE?: string;
+  DEMO_SHOWCASE_ENABLED?: string;
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
 }
 
+const DEMO_MEMBER_ID = '00000000-0000-4000-8000-00000000d3a0';
 const encoder = new TextEncoder();
 const ownedTables = new Set<string>(WORKSPACE_TABLES);
 const publicTables = new Set(['provider_catalog', 'provider_offerings', 'prop_firm_rule_versions', 'provider_change_reviews']);
@@ -125,14 +128,14 @@ async function authRoute(request: Request, env: Env, path: string) {
     if(gate?.value==='true') return response({error:'Registration is temporarily paused by the workspace administrator.'},403);
     if (!env.PILOT_INVITE_CODE) return response({ error: 'Workspace sign-up has not been configured.' }, 503);
     if (!input.invite_code || input.invite_code.trim().toLowerCase() !== env.PILOT_INVITE_CODE.trim().toLowerCase()) return response({ error: 'Invalid pilot invite code.' }, 403);
-    const accountCount = await env.DB.prepare('SELECT COUNT(*) AS total FROM users').first<{ total: number }>();
+    const accountCount = await env.DB.prepare('SELECT COUNT(*) AS total FROM users WHERE id<>?').bind(DEMO_MEMBER_ID).first<{ total: number }>();
     if ((accountCount?.total || 0) >= 10) return response({ error: 'This pilot has reached its 10-account limit.' }, 403);
     const email = input.email?.trim().toLowerCase(); const username = input.username?.trim().toLowerCase(); const password = input.password || ''; const displayName = input.display_name?.trim() || username;
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !username || !/^[a-z0-9_]{3,32}$/.test(username) || password.length < 8) return response({ error: 'Use a valid email, 3â€“32 character username, and password of at least 8 characters.' }, 400);
     const existing = await env.DB.prepare('SELECT id FROM users WHERE email=? OR username=?').bind(email, username).first(); if (existing) return response({ error: 'Email or username is already in use.' }, 409);
-    const secured = await hashPassword(password); const userId = id(); const timestamp = now(); const created = await env.DB.prepare('INSERT OR IGNORE INTO users (id,email,username,display_name,password_hash,password_salt,created_at,updated_at) SELECT ?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM users)<10').bind(userId, email, username, displayName, secured.hash, secured.salt, timestamp, timestamp).run(); if (!created.meta.changes) return response({ error: 'Account unavailable or pilot full.' }, 409); const user = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(userId).first<Record<string, unknown>>(); return issueSession(env.DB, user!);
+    const secured = await hashPassword(password); const userId = id(); const timestamp = now(); const created = await env.DB.prepare('INSERT OR IGNORE INTO users (id,email,username,display_name,password_hash,password_salt,created_at,updated_at) SELECT ?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM users WHERE id<>?)<10').bind(userId, email, username, displayName, secured.hash, secured.salt, timestamp, timestamp,DEMO_MEMBER_ID).run(); if (!created.meta.changes) return response({ error: 'Account unavailable or pilot full.' }, 409); const user = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(userId).first<Record<string, unknown>>(); return issueSession(env.DB, user!);
   }
-  if (path === '/api/auth/signin') { const user = await env.DB.prepare('SELECT * FROM users WHERE email=?').bind(input.email?.trim().toLowerCase()).first<Record<string, string>>(); if (!user) return response({ error: 'Invalid email or password.' }, 401); const secured = await hashPassword(input.password || '', user.password_salt); if (secured.hash !== user.password_hash) return response({ error: 'Invalid email or password.' }, 401); if (user.account_status === 'suspended') return response({ error: 'This account is suspended.' }, 403); return issueSession(env.DB, user); }
+  if (path === '/api/auth/signin') { const user = await env.DB.prepare('SELECT * FROM users WHERE email=?').bind(input.email?.trim().toLowerCase()).first<Record<string, string>>(); if (!user || user.id===DEMO_MEMBER_ID) return response({ error: 'Invalid email or password.' }, 401); const secured = await hashPassword(input.password || '', user.password_salt); if (secured.hash !== user.password_hash) return response({ error: 'Invalid email or password.' }, 401); if (user.account_status === 'suspended') return response({ error: 'This account is suspended.' }, 403); return issueSession(env.DB, user); }
   return response({ error: 'Unknown authentication action.' }, 404);
 }
 
@@ -226,6 +229,31 @@ async function assertOwnedLinks(table: string, record: Record<string, unknown>, 
   }
 }
 
+async function validateReview(record:Record<string,unknown>,key:string,owner:string,db:D1Database,restore:boolean) {
+  if(typeof record.reference!=='string' || key!=='review/'+owner+'/'+record.reference || !['followed','changed','unsure',null].includes(record.verdict as string|null)) throw new RequestError(400,'Invalid decision review.');
+  const source=await decisionSource(db,owner,record.reference);
+  if(!source && !restore)throw new RequestError(404,'The trade is unavailable in this account.');
+  if(source){record.account_id=source.account;record.symbol=source.symbol;record.entry_time=source.time;}
+  if (!restore && record.strategy_id) {
+    const strategy = await db.prepare(`SELECT 1 FROM workspace_records WHERE user_id=? AND table_name='trader_strategies' AND id=?
+      UNION ALL SELECT 1 FROM decision_playbook_history WHERE owner=? AND collection='trader_strategies' AND record_id=? AND payload IS NOT NULL LIMIT 1`)
+      .bind(owner,record.strategy_id,owner,record.strategy_id).first();
+    if (!strategy) throw new RequestError(400, 'Choose a strategy from your playbook.');
+  }
+  if (!restore && record.commitment_id) {
+    const weekly = await db.prepare("SELECT payload FROM workspace_records WHERE user_id=? AND table_name='weekly_reviews' AND id=?")
+      .bind(owner,record.commitment_id).first<{payload:string}>();
+    if (!weekly) throw new RequestError(400, 'Choose a weekly commitment from your journal.');
+    const account = JSON.parse(weekly.payload).account_id;
+    if (account && source && source.account !== account) throw new RequestError(400, 'This commitment belongs to another trading account.');
+  }
+  if(record.entry_model_id && !restore){
+    const row=await db.prepare("SELECT payload FROM workspace_records WHERE user_id=? AND table_name='strategy_entry_models' AND id=?").bind(owner,record.entry_model_id).first<{payload:string}>();
+    const archived=await db.prepare("SELECT payload FROM decision_playbook_history WHERE owner=? AND collection='strategy_entry_models' AND record_id=? AND payload IS NOT NULL AND json_extract(payload,'$.strategy_id')=? LIMIT 1").bind(owner,record.entry_model_id,record.strategy_id??null).first();
+    if((!row || JSON.parse(row.payload).strategy_id!==record.strategy_id) && !archived)throw new RequestError(400,'Choose an entry model from the selected strategy.');
+  }
+}
+
 const fillReviewFields = new Set(['notes','lessons','mistakes','emotional_state','setup_quality','observations','what_went_wrong','strategy_id','setup_id','entry_model_id','plan_id','entry_screenshot_url','entry_voice_note_url','closure_screenshot_url','closure_voice_note_url','screenshot_url','voice_note_url','checklist_items','checklist_completed','checklist_override_reason']);
 // Financial or relationship edits must pass the same validation and settlement as new trades.
 // Annotation-only edits remain available for older imported journal records.
@@ -278,6 +306,8 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
       }
       const normalized = table==='trades' && input.action==='insert' ? await normalizeTrade(item,user.id,env.DB) : item;
       const cleanRecord: Record<string, unknown> = { ...normalized };
+      if(table==='trades' && input.action==='insert') cleanRecord.decision_entry=freezeDecisionEntry(cleanRecord);
+      if(table==='decision_reviews') await validateReview(cleanRecord,recordId,String(user.id),env.DB,input.action==='upsert');
       if (table === 'trading_accounts') {
         // A user-provided backup must never impersonate an authenticated MT5 snapshot.
         for (const key of ['broker_balance','broker_balance_at','broker_equity','broker_equity_at']) delete cleanRecord[key];
@@ -288,7 +318,7 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
       const payload = { ...cleanRecord, id: recordId, user_id: user.id };
       const json = JSON.stringify(payload);
       const digest = await sha(json);
-      const ignore = input.action === 'upsert' || (table === 'trades' && items.length === 1);
+      const ignore = input.action === 'upsert' || ((table === 'trades' || table === 'decision_reviews') && items.length === 1);
       const statement = env.DB.prepare(`INSERT ${ignore ? 'OR IGNORE' : ''} INTO workspace_records
         (id,user_id,table_name,payload,created_at,updated_at,request_hash) VALUES (?,?,?,?,?,?,?)`)
         .bind(recordId, user.id, table, json, timestamp, timestamp, digest);
@@ -301,7 +331,7 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
       else if (input.action === 'insert') {
         const previous = await env.DB.prepare('SELECT payload,created_at,updated_at,request_hash FROM workspace_records WHERE id=? AND user_id=? AND table_name=?')
           .bind(row.recordId, user.id, table).first<{ payload: string; created_at: string; updated_at: string; request_hash: string }>();
-        if (!previous || previous.request_hash !== row.digest) return response({ error: 'This trade ID is already in use. Refresh before saving.' }, 409);
+        if (!previous || previous.request_hash !== row.digest) return response({ error: 'This record has changed. Refresh before saving.' }, 409);
         inserted.push({ ...JSON.parse(previous.payload), created_at: previous.created_at, updated_at: previous.updated_at });
       }
     }
@@ -317,6 +347,7 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
     const patch = input.payload;
     if (input.action === 'delete' && isFill) return response({ error: 'Broker fills cannot be deleted from the journal.' }, 403);
     if (input.action === 'update') {
+      if(table==='decision_reviews' && !filters.updated_at) return response({error:'Refresh the review before editing.'},428);
       if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return response({ error: 'Supply a record patch.' }, 400);
       if (table === 'trades' && (
         (!isFill && 'trade_source' in patch && patch.trade_source !== (old.trade_source ?? 'manual'))
@@ -337,6 +368,8 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
       return result.meta.changes ? response({ data: null }) : response({ error: 'This record changed. Refresh before deleting.' }, 409);
     }
     const merged = { ...old, ...patch, user_id: user.id, id: input.id };
+    if(table==='trades') { if(old.decision_entry) merged.decision_entry=old.decision_entry; else delete merged.decision_entry; }
+    if(table==='decision_reviews') await validateReview(merged,input.id,String(user.id),env.DB,false);
     if (table === 'trading_accounts') {
       for (const key of ['broker_balance','broker_balance_at','broker_equity','broker_equity_at']) {
         if (key in old) merged[key] = old[key];
@@ -625,7 +658,7 @@ async function adminRoute(request: Request, env: Env, user: Record<string, unkno
   if(input.action==='overview') {
     const users=await env.DB.prepare("SELECT COUNT(*) AS total,SUM(CASE WHEN role='member' THEN 1 ELSE 0 END) AS members,SUM(CASE WHEN account_status='suspended' THEN 1 ELSE 0 END) AS suspended FROM users").first();
     const devices=await env.DB.prepare("SELECT COUNT(*) AS total,SUM(CASE WHEN revoked=0 THEN 1 ELSE 0 END) AS active FROM mt5_devices").first();
-    const links=await env.DB.prepare("SELECT COUNT(*) AS total,SUM(CASE WHEN status='connected' THEN 1 ELSE 0 END) AS connected FROM mt5_links").first();
+    const links=await env.DB.prepare("SELECT COUNT(*) AS total,SUM(CASE WHEN status='connected' THEN 1 ELSE 0 END) AS connected,SUM(CASE WHEN status='connected' AND (capture_health='needs_attention' OR gap>0) THEN 1 ELSE 0 END) AS needs_attention,SUM(CASE WHEN retry_requested_at IS NOT NULL THEN 1 ELSE 0 END) AS retries_pending FROM mt5_links").first();
     const settings=await env.DB.prepare("SELECT key,value FROM site_settings WHERE key IN ('signup_paused','mt5_capture_paused')").all<{key:string;value:string}>();
     const flags=Object.fromEntries(settings.results.map(setting=>[setting.key,setting.value==='true']));
     const lastAudit=await env.DB.prepare("SELECT created_at FROM admin_audit_log ORDER BY created_at DESC LIMIT 1").first<{created_at:string}>();
@@ -750,14 +783,47 @@ export default {
       return response({ error: 'Cross-origin mutation rejected.' }, 403);
     }
     try {
+      if (request.method === 'GET' && pathname === '/api/demo/available')
+        return response({enabled:env.DEMO_SHOWCASE_ENABLED==='true'});
       if (request.method === 'GET' && pathname === '/api/health') {
         const ready = await env.DB.prepare('SELECT 1 AS ready').first<{ ready: number }>();
         return ready?.ready === 1 ? response({ status: 'ok', database: 'connected' }) : response({ status: 'unavailable' }, 503);
+      }
+      if (request.method === 'POST' && pathname === '/api/demo/enter') {
+        if (env.DEMO_SHOWCASE_ENABLED !== 'true') return response({ error: 'Preview unavailable.' }, 404);
+        // Membership stays invite-only: a valid staging member must choose
+        // to switch to the read-only preview. Never offer anonymous sessions.
+        const viewer=await currentUser(request,env.DB);
+        if(!viewer || viewer.id===DEMO_MEMBER_ID) return response({error:'Sign in with an active staging account to explore the demo.'},401);
+        const ip=request.headers.get('CF-Connecting-IP') || 'local';
+        if(!await withinAuthBudget(env.DB,'demo-preview:'+ip,40)) return throttled();
+        const sample=await env.DB.prepare("SELECT * FROM users WHERE id=? AND email=? AND role='member' AND account_status='active'")
+          .bind(DEMO_MEMBER_ID,'showcase@youngmoney3.invalid').first<Record<string,unknown>>();
+        return sample ? issueSession(env.DB,sample) : response({error:'Demo workspace has not been seeded on staging.'},503);
       }
       if (request.method === 'POST' && pathname.startsWith('/api/mt5/device/')) return await mt5Route(request, env, null);
       if (request.method === 'POST' && ['/api/auth/signup', '/api/auth/signin', '/api/auth/recover'].includes(pathname)) return await authRoute(request, env, pathname);
       const user = await currentUser(request, env.DB);
       if (!user) return response({ error: 'Authentication required.' }, 401);
+      if (user.id===DEMO_MEMBER_ID) {
+        if (env.DEMO_SHOWCASE_ENABLED!=='true') return response({error:'Preview unavailable.'},403);
+        // Read-only server-backed sample. Browser controls alone are not a security boundary.
+        const readOnlyRoute = (request.method==='GET' &&
+          (pathname==='/api/me'||pathname==='/api/account-summaries')) ||
+          (request.method==='POST' && pathname==='/api/auth/signout') ||
+          (request.method==='POST' && pathname==='/api/decision/context') ||
+          (request.method==='POST' && ['/api/mt5/status','/api/mt5/positions',
+            '/api/mt5/position-evidence'].includes(pathname)) ||
+          (request.method==='POST' && pathname==='/api/data' &&
+            (await jsonObject<{action?:string}>(request.clone())).action==='select');
+        if (!readOnlyRoute) return response({error:'This is a read-only sample workspace. Sign in with your own account to save changes.'},403);
+      }
+      if(request.method==='POST' && pathname==='/api/decision/context') {
+        const input=await jsonObject<Record<string,unknown>>(request);
+        const source=await decisionSource(env.DB,String(user.id),input.reference);
+        if(!source || !Number.isFinite(Date.parse(source.time)))return response({error:'Entry evidence unavailable.'},404);
+        return response(await historicalRules(env.DB,String(user.id),source,input));
+      }
       if(request.method==='GET' && pathname==='/api/account-summaries') return response({rows:await accountSummaries(env.DB,user.id)});
       if (pathname.startsWith('/api/mt5/')) return await mt5Route(request, env, String(user.id));
       if (request.method === 'GET' && pathname === '/api/me') return response({ user: profile(user) });
