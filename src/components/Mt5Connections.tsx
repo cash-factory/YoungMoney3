@@ -120,7 +120,7 @@ export function Mt5Connections() {
     {loaded && !devices.length && <p className="text-sm text-secondary">Run the Windows connector, then enter your pairing code on that PC.</p>}
     {devices.length>0 && <p className="text-xs text-secondary">Each connector installation should be paired once. Rename your PCs to identify them easily; adding more broker accounts does not require pairing again.</p>}
     <div className="flex flex-wrap items-center gap-2">
-      <a className="btn-primary inline-flex items-center gap-2" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.0-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer" aria-label="Download YoungMoney3 Windows Connector version 0.5.0 release candidate 1"><Download size={15}/>Download Connector v0.5.0-rc1</a>
+      <a className="btn-primary inline-flex items-center gap-2" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.1-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer" aria-label="Download YoungMoney3 Windows Connector version 0.5.1 release candidate 1"><Download size={15}/>Download Connector v0.5.1-rc1</a>
       <a className="btn-secondary inline-flex items-center gap-2" href="/connector-download.html">Release details &amp; SHA-256</a>
       <a className="btn-secondary inline-flex items-center gap-2" href="/mt5-connector.zip" download><Download size={15}/>Python source fallback</a>
     </div>
