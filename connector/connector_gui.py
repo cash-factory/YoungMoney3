@@ -43,7 +43,7 @@ ACCENT = "#ff365c"
 WARM = "#f9c9ab"
 DANGER = "#ff8da7"
 FONT = "Segoe UI"
-VERSION = "0.5.1-rc1"
+VERSION = "0.5.2-rc1"
 
 
 def terminal_candidates():
@@ -396,10 +396,10 @@ class ConnectorApp:
 
     def _build_overview(self):
         page = self._scrollable_page("overview")
-        self._stack_heading(page, "Account monitor", "Connect your broker once. Your journal updates while this app is open.")
+        self._stack_heading(page, "Account monitor", "A dedicated connection for every MT5 account.")
         hero = self._card(page, 24)
         hero.pack(fill="x", pady=(0, 16))
-        self._label(hero, "Connection status", size=11, color=MUTED).pack(anchor="w")
+        self._label(hero, "CONNECTION STATUS", size=9, bold=True, color=MUTED).pack(anchor="w")
         self._label(hero, textvar=self.status_var, size=20, bold=True).pack(anchor="w", pady=(4, 8))
         self.connection_path = ConnectionPath(hero, background=PANEL, motion=self.motion_var.get)
         self.connection_path.pack(fill="x", pady=(4, 4))

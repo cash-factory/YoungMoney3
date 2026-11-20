@@ -12,6 +12,7 @@ FILES = {
     "connect.py": "connector/connect.py",
     "ledger.py": "connector/ledger.py",
     "history_range.py": "connector/history_range.py",
+    "cash_history.py": "connector/cash_history.py",
     "lifecycle.py": "connector/lifecycle.py",
     "connector_gui.py": "connector/connector_gui.py",
     "studio_ui.py": "connector/studio_ui.py",

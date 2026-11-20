@@ -192,20 +192,34 @@ class StudioArt(tk.Canvas):
         soft = blend(background, "#ffffff", .12)
         bright = blend(self.accent, "#ffffff", .5)
         if self.variant == "Account monitor":
-            # The overview's motion belongs to the live status rail. The header
-            # stays still even when a user returns to the page mid-verification.
-            panel = blend(background, "#9b93a6", .12)
-            edge = blend(background, "#e3dce7", .37)
-            shell = (20,24, 112,10, 130,18, 130,77, 39,91, 20,81)
-            self.create_polygon(*shell, fill=panel, outline=edge, width=1)
-            self.create_polygon(26,29,112,16,123,21,123,71,38,84,26,78,
-                                fill=background, outline=soft)
-            for offset, length in ((0,55),(10,36),(20,45)):
-                self.create_line(39,44+offset,39+length,44+offset-length*.15,fill=edge,width=2)
-            self.create_polygon(99,55,155,46,170,52,170,84,115,94,99,87,
-                                fill=blend(background,self.accent,.12),outline=self.accent,width=1)
-            self.create_line(111,68,120,75,137,58,fill=bright,width=2.5)
-            self.create_line(143,72,160,69,fill=bright,width=2)
+            # Quiet product-style composition: a Windows terminal, isolated
+            # accounts and verified journal evidence. No loop or decorative
+            # motion; connection animation is reserved for actual state changes.
+            edge = blend(background, "#ffffff", .24)
+            slate = blend(background, "#ffffff", .08)
+            screen = blend(background, "#ffffff", .045)
+            success = "#72cda4"
+            self.create_rectangle(17, 20, 101, 79, fill=slate, outline=edge,
+                                  width=1)
+            self.create_rectangle(22, 25, 96, 70, fill=screen, outline=edge,
+                                  width=1)
+            self.create_line(43, 83, 76, 83, fill=edge, width=2)
+            self.create_line(53, 79, 53, 83, fill=edge, width=2)
+            self.create_line(69, 79, 69, 83, fill=edge, width=2)
+            # A compact candlestick/chart reference within the terminal.
+            self.create_line(32, 60, 44, 50, 57, 54, 69, 38, 86, 30,
+                             fill=self.accent, width=2.5, smooth=True)
+            for x, low, high in ((38, 51, 62), (55, 42, 57), (73, 30, 47)):
+                self.create_line(x, low, x, high, fill=edge, width=1)
+            # Native connection path to three independent captured accounts.
+            self.create_line(105, 49, 128, 49, fill=edge, width=2)
+            self.create_line(128, 27, 128, 70, fill=edge, width=2)
+            for y in (27, 49, 70):
+                self.create_line(128, y, 143, y, fill=edge, width=2)
+                self.create_rectangle(145, y - 10, 173, y + 10,
+                                      fill=slate, outline=edge, width=1)
+                self.create_line(151, y - 2, 156, y + 2, 165, y - 5,
+                                 fill=success, width=1.9)
             return
         if self.variant == "Account sessions":
             for index in range(3):

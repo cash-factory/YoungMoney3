@@ -28,7 +28,7 @@ class DevicePresence:
     def check(self):
         try:
             setup = "ready" if self.setup.sources() else "install"
-            payload = {"setup": setup, "version": "0.5.1-rc1"}
+            payload = {"setup": setup, "version": "0.5.2-rc1"}
             if self.installation:
                 payload["installationId"] = self.installation()
             reply = self.request(payload)

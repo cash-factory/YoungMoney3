@@ -191,7 +191,7 @@ class PresenceTests(unittest.TestCase):
         self.assertTrue(device.check())
         self.assertEqual(request.call_args.args[0]["installationId"],uuid)
         self.assertEqual([e.get("name") for e in events],["Trading Laptop","Office Laptop"])
-        self.assertEqual(request.call_args.args[0]["version"],"0.5.1-rc1")
+        self.assertEqual(request.call_args.args[0]["version"],"0.5.2-rc1")
 
     def test_duplicate_installation_conflict_does_not_revoke_pairing(self):
         error=HTTPError("https://example.test",409,"Conflict",{},

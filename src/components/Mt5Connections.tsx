@@ -188,6 +188,14 @@ export function Mt5Connections() {
           </div>;
         })}
       </div>
+      <details className="ym-context-help ym-connector-downloads"><summary><CircleHelp size={15}/>Connector downloads and setup</summary>
+        <div className="ym-connection-actions">
+          <a href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.1-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer">Download Connector v0.5.1-rc1</a>
+          <a href="/connector-download.html">Release details &amp; SHA-256</a>
+          <a href="/mt5-connector.zip" download>Python source fallback</a>
+        </div>
+        <p>Use the Windows connector on the computer that runs MT5. Staging builds are unsigned and capture-only. Check the release checksum before opening the executable.</p>
+      </details>
       {requestedPc && loaded && <p className="ym-context-short" role="status">{!devices.length?'Pair a PC once to continue.':requestedPc==='1'&&devices.length>1?'Select the PC to add this account to.':'Keep the connector open; the login will open when the selected PC is ready.'}</p>}
     </section>
     <section id="ym-linked-accounts" className="card ym-connection-section" aria-labelledby="linked-accounts-title">

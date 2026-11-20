@@ -485,9 +485,9 @@ test('paired PCs are named consistently on the dashboard and connector; repeated
     assert.ok(worker.includes(text),'Worker must enforce owner-scoped PC identity '+text);
   }
   assert.ok(site.includes('pairedPcName(d)')&&site.includes('Rename')&&site.includes('Unpair PC')&&
-    site.includes("action('rename-pc'")&&site.includes('Pair a different PC'),
+    site.includes("action('rename-pc'")&&site.includes('Pair another PC'),
     'Dashboard must show stable PC names and discourage repeated pairings');
-  assert.ok(site.includes('Paired PC:')&&mobile.includes('Paired PC:')&&types.includes('pc_name'),
+  assert.ok(site.includes('pairedPcName(pc)')&&mobile.includes('Paired PC:')&&types.includes('pc_name'),
     'Account cards and monitors must expose the responsible paired PC');
   assert.ok(desktop.includes('Rename this PC')&&desktop.includes('self.pc_name')&&
     desktop.includes('rename_paired_pc'),'Desktop must share PC names with dashboard');
@@ -495,4 +495,15 @@ test('paired PCs are named consistently on the dashboard and connector; repeated
     'Presence must advertise stable installation and return remote label');
   assert.ok(identity.includes('uuid.uuid4()')&&identity.includes('Saved PC identity is unreadable'),
     'Corrupted installations cannot silently create duplicate device identity');
+});
+
+test('the MT5 workspace uses selective disclosure and names action outcomes',()=>{
+  const hub=read('src/components/Mt5Connections.tsx');
+  const feedback=read('src/lib/actionFeedback.tsx');
+  const css=read('src/connection-hub.css');
+  assert.ok(hub.includes('aria-expanded={expanded}')&&hub.includes('accountPanel')&&hub.includes('ym-account-tabs'));
+  assert.ok(hub.includes('CashFlowPanel')&&hub.includes('timezone_confirmed_at'));
+  assert.ok(hub.includes("'Timezone saved for this broker account")&&hub.includes("announceAction('error'"));
+  assert.ok(feedback.includes("'ym:action-result'")&&feedback.includes('role={item.tone'));
+  assert.ok(css.includes('prefers-reduced-motion:reduce')&&css.includes('ym-feedback-toast'));
 });

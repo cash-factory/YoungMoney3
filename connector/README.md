@@ -8,7 +8,7 @@
 4. Keep the connector open. **PC online** confirms the connection to the dashboard. **Broker verified** confirms the login. **Journal synced** follows an acknowledged account upload.
 5. Use **Broker accounts** on the trading dashboard to see each login, check its last sync, or pause and resume monitoring. **Manage accounts** opens retries, timezones and historical imports.
 
-## Identify a paired Windows PC (staging v0.5.1-rc1)
+## Identify a paired Windows PC (staging v0.5.2-rc1)
 
 Each connector installation has one random, persistent installation identifier in
 the current Windows user's LOCALAPPDATA/YMFX folder. It is not a hardware ID,
@@ -166,3 +166,7 @@ protective orders that the broker does not expose cannot be reconstructed
 from fills alone. Reviews and manual duplicate matching are still mandatory
 before older closed fills become journal trades. Connected accounts and
 live evidence are never deleted by the failed-login cleanup controls.
+
+## Automatic historical balance movements (v0.5.2-rc1)
+
+The connected demo/contest account is checked for past MT5 DEAL_TYPE_BALANCE transactions automatically, independently of the approved closed-trade history importer. Positive entries can be deposits **or** broker corrections; negative entries can be withdrawals **or** corrections. Raw broker deals are preserved, no claim of verified lifetime profit is made, and the staging account ledger labels credit/debit candidates as *unverified*. The connector scans older available records in bounded resumable windows without blocking normal trade capture. Broker retention remains a limitation; compare amounts with an original broker account statement before drawing lifetime P&L conclusions.
