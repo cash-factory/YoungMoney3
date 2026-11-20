@@ -22,7 +22,7 @@ export function ActionFeedbackHost() {
       const item=(event as CustomEvent<ActionMessage>).detail;
       if(!item?.message) return;
       setMessages(previous=>{
-        const last=previous.at(-1);
+        const last=previous[previous.length-1];
         // A domain-level confirmation may follow a generic mutation status.
         // Present the more recent result instead of stacking near-duplicates.
         if(last && last.tone===item.tone && item.createdAt-last.createdAt<1000)

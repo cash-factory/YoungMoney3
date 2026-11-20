@@ -9,7 +9,7 @@ const displayTable = (name:string) => ({
   strategy_test_trades:'Strategy test trade',study_materials:'Study material',
   decision_reviews:'Decision review',trading_account_adjustments:'Account adjustment',
   market_instruments:'Market instrument'
-} as Record<string,string>)[name]||name.replaceAll('_',' ');
+} as Record<string,string>)[name]||name.replace(/_/g,' ');
 
 type Row = Record<string, unknown>;
 type Result = { data: Row | null; error: { message: string; status?:number } | null };
