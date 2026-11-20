@@ -25,7 +25,7 @@ export function ActionFeedbackHost() {
         const last=previous[previous.length-1];
         // A domain-level confirmation may follow a generic mutation status.
         // Present the more recent result instead of stacking near-duplicates.
-        if(last && last.tone===item.tone && item.createdAt-last.createdAt<1000)
+        if(last && last.tone===item.tone && last.message===item.message && item.createdAt-last.createdAt<1000)
           return [...previous.slice(0,-1),item].slice(-3);
         return [...previous.filter(x=>x.id!==item.id),item].slice(-3);
       });
@@ -36,7 +36,7 @@ export function ActionFeedbackHost() {
   useEffect(()=>{
     const timers=messages.filter(item=>item.tone!=='error').map(item=>
       window.setTimeout(()=>setMessages(current=>current.filter(x=>x.id!==item.id)),
-        item.tone==='warning'?9000:5800));
+        Math.max(0,(item.tone==='warning'?9000:5800)-(Date.now()-item.createdAt))));
     return()=>timers.forEach(timer=>window.clearTimeout(timer));
   },[messages]);
   return <div className="ym-feedback-stack" aria-label="Operation notifications">
