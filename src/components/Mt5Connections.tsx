@@ -182,7 +182,7 @@ export function Mt5Connections() {
                   <button type="button" className="btn-secondary" onClick={()=>{setEditingPc(d.id);setPcNameDraft(pairedPcName(d));}}>Rename PC</button>
                   <button type="button" className="btn-secondary" onClick={()=>{if(window.confirm('Unpair '+pairedPcName(d)+'? This revokes its connected broker sessions. Do not unpair the PC currently capturing your trades.'))void run(()=>action('revoke',{device:d.id}),'PC unpaired. Historical trade evidence was retained.','revoke-pc');}}>Unpair PC</button>
                 </div>}
-              <details className="ym-context-help"><summary><CircleHelp size={15}/>Connection and safety details</summary><p>Use Add broker account to connect more logins without pairing again. Unpairing revokes monitoring for accounts on this PC. An offline PC retains its saved pairing; reopen the Windows connector on that computer.</p><div className="ym-connection-actions"><a href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.1-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer">Download Windows Connector</a><a href="/connector-download.html">Release details and checksum</a></div></details>
+              <details className="ym-context-help"><summary><CircleHelp size={15}/>Connection and safety details</summary><p>Use Add broker account to connect more logins without pairing again. Unpairing revokes monitoring for accounts on this PC. An offline PC retains its saved pairing; reopen the Windows connector on that computer.</p><div className="ym-connection-actions"><a href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.2-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer">Download Windows Connector</a><a href="/connector-download.html">Release details and checksum</a></div></details>
               {count>0 && <button type="button" className="ym-select-account-jump" onClick={()=>document.getElementById('ym-linked-accounts')?.scrollIntoView({behavior:'smooth',block:'start'})}>Manage this PC's {count} linked {count===1?'account':'accounts'} <ArrowRight size={15}/></button>}
             </div>}
           </div>;
@@ -190,7 +190,7 @@ export function Mt5Connections() {
       </div>
       <details className="ym-context-help ym-connector-downloads"><summary><CircleHelp size={15}/>Connector downloads and setup</summary>
         <div className="ym-connection-actions">
-          <a href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.1-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer">Download Connector v0.5.1-rc1</a>
+          <a href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.2-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer">Download Connector v0.5.2-rc1</a>
           <a href="/connector-download.html">Release details &amp; SHA-256</a>
           <a href="/mt5-connector.zip" download>Python source fallback</a>
         </div>
@@ -307,7 +307,13 @@ export function Mt5Connections() {
         setHistoryScan(current=>current===historyScan ? null : current);
         await run(async()=>{if(imported) await fetchTrades();});
       }}/>}
-    <section className="card p-5 sm:p-6 space-y-4" aria-label="Rich position lifecycles">
+    <details className="card p-5 sm:p-6 ym-position-archives" aria-label="Rich position lifecycles">
+      <summary className="cursor-pointer list-none flex flex-wrap items-center justify-between gap-3" aria-label="Expand broker position lifecycles">
+        <span className="font-bold text-sm">Broker position evidence</span>
+        <span className="ym-section-count">{positions.length} lifecycles</span>
+        <ChevronDown size={17} />
+      </summary>
+      <div className="mt-4 pt-4 border-t border-themed space-y-3">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div><h2 className="text-base font-bold">Position lifecycles</h2>
           <p className="text-xs text-muted mt-1">A position lifecycle contains its entries, scale-ins and partial closes. Raw broker records are kept separately for audit.</p>
@@ -362,7 +368,8 @@ export function Mt5Connections() {
         const page=await action('positions',{offset:positions.length});
         setPositions(previous=>[...previous,...page.rows]);setPositionsMore(Boolean(page.more));
       } catch(e){setError(e instanceof Error?e.message:'Could not load more lifecycles.');}}}>Load more lifecycles</button>}
-    </section>
+      </div>
+    </details>
     <dialog ref={dialog} aria-labelledby="mt5-dialog-title" className="mt5-dialog" onClose={()=>{setDevice('');void refresh().catch(e=>setError(e.message));}}>
       <header className="flex items-center justify-between border-b border-themed px-5 py-4"><h2 id="mt5-dialog-title" className="font-bold">Connect MT5 account</h2><button className="btn-ghost p-2" aria-label="Close login" onClick={()=>dialog.current?.close()}><X size={18}/></button></header>
       {device && <iframe title="MT5 broker account login" className="w-full border-0" style={{height:'min(530px,70dvh)'}} src={'/mt5-login.html#'+encodeURIComponent(device)}/>}
