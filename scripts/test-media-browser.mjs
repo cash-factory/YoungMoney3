@@ -60,7 +60,7 @@ export async function runMediaChecks(page) {
   await imageCard.locator('img').waitFor();
   await imageCard.locator('img').evaluate(image => image.decode());
   assert.equal(await imageCard.locator('img').evaluate(image => image.naturalWidth > 0), true);
-  await imageCard.getByRole('button', { name: 'Open attachment details' }).click();
+  await imageCard.getByRole('button', { name: 'Open EUR/USD' }).click();
   const preview = page.getByRole('dialog', { name: 'Attachment preview' });
   await preview.waitFor();
   await preview.locator('img').waitFor();
@@ -91,7 +91,8 @@ export async function runMediaChecks(page) {
   await search.fill('');
   await page.getByRole('status').filter({ hasText: /^3 attachments$/ }).waitFor();
   assert.equal(await library.evaluate(node => node.scrollWidth <= node.clientWidth + 1), true, 'Library fits viewport');
-  await imageCard.getByRole('link', { name: 'EUR/USD', exact: true }).click();
+  await imageCard.getByRole('button', { name: 'Open EUR/USD' }).click();
+  await page.getByRole('dialog', { name: 'Attachment preview' }).getByRole('link', { name: 'EUR/USD', exact: true }).click();
   await page.getByRole('heading', { name: 'Trade capture · Media Library' }).waitFor();
   assert.equal(new URL(page.url()).searchParams.get('trade'), 'fixture-trade-1');
   await page.getByRole('button', { name: 'Back to trades', exact: true }).click();

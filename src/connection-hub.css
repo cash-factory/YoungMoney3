@@ -132,3 +132,7 @@
  .ym-detail-grid{gap:7px}.ym-detail-grid>div{padding:9px}
 }
 @media(prefers-reduced-motion:reduce){.ym-feedback-toast,.ym-selection-details{animation:none}.ym-selectable-card,.ym-selectable-trigger,.ym-selectable-chevron{transition:none}.ym-workspace button:not(:disabled):active{transform:none}}
+
+/* Notifications remain noticeable without sitting over bottom navigation. */
+.ym-feedback-stack{top:clamp(12px,2vw,24px);bottom:auto}
+@media(max-width:640px){.ym-feedback-stack{top:12px;inset-inline-end:12px}}
