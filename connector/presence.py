@@ -7,8 +7,9 @@ import urllib.error
 class DevicePresence:
     interval = 12
 
-    def __init__(self, request, setup, report, stop):
+    def __init__(self, request, setup, report, stop, installation=None):
         self.request, self.setup, self.report, self.stop = request, setup, report, stop
+        self.installation = installation
         self._lock = threading.Lock()
         self._latest = None
         self._state = None
@@ -19,7 +20,7 @@ class DevicePresence:
             return self._latest
 
     def emit(self, state, **details):
-        signature = (state, details.get("setup"), details.get("device"))
+        signature = (state, details.get("setup"), details.get("device"), details.get("name"))
         if self.report and self._state != signature:
             self.report({"state": state, **details})
         self._state = signature
@@ -27,14 +28,17 @@ class DevicePresence:
     def check(self):
         try:
             setup = "ready" if self.setup.sources() else "install"
-            reply = self.request({"setup": setup, "version": "0.5.0-rc1"})
+            payload = {"setup": setup, "version": "0.5.1-rc1"}
+            if self.installation:
+                payload["installationId"] = self.installation()
+            reply = self.request(payload)
             if (not isinstance(reply, dict) or not reply.get("device")
                     or not isinstance(reply.get("paused"), list)):
                 self.emit("pc-service-incompatible")
                 return False
             with self._lock:
                 self._latest = reply
-            self.emit("pc-online", device=reply["device"], setup=setup)
+            self.emit("pc-online", device=reply["device"], name=reply.get("name"), setup=setup)
             return True
         except urllib.error.HTTPError as error:
             if error.code in (404, 405):
@@ -42,6 +46,15 @@ class DevicePresence:
                 # like a revoked pairing or an unexplained broker disconnect.
                 self.emit("pc-service-incompatible")
                 return False
+            if error.code == 409:
+                try:
+                    identity = json.loads(error.read(512)).get("code") in (
+                        "pc_already_paired", "pc_identity_mismatch")
+                except (ValueError, OSError):
+                    identity = False
+                if identity:
+                    self.emit("pc-identity-conflict")
+                    return False
             if error.code in (401, 403):
                 try:
                     revoked = json.loads(error.read(512)).get("code") == "device_revoked"

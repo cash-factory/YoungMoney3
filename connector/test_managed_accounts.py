@@ -178,6 +178,32 @@ class PresenceTests(unittest.TestCase):
         self.assertFalse(stop.is_set())
         self.assertEqual([r["state"] for r in posted], ["pc-reconnecting", "pc-online"])
 
+    def test_pc_name_and_installation_are_shared_with_dashboard(self):
+        events=[]
+        uuid="11111111-1111-4111-8111-111111111111"
+        request=Mock(side_effect=[
+            {"device":"device-1","name":"Trading Laptop","paused":[]},
+            {"device":"device-1","name":"Office Laptop","paused":[]},
+        ])
+        device=DevicePresence(request,Mock(sources=lambda:[]),events.append,threading.Event(),
+                              installation=lambda:uuid)
+        self.assertTrue(device.check())
+        self.assertTrue(device.check())
+        self.assertEqual(request.call_args.args[0]["installationId"],uuid)
+        self.assertEqual([e.get("name") for e in events],["Trading Laptop","Office Laptop"])
+        self.assertEqual(request.call_args.args[0]["version"],"0.5.1-rc1")
+
+    def test_duplicate_installation_conflict_does_not_revoke_pairing(self):
+        error=HTTPError("https://example.test",409,"Conflict",{},
+                        io.BytesIO(b'{"code":"pc_already_paired"}'))
+        stop=threading.Event()
+        events=[]
+        service=DevicePresence(Mock(side_effect=[error]),Mock(sources=lambda:[]),
+                               events.append,stop)
+        self.assertFalse(service.check())
+        self.assertFalse(stop.is_set())
+        self.assertEqual(events[0]["state"],"pc-identity-conflict")
+
     def test_only_explicit_revocation_requests_repair(self):
         def denied(body):
             return HTTPError("https://example.test",403,"Forbidden",{},io.BytesIO(body))

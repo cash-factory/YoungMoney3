@@ -43,7 +43,7 @@ ACCENT = "#ff365c"
 WARM = "#f9c9ab"
 DANGER = "#ff8da7"
 FONT = "Segoe UI"
-VERSION = "0.5.0-rc1"
+VERSION = "0.5.1-rc1"
 
 
 def terminal_candidates():
@@ -74,6 +74,7 @@ class ConnectorApp:
         self.focus_slot = None
         self.pc_state = "starting"
         self.device_id = None
+        self.pc_name = None
         self.setup_state = None
         self.remote_paused = set()
         self.busy_since = None
@@ -403,6 +404,7 @@ class ConnectorApp:
         self.connection_path = ConnectionPath(hero, background=PANEL, motion=self.motion_var.get)
         self.connection_path.pack(fill="x", pady=(4, 4))
         self._label(hero, textvar=self.device_var, size=10, color=MUTED, wrap=730).pack(anchor="w")
+        self._button(hero, "Rename this PC", self.rename_this_pc, quiet=True).pack(anchor="w", pady=(10, 2))
         self.progress = ttk.Progressbar(hero, style="YM.Horizontal.TProgressbar")
         next_card = self._card(page, 20)
         next_card.pack(fill="x")
@@ -675,8 +677,10 @@ class ConnectorApp:
         if self._worker_busy():
             self.pair_stage_var.set("Stop the current capture service before pairing this PC again.")
             return
-        if self.paired and not messagebox.askyesno("Pair again?",
-            "Pairing again creates a new device identity. Existing links may need to be reconnected. Continue?"):
+        if self.paired:
+            self.pair_stage_var.set("This PC already has a saved pairing. Reuse it instead of generating another PC entry.")
+            self.banner_var.set("Open Overview to see the paired PC name and identifier. You can rename it there.")
+            self.show_page("overview")
             return
         code = self._normalized_code()
         self.pair_ok = False
@@ -685,6 +689,30 @@ class ConnectorApp:
         self.code_var.set("")
         self._log("Pairing request started. Waiting for staging to confirm.")
         self._start_worker([STAGING_URL, "--pair", "--pair-only"], pairing_code=code)
+
+    def rename_this_pc(self):
+        if not self.paired or self.pc_state != "pc-online":
+            self.banner_var.set("Connect this paired PC to the dashboard before changing its name.")
+            return
+        proposed = simpledialog.askstring("Rename paired PC",
+            "This name appears in the connector and on your YoungMoney3 dashboard.\n"
+            "Example: Trading Laptop · Office", initialvalue=self.pc_name or "",
+            parent=self.root)
+        if proposed is None:
+            return
+        proposed = proposed.strip()
+        if not (2 <= len(proposed) <= 48 and proposed[0].isalnum() and
+                re.fullmatch(r"[\w .()'&·–-]+", proposed)):
+            self.banner_var.set("Use a PC name between 2 and 48 characters, without file path characters.")
+            return
+        self.banner_var.set("Updating your PC name on staging…")
+        def perform():
+            try:
+                result = connect.rename_paired_pc(STAGING_URL, proposed)
+                self.events.put({"state":"pc-renamed","device":result.get("device"),"name":result.get("name")})
+            except Exception:
+                self.events.put({"state":"pc-name-error"})
+        threading.Thread(target=perform, name="YMFX-rename-PC", daemon=True).start()
 
     def _selected(self):
         selected = self.session_table.selection()
@@ -1074,16 +1102,30 @@ class ConnectorApp:
         if state == "pc-online":
             self.pc_state = state
             self.device_id = item["device"]
+            self.pc_name = item.get("name") or ("PC "+self.device_id[:8])
             previous_setup = self.setup_state
             self.setup_state = item["setup"]
             self.status_var.set("PC online" if self.setup_state == "ready" else "MetaTrader installation needed")
-            self.device_var.set("Paired to your dashboard. Keep this app open to monitor your accounts.")
+            self.device_var.set(self.pc_name+"  ·  PC "+self.device_id[:8]+
+                                "  ·  Paired with this dashboard. Keep this connector open.")
             self.connection_path.show(3 if self.sync_by_slot else 2 if self.account_by_slot else 1)
             self.pair_stage_var.set("PC online. You can now add a broker account.")
             self.banner_var.set("Choose Add account to sign in to your broker." if self.setup_state == "ready"
                                 else "Choose Add account to get MetaTrader 5. This PC stays paired.")
             if self.login_requested and (self.setup_state == "ready" or previous_setup != "install"):
                 self.add_account()
+        elif state == "pc-renamed":
+            self.pc_name = item.get("name") or self.pc_name
+            if self.pc_name and self.device_id:
+                self.device_var.set(self.pc_name+"  ·  PC "+self.device_id[:8]+"  ·  Paired with this dashboard.")
+            self.banner_var.set("PC name updated. The dashboard now shows the same name.")
+        elif state == "pc-name-error":
+            self.banner_var.set("Could not rename this PC. Check your connection, then retry.")
+        elif state == "pc-identity-conflict":
+            self.pc_state = state
+            self.status_var.set("Duplicate PC identity needs attention")
+            self.device_var.set("Another active pairing belongs to this installation identity. Review paired PCs on your dashboard.")
+            self.banner_var.set("Do not pair this PC again. Unpair an obsolete duplicate from the dashboard; keep the one with your active accounts.")
         elif state == "pc-reconnecting":
             self.pc_state = state
             self.status_var.set("Reconnecting to dashboard")

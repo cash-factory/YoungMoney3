@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useTrades } from '@/hooks/useData';
 
-import { mt5Action as action, monitoringStatus, pcOnline, type Device, type Link } from '@/lib/mt5Monitor';
+import { mt5Action as action, monitoringStatus, pcOnline, pairedPcName, type Device, type Link } from '@/lib/mt5Monitor';
 
 type PositionSummary = {
   lifecycle_id:string;position_id:string;symbol:string;direction:string;status:string;
@@ -29,6 +29,8 @@ export function Mt5Connections() {
   const { user } = useAuth();
   const { trades, fetchTrades } = useTrades(user?.id);
   const [devices,setDevices] = useState<Device[]>([]);
+  const [editingPc,setEditingPc] = useState<string | null>(null);
+  const [pcNameDraft,setPcNameDraft] = useState('');
   const [links,setLinks] = useState<Link[]>([]);
   const dialog = useRef<HTMLDialogElement>(null);
   const [device,setDevice] = useState('');
@@ -108,11 +110,15 @@ export function Mt5Connections() {
     <header className="flex flex-wrap items-center justify-between gap-3"><h2 className="flex items-center gap-2 font-bold"><Monitor size={20} className="text-brand-500"/> Paired PCs</h2>
     <div className="flex flex-wrap gap-2">
       <button className="btn-primary" disabled={capturePaused} onClick={startAccountSetup}>Add account</button>
-      <button className="btn-secondary" disabled={capturePaused} onClick={()=>run(async()=>setCode((await action('pair')).code))}>Pair a PC</button>
+      <button className="btn-secondary" disabled={capturePaused} onClick={()=>{
+        if(devices.length && !window.confirm('Pair a different PC? Existing PCs stay paired. If this is the same PC, reopen its connector instead of creating another pairing.')) return;
+        void run(async()=>setCode((await action('pair')).code));
+      }}>Pair a different PC</button>
     </div></header>
     {setupHint && <p role="status" className="rounded-xl bg-secondary p-3 text-sm text-secondary">{setupHint}</p>}
     {capturePaused && <p role="status">Staging capture is paused by your administrator.</p>}
     {loaded && !devices.length && <p className="text-sm text-secondary">Run the Windows connector, then enter your pairing code on that PC.</p>}
+    {devices.length>0 && <p className="text-xs text-secondary">Each connector installation should be paired once. Rename your PCs to identify them easily; adding more broker accounts does not require pairing again.</p>}
     <div className="flex flex-wrap items-center gap-2">
       <a className="btn-primary inline-flex items-center gap-2" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.0-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer" aria-label="Download YoungMoney3 Windows Connector version 0.5.0 release candidate 1"><Download size={15}/>Download Connector v0.5.0-rc1</a>
       <a className="btn-secondary inline-flex items-center gap-2" href="/connector-download.html">Release details &amp; SHA-256</a>
@@ -120,13 +126,37 @@ export function Mt5Connections() {
     </div>
     <p className="text-xs text-muted">Official Windows x64 staging prerelease · unsigned · capture-only. Verify the executable checksum before running. Existing PC pairings remain available.</p>
     {code && <p>Enter this pairing code in the connector within five minutes: <code className="break-all select-all">{code}</code></p>}
-    {devices.map(d=><div className="flex flex-wrap items-center justify-between gap-3 border-t border-themed pt-4" key={d.id}>
-      <div><strong className="text-sm">PC {d.id.slice(0,8)} · {pcOnline(d)?'Online':'Paired · offline'}</strong>
-        <p className="text-xs text-secondary">{!pcOnline(d)?'Open the connector on this PC. Its pairing is saved.':
-          d.setup_state === 'install'?'Install MetaTrader 5 on this PC. The connector will detect it automatically.':
-          d.setup_state === 'ready'?'Ready to add an account.':'Use the latest connector for automatic account setup.'}</p></div>
-      <div className="flex flex-wrap gap-2"><button className="btn-primary" disabled={!pcOnline(d) || d.setup_state==='install' || capturePaused} onClick={()=>openLogin(d.id)}>Add account</button>
-      <button className="btn-secondary" onClick={()=>{if(window.confirm('Revoke this PC and stop all of its account imports?')) void run(()=>action('revoke',{device:d.id}));}}>Revoke PC</button></div></div>)}
+    {devices.map(d=><div className="border-t border-themed pt-4 space-y-3" key={d.id} role="group" aria-label={'Paired PC '+pairedPcName(d)}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap gap-2 items-center">
+            <strong className="text-sm">{pairedPcName(d)}</strong>
+            <span className={`ym-market-chip`} data-tone={pcOnline(d)?'positive':'neutral'}>{pcOnline(d)?'Online':'Offline'}</span>
+          </div>
+          <p className="text-xs text-secondary">PC ID {d.id.slice(0,8)} · {d.connector_version||'Connector version unknown'} · {links.filter(link=>link.device===d.id && link.status==='connected').length} linked accounts</p>
+          <p className="text-xs text-secondary">{!pcOnline(d)?'Open the existing connector on this PC. Its pairing is saved.':
+            d.setup_state === 'install'?'Install MetaTrader 5 on this PC. The connector will detect it automatically.':
+            d.setup_state === 'ready'?'Ready to add an account.':'Use the latest connector for automatic account setup.'}</p>
+          <p className="text-xs text-muted">{d.last_seen?'Last contacted '+new Date(d.last_seen).toLocaleString():'Not checked in yet'}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="btn-primary" disabled={!pcOnline(d) || d.setup_state==='install' || capturePaused} onClick={()=>openLogin(d.id)}>Add account</button>
+          <button type="button" className="btn-secondary" aria-label={'Rename '+pairedPcName(d)} onClick={()=>{setEditingPc(d.id);setPcNameDraft(pairedPcName(d));}}>Rename</button>
+          <button type="button" className="btn-secondary" onClick={()=>{if(window.confirm('Unpair '+pairedPcName(d)+'? Monitoring on this PC stops and its broker connections are revoked. Historical evidence is preserved but may no longer appear under active connections. Keep your active PC and accounts.')) void run(()=>action('revoke',{device:d.id}));}}>Unpair PC</button>
+        </div>
+      </div>
+      {editingPc===d.id && <div className="flex flex-wrap gap-2 items-end rounded-lg bg-secondary p-3" aria-label={'Rename PC '+d.id.slice(0,8)}>
+        <label className="flex-1 min-w-[180px] text-xs text-secondary">Display name
+          <input className="input-field mt-1" maxLength={48} value={pcNameDraft}
+            placeholder="e.g. My Trading Laptop" onChange={event=>setPcNameDraft(event.target.value)}/>
+        </label>
+        <button type="button" className="btn-primary" disabled={pcNameDraft.trim().length<2} onClick={()=>void run(async()=>{
+          await action('rename-pc',{device:d.id,name:pcNameDraft.trim()});
+          setEditingPc(null);
+        })}>Save name</button>
+        <button type="button" className="btn-secondary" onClick={()=>setEditingPc(null)}>Cancel</button>
+      </div>}
+    </div>)}
     {requestedPc && loaded && <p role="status" className="text-sm text-secondary">{!devices.length?'Pair this PC once to continue.':
       requestedPc==='1' && devices.length>1?'Choose the PC where MetaTrader is installed.':
       !devices.some(d=>requestedPc==='1' || d.id===requestedPc)?'This PC is paired with a different workspace or has been removed.':
@@ -173,6 +203,7 @@ export function Mt5Connections() {
       <header className="flex flex-wrap items-start justify-between gap-3"><div>
         <h3 className="font-semibold">{accountNames[l.account_id || ''] || l.company || l.server || 'Broker account'}</h3>
         <p className="text-xs text-secondary">{[l.server,l.login,l.trade_mode===0?'Demo':l.trade_mode===1?'Contest':l.trade_mode===2?'Real':null].filter(Boolean).join(' · ')}</p>
+        <p className="text-xs text-muted mt-1">Paired PC: {pairedPcName(devices.find(pc=>pc.id===l.device))}</p>
       </div><strong className="text-sm">{monitoringStatus(l,devices.find(d=>d.id===l.device),capturePaused)}</strong></header>
       {l.last_error && <p className="text-sm" role="status">{l.last_error}</p>}
       {l.status==='connected' && <div className="space-y-3">

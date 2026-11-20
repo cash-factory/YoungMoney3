@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Radio, ArrowUpRight } from 'lucide-react';
-import { mt5Action, monitoringStatus, type MonitorStatus } from '@/lib/mt5Monitor';
+import { mt5Action, monitoringStatus, pairedPcName, type MonitorStatus } from '@/lib/mt5Monitor';
 
 export function AccountMonitor({accountId}: {accountId: string}) {
   const [data, setData] = useState<MonitorStatus | null>(null);
@@ -43,7 +43,8 @@ export function AccountMonitor({accountId}: {accountId: string}) {
     {data && !links.length && <p className="text-sm text-secondary mt-3">{accountId === 'all' ? 'Add a broker account to see its sync status here.' : 'This journal account has no active MT5 connection.'}</p>}
     {links.map(link => <div key={link.id} className="mt-3 pt-3 border-t border-themed flex flex-wrap items-center justify-between gap-3">
       <div><strong className="text-sm">{names.get(link.account_id || '') || link.company || link.server || 'Account setup'}</strong>
-        <p className="text-xs text-secondary">{[link.server, link.login].filter(Boolean).join(' · ')}{link.last_sync && ' · Last sync '+new Date(link.last_sync).toLocaleString()}</p></div>
+        <p className="text-xs text-secondary">{[link.server, link.login].filter(Boolean).join(' · ')}{link.last_sync && ' · Last sync '+new Date(link.last_sync).toLocaleString()}</p>
+        <p className="text-xs text-muted mt-1">Paired PC: {pairedPcName(data?.devices?.find(d=>d.id===link.device))}</p></div>
       <div className="flex flex-wrap items-center gap-3"><span className="text-sm">{monitoringStatus(link,data?.devices?.find(d=>d.id===link.device),data?.capturePaused)}</span>
         {link.status === 'connected' && <button className="btn-secondary" disabled={Boolean(saving)} onClick={()=>void toggle(link.id,!link.monitoring_paused)}>
           {link.monitoring_paused ? 'Resume monitoring' : 'Pause monitoring'}</button>}</div>

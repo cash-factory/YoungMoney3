@@ -1,6 +1,8 @@
-export type Device = { id: string; last_seen: number; setup_state?: 'ready' | 'install' | null; connector_version?: string | null };
+export type Device = { id: string; pc_name?: string | null; last_seen: number; setup_state?: 'ready' | 'install' | null; connector_version?: string | null };
 export type Link = { id: string; device?:string; monitoring_paused?:number; pending_reviews?:number; capture_health?:string; retry_requested_at?:string; account_id?:string; company?: string; login?: string; server?: string; trade_mode?: number; access_level?: string; status: string; last_sync?: string; broker_balance?:number;broker_equity?:number;currency?:string; gap?: number; last_error?: string; expires: number;history_id?:string;history_status?:string;history_since?:number|null;history_mode?:string;history_anchor_at?:number|null;history_anchor_ticket?:string|null;history_anchor_amount?:number|null;history_scanned_until?:number|null;broker_timezone?:string;timezone_confirmed_at?:string;timezone_source?:string;utc_conversion_status?:string };
 export type MonitorStatus = { devices: Device[]; links: Link[]; accounts: {id:string; name:string}[]; demoOnly: boolean; capturePaused?: boolean };
+
+export const pairedPcName = (pc?: Device) => pc?.pc_name?.trim() || (pc ? 'PC '+pc.id.slice(0,8) : 'Unknown PC');
 
 export const pcOnline = (pc?: Device) => Boolean(pc && Date.now() - pc.last_seen < 90_000);
 

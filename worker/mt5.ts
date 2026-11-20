@@ -8,6 +8,13 @@ const hash = async (value: string) => [...new Uint8Array(await crypto.subtle.dig
 const limited = (value: unknown, max: number): value is string => typeof value === 'string' && value.length > 0 && value.length <= max;
 const isObject = (v: unknown): v is Fields => v !== null && typeof v === 'object' && !Array.isArray(v);
 const timestamp = (v: unknown): v is string => limited(v, 40) && Number.isFinite(Date.parse(v));
+const installationId = (v: unknown): v is string =>
+  typeof v === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(v);
+const pcLabel = (v: unknown): string | null => {
+  if (typeof v !== 'string') return null;
+  const name=v.trim();
+  return name.length>=2 && name.length<=48 && /^[\p{L}\p{N}][\p{L}\p{N} ._()'&·–-]*$/u.test(name) ? name : null;
+};
 async function body(request: Request): Promise<Fields | null> {
   const reader = request.body?.getReader();
   if (!reader) return {};
@@ -50,13 +57,21 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   }
   if (owner) {
     if (action === 'status') {
-      const devices = await q('SELECT id,public_key,last_seen,setup_state,connector_version FROM mt5_devices WHERE owner=? AND revoked=0 AND public_key IS NOT NULL', owner).all();
+      const devices = await q('SELECT id,pc_name,public_key,last_seen,setup_state,connector_version FROM mt5_devices WHERE owner=? AND revoked=0 AND public_key IS NOT NULL', owner).all();
       const links = await q('SELECT l.device,l.monitoring_paused,l.retry_requested_at,l.capture_health,l.id,l.account_id,l.status,l.company,l.server,l.login,l.access_level,l.trade_mode,l.history_id,l.history_status,l.history_since,l.history_authorized_since,l.history_mode,l.history_anchor_at,l.history_anchor_ticket,l.history_anchor_amount,l.history_scanned_until,l.last_sync,l.broker_balance,l.broker_equity,l.currency,l.gap,l.last_error,l.expires,l.broker_timezone,l.timezone_confirmed_at,l.timezone_source,l.utc_conversion_status FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND d.revoked=0', owner).all();
       const accounts=await q("SELECT id,json_extract(payload,'$.name') AS name FROM workspace_records WHERE user_id=? AND table_name='trading_accounts' ORDER BY created_at",owner).all();
       const states=await Promise.all(links.results.map(async link=>({...link,pending_reviews:(await remainingReviews(String(link.id)))?.n??0})));
       return json({ accounts:accounts.results, devices: devices.results, links: states, demoOnly: env.MT5_ALLOW_LIVE !== 'true', capturePaused: await capturePaused() });
     }
     if (action === 'set-monitoring') return setMonitoring(owner);
+    if (action === 'rename-pc') {
+      if (!limited(input.device,64)) return fail('Choose a paired PC.');
+      const name=pcLabel(input.name);
+      if (!name) return fail('Choose a PC name between 2 and 48 characters, using letters, numbers or common punctuation.');
+      const renamed=await q("UPDATE mt5_devices SET pc_name=? WHERE id=? AND owner=? AND revoked=0 AND public_key IS NOT NULL",
+        name,input.device,owner).run();
+      return renamed.meta.changes ? json({ok:true,device:input.device,name}) : fail('Paired PC unavailable.',404);
+    }
     if (action === 'remove-failed' || action === 'clear-failed') {
       // Failed/expired requests are metadata, not journal accounts. Never
       // delete a connected link, broker evidence, or already imported fills.
@@ -206,6 +221,10 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     if (action === 'pair') {
       if(await capturePaused()) return fail('MT5 pairing is paused by the administrator.',403);
       const code = uuid().replaceAll('-', '');
+      // An abandoned one-time code is never a real paired PC. Only delete
+      // expired, unclaimed codes, never device rows carrying broker links.
+      await q("DELETE FROM mt5_devices WHERE owner=? AND pair_hash IS NOT NULL AND public_key IS NULL AND expires<?",
+        owner,unix).run();
       await q('INSERT INTO mt5_devices(id,owner,pair_hash,expires) VALUES(?,?,?,?)', uuid(), owner, await hash(code), unix + 300000).run();
       return json({ code });
     }
@@ -252,26 +271,63 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if (action==='device/claim') {
     if(await capturePaused()) return fail('MT5 pairing is paused by the administrator.',403);
     if (!limited(input.code,64) || !limited(input.publicKey,1024) || !/^[a-zA-Z0-9+/=]+$/.test(input.publicKey)) return fail('Invalid pairing request.');
+    // Old connectors are still accepted. Current connectors send a locally
+    // persisted random UUID, which is a deduplication hint, NOT authentication.
+    if (input.installationId !== undefined && !installationId(input.installationId))
+      return fail('Invalid connector installation identity.');
+    const claimedHash=installationId(input.installationId)?await hash(input.installationId.toLowerCase()):null;
+    const codeHash=await hash(String(input.code));
+    if (claimedHash) {
+      const prior=await q(`SELECT existing.id FROM mt5_devices pending JOIN mt5_devices existing
+        ON existing.owner=pending.owner AND existing.installation_hash=? AND existing.revoked=0
+        AND existing.public_key IS NOT NULL AND existing.id<>pending.id
+        WHERE pending.pair_hash=? AND pending.expires>? AND pending.revoked=0`,
+        claimedHash,codeHash,unix).first();
+      if(prior) return json({error:'This Windows connector is already paired. Reopen the saved pairing instead of making another PC.',code:'pc_already_paired'},409);
+    }
     const token=uuid()+uuid();
-    const result=await q('UPDATE mt5_devices SET pair_hash=NULL,token_hash=?,public_key=?,last_seen=? WHERE pair_hash=? AND expires>? AND revoked=0 RETURNING id',await hash(token),input.publicKey,unix,await hash(input.code),unix).first();
-    return result ? json({token}) : fail('Pairing code expired or already used.',403);
+    const result=await q(`UPDATE mt5_devices SET pair_hash=NULL,token_hash=?,public_key=?,last_seen=?,installation_hash=?
+      WHERE pair_hash=? AND expires>? AND revoked=0
+      AND (? IS NULL OR NOT EXISTS(
+        SELECT 1 FROM mt5_devices old WHERE old.owner=mt5_devices.owner AND old.revoked=0
+        AND old.public_key IS NOT NULL AND old.installation_hash=? AND old.id<>mt5_devices.id))
+      RETURNING id`,await hash(token),input.publicKey,unix,claimedHash,codeHash,unix,claimedHash,claimedHash).first();
+    return result ? json({token,device:result.id}) : fail('Pairing code expired, already used or this PC is already paired.',409);
   }
   const token=request.headers.get('authorization')?.match(/^Bearer (.{72})$/)?.[1];
   if (!token) return fail('Device authentication required.',401);
-  const device=await q("SELECT d.id,d.owner FROM mt5_devices d JOIN users u ON u.id=d.owner WHERE token_hash=? AND revoked=0 AND u.account_status='active'",await hash(token)).first<{id:string;owner:string}>();
+  const device=await q("SELECT d.id,d.owner,d.pc_name,d.installation_hash FROM mt5_devices d JOIN users u ON u.id=d.owner WHERE token_hash=? AND revoked=0 AND u.account_status='active'",await hash(token)).first<{id:string;owner:string;pc_name:string|null;installation_hash:string|null}>();
   if (!device) return json({error:'Device access revoked.',code:'device_revoked'},403);
   if (action === 'device/set-monitoring') return setMonitoring(device.owner, device.id);
+  if (action === 'device/rename') {
+    const name=pcLabel(input.name);
+    if(!name) return fail('Choose a PC name between 2 and 48 characters.');
+    const change=await q('UPDATE mt5_devices SET pc_name=? WHERE id=? AND owner=? AND revoked=0',
+      name,device.id,device.owner).run();
+    return change.meta.changes ? json({ok:true,device:device.id,name}) : fail('Paired PC unavailable.',404);
+  }
   if (action === 'device/presence') {
     if (!['ready','install'].includes(String(input.setup)) || !limited(input.version,32)) return fail('Invalid connector status.');
+    if(input.installationId!==undefined && !installationId(input.installationId))
+      return fail('Invalid installation identity.');
+    const identity=installationId(input.installationId)?await hash(input.installationId.toLowerCase()):null;
+    if(identity && device.installation_hash && identity!==device.installation_hash)
+      return json({error:'This pairing belongs to a different connector installation.',code:'pc_identity_mismatch'},409);
+    if(identity && !device.installation_hash) {
+      const already=await q('SELECT id FROM mt5_devices WHERE owner=? AND installation_hash=? AND revoked=0 AND public_key IS NOT NULL AND id<>?',
+        device.owner,identity,device.id).first();
+      if(already) return json({error:'Another paired PC has this installation identity.',code:'pc_already_paired'},409);
+    }
     const halted = await capturePaused();
     const [, , paused, retries, pending] = await db.batch<{id:string; server?:string|null; retry_requested_at?:string}>([
-      q('UPDATE mt5_devices SET last_seen=?,setup_state=?,connector_version=? WHERE id=?',unix,input.setup,input.version,device.id),
+      q('UPDATE mt5_devices SET last_seen=?,setup_state=?,connector_version=?,installation_hash=COALESCE(installation_hash,?) WHERE id=?',
+        unix,input.setup,input.version,identity,device.id),
       q("UPDATE mt5_links SET envelope=NULL,status='expired' WHERE device=? AND status IN ('pending','verifying') AND expires<=?",device.id,unix),
       q("SELECT id FROM mt5_links WHERE device=? AND status='connected' AND monitoring_paused=1",device.id),
       q("SELECT id,retry_requested_at FROM mt5_links WHERE device=? AND status='connected' AND monitoring_paused=0 AND retry_requested_at IS NOT NULL",device.id),
       q("SELECT id,server FROM mt5_links WHERE device=? AND status='pending' AND expires>? ORDER BY expires,id LIMIT 1",device.id,unix),
     ]);
-    return json({device:device.id,capturePaused:halted,paused:paused.results.map(r=>r.id),
+    return json({device:device.id,name:device.pc_name||'PC '+device.id.slice(0,8),capturePaused:halted,paused:paused.results.map(r=>r.id),
       retries:halted?[]:retries.results,pending:halted?null:pending.results[0]??null});
   }
   if(action==='device/retries'){

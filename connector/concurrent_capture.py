@@ -169,8 +169,10 @@ def run_supervisor(origin, db, database_path, slots, token, report,
     previous_paused = None
     if managed_accounts is not None:
         from presence import DevicePresence
+        from pc_identity import installation_id
         presence = DevicePresence(lambda payload: connect.post("presence", payload, token),
-                                  managed_accounts, report, stop_event)
+                                  managed_accounts, report, stop_event,
+                                  installation=lambda: installation_id(origin))
         presence.thread.start()
     previous_links = None
     next_poll = 0.0

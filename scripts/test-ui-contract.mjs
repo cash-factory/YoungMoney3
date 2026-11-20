@@ -468,3 +468,31 @@ test('market outcome palette is consistent on landing, dashboard, trade ledger a
   assert.ok(rich.includes('var(--ym-loss)') && rich.includes('var(--ym-gain)'),
     'Lifecycle chart bins must distinguish negative and positive R');
 });
+
+test('paired PCs are named consistently on the dashboard and connector; repeated pairing is guarded',()=>{
+  const worker=read('worker/mt5.ts');
+  const migration=read('migrations/0014_mt5_pc_identity.sql');
+  const site=read('src/components/Mt5Connections.tsx');
+  const mobile=read('src/components/AccountMonitor.tsx');
+  const types=read('src/lib/mt5Monitor.ts');
+  const desktop=read('connector/connector_gui.py');
+  const presence=read('connector/presence.py');
+  const identity=read('connector/pc_identity.py');
+  for(const text of ['installation_hash','pc_name','mt5_owner_installation_active']) {
+    assert.ok(migration.includes(text),'Migration must retain identity and label '+text);
+  }
+  for(const text of ['rename-pc','device/rename','pc_already_paired','pc_identity_mismatch','installationId']) {
+    assert.ok(worker.includes(text),'Worker must enforce owner-scoped PC identity '+text);
+  }
+  assert.ok(site.includes('pairedPcName(d)')&&site.includes('Rename')&&site.includes('Unpair PC')&&
+    site.includes("action('rename-pc'")&&site.includes('Pair a different PC'),
+    'Dashboard must show stable PC names and discourage repeated pairings');
+  assert.ok(site.includes('Paired PC:')&&mobile.includes('Paired PC:')&&types.includes('pc_name'),
+    'Account cards and monitors must expose the responsible paired PC');
+  assert.ok(desktop.includes('Rename this PC')&&desktop.includes('self.pc_name')&&
+    desktop.includes('rename_paired_pc'),'Desktop must share PC names with dashboard');
+  assert.ok(presence.includes('installationId')&&presence.includes('name=reply.get'),
+    'Presence must advertise stable installation and return remote label');
+  assert.ok(identity.includes('uuid.uuid4()')&&identity.includes('Saved PC identity is unreadable'),
+    'Corrupted installations cannot silently create duplicate device identity');
+});

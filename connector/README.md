@@ -8,6 +8,26 @@
 4. Keep the connector open. **PC online** confirms the connection to the dashboard. **Broker verified** confirms the login. **Journal synced** follows an acknowledged account upload.
 5. Use **Broker accounts** on the trading dashboard to see each login, check its last sync, or pause and resume monitoring. **Manage accounts** opens retries, timezones and historical imports.
 
+## Identify a paired Windows PC (staging v0.5.1-rc1)
+
+Each connector installation has one random, persistent installation identifier in
+the current Windows user's LOCALAPPDATA/YMFX folder. It is not a hardware ID,
+broker credential or authorization token. The original pairing secret stays in
+Windows Credential Manager. Reopening or upgrading the connector uses that
+existing pairing; it does not require a new code.
+
+**Overview → Rename this PC** changes the display name on the dashboard.
+The connector and **MT5 Connections → Paired PCs** show the same name,
+the first eight characters of the server device ID, check-in status and
+version. Linked broker accounts identify which PC monitors them.
+
+A repeated pairing claim from this installation is rejected while an active
+pairing exists. Never unpair the active PC to tidy up the list: doing so
+revokes its broker links (although historical evidence is retained).
+Use **Unpair PC** only for an obsolete entry after confirming that its
+accounts are no longer monitored there. A lost or corrupted installation
+identity is not silently replaced, because that would create more duplicates.
+
 ## Manual command-line setup
 
 The optional command-line client uses 64-bit Python 3.13 and desktop MetaTrader 5. Create one separate, writable portable terminal installation per simultaneously monitored account. Open each dedicated terminal once and add the exact broker server there. Leave your normal trading terminal separate.
@@ -28,7 +48,7 @@ The optional command-line client uses 64-bit Python 3.13 and desktop MetaTrader 
    ```
 
 5. Enter the code at the prompt. From your phone or PC choose **Connect MT5 account** on the website and enter the exact server, account number, and investor password.
-6. Leave the connector running. Restart it with the same command without `--pair`. Re-pairing creates a new device identity. Revoke the old device in MT5 Connections if you retire it.
+6. Leave the connector running. Restart it with the same command without `--pair`. An already-paired installation refuses another active pairing. If replacing an obsolete pairing, revoke the old PC explicitly in MT5 Connections first.
 
 Credentials use the current Windows user's Credential Manager. The private key and device token never belong in source control or logs. The local SQLite journal under LOCALAPPDATA/YMFX contains private trade history and pending uploads. Protect this Windows user profile. The connector supports investor or standard MT5 credentials, performs read operations only, and uses outbound HTTPS. A standard password can still authorize trading inside the external MT5 terminal. YoungMoney3 itself has no order controls. A broker that requires an unsupported second authentication step must be verified in a demo environment before use.
 

@@ -38,6 +38,25 @@ def post(action, data, token=None):
     with opener.open(req, timeout=20) as reply:
         return json.load(reply)
 
+def rename_paired_pc(url, name):
+    """Rename only the PC belonging to the existing Windows vault token.
+
+    The desktop UI must never load or cache broker credentials, and must
+    never depend on the long-running MT5 worker's mutable module globals.
+    """
+    service_name="YMFX MT5 "+hashlib.sha256(url.rstrip("/").encode()).hexdigest()[:16]
+    keyring.set_keyring(WinVaultKeyring())
+    saved=keyring.get_password(service_name,"token")
+    if not saved:
+        raise RuntimeError("Pair this PC before renaming it.")
+    request=urllib.request.Request(url.rstrip("/")+"/api/mt5/device/rename",
+        json.dumps({"name":name}).encode(),
+        {"Content-Type":"application/json","Authorization":"Bearer "+saved},
+        method="POST")
+    with urllib.request.build_opener(NoRedirect()).open(request, timeout=20) as reply:
+        return json.load(reply)
+
+
 def utc(ms):
     return datetime.fromtimestamp(ms/1000, timezone.utc)
 

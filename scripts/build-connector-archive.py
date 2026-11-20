@@ -17,6 +17,7 @@ FILES = {
     "studio_ui.py": "connector/studio_ui.py",
     "managed_accounts.py": "connector/managed_accounts.py",
     "presence.py": "connector/presence.py",
+    "pc_identity.py": "connector/pc_identity.py",
     "sessions.py": "connector/sessions.py",
     "terminal_factory.py": "connector/terminal_factory.py",
     "concurrent_capture.py": "connector/concurrent_capture.py",
