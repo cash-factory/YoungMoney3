@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { pnlTone, signedMoney } from './tradingTone';
+import { pnlTone, signedMoney } from './tradingTone.ts';
 
 test('financial outcomes do not depend on long or short direction', () => {
   assert.equal(pnlTone(25), 'positive');
