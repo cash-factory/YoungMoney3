@@ -100,7 +100,7 @@ export function CashFlowPanel({link}:{link:Link}){
             setReference(row.statement_reference||'');setNote(row.note||'');setReviewError('');
           }}>
           <span className="ym-cash-review-glyph" data-side={row.direction}>{row.direction==='in'?<ArrowDownRight size={17}/>:<ArrowUpRight size={17}/>}</span>
-          <span className="ym-cash-review-name"><strong>{row.reviewed_classification?.replaceAll('_',' ')||(row.direction==='in'?'Unreviewed credit':'Unreviewed debit')}</strong>
+          <span className="ym-cash-review-name"><strong>{row.reviewed_classification?.replace(/_/g,' ')||(row.direction==='in'?'Unreviewed credit':'Unreviewed debit')}</strong>
             <small>Broker deal {row.ticket} · {new Date(row.broker_time_msc).toLocaleString()} (broker clock)</small></span>
           <span className={'ym-cash-review-amount ym-market-'+(row.direction==='in'?'positive':'negative')}>{Number(row.amount)>0?'+':''}{money(Number(row.amount),row.currency)}</span>
           <ChevronDown size={16} className="ym-selectable-chevron"/>
