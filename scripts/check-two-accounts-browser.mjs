@@ -239,10 +239,17 @@ export async function checkTwoAccounts(browser, base, width) {
     await login.getByText(/first sync was received/).waitFor();
     await login.getByRole('button',{name:'View accounts'}).click();
     await page.getByRole('dialog',{name:'Connect MT5 account'}).waitFor({state:'hidden'});
-    const dollar = page.getByRole('group', { name: 'MT5 account Dollar demo · 42' });
-    const euro = page.getByRole('group', { name: 'MT5 account Euro demo · 43' });
+    const accountList = page.getByRole('list', { name: 'Select a broker account' });
+    const dollar = accountList.getByRole('listitem').filter({ hasText: first.name });
+    const euro = accountList.getByRole('listitem').filter({ hasText: second.name });
+    const openAccount = async (entry, name) => {
+      await entry.getByRole('button', { name: new RegExp(name) }).click();
+      await entry.getByRole('tab', { name: 'Trade history' }).click();
+    };
+    await openAccount(dollar, first.name);
     await dollar.getByRole('button', { name: 'Review earlier trades' }).click();
     await dollarStarted.promise;
+    await openAccount(euro, second.name);
     await euro.getByRole('button', { name: 'Review earlier trades' }).click();
     const current = page.getByRole('region', { name: 'Earlier trades for Euro demo' });
     await current.getByText('EURO-FILL').waitFor();
@@ -256,7 +263,8 @@ export async function checkTwoAccounts(browser, base, width) {
     await euro.getByRole('button', { name: 'Review earlier trades' }).click();
     await current.getByText('EURO-FILL').waitFor();
     latestEuroScan = 'new-scan-with-one-fill';
-    await euro.getByRole('button', { name: 'Retry this account' }).click();
+    await euro.getByRole('tab', { name: 'Overview' }).click();
+    await euro.getByRole('button', { name: 'Retry account' }).click();
     await current.getByText(/scan is no longer current/).waitFor();
     assert.equal(await current.getByRole('button', { name: /Import.*reviewed/ }).count(), 0);
     await page.goto(base + '#trades');
