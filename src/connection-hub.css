@@ -150,3 +150,48 @@
 @keyframes ym-toast-track{from{transform:scaleX(1)}to{transform:scaleX(0)}}
 @keyframes ym-toast-icon-in{from{transform:scale(.6);opacity:.4}to{transform:scale(1);opacity:1}}
 @media(prefers-reduced-motion:reduce){.ym-feedback-toast::after,.ym-feedback-toast-icon{animation:none}}
+
+/* Device → account cards keep associated broker sessions in one place. */
+.ym-pc-accounts{margin-top:15px;padding-top:15px;border-top:1px solid var(--border)}
+.ym-pc-accounts-header,.ym-cash-movements-header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:9px}
+.ym-pc-accounts-header strong,.ym-cash-movements-header h3{font-size:12px;font-weight:750}
+.ym-pc-account-link{width:100%;display:flex;align-items:center;gap:11px;text-align:left;border:1px solid var(--border);border-radius:9px;background:var(--bg-card);padding:12px;margin-top:7px;transition:border-color .15s,transform .15s}
+.ym-pc-account-link:hover,.ym-pc-account-link:focus-visible{border-color:var(--brand);transform:translateX(2px)}
+.ym-pc-account-link>span:first-child{flex:1;min-width:0}
+.ym-pc-account-link strong{display:block;font-size:12px;overflow-wrap:anywhere}
+.ym-pc-account-link small,.ym-pc-accounts-empty,.ym-cash-movements-header>span{display:block;font-size:10px;line-height:1.5;color:var(--text-secondary);margin-top:4px}
+.ym-pc-accounts-empty{background:var(--bg-card);border:1px dashed var(--border);padding:12px;border-radius:9px}
+/* Separate transfer receipts, review controls and uncertain period results. */
+.ym-cash-performance{display:grid;gap:13px;padding:clamp(14px,2vw,20px);border-radius:13px;border:1px solid var(--border);background:var(--bg-secondary)}
+.ym-cash-performance-head{display:flex;justify-content:space-between;align-items:start;gap:11px;flex-wrap:wrap}
+.ym-cash-performance-head h3{font-size:15px;font-weight:750;letter-spacing:-.025em;margin-top:4px}
+.ym-cash-performance .ym-cash-figures strong{font-size:clamp(15px,1.7vw,20px)}
+.ym-cash-review-list{display:grid;gap:8px}
+.ym-cash-review-card{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:border-color .15s}
+.ym-cash-review-card[data-open="true"]{border-color:var(--border-strong)}
+.ym-cash-review-trigger{width:100%;display:flex;align-items:center;gap:12px;text-align:left;padding:13px 15px}
+.ym-cash-review-trigger:hover,.ym-cash-review-trigger:focus-visible{background:var(--bg-secondary)}
+.ym-cash-review-trigger[aria-expanded="true"] .ym-selectable-chevron{transform:rotate(180deg)}
+.ym-cash-review-glyph{display:grid;place-items:center;width:35px;height:35px;flex:none;color:var(--success-text);border-radius:9px;background:color-mix(in srgb,var(--success-text) 8%,var(--bg-card))}
+.ym-cash-review-glyph[data-side="out"]{color:var(--error-text);background:color-mix(in srgb,var(--error-text) 8%,var(--bg-card))}
+.ym-cash-review-name{flex:1;min-width:0}
+.ym-cash-review-name strong{display:block;font-size:12px;text-transform:capitalize}
+.ym-cash-review-name small{display:block;font-size:10px;line-height:1.5;color:var(--text-secondary);margin-top:4px}
+.ym-cash-review-amount{font:750 12px 'JetBrains Mono',monospace;white-space:nowrap}
+.ym-cash-review-body{display:grid;gap:12px;border-top:1px solid var(--border);padding:16px;background:var(--bg-secondary);animation:ym-hub-open .18s ease-out both}
+.ym-cash-review-note{display:grid;gap:8px;font-size:11px;color:var(--text-secondary)}
+.ym-cash-review-note textarea{min-height:64px;resize:vertical}
+.ym-cash-review-body .ym-confirmation-stamp{margin-left:auto}
+/* Distinct, one-shot, accessible action receipts: never flash indefinitely. */
+.ym-feedback-toast{overflow:hidden;position:relative}
+.ym-feedback-toast::after{content:"";position:absolute;bottom:0;left:0;width:100%;height:2px;background:var(--ym-toast-tone);transform-origin:left;animation:ym-toast-track 5.8s linear both;opacity:.55}
+.ym-feedback-toast[data-tone="error"]::after{animation:none;opacity:1}
+.ym-feedback-toast[data-tone="warning"]::after{animation-duration:9s}
+.ym-feedback-toast-body{flex:1;min-width:0}
+.ym-feedback-toast-body strong{display:block;color:var(--ym-toast-tone);font-size:11px;letter-spacing:.025em}
+.ym-feedback-toast-body p{font-size:12px;font-weight:550;line-height:1.5;margin-top:4px}
+.ym-feedback-toast-icon{animation:ym-toast-icon-in .35s ease-out both}
+@keyframes ym-toast-track{to{transform:scaleX(0)}}
+@keyframes ym-toast-icon-in{from{transform:scale(.7);opacity:.4}to{transform:scale(1);opacity:1}}
+@media(max-width:650px){.ym-cash-review-amount{font-size:11px}.ym-cash-review-trigger{gap:8px;padding:11px}.ym-cash-review-glyph{width:29px;height:29px}.ym-cash-performance-head{display:block}}
+@media(prefers-reduced-motion:reduce){.ym-feedback-toast::after,.ym-feedback-toast-icon,.ym-cash-review-body{animation:none}.ym-pc-account-link:hover{transform:none}}
