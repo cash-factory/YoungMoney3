@@ -8,7 +8,7 @@ type Flow = {ticket:string;amount:string;currency:string;direction:'in'|'out';cl
   broker_time_msc:number;recorded_at:string;reviewed_classification?:CashClass|null;
   statement_reference?:string|null;note?:string|null;attested_at?:string|null;revision?:number|null};
 type Period={baselineAt:string|null;openingBalance:number|null;openingEquity:number|null;
-  reviewedExternalNet:number;unresolvedMovements:number|null;reviewedCount:number|null;
+  reviewedExternalNet:number;reviewedNonTradingNet:number;unresolvedMovements:number|null;reviewedCount:number|null;
   deltaBalance:number|null;deltaEquity:number|null;status:string;
   independentlyVerified:false;basis:string};
 type CashView={link:string;currency:string;rows:Flow[];nextOffset:number;more:boolean;
@@ -87,10 +87,10 @@ export function CashFlowPanel({link}:{link:Link}){
       <div className="ym-cash-figures">
         <div><small>Change in balance, adjusted for transfers</small><strong className={period.deltaBalance===null?'':period.deltaBalance>0?'ym-market-positive':period.deltaBalance<0?'ym-market-negative':''}>{period.deltaBalance===null?'Not ready':money(period.deltaBalance,data.currency)}</strong><span>Since {period.baselineAt?new Date(period.baselineAt).toLocaleDateString():'first broker sync'}</span></div>
         <div><small>Change in equity, adjusted for transfers</small><strong className={period.deltaEquity===null?'':period.deltaEquity>0?'ym-market-positive':period.deltaEquity<0?'ym-market-negative':''}>{period.deltaEquity===null?'Not ready':money(period.deltaEquity,data.currency)}</strong><span>Includes unrealised P&L, if present</span></div>
-        <div><small>Owner-reviewed net transfers</small><strong>{money(period.reviewedExternalNet,data.currency)}</strong><span>{period.unresolvedMovements===null?'Awaiting baseline':period.unresolvedMovements+' movements still need review'}</span></div>
+        <div><small>Reviewed non-trading balance movements</small><strong>{money(period.reviewedNonTradingNet,data.currency)}</strong><span>{period.unresolvedMovements===null?'Awaiting baseline':period.unresolvedMovements+' movements still need review'}</span></div>
       </div>
       <details className="ym-context-help"><summary><ShieldCheck size={15}/>Calculation method and limitations</summary>
-        <p>Current balance/equity less the first observed snapshot, then subtracting only deposits or withdrawals that you classified against a statement. Broker cash transactions may include adjustments. The calculation is hidden while movements remain unreviewed. Capture gaps, timestamp offsets, missing broker history and unverified opening capital can make a result incomplete. This is <strong>not verified lifetime profit, ROI or a certified account statement</strong>.</p>
+        <p>Current balance/equity less the first observed snapshot, then subtracting classified deposits, withdrawals, internal transfers and broker adjustments. External deposits and withdrawals require a statement reference. The calculation is hidden while movements remain unreviewed. Capture gaps, timestamp offsets, missing broker history and unverified opening capital can make a result incomplete. This is <strong>not verified lifetime profit, ROI or a certified account statement</strong>.</p>
       </details>
     </section>
     <div className="ym-cash-coverage" role="status">
