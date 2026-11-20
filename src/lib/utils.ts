@@ -1,5 +1,6 @@
+import { getExecutionMetrics, realizedExecutionEvents } from './executionMetrics.ts';
 import { format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from 'date-fns';
-import type { Trade, DashboardStats } from './types';
+import type { Trade, DashboardStats } from './types.ts';
 
 export function formatCurrency(value: number): string {
   const sign = value < 0 ? '-' : '';
@@ -101,7 +102,7 @@ export function isTradeOnDay(trade: Trade, day: Date): boolean {
 }
 
 function closedTrades(trades: Trade[]): Trade[] {
-  return trades.filter(trade => trade.status === 'closed');
+  return trades.filter(trade => trade.status === 'closed' && !trade.superseded_by);
 }
 
 function realizedAt(trade: Trade): string {
@@ -110,9 +111,10 @@ function realizedAt(trade: Trade): string {
 
 export function computeDashboardStats(trades: Trade[]): DashboardStats {
   const closed = closedTrades(trades);
+  const executionEvents = realizedExecutionEvents(trades);
   if (closed.length === 0) {
     return {
-      totalPnl: 0, totalTrades: 0, winRate: 0, wins: 0, losses: 0, breakevens: 0,
+      totalPnl: executionEvents.reduce((sum,event)=>sum+event.pnl,0), totalTrades: 0, winRate: 0, wins: 0, losses: 0, breakevens: 0,
       avgWin: 0, avgLoss: 0, bestDay: null, worstDay: null,
       maxConsecutiveWins: 0, maxConsecutiveLosses: 0,
       currentStreak: { type: 'none', count: 0 },
@@ -121,7 +123,7 @@ export function computeDashboardStats(trades: Trade[]): DashboardStats {
   }
 
   const sorted = [...closed].sort((a, b) => new Date(realizedAt(a)).getTime() - new Date(realizedAt(b)).getTime());
-  const totalPnl = closed.reduce((sum, t) => sum + t.pnl, 0);
+  const totalPnl = executionEvents.reduce((sum,event)=>sum+event.pnl,0);
   const wins = closed.filter(t => t.outcome === 'win');
   const losses = closed.filter(t => t.outcome === 'loss');
   const breakevens = closed.filter(t => t.outcome === 'breakeven');
@@ -131,9 +133,9 @@ export function computeDashboardStats(trades: Trade[]): DashboardStats {
 
   // Best/worst day
   const dayMap = new Map<string, number>();
-  closed.forEach(t => {
-    const day = format(parseISO(realizedAt(t)), 'yyyy-MM-dd');
-    dayMap.set(day, (dayMap.get(day) || 0) + t.pnl);
+  executionEvents.forEach(event => {
+    const day = format(parseISO(event.at),'yyyy-MM-dd');
+    dayMap.set(day,(dayMap.get(day) || 0)+event.pnl);
   });
   let bestDay: { date: string; pnl: number } | null = null;
   let worstDay: { date: string; pnl: number } | null = null;
@@ -176,8 +178,8 @@ export function computeDashboardStats(trades: Trade[]): DashboardStats {
   const grossLoss = Math.abs(losses.reduce((s, t) => s + t.pnl, 0));
   const profitFactor = grossLoss === 0 ? (grossProfit > 0 ? Infinity : 0) : grossProfit / grossLoss;
   const expectancy = closed.length ? totalPnl / closed.length : 0;
-  const rrTrades = closed.filter(t => t.realized_r != null);
-  const avgRiskReward = rrTrades.length ? rrTrades.reduce((s, t) => s + (t.realized_r || 0), 0) / rrTrades.length : 0;
+  const rrTrades = closed.map(getExecutionMetrics).map(metrics=>metrics.realized_r).filter((value):value is number=>value!=null && Number.isFinite(value));
+  const avgRiskReward = rrTrades.length ? rrTrades.reduce((sum,value)=>sum+value,0)/rrTrades.length : 0;
 
   return {
     totalPnl, totalTrades: closed.length, winRate,
@@ -190,21 +192,19 @@ export function computeDashboardStats(trades: Trade[]): DashboardStats {
 }
 
 export function equityCurveData(trades: Trade[]): { date: string; equity: number; label: string }[] {
-  const sorted = closedTrades(trades).sort((a, b) => new Date(realizedAt(a)).getTime() - new Date(realizedAt(b)).getTime());
+  const sorted = realizedExecutionEvents(trades).sort((a,b)=>Date.parse(a.at)-Date.parse(b.at));
   let running = 0;
-  return sorted.map(t => {
-    running += t.pnl;
-    const date = realizedAt(t);
-    return { date, equity: running, label: format(parseISO(date), 'MMM d') };
+  return sorted.map(event => {
+    running += event.pnl;
+    return {date:event.at,equity:running,label:format(parseISO(event.at),'MMM d')};
   });
 }
 
 export function dailyPnlData(trades: Trade[], days: Date[]): { date: string; pnl: number; label: string; trades: number }[] {
-  const closed = closedTrades(trades);
-  return days.map(day => {
-    const dayTrades = closed.filter(t => isSameDay(parseISO(realizedAt(t)), day));
-    const pnl = dayTrades.reduce((s, t) => s + t.pnl, 0);
-    return { date: format(day, 'yyyy-MM-dd'), pnl, label: format(day, 'MMM d'), trades: dayTrades.length };
+  const events=realizedExecutionEvents(trades);
+  return days.map(day=>{
+    const selected=events.filter(event=>isSameDay(parseISO(event.at),day));
+    return {date:format(day,'yyyy-MM-dd'),pnl:selected.reduce((sum,event)=>sum+event.pnl,0),label:format(day,'MMM d'),trades:new Set(selected.map(event=>event.trade.id)).size};
   });
 }
 
@@ -255,22 +255,14 @@ export function groupByDirection(trades: Trade[]): { direction: string; trades: 
 }
 
 export function groupBySession(trades: Trade[]): { session: string; trades: number; pnl: number; winRate: number }[] {
-  const sessions: Record<string, string> = {
-    asian: 'Asian', london: 'London', new_york: 'New York', overlap: 'Overlap', sydney: 'Sydney',
-  };
-  const map = new Map<string, { trades: number; pnl: number; wins: number }>();
-  closedTrades(trades).forEach(t => {
-    if (!t.session) return;
-    const ex = map.get(t.session) || { trades: 0, pnl: 0, wins: 0 };
-    ex.trades++;
-    ex.pnl += t.pnl;
-    if (t.outcome === 'win') ex.wins++;
-    map.set(t.session, ex);
-  });
-  return Array.from(map.entries()).map(([session, v]) => ({
-    session: sessions[session] || session,
-    trades: v.trades, pnl: v.pnl, winRate: (v.wins / v.trades) * 100,
-  }));
+  const groups=new Map<string,Trade[]>();
+  for(const trade of closedTrades(trades)) {
+    const sessions=getExecutionMetrics(trade).sessions_at_entry ?? [];
+    if(!sessions.length) continue;
+    const key=sessions.length>1 ? sessions.join(' / ') : sessions[0];
+    groups.set(key,[...(groups.get(key) || []),trade]);
+  }
+  return [...groups].map(([session,items])=>({session,trades:items.length,pnl:items.reduce((sum,t)=>sum+t.pnl,0),winRate:items.filter(t=>t.outcome==='win').length/items.length*100}));
 }
 
 export function groupByStrategy(trades: Trade[]): { strategy: string; trades: number; pnl: number; winRate: number }[] {
@@ -290,16 +282,20 @@ export function groupByStrategy(trades: Trade[]): { strategy: string; trades: nu
 
 export function exportToCSV(trades: Trade[]): string {
   const headers = [
-    'Date', 'Pair', 'Direction', 'Status', 'Entry', 'Exit', 'TP', 'Lot Size', 'Outcome', 'PnL', 'Pips',
-    'Strategy', 'Session', 'Broker', 'Account Type', 'Risk %', 'R:R', 'Emotion', 'Setup Quality', 'Mistakes', 'Lessons', 'Notes',
+    'Position ID','Entry Time UTC','Exit Time UTC','Pair','Direction','Status','Entry','Exit','Current SL','Current TP','Lot Size','Outcome','Net PnL','Currency',
+    'Pips','Ticks','Points','First SL','First SL Time','SL Evidence','Delayed SL','Initial Risk','Planned R','Net Realized R','Hold Seconds','Weighted Hold Seconds',
+    'Sessions At Entry','Sessions Crossed','Timezone Evidence','Capture Gaps','Fills JSON','Stops JSON','Strategy','Broker','Risk %','Emotion','Setup Quality','Mistakes','Lessons','Notes',
   ];
-  const rows = trades.map(t => [
-    t.entry_time, t.pair, t.direction, t.status, t.entry_price || '', t.exit_price || '', t.take_profit || '', t.lot_size || '',
-    t.outcome || '', t.pnl, t.pips, t.strategy || '', t.session || '', t.broker || '', t.account_type || '',
-    t.risk_percent || '', t.risk_reward_ratio || '', t.emotional_state || '', t.setup_quality || '',
-    t.mistakes.join('; '), t.lessons || '', t.notes || '',
-  ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
-  return [headers.join(','), ...rows].join('\n');
+  const rows=trades.map(trade=>{
+    const metrics=getExecutionMetrics(trade);
+    const values=[
+      trade.id,trade.entry_time,trade.exit_time,trade.pair,trade.direction,trade.status,trade.entry_price,trade.exit_price,trade.stop_loss,trade.take_profit,trade.lot_size,trade.outcome,trade.pnl,trade.settlement_currency || trade.calculation_snapshot?.account_currency,
+      metrics.pips,metrics.ticks,metrics.points,metrics.first_sl,metrics.first_sl_at,metrics.first_sl_source,metrics.delayed_sl,metrics.initial_risk,metrics.planned_r,metrics.realized_r,metrics.duration_seconds,metrics.weighted_duration_seconds,
+      metrics.sessions_at_entry?.join('; '),metrics.sessions_crossed?.join('; '),metrics.timezone_status,metrics.completeness?.join('; '),JSON.stringify(metrics.fills ?? []),JSON.stringify(metrics.stops ?? []),trade.strategy,trade.broker,trade.risk_percent,trade.emotional_state,trade.setup_quality,trade.mistakes?.join('; '),trade.lessons,trade.notes,
+    ];
+    return values.map(value=>`"${String(value ?? '').replace(/"/g,'""')}"`).join(',');
+  });
+  return [headers.join(','),...rows].join('\n');
 }
 
 export function downloadFile(content: string, filename: string, mime = 'text/csv') {

@@ -1,0 +1,17 @@
+altgraph==0.17.5
+cffi==2.1.1
+cryptography==49.0.0
+jaraco.classes==3.4.0
+jaraco.context==6.1.2
+jaraco.functools==4.6.0
+keyring==25.7.0
+metatrader5==5.0.6231
+more-itertools==11.2.1
+numpy==2.5.4
+packaging==26.3
+pefile==2023.2.7
+pycparser==3.12
+pyinstaller==6.16.0
+pyinstaller-hooks-contrib==2026.10
+pywin32-ctypes==0.2.3
+setuptools==84.2.1

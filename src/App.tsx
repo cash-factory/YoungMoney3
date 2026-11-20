@@ -120,6 +120,7 @@ function AppContent() {
     <Layout current={page} onNavigate={navigateToPage} onQuickAdd={() => setQuickAdd(true)}>
       {onboardingError && <p role="alert" className="card p-3 mb-4 text-sm">Workspace setup could not be checked. <button className="btn-secondary" onClick={()=>setOnboardingAttempt(v=>v+1)}>Retry</button></p>}
       {onboardingNeeded && page !== 'workspace-setup' && <div className="card p-4 mb-4 flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-secondary">Create your first strategy and risk settings when you’re ready.</p><button className="btn-secondary" onClick={()=>navigateToPage('workspace-setup')}>Set up workspace</button></div>}
+      {import.meta.env.VITE_APP_ENV==='staging' && <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-semibold" role="status">Staging · Demo trade capture and connector testing</div>}
       <div key={page} className="animate-fade-in">
         {page === 'workspace-setup' && <OnboardingPage onComplete={()=>{setOnboardingNeeded(false);navigateToPage('dashboard');}} />}
         {page === 'dashboard' && <DashboardPage />}

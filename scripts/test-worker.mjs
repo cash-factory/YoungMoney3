@@ -178,6 +178,33 @@ try {
   assert.equal((await device('verified',{link:pendingReal,ok:true,mode:2,trade_access:true,login:'44',server:'Real',company:'Fixtures',currency:'USD',balance:100})).status,409);
   assert.equal((await (await call('mt5/status',{})).json()).links.find(l=>l.id===pendingReal).status,'failed');
   assert.equal((await call('admin',{action:'overview'})).status,403);
+  const beforeGroup=(await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json()).count;
+  const fillMetrics={version:1,cycle_id:'100',position_id:'900',first_sl:90,first_sl_source:'opening_order',
+    initial_risk:'10',closed_risk:'10',realized_net:'-5',time_quality:'inferred_offset',
+    source_deal_tickets:['42'],entries:[{ticket:'100',volume:'1',first_sl:90,initial_risk:'10'}],
+    exits:[{ticket:'42',time:row.exit_time,net_pnl:'-5',volume:'1'}],
+    fills:[{ticket:'100',kind:'entry',price:100,volume:'1'},{ticket:'42',kind:'exit',price:95,volume:'1'}],
+    movement:'-5',movement_unit:'pips',price_movement:'-0.0005'};
+  const grouped={link,events:[{kind:'lifecycle',key:'position-900-100',fields:{...row,execution_metrics:fillMetrics}}]};
+  assert.equal((await device('sync',grouped)).status,200);
+  assert.equal((await device('sync',grouped)).status,200);
+  const afterGroup=(await (await call('data',{action:'select',table:'trades',filters:{trade_source:'mt5'}})).json());
+  assert.equal(afterGroup.count,beforeGroup,'grouping replaces one legacy close without double-counting');
+  const groupedRow=afterGroup.data.find(t=>t.id.endsWith('/position-900-100'));
+  assert.equal(groupedRow.execution_metrics.first_sl,90);
+  assert.equal(groupedRow.execution_metrics.realized_r,-0.5);
+  assert.equal(groupedRow.pips,-5);
+  const changed=structuredClone(grouped);
+  changed.events[0].fields.execution_metrics.first_sl=99;
+  changed.events[0].fields.execution_metrics.initial_risk='1';
+  changed.events[0].fields.execution_metrics.entries[0].first_sl=99;
+  changed.events[0].fields.execution_metrics.entries[0].initial_risk='1';
+  assert.equal((await device('sync',changed)).status,200);
+  const frozen=(await (await call('data',{action:'select',table:'trades',filters:{id:groupedRow.id}})).json()).data[0];
+  assert.equal(frozen.execution_metrics.first_sl,90);
+  assert.equal(frozen.execution_metrics.initial_risk,10);
+  const allEvidence=(await (await call('data',{action:'select',table:'trades',includeSuperseded:true,filters:{id:link+'/close-42'}})).json()).data;
+  assert.equal(allEvidence[0].superseded_by,groupedRow.id);
   await db.prepare("UPDATE users SET account_status='suspended'").run();
   assert.equal((await call('data',insert)).status,401);
   assert.equal((await device('sync',batch)).status,403);

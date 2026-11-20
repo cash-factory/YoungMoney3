@@ -1,3 +1,4 @@
+import { ExecutionSummaryCards } from '@/components/ExecutionMetrics';
 import { useState, useMemo } from 'react';
 import { CalendarCheck, Plus, Trash2, Save, Star, TrendingUp, TrendingDown, Brain } from 'lucide-react';
 import { ScreenshotUpload } from '@/components/ScreenshotUpload';
@@ -11,7 +12,7 @@ import { VoiceRecorder } from '@/components/VoiceRecorder';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { Modal } from '@/components/ui/Modal';
 import { StatCard } from '@/components/ui/StatCard';
-import type { WeeklyReview, WeeklyReviewInput } from '@/lib/types';
+import type { WeeklyReview, WeeklyReviewInput, Trade } from '@/lib/types';
 import { format, parseISO, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 
 export function WeeklyReviewsPage() {
@@ -31,6 +32,10 @@ export function WeeklyReviewsPage() {
     if (confirm('Delete this weekly review?')) await deleteReview(id);
   };
 
+  const currentWeekTrades = useMemo(() => {
+    const range = {start:startOfWeek(new Date(),{weekStartsOn:1}),end:endOfWeek(new Date(),{weekStartsOn:1})};
+    return trades.filter(trade=>isWithinInterval(parseISO(trade.exit_time || trade.entry_time),range));
+  },[trades]);
   const avgRating = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
   const totalPnl = reviews.reduce((s, r) => s + r.pnl, 0);
 
@@ -54,6 +59,7 @@ export function WeeklyReviewsPage() {
         }
       />
 
+      <section className="mb-5 space-y-3"><h2 className="text-sm font-semibold">This week’s execution</h2><ExecutionSummaryCards trades={currentWeekTrades} /></section>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <StatCard label="Total Reviews" value={String(reviews.length)} icon={<CalendarCheck size={20} />} accent="blue" />
         <StatCard label="Avg Rating" value={avgRating.toFixed(1)} icon={<Star size={20} />} accent="amber" />
@@ -101,7 +107,7 @@ export function WeeklyReviewsPage() {
 
           <div className="space-y-3">
             {reviews.map(review => (
-              <ReviewCard key={review.id} review={review} onEdit={() => { setEditing(review); setShowForm(true); }} onDelete={() => handleDelete(review.id)} />
+              <ReviewCard key={review.id} review={review} trades={trades} onEdit={() => { setEditing(review); setShowForm(true); }} onDelete={() => handleDelete(review.id)} />
             ))}
           </div>
         </>
@@ -114,7 +120,12 @@ export function WeeklyReviewsPage() {
   );
 }
 
-function ReviewCard({ review, onEdit, onDelete }: { review: WeeklyReview; onEdit: () => void; onDelete: () => void }) {
+function ReviewCard({ review, trades, onEdit, onDelete }: { review: WeeklyReview; trades: Trade[]; onEdit: () => void; onDelete: () => void }) {
+  const start=Date.parse(review.week_start),end=Date.parse(review.week_end)+86400000;
+  const weekTrades=trades.filter(trade=>{
+    const at=Date.parse(trade.exit_time || trade.entry_time);
+    return at>=start && at<end && (!review.account_id || trade.account_id===review.account_id);
+  });
   return (
     <div className="card p-5 card-hover">
       <div className="flex items-start justify-between mb-3">
@@ -141,6 +152,7 @@ function ReviewCard({ review, onEdit, onDelete }: { review: WeeklyReview; onEdit
         </div>
       </div>
 
+      <div className="mb-4"><ExecutionSummaryCards trades={weekTrades} /></div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
         {review.what_went_well && (
           <div><p className="font-semibold text-success-500 mb-0.5">What Went Well</p><p className="text-secondary whitespace-pre-wrap">{review.what_went_well}</p></div>

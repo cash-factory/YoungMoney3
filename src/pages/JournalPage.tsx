@@ -1,3 +1,4 @@
+import { ExecutionSummaryCards } from '@/components/ExecutionMetrics';
 import { useMemo, useState } from 'react';
 import { BookOpen, Plus, Trash2, Save, Target, Eye, CheckSquare, FileText, Calendar } from 'lucide-react';
 import { ScreenshotUpload } from '@/components/ScreenshotUpload';
@@ -124,7 +125,7 @@ function JournalCard({ entry, trades, accounts, onEdit, onDelete }: { entry: Jou
     const d = parseISO(entry.entry_date);
     return trades.filter(t => {
       if (t.status !== 'closed' || (entry.account_id && t.account_id !== entry.account_id)) return false;
-      if (entry.linked_trade_ids?.length) return entry.linked_trade_ids.includes(t.id);
+      if (entry.linked_trade_ids?.length) return entry.linked_trade_ids.includes(t.id) || ((t as Trade & {original_trade_ids?:string[]}).original_trade_ids ?? []).some(id=>entry.linked_trade_ids!.includes(id));
       const td = parseISO(t.exit_time || t.entry_time);
       if (entry.entry_type === 'daily') return format(td, 'yyyy-MM-dd') === format(d, 'yyyy-MM-dd');
       if (entry.entry_type === 'weekly') return format(td, 'yyyy-ww') === format(d, 'yyyy-ww');
@@ -165,6 +166,7 @@ function JournalCard({ entry, trades, accounts, onEdit, onDelete }: { entry: Jou
         </div>
       </div>
 
+      <div className="mb-4"><ExecutionSummaryCards trades={entryTrades} /></div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {entry.daily_goals && (
           <div>
@@ -308,7 +310,7 @@ function JournalForm({ initial, trades, strategies, setups, instruments, account
         <div><label className={labelCls}>Setup</label><select className={inputCls} value={setupId} onChange={e => setSetupId(e.target.value)}><option value="">None</option>{setups.map(setup => <option key={setup.id} value={setup.id}>{setup.name}</option>)}</select></div>
         <div><label className={labelCls}>Instrument</label><select className={inputCls} value={instrumentId} onChange={e => setInstrumentId(e.target.value)}><option value="">None</option>{instruments.map(item => <option key={item.id} value={item.id}>{item.symbol}</option>)}</select></div>
         <div><label className={labelCls}>Account</label><select className={inputCls} value={accountId} onChange={e => setAccountId(e.target.value)}><option value="">None</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}</select></div>
-        <div><label className={labelCls}>Trades linked ({linkedTradeIds.length})</label><div className="max-h-36 overflow-y-auto rounded-lg border border-themed p-2 space-y-1">{trades.slice(0, 30).map(trade => <label key={trade.id} className="flex gap-2 items-center text-xs"><input type="checkbox" checked={linkedTradeIds.includes(trade.id)} onChange={e => setLinkedTradeIds(ids => e.target.checked ? [...ids, trade.id] : ids.filter(id => id !== trade.id))} />{trade.pair} · {format(parseISO(trade.entry_time), 'MMM d')} · {trade.outcome || trade.status}</label>)}</div></div>
+        <div><label className={labelCls}>Trades linked ({linkedTradeIds.length})</label><div className="max-h-36 overflow-y-auto rounded-lg border border-themed p-2 space-y-1">{trades.slice(0, 30).map(trade => <label key={trade.id} className="flex gap-2 items-center text-xs"><input type="checkbox" checked={linkedTradeIds.includes(trade.id) || (trade.original_trade_ids ?? []).some(id=>linkedTradeIds.includes(id))} onChange={e => setLinkedTradeIds(ids => e.target.checked ? [...ids, trade.id] : ids.filter(id => id !== trade.id && !(trade.original_trade_ids ?? []).includes(id)))} />{trade.pair} · {format(parseISO(trade.entry_time), 'MMM d')} · {trade.outcome || trade.status}</label>)}</div></div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

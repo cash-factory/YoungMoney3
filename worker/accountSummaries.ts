@@ -3,18 +3,26 @@ type SummaryRow = {account_id:string|null; currency:string; origin:string; digit
 
 /** Group by decimal scale so each bucket can be accumulated as integer minor units. */
 export async function accountSummaries(db:D1Database, owner:unknown) {
-  const rows=await db.prepare(`WITH posted AS (
-    SELECT json_extract(t.payload,'$.account_id') AS account_id,
-      COALESCE(json_extract(t.payload,'$.settlement_currency'),json_extract(t.payload,'$.calculation_snapshot.account_currency'),json_extract(a.payload,'$.base_currency'),'Unknown') AS currency,
-      COALESCE(json_extract(t.payload,'$.trade_source'),'manual') AS origin,
-      CAST(COALESCE(json_extract(t.payload,'$.pnl_decimal'),json_extract(t.payload,'$.pnl'),0) AS TEXT) AS amount
-    FROM workspace_records t LEFT JOIN workspace_records a
-      ON a.id=json_extract(t.payload,'$.account_id') AND a.user_id=t.user_id AND a.table_name='trading_accounts'
-    WHERE t.user_id=? AND t.table_name='trades' AND json_extract(t.payload,'$.status')='closed'
+  const rows=await db.prepare(`WITH facts AS (
+    SELECT t.*,a.payload AS account_payload
+    FROM workspace_records t LEFT JOIN workspace_records a ON a.id=json_extract(t.payload,'$.account_id')
+      AND a.user_id=t.user_id AND a.table_name='trading_accounts'
+    WHERE t.user_id=? AND t.table_name='trades' AND json_extract(t.payload,'$.superseded_by') IS NULL
+  ), realized AS (
+    SELECT facts.id,facts.payload,facts.account_payload,CAST(json_extract(e.value,'$.net_pnl') AS TEXT) AS amount
+    FROM facts, json_each(facts.payload,'$.execution_metrics.exits') e
+    UNION ALL
+    SELECT id,payload,account_payload,CAST(COALESCE(json_extract(payload,'$.pnl_decimal'),json_extract(payload,'$.pnl'),0) AS TEXT)
+    FROM facts WHERE json_extract(payload,'$.status')='closed'
+      AND COALESCE(json_array_length(payload,'$.execution_metrics.exits'),0)=0
+  ), posted AS (
+    SELECT id,json_extract(payload,'$.account_id') AS account_id,
+      COALESCE(json_extract(payload,'$.settlement_currency'),json_extract(payload,'$.calculation_snapshot.account_currency'),json_extract(account_payload,'$.base_currency'),'Unknown') AS currency,
+      COALESCE(json_extract(payload,'$.trade_source'),'manual') AS origin,amount FROM realized
   ), scaled AS (
     SELECT *, CASE WHEN instr(amount,'.')=0 THEN 0 ELSE length(amount)-instr(amount,'.') END AS digits FROM posted
   )
-  SELECT account_id,currency,origin,digits,CAST(SUM(CAST(REPLACE(amount,'.','') AS INTEGER)) AS TEXT) AS amount, COUNT(*) AS trades
+  SELECT account_id,currency,origin,digits,CAST(SUM(CAST(REPLACE(amount,'.','') AS INTEGER)) AS TEXT) AS amount, COUNT(DISTINCT id) AS trades
   FROM scaled WHERE instr(lower(amount),'e')=0 GROUP BY account_id,currency,origin,digits`).bind(owner).all<SummaryRow>();
   const totals=new Map<string,{account_id:string|null;currency:string;origin:string;profit:string;trades:number}>();
   for(const row of rows.results){
@@ -25,7 +33,7 @@ export async function accountSummaries(db:D1Database, owner:unknown) {
   }
   // Legacy scientific notation cannot be safely cast to SQLite integer text.
   const tiny=await db.prepare(`SELECT t.payload,a.payload AS account FROM workspace_records t LEFT JOIN workspace_records a ON a.user_id=t.user_id AND a.table_name='trading_accounts' AND a.id=json_extract(t.payload,'$.account_id')
-    WHERE t.user_id=? AND t.table_name='trades' AND json_extract(t.payload,'$.status')='closed' AND instr(lower(CAST(COALESCE(json_extract(t.payload,'$.pnl_decimal'),json_extract(t.payload,'$.pnl')) AS TEXT)),'e')>0`).bind(owner).all<{payload:string;account:string|null}>();
+    WHERE t.user_id=? AND t.table_name='trades' AND json_extract(t.payload,'$.superseded_by') IS NULL AND COALESCE(json_array_length(t.payload,'$.execution_metrics.exits'),0)=0 AND json_extract(t.payload,'$.status')='closed' AND instr(lower(CAST(COALESCE(json_extract(t.payload,'$.pnl_decimal'),json_extract(t.payload,'$.pnl')) AS TEXT)),'e')>0`).bind(owner).all<{payload:string;account:string|null}>();
   for(const row of tiny.results){
     const t=JSON.parse(row.payload), account_id=t.account_id ?? null, currency=t.settlement_currency||t.calculation_snapshot?.account_currency||(row.account && JSON.parse(row.account).base_currency)||'Unknown', origin=t.trade_source||'manual';
     const key=JSON.stringify([account_id,currency,origin]);

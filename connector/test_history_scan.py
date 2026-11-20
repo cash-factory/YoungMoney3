@@ -68,6 +68,30 @@ class HistoryResumptionTests(unittest.TestCase):
                 width=(args[1]-args[0]).total_seconds()*1000
                 self.assertLessEqual(width,7*DAY+2500)
 
+    def test_closed_position_uploads_one_rich_lifecycle(self):
+        class Record(dict):
+            def _asdict(self):
+                return dict(self)
+        opened=Record(ticket=9007199254740993,order=11,position_id=17,symbol="EURUSD",type=0,entry=0,
+                      volume=1,price=1.1,profit=0,commission=-1,fee=0,swap=0,time_msc=self.start+1000)
+        closed=Record(ticket=9007199254740994,order=12,position_id=17,symbol="EURUSD",type=1,entry=1,
+                      volume=1,price=1.101,profit=100,commission=-1,fee=0,swap=0,time_msc=self.start+2000)
+        self.api.history_deals_get.return_value=[opened,closed]
+        self.api.history_orders_get.return_value=[Record(ticket=11,sl=1.099,tp=1.102,time_done_msc=self.start+1000,time_setup_msc=self.start+1000)]
+        self.api.symbol_info_tick.return_value=None
+        self.api.symbol_info.return_value=Record(name="EURUSD",trade_calc_mode=0,currency_base="EUR",currency_profit="USD",trade_tick_size=.00001)
+        self.api.order_calc_profit.side_effect=lambda action,symbol,volume,entry,exit:(exit-entry)*100000*volume
+        self.scan()
+        events=[event for call in self.calls for event in call.get("events",[]) if event["kind"]=="lifecycle"]
+        self.assertEqual(len(events),1)
+        event=events[0]
+        self.assertEqual(event["key"],"position-17-9007199254740993")
+        self.assertEqual(event["fields"]["status"],"closed")
+        self.assertEqual(event["fields"]["pnl"],98)
+        self.assertAlmostEqual(event["fields"]["pips"],10)
+        self.assertEqual(event["fields"]["execution_metrics"]["first_sl"],1.099)
+        self.assertEqual(event["fields"]["execution_metrics"]["source_deal_tickets"],["9007199254740993","9007199254740994"])
+
     def test_cancelled_scan_stops_after_server_decline(self):
         self.scan()
         self.status='declined'

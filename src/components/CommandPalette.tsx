@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, ArrowRight, Plus, Command, X } from 'lucide-react';
+import { useDialogFocus } from '@/hooks/useDialogFocus';
 import type { PageId } from './Layout';
 
 interface Destination {
@@ -43,6 +44,8 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickAdd }: Props)
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  useDialogFocus(open, dialogRef, onClose);
   const results = useMemo(() => {
     const normalized = query.toLocaleLowerCase().trim();
     return normalized
@@ -54,10 +57,7 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickAdd }: Props)
 
   useEffect(() => {
     if (!open) { setQuery(''); setSelected(0); return; }
-    inputRef.current?.focus();
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previousOverflow; };
+
   }, [open]);
 
   useEffect(() => { setSelected(0); }, [query]);
@@ -72,15 +72,15 @@ export function CommandPalette({ open, onClose, onNavigate, onQuickAdd }: Props)
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center px-4 pt-[12vh] sm:pt-[16vh]" role="presentation">
       <button className="absolute inset-0 bg-black/65 backdrop-blur-sm" onClick={onClose} aria-label="Close quick navigation" />
-      <section role="dialog" aria-modal="true" aria-label="Quick navigation" className="command-palette relative z-10 w-full max-w-xl overflow-hidden rounded-2xl border border-themed bg-card shadow-2xl">
+      <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Quick navigation" className="command-palette ym-command-surface relative z-10 w-full max-w-xl overflow-hidden rounded-2xl border border-themed bg-card shadow-2xl">
         <div className="flex items-center gap-3 border-b border-themed px-4 py-4">
           <Search size={20} className="text-muted shrink-0" />
           <input
             ref={inputRef}
+            data-autofocus
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => {
-              if (e.key === 'Escape') { e.preventDefault(); onClose(); }
               if (e.key === 'ArrowDown') { e.preventDefault(); setSelected(v => Math.min(v + 1, Math.max(0, count - 1))); }
               if (e.key === 'ArrowUp') { e.preventDefault(); setSelected(v => Math.max(0, v - 1)); }
               if (e.key === 'Enter') { e.preventDefault(); activate(selected); }

@@ -1,3 +1,6 @@
+import { ExecutionMetricsPanel, ExecutionSummaryCards, ExecutionSessionSummary } from '@/components/ExecutionMetrics';
+import { executionMovement, formatHoldDuration } from '@/lib/executionPresentation';
+import { getExecutionMetrics } from '@/lib/executionMetrics';
 import { accountLedger, tradeCurrency } from '@/lib/tradeFinance';
 import { dateKeyInTimeZone } from '@/lib/riskMetrics';
 import { useEffect, useMemo, useState } from 'react';
@@ -35,6 +38,7 @@ export function DashboardPage() {
   const { plans } = useTradingPlans(user?.id);
   const { checklist, addChecklistItem, deleteChecklistItem } = useChecklist(user?.id);
   const [showAdd, setShowAdd] = useState(false);
+  const [activeSection, setActiveSection] = useState('ym-overview');
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const [showRiskSettings, setShowRiskSettings] = useState(false);
   const [accountFilter, setAccountFilter] = useState('all');
@@ -141,7 +145,23 @@ export function DashboardPage() {
     await saveSettings(input);
   };
 
+  useEffect(() => {
+    if (loading || typeof IntersectionObserver === 'undefined') return;
+    const ids = ['ym-overview', 'ym-risk', 'ym-performance', 'ym-recent', 'ym-deep-dive'];
+    const observer = new IntersectionObserver(entries => {
+      const visible = entries.filter(entry => entry.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+      if (visible[0]) setActiveSection(visible[0].target.id);
+    }, { rootMargin: '-10% 0px -65% 0px', threshold: 0 });
+    for (const id of ids) {
+      const target = document.getElementById(id);
+      if (target) observer.observe(target);
+    }
+    return () => observer.disconnect();
+  }, [loading, source]);
+
   const jumpToSection = (id: string) => {
+    setActiveSection(id);
     document.getElementById(id)?.scrollIntoView({
       behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
       block: 'start',
@@ -154,21 +174,20 @@ export function DashboardPage() {
   return (
     <div className="ym-dashboard">
       {loadError && <p role="alert">Trade history unavailable. Showing figures last refreshed {new Date(asOf!).toLocaleString()}.</p>}
-      {trades.some(t=>t.status==='closed' && (!t.exit_time || tradeCurrency(t,accounts)==='Unknown' || t.realized_r == null)) && <p className="card p-3 text-sm" role="status">Some closed trades need review for close time, currency or initial risk. Daily risk and R statistics may be incomplete.</p>}
-      {account?.broker_balance != null && (!account.broker_balance_at || Date.now()-Date.parse(account.broker_balance_at)>120000) && <p role="status" className="card p-3 text-xs text-secondary">Broker balance is a last-known snapshot, not a live quote. Check MT5 Connections for its latest sync before making trading decisions.</p>}
+      {trades.some(t=>t.status==='closed' && (!t.exit_time || tradeCurrency(t,accounts)==='Unknown' || getExecutionMetrics(t).realized_r == null)) && <p className="card p-3 text-sm" role="status">Some closed trades need review for close time, currency or initial risk. Daily risk and R statistics may be incomplete.</p>}
+      {account?.broker_balance != null && (!account.broker_balance_at || Date.now()-Date.parse(account.broker_balance_at)>120000) && <p role="status" className="card p-3 text-xs text-secondary">Broker balance needs refreshing. Check the latest sync in MT5 Connections.</p>}
 
       <div className="ym-dash-heading" id="ym-overview">
         <div className="min-w-0">
-          <p className="ym-dash-eyebrow"><span aria-hidden="true" className="ym-dash-eyebrow-mark" /> TRADING OPERATIONS / OVERVIEW</p>
           <h1>Trading overview</h1>
-          <p>Everything that matters, in one clear view. Review your results, risk and next decisions.</p>
+          <p>Account performance, execution quality and trading risk.</p>
         </div>
         <button type="button" onClick={() => setShowAdd(true)} className="btn-primary ym-dash-new-trade">
           <Plus size={18} /> Add trade
         </button>
       </div>
 
-      <div className="ym-dash-controls card" role="group" aria-label="Performance filters">
+      <div className="ym-dash-controls ym-toolbar card" role="group" aria-label="Performance filters">
         <label>
           <span>Trading account</span>
           <select className="input-field" value={accountFilter} onChange={event => setAccountFilter(event.target.value)}>
@@ -195,23 +214,23 @@ export function DashboardPage() {
       </div>
 
       <nav className="ym-dash-jump" aria-label="Dashboard sections">
-        <button type="button" onClick={() => jumpToSection('ym-overview')}>Overview</button>
-        {source === 'live' && <button type="button" onClick={() => jumpToSection('ym-risk')}>Risk &amp; rules</button>}
-        <button type="button" onClick={() => jumpToSection('ym-performance')}>Performance</button>
-        <button type="button" onClick={() => jumpToSection('ym-recent')}>Recent trades</button>
-        <button type="button" onClick={() => jumpToSection('ym-deep-dive')}>Deep dive</button>
+        <button type="button" className="ym-dashboard-tab" aria-current={activeSection === 'ym-overview' ? 'location' : undefined} onClick={() => jumpToSection('ym-overview')}>Overview</button>
+        {source === 'live' && <button type="button" className="ym-dashboard-tab" aria-current={activeSection === 'ym-risk' ? 'location' : undefined} onClick={() => jumpToSection('ym-risk')}>Risk &amp; rules</button>}
+        <button type="button" className="ym-dashboard-tab" aria-current={activeSection === 'ym-performance' ? 'location' : undefined} onClick={() => jumpToSection('ym-performance')}>Performance</button>
+        <button type="button" className="ym-dashboard-tab" aria-current={activeSection === 'ym-recent' ? 'location' : undefined} onClick={() => jumpToSection('ym-recent')}>Recent trades</button>
+        <button type="button" className="ym-dashboard-tab" aria-current={activeSection === 'ym-deep-dive' ? 'location' : undefined} onClick={() => jumpToSection('ym-deep-dive')}>Deep dive</button>
       </nav>
 
       <section className="ym-dash-balance" aria-label="Account and trading result">
         <div className="ym-dash-balance-main">
-          <p className="ym-dash-kicker">{source === 'live' ? 'ACCOUNT SNAPSHOT' : 'PRACTICE PERFORMANCE'}</p>
+
           <h2>{account?.name || (source === 'live' ? 'All trading accounts' : source === 'backtest' ? 'Backtest workspace' : 'Forward testing')}</h2>
           {source === 'live' ? (
             account ? (
               <>
-                <p className="ym-dash-measure-label">Calculated account balance</p>
+                <p className="ym-dash-measure-label">{account.broker_balance != null ? 'Broker reported balance' : 'Journal balance'}</p>
                 <p className="ym-dash-balance-number">{formatAccountMoney(currentBalance ?? 0, account.base_currency)}</p>
-                <p className="ym-dash-balance-hint">Opening balance + all realized trades and cash adjustments. Not a live broker quote.</p>
+                <p className="ym-dash-balance-hint">{account.broker_balance != null ? 'Latest balance received from your connected MT5 terminal.' : 'Opening balance, realized trades and cash adjustments.'}</p>
               </>
             ) : balancesByCurrency.size ? (
               <>
@@ -235,8 +254,8 @@ export function DashboardPage() {
             </>
           )}
           <div className="ym-dash-balance-foot">
-            <span>{account ? 'ACCOUNT SELECTED' : 'ALL ACCOUNTS'}</span>
-            <span>{source === 'live' ? 'JOURNAL VIEW' : source === 'backtest' ? 'BACKTEST VIEW' : 'FORWARD TEST VIEW'}</span>
+            <span>{account ? account.base_currency : balancesByCurrency.size + (balancesByCurrency.size===1?' account currency':' account currencies')}</span>
+            {asOf && <span>Updated {new Date(asOf).toLocaleTimeString(undefined, {hour:'2-digit',minute:'2-digit'})}</span>}
           </div>
         </div>
         <div className="ym-dash-result">
@@ -254,7 +273,7 @@ export function DashboardPage() {
               ))}
             </div>
           ) : (
-            <p className="ym-dash-result-description">Closed trades only. Results use the selected account and trade source.</p>
+            <p className="ym-dash-result-description">Realized exits use the selected account and trade source.</p>
           )}
           <div className="ym-dash-result-stats">
             <div><span>Win rate</span><strong>{formatPercent(stats.winRate)}</strong></div>
@@ -264,7 +283,7 @@ export function DashboardPage() {
       </section>
 
       <div className="ym-dash-section-title">
-        <div><p className="ym-dash-kicker">AT A GLANCE</p><h2>Key performance</h2></div>
+        <div><h2>Key performance</h2></div>
         <span>Closed trades · selected view</span>
       </div>
       <div className="ym-dash-metric-grid">
@@ -278,13 +297,15 @@ export function DashboardPage() {
         <StatCard label="Profit factor"
           value={mixedCurrencyView ? 'Choose account' : stats.profitFactor === Infinity ? '∞' : stats.profitFactor.toFixed(2)}
           icon={<TrendingUp size={19} />}
-          sublabel={mixedCurrencyView ? 'Not combined across currencies' : stats.totalTrades === 0 ? 'No closed trades yet' : 'Expectancy: ' + formatCurrency(stats.expectancy)}
+          sublabel={mixedCurrencyView ? 'Grouped by currency' : stats.totalTrades === 0 ? 'No closed trades yet' : 'Expectancy: ' + formatCurrency(stats.expectancy)}
           accent="blue" />
       </div>
 
+      <div className="ym-dash-execution mb-6"><ExecutionSummaryCards trades={trades} /></div>
+
       {source === 'live' && <section id="ym-risk" className="ym-dash-section">
         <div className="ym-dash-section-title">
-          <div><p className="ym-dash-kicker">CAPITAL PRESERVATION</p><h2>Risk &amp; trading rules</h2></div>
+          <div><h2>Risk &amp; trading rules</h2></div>
           <span>Review limits before the next trade</span>
         </div>
         <div className="ym-dash-risk-area">
@@ -310,12 +331,12 @@ export function DashboardPage() {
 
       <section className="ym-dash-section" id="ym-performance">
         <div className="ym-dash-section-title">
-          <div><p className="ym-dash-kicker">PERFORMANCE REVIEW</p><h2>Performance trends</h2></div>
+          <div><h2>Performance trends</h2></div>
           <span>Results from closed trades</span>
         </div>
       <div className="ym-dash-charts grid grid-cols-1 xl:grid-cols-5 gap-4 mb-6">
         <div className="ym-dash-chart-card card p-4 sm:p-5 xl:col-span-3">
-          <h3 className="text-sm font-semibold mb-1">Cumulative closed P&amp;L</h3><p className="ym-dash-chart-caption">Running total of closed-trade results—not account equity or live balance.</p>
+          <h3 className="text-sm font-semibold mb-1">Cumulative realized P&amp;L</h3><p className="ym-dash-chart-caption">Running total of realized exits, including partial closes.</p>
           {mixedCurrencyView ? <p className="py-20 text-center text-sm text-muted">Select one account to view cumulative closed P&L. Results in different currencies cannot be combined.</p> : equity.length > 0 ? (
             <ResponsiveContainer width="100%" height={280}>
               <AreaChart data={equity} margin={{ left: -10, right: 10, top: 5, bottom: 0 }}>
@@ -365,15 +386,56 @@ export function DashboardPage() {
 
       </section>
 
+
+
+      <div className="mb-6"><ExecutionSessionSummary trades={trades} /></div>
+
       <section className="ym-dash-section" id="ym-recent">
         <div className="ym-dash-section-title">
-          <div><p className="ym-dash-kicker">THE LEDGER</p><h2>Recent trades</h2></div>
+          <div><h2>Recent trades</h2></div>
           <span>Open a trade to review its details</span>
         </div>
       <div className="ym-dash-recent-card card p-4 sm:p-5">
         {recentTrades.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <>
+            <div className="divide-y divide-themed sm:hidden">
+              {recentTrades.map(trade => {
+                const pnl = trade.status === 'open'
+                  ? 'Pending'
+                  : mixedCurrencyView
+                    ? formatAccountMoney(trade.pnl, tradeCurrency(trade, accounts))
+                    : formatCurrency(trade.pnl);
+                const entered = new Date(trade.entry_time).toLocaleString(undefined, {
+                  month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                });
+                return <button
+                  key={trade.id}
+                  type="button"
+                  onClick={() => setSelectedTrade(trade)}
+                  className="ym-mobile-trade w-full py-4 text-left transition-colors first:pt-1 last:pb-1"
+                  aria-label={`Review ${trade.pair} ${trade.direction} trade, ${pnl}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-semibold tracking-tight">{trade.pair}</p>
+                      <p className="mt-1 flex items-center gap-1.5 text-[11px] text-secondary">
+                        {trade.direction === 'long' ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                        <span>{trade.direction === 'long' ? 'Long' : 'Short'}</span>
+                        <span className="text-muted" aria-hidden="true">·</span>
+                        <span className="capitalize">{trade.status === 'open' ? 'Open' : trade.outcome || 'Closed'}</span>
+                      </p>
+                    </div>
+                    <span className={`shrink-0 text-right text-sm font-semibold tabular-nums ${trade.status === 'open' ? 'text-secondary' : trade.pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>{pnl}</span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[10px] text-muted">
+                    <time dateTime={trade.entry_time}>{entered}</time>
+                    <span className="tabular-nums">{executionMovement(trade)} · {formatHoldDuration(getExecutionMetrics(trade).duration_seconds)}</span>
+                  </div>
+                </button>;
+              })}
+            </div>
+            <div className="hidden overflow-x-auto sm:block">
+            <table className="ym-table w-full min-w-[680px] text-sm">
               <thead>
                 <tr className="text-xs text-muted uppercase tracking-wide border-b border-themed">
                   <th className="text-left py-2 px-2 font-medium">Date</th>
@@ -381,14 +443,14 @@ export function DashboardPage() {
                   <th className="text-left py-2 px-2 font-medium">Dir</th>
                   <th className="text-left py-2 px-2 font-medium">Outcome</th>
                   <th className="text-right py-2 px-2 font-medium">P&L</th>
-                  <th className="text-right py-2 px-2 font-medium">Pips</th>
+                  <th className="text-right py-2 px-2 font-medium">Movement / Hold</th>
                   <th className="text-right py-2 px-2 font-medium">View</th>
                 </tr>
               </thead>
               <tbody>
                 {recentTrades.map(t => (
                   <tr key={t.id} className="border-b border-themed/50 hover:bg-secondary transition-colors">
-                    <td className="py-2.5 px-2 text-xs text-muted">{formatDateTime(t.entry_time)}</td>
+                    <td className="whitespace-nowrap py-2.5 px-2 text-xs text-muted"><time dateTime={t.entry_time}>{formatDateTime(t.entry_time)}</time></td>
                     <td className="py-2.5 px-2 font-mono font-semibold">{t.pair}</td>
                     <td className="py-2.5 px-2">
                       <span className={`badge ${t.direction === 'long' ? 'badge-success' : 'badge-error'}`}>
@@ -410,12 +472,12 @@ export function DashboardPage() {
                     <td className={`py-2.5 px-2 text-right font-mono font-semibold ${t.status === 'open' ? 'text-orange-500' : t.pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>
                       {t.status === 'open' ? 'Pending' : mixedCurrencyView ? formatAccountMoney(t.pnl, tradeCurrency(t, accounts)) : account ? formatAccountMoney(t.pnl, account.base_currency) : formatCurrency(t.pnl)}
                     </td>
-                    <td className="py-2.5 px-2 text-right font-mono text-muted">{t.pips?.toFixed(1) || '0.0'}</td>
+                    <td className="py-2.5 px-2 text-right font-mono text-muted">{executionMovement(t)}<span className="block text-xs">{formatHoldDuration(getExecutionMetrics(t).duration_seconds)}</span></td>
                     <td className="py-2.5 px-2 text-right">
                       <button
                         type="button"
                         onClick={() => setSelectedTrade(t)}
-                        className="btn-ghost p-1.5"
+                        className="btn-ghost p-2.5 rounded-full"
                         aria-label={`View ${t.pair} trade details`}
                         title="View trade details"
                       >
@@ -426,7 +488,8 @@ export function DashboardPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         ) : (
           <EmptyState icon={<Plus size={36} />} title="No trades yet" message="Click 'Add Trade' to log your first trade and start building your journal." />
         )}
@@ -442,7 +505,7 @@ export function DashboardPage() {
           <ChevronDown className="ym-dash-detail-chevron" size={20} aria-hidden="true" />
         </summary>
         <div className="ym-dash-details-body">
-          <div className="ym-dash-section-title"><div><p className="ym-dash-kicker">DEEPER METRICS</p><h2>Consistency &amp; edge</h2></div></div>
+          <div className="ym-dash-section-title"><div><h2>Consistency &amp; edge</h2></div></div>
           <div className="ym-dash-average-win">
             <StatCard label="Average winning trade" value={mixedCurrencyView ? 'By currency' : formatCurrency(stats.avgWin)}
               icon={<TrendingUp size={19} />}
@@ -470,20 +533,20 @@ export function DashboardPage() {
           accent="rose"
         />
         <StatCard
-          label="Avg Risk : Reward"
-          value={stats.avgRiskReward > 0 ? `1:${stats.avgRiskReward.toFixed(2)}` : '—'}
+          label="Net R coverage"
+          value={String(trades.filter(t=>t.status==='closed' && getExecutionMetrics(t).realized_r!=null).length) + ' / ' + stats.totalTrades}
           icon={<Star size={20} className="text-amber-500" />}
           accent="amber"
         />
       </div>
 
-          <div className="ym-dash-section-title"><div><p className="ym-dash-kicker">PRACTICAL TOOLS</p><h2>Trade calculator</h2></div></div>
+          <div className="ym-dash-section-title"><div><h2>Trade calculator</h2></div></div>
       {/* Trade Calculator */}
       <div className="mb-6">
         <TradeCalculator trades={liveTrades} adjustments={adjustments} />
       </div>
 
-          <div className="ym-dash-section-title"><div><p className="ym-dash-kicker">THE DETAILS</p><h2>Patterns &amp; behavior</h2></div></div>
+          <div className="ym-dash-section-title"><div><h2>Patterns &amp; behavior</h2></div></div>
       {/* Best/Worst day + Top pairs */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         {mixedCurrencyView ? <div className="card p-5"><h3 className="text-sm font-semibold mb-4">Currency Breakdown</h3><div className="space-y-2">{currencyTotals.length ? currencyTotals.map(([currency, pnl]) => <div key={currency} className="flex items-center justify-between rounded-lg bg-secondary px-3 py-2"><span className="text-sm font-medium">{currency}</span><span className={`font-mono text-sm font-semibold ${pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>{pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}</span></div>) : <p className="text-sm text-muted">No closed trades in this view.</p>}</div></div> : <div className="card p-5">
@@ -604,6 +667,7 @@ export function DashboardPage() {
                 <p className="mt-1 whitespace-pre-wrap text-sm">{selectedTrade.lessons}</p>
               </div>
             )}
+            <ExecutionMetricsPanel trade={selectedTrade} />
             <TradeAttachments trade={selectedTrade} />
           </div>
         )}
@@ -624,7 +688,7 @@ export function DashboardPage() {
 
 function TradeDetail({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg bg-secondary p-3">
+    <div className="rounded-xl border border-themed bg-secondary p-3">
       <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">{label}</p>
       <p className="mt-1 break-words text-sm font-medium">{value}</p>
     </div>

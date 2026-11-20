@@ -1,3 +1,4 @@
+import {connectorDownload} from './connectorDownload';
 import {accountSummaries} from './accountSummaries';
 import {selectRecords} from './selectRecords';
 import { settleManualTrade } from '../src/lib/settleManualTrade';
@@ -14,6 +15,8 @@ import { deleteOwnedMedia } from '../src/lib/mediaCleanup';
 
 export interface Env {
   DB: D1Database;
+  ASSETS?: Fetcher;
+  APP_ENV?: string;
   MEDIA?: R2Bucket;
   PILOT_INVITE_CODE?: string;
   MT5_ALLOW_LIVE?: string;
@@ -741,6 +744,7 @@ export default {
   async fetch(request, env): Promise<Response> {
     const { pathname, origin } = new URL(request.url);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204 });
+    if(pathname==='/downloads/YoungMoney3-Connector.zip') return await connectorDownload(request,env);
     const requestOrigin = request.headers.get('Origin');
     const fetchSite = request.headers.get('Sec-Fetch-Site');
     // A sibling subdomain is same-site but not same-origin. Do not let it

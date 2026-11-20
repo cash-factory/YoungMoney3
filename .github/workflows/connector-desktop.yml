@@ -1,0 +1,35 @@
+name: Build staging Windows connector
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'connector/**'
+      - '.github/workflows/connector-desktop.yml'
+permissions:
+  contents: read
+jobs:
+  executable:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - name: Install reproducible build dependencies
+        run: python -m pip install -r connector/requirements-build.txt
+      - name: Verify connector calculations and terminal handling
+        run: python -m unittest discover -s connector -p 'test_*.py'
+      - name: Build and smoke test executable
+        shell: pwsh
+        run: ./connector/build.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: youngmoney3-connector-staging-windows-x64
+          path: |
+            connector/dist/YoungMoney3 Connector.exe
+            connector/dist/YoungMoney3-Connector.zip
+            connector/dist/SHA256SUMS.txt
+            connector/dist/smoke-test.json
+          if-no-files-found: error

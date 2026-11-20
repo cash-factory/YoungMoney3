@@ -1,8 +1,11 @@
+import { ExecutionSummaryCards } from '@/components/ExecutionMetrics';
+import { executionMovement } from '@/lib/executionPresentation';
+import { realizedExecutionEvents } from '@/lib/executionMetrics';
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Plus, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { useTrades } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
-import { formatCurrency, formatPips } from '@/lib/utils';
+import { formatCurrency } from '@/lib/utils';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { Modal } from '@/components/ui/Modal';
@@ -31,13 +34,19 @@ export function CalendarPage() {
 
   const tradesByDay = useMemo(() => {
     const map = new Map<string, { trades: typeof trades; pnl: number }>();
-    trades.forEach(t => {
-      const key = format(parseISO(t.entry_time), 'yyyy-MM-dd');
-      const ex = map.get(key) || { trades: [], pnl: 0 };
-      ex.trades.push(t);
-      ex.pnl += t.pnl;
-      map.set(key, ex);
-    });
+    for (const event of realizedExecutionEvents(trades)) {
+      const key = format(parseISO(event.at), 'yyyy-MM-dd');
+      const day = map.get(key) || { trades: [], pnl: 0 };
+      if (!day.trades.some(trade => trade.id === event.trade.id)) day.trades.push(event.trade);
+      day.pnl += event.pnl;
+      map.set(key, day);
+    }
+    for (const trade of trades.filter(t=>t.status==='open')) {
+      const key=format(parseISO(trade.entry_time),'yyyy-MM-dd');
+      const day=map.get(key) || {trades:[],pnl:0};
+      if(!day.trades.some(t=>t.id===trade.id)) day.trades.push(trade);
+      map.set(key,day);
+    }
     return map;
   }, [trades]);
 
@@ -48,10 +57,12 @@ export function CalendarPage() {
   }, [selectedDate, tradesByDay]);
 
   const monthStats = useMemo(() => {
-    const monthTrades = trades.filter(t => isSameMonth(parseISO(t.entry_time), currentMonth));
-    const pnl = monthTrades.reduce((s, t) => s + t.pnl, 0);
-    const wins = monthTrades.filter(t => t.outcome === 'win').length;
-    return { pnl, count: monthTrades.length, wins, winRate: monthTrades.length ? (wins / monthTrades.length) * 100 : 0 };
+    const events = realizedExecutionEvents(trades).filter(event => isSameMonth(parseISO(event.at),currentMonth));
+    const monthTrades = [...new Map(events.map(event=>[event.trade.id,event.trade])).values()];
+    const pnl = events.reduce((sum,event)=>sum+event.pnl,0);
+    const completed = monthTrades.filter(trade=>trade.status==='closed');
+    const wins = completed.filter(trade=>trade.outcome==='win').length;
+    return {pnl,count:monthTrades.length,wins,winRate:completed.length ? wins/completed.length*100 : 0};
   }, [trades, currentMonth]);
 
   const handleAddOnDate = (date: Date) => {
@@ -76,6 +87,7 @@ export function CalendarPage() {
         subtitle={`${format(currentMonth, 'MMMM yyyy')} — ${monthStats.count} trades, ${formatCurrency(monthStats.pnl)}`}
       />
 
+      <div className="mb-5"><ExecutionSummaryCards trades={trades.filter(t => isSameMonth(parseISO(t.exit_time || t.entry_time), currentMonth))} /></div>
       {/* Month navigation */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
@@ -158,6 +170,7 @@ export function CalendarPage() {
 
           {selectedTrades.length > 0 ? (
             <div className="space-y-2">
+              <ExecutionSummaryCards trades={selectedTrades} />
               {selectedTrades.map(t => (
                 <div key={t.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary border border-themed">
                   <div className="flex items-center gap-3">
@@ -173,9 +186,9 @@ export function CalendarPage() {
                   </div>
                   <div className="text-right">
                     <span className={`font-mono font-semibold text-sm ${t.pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>
-                      {formatCurrency(t.pnl)}
+                      {formatCurrency(selectedDate ? realizedExecutionEvents([t]).filter(event=>format(parseISO(event.at),'yyyy-MM-dd')===format(selectedDate,'yyyy-MM-dd')).reduce((sum,event)=>sum+event.pnl,0) : 0)}
                     </span>
-                    <span className="block text-xs text-muted">{formatPips(t.pips)}</span>
+                    <span className="block text-xs text-muted">{executionMovement(t)}</span>
                   </div>
                 </div>
               ))}

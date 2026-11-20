@@ -1,3 +1,4 @@
+import {capturePayload, persistLifecycle, validateCaptureMetrics} from './tradeCapture';
 interface Bindings { DB: D1Database; MT5_ALLOW_LIVE?: string }
 type Fields = Record<string, unknown>;
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -17,7 +18,7 @@ async function body(request: Request): Promise<Fields | null> {
     const chunk = await reader.read();
     if (chunk.done) break;
     size += chunk.value.byteLength;
-    if (size > 196608) { await reader.cancel(); return null; }
+    if (size > 1048576) { await reader.cancel(); return null; }
     content += decoder.decode(chunk.value, { stream: true });
   }
   try { const parsed: unknown = JSON.parse(content + decoder.decode()); return isObject(parsed) ? parsed : null; }
@@ -79,20 +80,22 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       if(!Number.isSafeInteger(expected)||expected<0) return fail('Review all history preview pages before importing.',400);
       const count=await q("SELECT count(*) AS total FROM mt5_events WHERE link=? AND substr(event_key,1,?)=?",link.id,prefix.length,prefix).first<{total:number}>();
       if(expected!==count?.total) return fail('History preview has changed. Review all pages again.',409);
-      const items=await q("SELECT event_key,payload FROM mt5_events WHERE link=? AND substr(event_key,1,?)=? AND NOT EXISTS(SELECT 1 FROM workspace_records w WHERE w.id=mt5_events.link||'/'||substr(mt5_events.event_key,?)) ORDER BY event_key LIMIT 40",link.id,prefix.length,prefix,prefix.length+1).all<{event_key:string;payload:string}>();
+      const items=await q("SELECT event_key,payload FROM mt5_events WHERE link=? AND substr(event_key,1,?)=? AND NOT EXISTS(SELECT 1 FROM workspace_records w WHERE w.id=mt5_events.link||'/'||substr(mt5_events.event_key,?)) ORDER BY event_key LIMIT 4",link.id,prefix.length,prefix,prefix.length+1).all<{event_key:string;payload:string}>();
       // Import in retryable batches. Broker deal IDs are immutable and deduplicate live fills.
-      const statements=items.results.map(row=>{
-        const key=row.event_key.slice(prefix.length),id=link.id+'/'+key;
-        const data={...JSON.parse(row.payload),id,user_id:owner,account_id:link.account_id,trade_source:'mt5',capture_mode:'history',broker:link.company,settlement_currency:link.currency,historical_import:true,mistakes:[],pips:0};
-        return q("INSERT OR IGNORE INTO workspace_records(id,user_id,table_name,payload,created_at,updated_at) VALUES(?,?,'trades',?,?,?)",id,owner,JSON.stringify(data),now(),now());
-      });
       let added=0;
-      for(const statement of statements) {
-        const result=await statement.run();
-        added+=result.meta.changes;
+      for(const row of items.results){
+        const key=row.event_key.slice(prefix.length),id=link.id+'/'+key;
+        const data={...JSON.parse(row.payload),id,user_id:owner,account_id:link.account_id,trade_source:'mt5',capture_mode:'history',broker:link.company,settlement_currency:link.currency,historical_import:true,mistakes:[]};
+        if(data.execution_metrics) {
+          await db.batch(await persistLifecycle(db,owner,link,key,data));
+          added++;
+        } else {
+          const result=await q("INSERT OR IGNORE INTO workspace_records(id,user_id,table_name,payload,created_at,updated_at) VALUES(?,?,'trades',?,?,?)",id,owner,JSON.stringify(data),now(),now()).run();
+          added+=result.meta.changes;
+        }
       }
       await q("UPDATE mt5_links SET history_status='imported' WHERE id=? AND history_id=?",link.id,link.history_id).run();
-      return json({added,more:items.results.length===40});
+      return json({added,more:items.results.length===4});
     }
     if (action === 'pair') {
       if(await capturePaused()) return fail('MT5 pairing is paused by the administrator.',403);
@@ -199,12 +202,13 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if(await capturePaused()) return fail('MT5 capture is paused by the administrator.',403);
   if(link.trade_mode===2 && env.MT5_ALLOW_LIVE!=='true') return fail('Real-account capture is paused by the release gate.',403);
   if (!Array.isArray(input.events)||input.events.length>40) return fail('Invalid capture batch.');
+  if(input.events.filter(event=>isObject(event) && (event.kind==='lifecycle' || event.kind==='history' && isObject(event.fields) && event.fields.execution_metrics)).length>4) return fail('Send at most four rich positions per capture batch.',413);
   const statements:D1PreparedStatement[]=[];
   for(const event of input.events) {
     if(!isObject(event)||!limited(event.key,120)||!isObject(event.fields)) return fail('Invalid capture event.');
     const f=event.fields, time=now();
     statements.push(q('INSERT INTO mt5_events(link,event_key,payload) VALUES(?,?,?) ON CONFLICT(link,event_key) DO UPDATE SET payload=excluded.payload',link.id,event.key,JSON.stringify(f)));
-    if(event.kind==='trade' || event.kind==='history') {
+    if(event.kind==='trade' || event.kind==='history' || event.kind==='lifecycle') {
       if(event.kind==='trade' && !/^(?:open|close)-\d+$/.test(event.key)) return fail('Invalid broker event key.');
       if(!limited(f.pair,80)||!['long','short'].includes(String(f.direction))||!['open','closed'].includes(String(f.status))||!timestamp(f.entry_time)||typeof f.pnl!=='number'||!Number.isFinite(f.pnl)||(f.status==='closed'&&!timestamp(f.exit_time))) return fail('Invalid trade.');
       const positive = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value > 0;
@@ -213,12 +217,12 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         || (f.status==='closed' && (!positive(f.exit_price) || Date.parse(String(f.exit_time))<Date.parse(String(f.entry_time))))
         || !validLevel(f.stop_loss) || !validLevel(f.take_profit)
         || (f.fees != null && (typeof f.fees!=='number'||!Number.isFinite(f.fees)))) return fail('Invalid broker fill price, size or costs.');
-      const allowed=['pair','direction','entry_price','exit_price','stop_loss','take_profit','lot_size','status','pnl','entry_time','exit_time','fees','broker_details','initial_risk'];
-      const data=Object.fromEntries(allowed.filter(k=>k in f).map(k=>[k,f[k]]));
-      Object.assign(data,{trade_source:'mt5',capture_mode:'live',account_id:link.account_id,user_id:device.owner,settlement_currency:link.currency,broker:link.company,outcome:f.status==='open'?null:f.pnl>0?'win':f.pnl<0?'loss':'breakeven'});
+      if(event.kind==='lifecycle' && (!/^position-\d+-\d+$/.test(event.key) || !validateCaptureMetrics(f.execution_metrics))) return fail('Invalid lifecycle capture.');
+      if(f.execution_metrics !== undefined && !validateCaptureMetrics(f.execution_metrics)) return fail('Invalid execution metrics.');
+      const data=capturePayload(f,device.owner,link);
       if(event.kind==='history'){
         const history=await q('SELECT history_id,history_status,linked_at,history_since FROM mt5_links WHERE id=?',link.id).first<{history_id:string;history_status:string;linked_at:string;history_since:number}>();
-        if(!history || !event.key.startsWith('history:'+history.history_id+':close-')
+        if(!history || !new RegExp('^history:'+history.history_id+':(?:close-\\d+|position-\\d+-\\d+)$').test(event.key)
           || history.history_status!=='requested' || f.status!=='closed'
           || Date.parse(String(f.exit_time))<history.history_since
           || Date.parse(String(f.exit_time))>=Date.parse(history.linked_at)
@@ -228,10 +232,14 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         statements[statements.length-1]=q('INSERT OR REPLACE INTO mt5_events(link,event_key,payload) VALUES(?,?,?)',link.id,event.key,JSON.stringify({...data,historical_import:true,outcome:Number(f.pnl)>0?'win':Number(f.pnl)<0?'loss':'breakeven'}));
         continue;
       }
+      if(event.kind==='lifecycle') {
+        statements.push(...await persistLifecycle(db,device.owner,link,event.key,data));
+        continue;
+      }
       const id=link.id+'/'+event.key;
       statements.push(q("INSERT INTO workspace_records(id,user_id,table_name,payload,created_at,updated_at) VALUES(?,?,'trades',?,?,?) ON CONFLICT(id) DO UPDATE SET payload=json_patch(workspace_records.payload,?),updated_at=excluded.updated_at WHERE workspace_records.user_id=excluded.user_id",id,device.owner,JSON.stringify({mistakes:[],pips:0,...data}),time,time,JSON.stringify(data)));
     } else if(event.kind==='retire' && /^open-\d+$/.test(event.key)) {
-      statements.push(q("DELETE FROM workspace_records WHERE id=? AND user_id=? AND table_name='trades' AND json_extract(payload,'$.status')='open'",link.id+'/'+event.key,device.owner));
+      statements.push(q("DELETE FROM workspace_records WHERE id=? AND user_id=? AND table_name='trades' AND json_extract(payload,'$.status')='open' AND json_extract(payload,'$.superseded_by') IS NULL",link.id+'/'+event.key,device.owner));
     } else if(event.kind!=='raw') return fail('Invalid capture kind.');
   }
   const balance = typeof input.balance === 'number' && Number.isFinite(input.balance) ? input.balance : null;

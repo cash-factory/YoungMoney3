@@ -1,3 +1,4 @@
+import { executionStats, formatHoldDuration } from './executionPresentation.ts';
 import type { Trade, PatternInsight, ComparisonData, DashboardStats } from './types';
 import {
   computeDashboardStats, groupByPair, groupByDayOfWeek, groupByDirection, groupBySession, groupByStrategy,
@@ -70,6 +71,10 @@ function buildSummary(stats: DashboardStats, trades: Trade[], periodType: string
     parts.push(`Best day: ${money(stats.bestDay.pnl)}, worst day: ${money(stats.worstDay.pnl)}.`);
   }
 
+  const execution=executionStats(trades);
+  if(execution.rCount) parts.push(`Average net realized R was ${execution.meanR!.toFixed(2)}R across ${execution.rCount} of ${execution.count} closed positions with known risk.`);
+  if(execution.durationCount) parts.push(`Average holding duration was ${formatHoldDuration(execution.meanDuration)} across ${execution.durationCount} positions.`);
+  if(execution.sessions.length) parts.push(`Recorded entry sessions were ${execution.sessions.map(([name,count])=>name+' ('+count+')').join(', ')}.`);
   return parts.join(' ');
 }
 
@@ -85,7 +90,7 @@ function buildSuggestions(trades: Trade[], stats: DashboardStats, money: MoneyFo
 
   // Risk-reward
   if (stats.avgRiskReward > 0 && stats.avgRiskReward < 1 && stats.totalTrades >= 5) {
-    suggestions.push('Your average risk-reward ratio is below 1:1. Even with a good win rate, this makes it hard to stay profitable. Aim for at least 1:2 R:R on new trades.');
+    suggestions.push('Your known-risk positions averaged below 1R after costs. Compare their planned targets, exits and trading costs in Execution analysis.');
   }
 
   // Emotional state patterns

@@ -43,6 +43,7 @@ class Query {
   private operation: 'select' | 'insert' | 'upsert' | 'update' | 'delete' = 'select';
   private payload: Row | Row[] | null = null;
   private head = false;
+  private includeSuperseded = false;
   private one = false;
   private maybe = false;
   private wantedOrder: { column: string; ascending?: boolean } | undefined;
@@ -51,7 +52,7 @@ class Query {
   private orFilter: string | undefined;
 
   constructor(private table: string) {}
-  select(columns = '*', options?: { count?: string; head?: boolean }) { void columns; this.head=!!options?.head; this.countRequested = !!options?.count; return this; }
+  select(columns = '*', options?: { count?: string; head?: boolean; includeSuperseded?:boolean }) { this.includeSuperseded=!!options?.includeSuperseded; void columns; this.head=!!options?.head; this.countRequested = !!options?.count; return this; }
   insert(value: Row | Row[]) { this.operation = 'insert'; this.payload = value; return this; }
   upsert(value: Row | Row[], options?: { onConflict?: string; ignoreDuplicates?: boolean }) { if(options && (options.ignoreDuplicates!==true || (options.onConflict!=='id' && !(this.table==='instrument_favorites' && options.onConflict==='user_id,instrument_id')))) throw new Error('Unsupported restore conflict policy.'); this.operation = 'upsert'; this.payload = value; return this; }
   update(value: Row) { this.operation = 'update'; this.payload = value; return this; }
@@ -93,7 +94,7 @@ class Query {
       membershipFilters: this.membershipFilters,
       or: this.orFilter,
       order: this.wantedOrder,
-      limit: this.rowLimit, head:this.head,
+      limit: this.rowLimit, head:this.head, includeSuperseded:this.includeSuperseded,
     };
     const result = await api('/api/data', query);
     if (this.operation==='select' && result.data && Array.isArray(result.data.data)) {

@@ -1,3 +1,4 @@
+import { getExecutionMetrics } from './executionMetrics';
 import type { Trade } from './types';
 
 export interface StrategyScore {
@@ -133,9 +134,9 @@ export function scoreStrategy(strategyName: string, trades: Trade[]): StrategySc
   const profitFactor = grossLoss === 0 ? (grossProfit > 0 ? Infinity : 0) : grossProfit / grossLoss;
 
   const expectancy = totalTrades > 0 ? pnl / totalTrades : 0;
-  const rrTrades = strategyTrades.filter(t => t.risk_reward_ratio != null);
+  const rrTrades = strategyTrades.map(getExecutionMetrics).map(metrics=>metrics.realized_r).filter((r):r is number=>r!=null);
   const avgRiskReward = rrTrades.length > 0
-    ? rrTrades.reduce((s, t) => s + (t.risk_reward_ratio || 0), 0) / rrTrades.length
+    ? rrTrades.reduce((sum,r)=>sum+r,0) / rrTrades.length
     : 0;
   const consistency = calcConsistency(strategyTrades);
 

@@ -1,3 +1,4 @@
+import {realizedExecutionEvents} from './executionMetrics.ts';
 import type { Trade } from './types.ts';
 
 export interface RiskMetricOptions {
@@ -61,12 +62,9 @@ export function calculateRiskMetrics(trades: Trade[], options: RiskMetricOptions
   const todayKey = dateKeyInTimeZone(now, options.timeZone) || dateKeyInTimeZone(now, 'UTC')!;
   const accountTrades = trades.filter(trade => trade.account_id === options.accountId);
   const enteredToday = accountTrades.filter(trade => dateKeyInTimeZone(trade.entry_time, options.timeZone) === todayKey);
-  const closedToday = accountTrades.filter(trade =>
-    trade.status === 'closed'
-    && trade.exit_time
-    && dateKeyInTimeZone(trade.exit_time, options.timeZone) === todayKey,
-  );
-  const todayPnl = closedToday.reduce((sum, trade) => sum + (Number.isFinite(trade.pnl) ? trade.pnl : 0), 0);
+  const realized = realizedExecutionEvents(accountTrades);
+  const todayPnl = realized.filter(event=>dateKeyInTimeZone(event.at,options.timeZone)===todayKey)
+    .reduce((sum,event)=>sum+event.pnl,0);
   const balance = Number.isFinite(options.accountBalance) && options.accountBalance > 0 ? options.accountBalance : 0;
   const percentageLimit = balance * Math.max(0, options.maxDailyLossPct) / 100;
   const absoluteLimit = options.maxDailyLossAmount;
@@ -76,9 +74,8 @@ export function calculateRiskMetrics(trades: Trade[], options: RiskMetricOptions
   const dailyLossUsed = Math.abs(Math.min(todayPnl, 0));
   const dailyLossPctUsed = dailyLossLimitAmount > 0 ? dailyLossUsed / dailyLossLimitAmount * 100 : 0;
 
-  const closedHistory = accountTrades
-    .filter(trade => trade.status === 'closed' && Number.isFinite(trade.pnl))
-    .sort((left, right) => new Date(left.exit_time || left.entry_time).getTime() - new Date(right.exit_time || right.entry_time).getTime());
+  const closedHistory = realized.map(event=>({pnl:event.pnl,at:event.at}))
+    .sort((a,b)=>Date.parse(a.at)-Date.parse(b.at));
 
   let runningPnl = 0;
   let peakPnl = 0;

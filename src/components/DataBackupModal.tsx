@@ -123,7 +123,7 @@ export function DataBackupModal({ open, onClose }: DataBackupModalProps) {
           else data[table] = (rows || []) as Record<string, unknown>[];
           continue;
         }
-        const { data: rows, error: queryError } = await supabase.from(table).select('*').eq('user_id', user.id);
+        const { data: rows, error: queryError } = await supabase.from(table).select('*',{includeSuperseded:table==='trades'}).eq('user_id', user.id);
         if (queryError) {
           data[table] = [];
           unavailableTables.push(table);

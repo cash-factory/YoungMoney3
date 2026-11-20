@@ -1,3 +1,5 @@
+import { ExecutionSummaryCards } from '@/components/ExecutionMetrics';
+import { simulatedExecutionTrade } from '@/lib/executionPresentation';
 import { useState } from 'react';
 import { ArrowRightCircle, Plus, Trash2, Save, Activity, TrendingUp, TrendingDown, Minus, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { ScreenshotUpload } from '@/components/ScreenshotUpload';
@@ -69,6 +71,10 @@ export function ForwardTestingPage() {
         }
       />
 
+      <div className="mb-5"><ExecutionSummaryCards trades={filtered.filter(trade=>trade.status!=='cancelled').map(trade=>simulatedExecutionTrade({
+        id:trade.id,pair:trade.instrument,direction:trade.direction,entry_time:trade.entry_time,exit_time:trade.exit_time,
+        status:trade.status==='closed'?'closed':'open',pnl:trade.pnl ?? 0,entry_price:trade.entry_price,exit_price:trade.exit_price,
+      }))} /></div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard label="Open Trades" value={String(openCount)} icon={<Activity size={20} />} accent="blue" />
         <StatCard label="Closed Trades" value={String(closedTrades.length)} icon={<CheckCircle2 size={20} />} accent="emerald" />

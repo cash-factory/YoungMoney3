@@ -20,7 +20,8 @@ from keyring.backends.Windows import WinVaultKeyring
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from ledger import closed_legs, iso
+from ledger import closed_legs, iso, position_lifecycles
+from metrics import ensure_capture_schema, capture_entry_risks, stored_risks, observe_stops, instrument_snapshot, add_current_exposure
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args):
@@ -126,10 +127,12 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
             keyring.delete_password(service,link)
             return
         with db: db.execute("UPDATE links SET verified=NULL WHERE link=?",(link,))
+    ensure_capture_schema(db)
     account=terminal_account(slot,int(login),server,keyring.get_password(service,link),verify_password=False)
     end=int(time.time()*1000)
     prior_clock=db.execute("SELECT offset FROM broker_clock WHERE link=?",(link,)).fetchone()
     offset=prior_clock[0] if prior_clock else 0
+    clock_known=prior_clock is not None
     candidates=records(mt5.positions_get())
     symbols=[p["symbol"] for p in candidates]
     if not symbols:
@@ -150,10 +153,12 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
             rounded=round(delta/900000)*900000
             if abs(delta-rounded)<30000 and abs(rounded)<=14*3600000:
                 offset=rounded
+                clock_known=True
                 with db: db.execute("INSERT OR REPLACE INTO broker_clock VALUES(?,?)",(link,offset))
                 break
     def normalize(rows):
-        return [{k:(v-offset if k.endswith("_msc") and v else v) for k,v in row.items()} for row in rows]
+        return [{**{k:(v-offset if k.endswith("_msc") and v else v) for k,v in row.items()},
+                 "broker_time_msc": row.get("time_msc"), "broker_offset_ms": offset} for row in rows]
 
     # Advance a bounded history window on every cycle while catching up.
     until=min(end,cursor+86400000)
@@ -169,47 +174,53 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
         for order in orders:
             if start<=max(order["time_done_msc"],order["time_setup_msc"])<=until:
                 enqueue(link,"raw","order-"+str(order["ticket"]),raw(order))
-        exits={d["position_id"] for d in deals if d["entry"] in (1,2,3) and d["type"] in (0,1) and start<=d["time_msc"]<=until}
-        for pid in exits:
+        current_positions={str(p["identifier"]): p for p in positions}
+        for position in positions:
+            observe_stops(db,link,position,end)
+        affected={d["position_id"] for d in deals if d["type"] in (0,1) and start<=d["time_msc"]<=until}
+        affected.update(int(pid) for pid in current_positions)
+        for pid in affected:
             position_orders={o["ticket"]:o for o in records(mt5.history_orders_get(position=pid))}
             position_deals=normalize(records(mt5.history_deals_get(position=pid)))
-            for leg in closed_legs(position_deals,start,position_orders):
-                previous_open=db.execute("SELECT payload FROM latest WHERE link=? AND key=?",(link,"open-"+str(pid))).fetchone()
-                if previous_open:
-                    previous_fields=json.loads(previous_open[0])["fields"]
-                    for level in ("stop_loss","take_profit"):
-                        leg["fields"][level]=leg["fields"].get(level) or previous_fields.get(level)
-                enqueue(link,leg["kind"],leg["key"],leg["fields"])
-        previous={row[0] for row in db.execute("SELECT key FROM latest WHERE link=? AND key LIKE 'open-%' AND json_extract(payload,'$.kind')='trade'",(link,))}
-        for p in positions:
-            ident=str(p["identifier"])
-            key="open-"+ident
-            previous.discard(key)
-            fields={"pair":p["symbol"],"direction":"long" if p["type"]==0 else "short","status":"open",
-                    "entry_time":iso(p["time_msc"]-offset),"entry_price":p["price_open"],"exit_price":None,"exit_time":None,
-                    "pnl":0,"lot_size":p["volume"],"stop_loss":p["sl"] or None,"take_profit":p["tp"] or None,
-                    "broker_details":{"position_id":ident,"ticket":str(p["ticket"]),"initial_risk_known":False}}
-            prior=db.execute("SELECT payload FROM latest WHERE link=? AND key=?",(link,key)).fetchone()
-            if prior:
-                old=json.loads(prior[0])["fields"]
-                if (old.get("stop_loss"),old.get("take_profit"))!=(fields["stop_loss"],fields["take_profit"]):
-                    enqueue(link,"raw",f"stops-{ident}-{end}",{"observed_at":iso(end),"sl":p["sl"],"tp":p["tp"]})
-            enqueue(link,"trade",key,fields)
-        for key in previous:
-            enqueue(link,"retire",key,{})
+            symbol=next((d["symbol"] for d in position_deals if d.get("symbol")),None)
+            if not symbol:
+                continue
+            def symbol_lookup(name):
+                value=mt5.symbol_info(name)
+                return value._asdict() if value else None
+            capture_entry_risks(db,link,position_deals,position_orders,current_positions,end,start,
+                                symbol_lookup,mt5.order_calc_profit,getattr(account,"currency",None),account.balance)
+            observations=[json.loads(row[0]) for row in db.execute(
+                "SELECT payload FROM execution_stops WHERE link=? AND position=? ORDER BY observed",(link,str(pid)))]
+            for lifecycle in position_lifecycles(position_deals,position_orders,stored_risks(db,link),
+                                                instrument_snapshot(symbol_lookup(symbol)),observations,
+                                                current_positions.get(str(pid)),
+                                                "inferred_offset" if clock_known else "unknown"):
+                add_current_exposure(lifecycle,current_positions.get(str(pid)),mt5.order_calc_profit)
+                fields=lifecycle["fields"]
+                metrics=fields["execution_metrics"]
+                if int(datetime.fromisoformat(fields["entry_time"]).timestamp()*1000)<start:
+                    metrics["position_open_at_link"]=True
+                    if any(int(datetime.fromisoformat(fill["time"]).timestamp()*1000)<start for fill in metrics["exits"]):
+                        metrics["completeness"].append("prelink_partial_history")
+                if fields["status"]=='open' or int(datetime.fromisoformat(fields["exit_time"]).timestamp()*1000)>=start:
+                    enqueue(link,'lifecycle',lifecycle['key'],fields)
+        # The Worker retires legacy open/close rows atomically when accepting a lifecycle.
         db.execute("UPDATE links SET cursor=?,last=?,gap=? WHERE link=?",(until,end,int(gap),link))
     # Acknowledged rows only. On restart, replay with unchanged broker ticket keys.
     for _ in range(5):
-        page=db.execute("SELECT seq,payload FROM outbox WHERE link=? ORDER BY seq LIMIT 24",(link,)).fetchall()
+        page=db.execute("SELECT seq,payload FROM outbox WHERE link=? ORDER BY seq LIMIT 4",(link,)).fetchall()
         active_history=db.execute("SELECT 1 FROM history_progress WHERE link=?",(link,)).fetchone()
         if not page and not gap and not active_history and end-heartbeats.get(link,0)<15000: break
         response=post("sync",{"link":link,"events":[json.loads(row[1]) for row in page],"balance":account.balance,"equity":account.equity,"gap":gap},token)
         heartbeats[link]=end
+        print("YM3_STATUS "+json.dumps({"state":"synced", "last_sync":int(time.time()*1000),
+                                      "account_suffix":str(login)[-4:]}),flush=True)
         with db:
             if page: db.execute("DELETE FROM outbox WHERE link=? AND seq<=?",(link,page[-1][0]))
             db.execute("UPDATE links SET gap=0 WHERE link=?",(link,))
         gap=False
-        if len(page)<24: break
+        if len(page)<4: break
 
     request=response.get("history") if "response" in locals() else None
     if request and request["status"]=="requested":
@@ -241,10 +252,23 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
             history=normalize(records(mt5.history_deals_get(position=int(pid))))
             orders={o["ticket"]:o for o in records(mt5.history_orders_get(position=int(pid)))}
             with db:
-                for leg in closed_legs(history,0,orders):
-                    if request["since"]<=int(datetime.fromisoformat(leg["fields"]["exit_time"]).timestamp()*1000)<start:
-                        leg["fields"]["historical_import"]=True
-                        enqueue(link,"history","history:"+request_id+":"+leg["key"],leg["fields"])
+                symbol=next((d["symbol"] for d in history if d.get("symbol")),None)
+                def history_symbol(name):
+                    value=mt5.symbol_info(name)
+                    return value._asdict() if value else None
+                capture_entry_risks(db,link,history,orders,{},end,start,history_symbol,
+                                    mt5.order_calc_profit,getattr(account,"currency",None),None)
+                observations=[json.loads(row[0]) for row in db.execute(
+                    "SELECT payload FROM execution_stops WHERE link=? AND position=? ORDER BY observed",(link,str(pid)))]
+                for lifecycle in position_lifecycles(history,orders,stored_risks(db,link),
+                                                    instrument_snapshot(history_symbol(symbol)) if symbol else None,
+                                                    observations,time_quality="historical_offset_unconfirmed"):
+                    if lifecycle["fields"]["status"]!='closed':
+                        continue
+                    closed_ms=int(datetime.fromisoformat(lifecycle["fields"]["exit_time"]).timestamp()*1000)
+                    if request["since"]<=closed_ms<start:
+                        lifecycle["fields"]["historical_import"]=True
+                        enqueue(link,"history","history:"+request_id+":"+lifecycle["key"],lifecycle["fields"])
                 db.execute("UPDATE history_work SET done=1 WHERE link=? AND request=? AND pid=?",
                            (link,request_id,pid))
         pending=db.execute("SELECT 1 FROM history_work WHERE link=? AND request=? AND done=0",
@@ -263,6 +287,8 @@ if __name__=="__main__":
     parser.add_argument("origin",help="HTTPS origin of your dashboard")
     parser.add_argument("slots",nargs="+",help="Full paths to dedicated portable MT5 terminal64.exe copies")
     parser.add_argument("--pair",action="store_true")
+    parser.add_argument("--pair-code-stdin",action="store_true",help=argparse.SUPPRESS)
+    parser.add_argument("--stop-file",help=argparse.SUPPRESS)
     parser.add_argument("--sync-once",action="store_true",help="Reconcile saved accounts once, then exit")
     args=parser.parse_args()
     origin=args.origin.rstrip("/")
@@ -278,7 +304,7 @@ if __name__=="__main__":
     if args.pair:
         private=rsa.generate_private_key(public_exponent=65537,key_size=2048)
         pub=private.public_key().public_bytes(serialization.Encoding.DER,serialization.PublicFormat.SubjectPublicKeyInfo)
-        code=getpass.getpass("Website pairing code: ").strip().lower()
+        code=(sys.stdin.readline() if args.pair_code_stdin else getpass.getpass("Website pairing code: ")).strip().lower()
         if len(code)!=32 or any(c not in "0123456789abcdef" for c in code):
             sys.exit("Copy the full 32-character code from Account settings > Pair a PC.")
         try:
@@ -310,12 +336,14 @@ if __name__=="__main__":
         CREATE TABLE IF NOT EXISTS outbox(seq INTEGER PRIMARY KEY,link TEXT,payload TEXT);
         CREATE INDEX IF NOT EXISTS outbox_link ON outbox(link,seq);
     """)
+    ensure_capture_schema(db)
     next_poll=0
     heartbeats={}
     failures=0
     print("Connector running. Keep this window open. Press Ctrl+C to exit.")
     try:
         while True:
+            if args.stop_file and Path(args.stop_file).exists(): break
             failed=False
             try:
                 if not args.sync_once and time.monotonic()>=next_poll:
@@ -326,6 +354,7 @@ if __name__=="__main__":
                 failed=True
                 print("Pairing service unavailable:",type(exc).__name__,flush=True)
             for row in db.execute("SELECT * FROM links").fetchall():
+                if args.stop_file and Path(args.stop_file).exists(): break
                 try: scan(*row)
                 except Exception as exc:
                     failed=True
@@ -335,7 +364,10 @@ if __name__=="__main__":
                 if failed: sys.exit(1)
                 break
             failures=min(failures+1,5) if failed else 0
-            time.sleep(min(60,2**(failures+1)))
+            pause_until=time.monotonic()+min(60,2**(failures+1))
+            while time.monotonic()<pause_until:
+                if args.stop_file and Path(args.stop_file).exists(): break
+                time.sleep(0.25)
     except KeyboardInterrupt:
         mt5.shutdown()
 

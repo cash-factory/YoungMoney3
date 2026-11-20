@@ -2,7 +2,8 @@ from pathlib import Path
 from zipfile import ZipFile
 
 root=Path(__file__).resolve().parent.parent
-mapping={'README.md':'connector/README.md','connect.py':'connector/connect.py','ledger.py':'connector/ledger.py','requirements.txt':'connector/requirements.txt'}
+names=['README.md','connect.py','ledger.py','metrics.py','desktop.py','app_runtime.py','requirements.txt','requirements-build.txt','requirements-build.lock.txt','YoungMoney3.spec','build.ps1']
+mapping={name:'connector/'+name for name in names}
 with ZipFile(root/'public/mt5-connector.zip') as archive:
     assert archive.testzip() is None, 'Connector ZIP is corrupt'
     assert set(archive.namelist()) == set(mapping), 'Connector ZIP contents differ from supported package'

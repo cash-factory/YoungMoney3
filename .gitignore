@@ -27,3 +27,11 @@ __pycache__/
 
 # Generated staging config contains deployment account resource IDs
 wrangler.staging.jsonc
+
+# Local executable build output
+connector/build/
+
+
+# Generated Windows download assets
+public/downloads/*.part
+public/downloads/connector-manifest.json
