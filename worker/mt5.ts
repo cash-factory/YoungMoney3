@@ -385,7 +385,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     return json({ job: claimed.meta.changes ? {id:job.id,envelope:JSON.parse(job.envelope)} : null });
   }
   if (!limited(input.link,64)) return fail('Missing link.');
-  const link=await q('SELECT * FROM mt5_links WHERE id=? AND device=?',input.link,device.id).first<{id:string;account_id:string;status:string;currency:string;company:string;expires:number;trade_mode:number|null;monitoring_paused:number}>();
+  const link=await q('SELECT * FROM mt5_links WHERE id=? AND device=?',input.link,device.id).first<{id:string;account_id:string;status:string;currency:string;company:string;expires:number;trade_mode:number|null;monitoring_paused:number;linked_at:string}>();
   if (!link) return fail('Unknown link.',404);
   if (action === 'device/history-anchor') {
     if(!limited(input.request,64)) return fail('Missing history request.');
