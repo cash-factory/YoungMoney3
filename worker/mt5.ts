@@ -134,18 +134,23 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         COUNT(*) AS count,
         SUM(CASE WHEN r.classification IN ('external_deposit','external_withdrawal')
           THEN CAST(c.amount AS REAL) ELSE 0 END) AS reviewed_external_net,
+        SUM(CASE WHEN r.classification IN ('external_deposit','external_withdrawal','internal_transfer','broker_adjustment')
+          THEN CAST(c.amount AS REAL) ELSE 0 END) AS reviewed_nontrading_net,
         SUM(CASE WHEN r.classification IS NULL OR r.classification='unresolved' THEN 1 ELSE 0 END) AS unresolved
         FROM mt5_cash_movements c LEFT JOIN mt5_cash_reviews r
           ON r.link=c.link AND r.ticket=c.ticket AND r.owner=c.owner
         WHERE c.link=? AND c.owner=? AND c.broker_time_msc>=?`,
         account.id,owner,baselineAt)
-        .first<{count:number;reviewed_external_net:number|null;unresolved:number|null}>();
+        .first<{count:number;reviewed_external_net:number|null;reviewed_nontrading_net:number|null;unresolved:number|null}>();
       const pending=sinceBaseline?.unresolved??null;
       const externalNet=sinceBaseline?.reviewed_external_net??0;
+      // Internal transfers and broker adjustments change cash, not trade P&L.
+      // Preserve external-only net independently for statement reconciliation.
+      const nonTradingNet=sinceBaseline?.reviewed_nontrading_net??0;
       const deltaBalance=account.broker_balance===null||account.performance_baseline_balance===null
-        ?null:account.broker_balance-account.performance_baseline_balance-externalNet;
+        ?null:account.broker_balance-account.performance_baseline_balance-nonTradingNet;
       const deltaEquity=account.broker_equity===null||account.performance_baseline_equity===null
-        ?null:account.broker_equity-account.performance_baseline_equity-externalNet;
+        ?null:account.broker_equity-account.performance_baseline_equity-nonTradingNet;
       const cashIn=totals?.incoming??0,cashOut=totals?.outgoing??0;
       const netCash=cashIn+cashOut;
       const fullyScanned=Boolean(account.cash_history_completed_at);
@@ -162,14 +167,14 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
             baselineAt:account.performance_baseline_at,
             openingBalance:account.performance_baseline_balance,
             openingEquity:account.performance_baseline_equity,
-            reviewedExternalNet:externalNet,
+            reviewedExternalNet:externalNet,reviewedNonTradingNet:nonTradingNet,
             unresolvedMovements:pending,reviewedCount:sinceBaseline?.count??null,
             deltaBalance:pending===0?deltaBalance:null,
             deltaEquity:pending===0?deltaEquity:null,
             status:baselineAt===null?'awaiting_baseline':pending!==0?'review_required':
               account.gap?'capture_gap':account.utc_conversion_status!=='confirmed'?'timezone_unverified':'indicative',
             independentlyVerified:false,
-            basis:'Change since first observed snapshot, less owner-attested external movements. Not verified lifetime P&L.'
+            basis:'Change since first observed snapshot, less owner-attested deposits, withdrawals, internal transfers and broker adjustments. Not verified lifetime P&L.'
           },
           // A DEAL_TYPE_BALANCE credit may be a broker correction; neither this
           // nor subtracting cash flow proves profit since account inception.
