@@ -286,6 +286,37 @@ try {
     'An immutable broker ticket must not silently mutate on replay');
   const rawCount=await db.prepare('SELECT COUNT(*) AS count FROM mt5_raw_evidence WHERE link=?').bind(link).first();
   assert.equal(rawCount.count,1);
+  // Cash transfers are detected from raw immutable MT5 DEAL_TYPE_BALANCE
+  // history, including deals predating the pairing. They are NOT trade P&L.
+  const cashTime=Date.now()-12*86400000;
+  const deposit={ticket:900001,type:2,time_msc:cashTime,profit:1250,comment:'Sample balance credit'};
+  const withdrawal={ticket:900002,type:2,time_msc:cashTime+1000,profit:-325,comment:'Sample balance debit'};
+  const bonus={ticket:900003,type:6,time_msc:cashTime+2000,profit:100};
+  const cashEvents=[deposit,withdrawal,bonus].map(d=>({kind:'raw',key:'deal-'+d.ticket,fields:d}));
+  assert.equal((await device('sync',{link,events:cashEvents})).status,200);
+  assert.equal((await device('sync',{link,events:cashEvents})).status,200);
+  let cashResult=await call('mt5/cash-movements',{link});
+  assert.equal(cashResult.status,200);
+  let cash=(await cashResult.json());
+  assert.equal(cash.rows.length,2,'Broker credits/bonuses must not be silently called deposits');
+  assert.equal(cash.summary.incoming,1250);
+  assert.equal(cash.summary.outgoing,325);
+  assert.equal(cash.summary.netCashFlow,925);
+  assert.equal(cash.summary.externalFlowsVerified,false);
+  assert.equal(cash.summary.overallProfitVerified,false);
+  assert.equal(cash.summary.scanStatus,'not_started');
+  const oldRaw=await device('sync',{link,events:[{kind:'raw',key:'deal-900001',fields:{...deposit,profit:2000}}]});
+  assert.equal(oldRaw.status,409,'Existing broker balance evidence cannot be changed');
+  assert.equal((await device('sync',{link,events:[],cashScan:{cursor:-1,complete:false}})).status,400);
+  assert.equal((await device('sync',{link,events:[],cashScan:{cursor:0,complete:false}})).status,200);
+  cash=(await (await call('mt5/cash-movements',{link})).json());
+  assert.equal(cash.summary.scanStatus,'scanning');
+  assert.equal((await device('sync',{link,events:[],cashScan:{cursor:0,complete:true}})).status,200);
+  cash=(await (await call('mt5/cash-movements',{link})).json());
+  assert.equal(cash.summary.scanStatus,'epoch_scanned');
+  assert.equal(cash.rows[0].ticket,'900002');
+  assert.equal((await call('mt5/cash-movements',{link:'not-a-real-link'})).status,404);
+
   const projected={
     calculation_version:1,lifecycle_id:'789:0',position_id:'789',symbol:'EURUSD',
     direction:'long',status:'closed',

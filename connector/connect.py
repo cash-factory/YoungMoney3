@@ -386,12 +386,26 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
         for pid in sorted({str(p["identifier"]) for p in positions}|{str(pid) for pid in exits}):
             lifecycle_projection(link,pid,end,start,settings)
         db.execute("UPDATE links SET cursor=?,last=?,gap=? WHERE link=?",(until,end,int(gap),link))
+    # Independently collect earlier cash movements without waiting for a
+    # user-triggered trade-history import. The checkpoint survives restarts.
+    # A failed broker query must not block live trade capture.
+    try:
+        from cash_history import backfill
+        cash_scan=backfill(db,link,start,offset,mt5,enqueue,raw)
+    except (RuntimeError, OSError, ValueError, OverflowError):
+        cash_scan=None
     # Acknowledged rows only. On restart, replay with unchanged broker ticket keys.
     for _ in range(5):
         page=db.execute("SELECT seq,payload FROM outbox WHERE link=? ORDER BY seq LIMIT 24",(link,)).fetchall()
         active_history=db.execute("SELECT 1 FROM history_progress WHERE link=?",(link,)).fetchone()
         if not page and not gap and not active_history and end-heartbeats.get(link,0)<15000: break
-        response=post("sync",{"link":link,"events":[json.loads(row[1]) for row in page],"balance":account.balance,"equity":account.equity,"gap":gap},token)
+        payload={"link":link,"events":[json.loads(row[1]) for row in page],
+                 "balance":account.balance,"equity":account.equity,"gap":gap}
+        # A scan checkpoint is acknowledged only with its last outbox page,
+        # after all earlier cash deal evidence is in-flight or acknowledged.
+        if cash_scan is not None and len(page)<24:
+            payload["cashScan"]=cash_scan
+        response=post("sync",payload,token)
         if isinstance(response.get("preferences"),dict):
             timezone_cache[link]=response["preferences"]
         if response.get("synced_at"):
@@ -549,6 +563,7 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
         CREATE TABLE IF NOT EXISTS capital_snapshots(link TEXT,at_ms INTEGER,equity TEXT,balance TEXT,PRIMARY KEY(link,at_ms));
         CREATE TABLE IF NOT EXISTS history_seed(link TEXT,request TEXT,PRIMARY KEY(link,request));
         CREATE TABLE IF NOT EXISTS history_progress(link TEXT PRIMARY KEY,request TEXT,cursor INTEGER);
+        CREATE TABLE IF NOT EXISTS cash_history_scan(link TEXT PRIMARY KEY,cursor INTEGER,complete INTEGER NOT NULL DEFAULT 0);
         CREATE TABLE IF NOT EXISTS history_anchor_scan(link TEXT PRIMARY KEY,request TEXT,cursor INTEGER,candidate_at INTEGER,candidate_ticket TEXT,candidate_amount REAL);
         CREATE TABLE IF NOT EXISTS history_work(link TEXT,request TEXT,pid TEXT,done INTEGER,PRIMARY KEY(link,request,pid));
         CREATE TABLE IF NOT EXISTS latest(link TEXT,key TEXT,payload TEXT,PRIMARY KEY(link,key));

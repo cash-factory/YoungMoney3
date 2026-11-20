@@ -32,12 +32,15 @@ import { LoadingSpinner } from '@/components/ui/Feedback';
 import { supabase } from '@/lib/supabase';
 import '@/decision-studio.css';
 import '@/trading-semantic.css';
+import '@/connection-hub.css';
+import '@/experience-refined.css';
 import type { FastCapture } from '@/components/DecisionDesk';
 import { SampleReplay } from '@/components/DecisionReplay';
 import { QuickCaptureModal } from '@/components/QuickCaptureModal';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { reportDataError } from '@/lib/recovery';
 import { Mt5Connections } from '@/components/Mt5Connections';
+import { ActionFeedbackHost } from '@/lib/actionFeedback';
 import { PlatformGuide } from '@/components/PlatformGuide';
 import { guideShouldWelcome, writeGuideState } from '@/lib/platformGuide';
 
@@ -196,6 +199,7 @@ function App() {
       <AuthProvider>
         <AppErrorBoundary>
           <AppContent />
+          <ActionFeedbackHost />
         </AppErrorBoundary>
       </AuthProvider>
     </ThemeProvider>

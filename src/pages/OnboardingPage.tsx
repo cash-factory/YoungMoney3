@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Plus, Target, ArrowRight, Check, Sparkles, Wallet, ListChecks, Trash2, ChevronRight, Loader2, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { BrandLogo } from '@/components/BrandLogo';
+import { announceAction } from '@/lib/actionFeedback';
 import { supabase } from '@/lib/supabase';
 import '@/onboarding-studio.css';
 import { useStrategies, useStrategyChecklist, useRiskSettings } from '@/hooks/useData';
@@ -78,9 +79,12 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
         daily_loss_limit_amount: settings?.daily_loss_limit_amount ?? null,
       });
       setSavingAccount(false);
+      announceAction('success','Planning balance and risk defaults saved.');
       return true;
     } catch (err: unknown) {
-      setError(err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to save account settings.');
+      const message=err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to save account settings.';
+      setError(message);
+      announceAction('error',message);
       setSavingAccount(false);
       return false;
     }
@@ -100,6 +104,7 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
       if (checklistError) throw checklistError;
       setStrategyName('');
       setStrategyDesc('');
+      announceAction('success','Strategy created with its starter checklist.');
     } catch (err: unknown) {
       setError(err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to add strategy.');
     }
@@ -109,6 +114,7 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
   const handleDeleteStrategy = async (id: string) => {
     try {
       await deleteStrategy(id);
+      announceAction('success','Strategy removed.');
       if (selectedStrategyId === id) {
         const remaining = strategies.filter(s => s.id !== id);
         setSelectedStrategyId(remaining.length > 0 ? remaining[0].id : null);
@@ -125,6 +131,7 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
       await addItem(newChecklistLabel.trim(), newChecklistRequired);
       setNewChecklistLabel('');
       setNewChecklistRequired(true);
+      announceAction('success','Checklist item saved.');
     } catch (err: unknown) {
       setError(err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to add checklist item.');
     }
@@ -134,6 +141,7 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
   const handleDeleteChecklistItem = async (id: string) => {
     try {
       await deleteItem(id);
+      announceAction('success','Checklist item removed.');
     } catch (err: unknown) {
       setError(err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to delete checklist item.');
     }
@@ -168,8 +176,7 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
               </li>;
             })}
           </ol>
-          <div className="ym-setup-guide-art" aria-hidden="true"><img src="/assets/page-art/workspace-setup.svg" alt="" width="960" height="540" /></div>
-          <p className="ym-setup-guide-note">Keep it simple to start. You can refine these settings as your process develops.</p>
+          <details className="ym-setup-guide-help"><summary>Why these steps?</summary><p>Each step establishes a practical default. You can change your risk, strategies and checklists later.</p></details>
         </aside>
 
         <section className="ym-setup-panel card" aria-label={`${STEPS[step].title} setup`}>
@@ -177,7 +184,11 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
           {step === 0 && <div className="ym-setup-stage">
             <p className="ym-setup-step-label">STEP 01 / WELCOME</p>
             <h2 ref={stepHeading} tabIndex={-1}>Build your trading foundation.</h2>
-            <p className="ym-setup-lead">Set a planning balance, define a strategy and give every trade a checklist to follow.</p>
+            <p className="ym-setup-lead">Four short steps. Your trading process stays yours.</p>
+            <figure className="ym-setup-feature-media" aria-label="Illustration of a structured trading workspace">
+              <img src="/assets/page-art/workspace-setup.svg" alt="Decorative trading workstation composition" width="960" height="540" loading="eager"/>
+              <figcaption><strong>YOUR WORKSPACE</strong><span>Risk · Strategy · Review</span></figcaption>
+            </figure>
             <div className="ym-setup-welcome-list">
               <div><span><Wallet size={20} /></span><div><h3>Start with your capital</h3><p>Anchor your workspace risk defaults.</p></div></div>
               <div><span><Target size={20} /></span><div><h3>Name your approach</h3><p>Keep the strategies you trade close at hand.</p></div></div>
@@ -189,7 +200,7 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
           {step === 1 && <div className="ym-setup-stage">
             <p className="ym-setup-step-label">STEP 02 / RISK BASELINE</p>
             <h2 ref={stepHeading} tabIndex={-1}>Set your planning balance.</h2>
-            <p className="ym-setup-lead">This balance anchors your workspace risk calculations. Account balances and broker connections are managed separately in Accounts.</p>
+            <p className="ym-setup-lead">Used for planning risk—not a live broker balance.</p><div className="ym-setup-helper-trigger"><details><summary>How does this work?</summary><p>Connected account equity and broker balances are tracked separately. Update your planning balance here when your risk baseline changes.</p></details></div>
             <div className="ym-setup-fields">
               <div><label htmlFor="setup-account-balance" className={labelCls}>Planning balance (USD)</label><div className="ym-setup-balance-input"><span aria-hidden="true">$</span><input id="setup-account-balance" type="number" step="100" min="0.01" className={inputCls} value={accountBalance} onChange={event => { setBalanceEdited(true); setAccountBalance(event.target.value); }} onKeyDown={event => { if (event.key === 'Enter' && !savingAccount && !loadingSettings) void handleSaveAccount().then(ok => ok && goToStep(2)); }} /></div></div>
               <div className="ym-setup-risk-preview"><div><ShieldCheck size={17} /><strong>{settings ? 'Your current risk settings' : 'Starting risk defaults'}</strong></div><dl><div><dt>Risk per trade · {riskPerTrade}%</dt><dd>${((parseFloat(accountBalance) || 0) * riskPerTrade / 100).toFixed(0)}</dd></div><div><dt>Daily loss limit · {dailyLoss}%</dt><dd>${((parseFloat(accountBalance) || 0) * dailyLoss / 100).toFixed(0)}</dd></div></dl><p>You can adjust these limits in Risk Management.</p></div>

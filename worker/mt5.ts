@@ -58,10 +58,48 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if (owner) {
     if (action === 'status') {
       const devices = await q('SELECT id,pc_name,public_key,last_seen,setup_state,connector_version FROM mt5_devices WHERE owner=? AND revoked=0 AND public_key IS NOT NULL', owner).all();
-      const links = await q('SELECT l.device,l.monitoring_paused,l.retry_requested_at,l.capture_health,l.id,l.account_id,l.status,l.company,l.server,l.login,l.access_level,l.trade_mode,l.history_id,l.history_status,l.history_since,l.history_authorized_since,l.history_mode,l.history_anchor_at,l.history_anchor_ticket,l.history_anchor_amount,l.history_scanned_until,l.last_sync,l.broker_balance,l.broker_equity,l.currency,l.gap,l.last_error,l.expires,l.broker_timezone,l.timezone_confirmed_at,l.timezone_source,l.utc_conversion_status FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND d.revoked=0', owner).all();
+      const links = await q('SELECT l.device,l.monitoring_paused,l.retry_requested_at,l.capture_health,l.id,l.account_id,l.status,l.company,l.server,l.login,l.access_level,l.trade_mode,l.history_id,l.history_status,l.history_since,l.history_authorized_since,l.history_mode,l.history_anchor_at,l.history_anchor_ticket,l.history_anchor_amount,l.history_scanned_until,l.cash_history_cursor,l.cash_history_completed_at,l.last_sync,l.broker_balance,l.broker_equity,l.currency,l.gap,l.last_error,l.expires,l.broker_timezone,l.timezone_confirmed_at,l.timezone_source,l.utc_conversion_status FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND d.revoked=0', owner).all();
       const accounts=await q("SELECT id,json_extract(payload,'$.name') AS name FROM workspace_records WHERE user_id=? AND table_name='trading_accounts' ORDER BY created_at",owner).all();
       const states=await Promise.all(links.results.map(async link=>({...link,pending_reviews:(await remainingReviews(String(link.id)))?.n??0})));
       return json({ accounts:accounts.results, devices: devices.results, links: states, demoOnly: env.MT5_ALLOW_LIVE !== 'true', capturePaused: await capturePaused() });
+    }
+    if (action === 'cash-movements') {
+      if(!limited(input.link,64)) return fail('Select a linked broker account.');
+      const account=await q(`SELECT l.id,l.currency,l.broker_balance,l.broker_equity,l.linked_at,
+        l.cash_history_cursor,l.cash_history_completed_at
+        FROM mt5_links l JOIN mt5_devices d ON d.id=l.device
+        WHERE l.id=? AND d.owner=? AND d.revoked=0 AND l.status='connected'`,
+        input.link,owner).first<{id:string;currency:string;broker_balance:number|null;
+        broker_equity:number|null;linked_at:string;cash_history_cursor:number|null;cash_history_completed_at:string|null}>();
+      if(!account) return fail('Linked broker account unavailable.',404);
+      const offset=Number(input.offset??0);
+      if(!Number.isSafeInteger(offset)||offset<0||offset>100000) return fail('Invalid cash ledger page.');
+      const page=await q(`SELECT ticket,amount,currency,direction,classification,broker_time_msc,
+         recorded_at FROM mt5_cash_movements WHERE link=? AND owner=?
+         ORDER BY broker_time_msc DESC,ticket DESC LIMIT 51 OFFSET ?`,
+         account.id,owner,offset).all();
+      const totals=await q(`SELECT COUNT(*) AS count,
+         SUM(CASE WHEN direction='in' THEN CAST(amount AS REAL) ELSE 0 END) AS incoming,
+         SUM(CASE WHEN direction='out' THEN CAST(amount AS REAL) ELSE 0 END) AS outgoing
+         FROM mt5_cash_movements WHERE link=? AND owner=?`,account.id,owner)
+         .first<{count:number;incoming:number|null;outgoing:number|null}>();
+      const cashIn=totals?.incoming??0,cashOut=totals?.outgoing??0;
+      const netCash=cashIn+cashOut;
+      const fullyScanned=Boolean(account.cash_history_completed_at);
+      return json({
+        link:account.id,currency:account.currency,rows:page.results.slice(0,50),
+        nextOffset:offset+Math.min(50,page.results.length),more:page.results.length>50,
+        summary:{count:totals?.count??0,incoming:cashIn,outgoing:Math.abs(cashOut),
+          netCashFlow:netCash,brokerBalance:account.broker_balance,brokerEquity:account.broker_equity,
+          cashAdjustedBalance:account.broker_balance==null?null:account.broker_balance-netCash,
+          cashAdjustedEquity:account.broker_equity==null?null:account.broker_equity-netCash,
+          scanStatus:fullyScanned?'epoch_scanned':account.cash_history_cursor==null?'not_started':'scanning',
+          cursor:account.cash_history_cursor,scanCompletedAt:account.cash_history_completed_at,
+          // A DEAL_TYPE_BALANCE credit may be a broker correction; neither this
+          // nor subtracting cash flow proves profit since account inception.
+          externalFlowsVerified:false, overallProfitVerified:false,
+          methodology:'Balance operations include potential deposits, withdrawals and corrections. Confirm against broker statements. Cash-adjusted values are not verified lifetime P&L.'}
+      });
     }
     if (action === 'set-monitoring') return setMonitoring(owner);
     if (action === 'rename-pc') {
@@ -473,6 +511,20 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         return fail('Broker evidence changed for an existing ticket. Import halted; an audited correction is required.',409);
       statements.push(q('INSERT OR IGNORE INTO mt5_raw_evidence(link,owner,account_id,event_key,evidence_kind,payload,sha256,recorded_at) VALUES(?,?,?,?,?,?,?,?)',
         link.id,device.owner,link.account_id,event.key,evidenceKind,payload,sha,time));
+      if(evidenceKind==='deal' && Number(f.type)===2 && /^deal-\d+$/.test(event.key)) {
+        // MT5 DEAL_TYPE_BALANCE = 2, which also includes broker adjustments.
+        // Save cash direction only. Never certify external deposit/withdrawal.
+        const amount=Number(f.profit),at=Number(f.time_msc??Number(f.time)*1000);
+        const ticket=String(f.ticket??'');
+        if(!/^\d+$/.test(ticket) || event.key!=='deal-'+ticket ||
+           !Number.isSafeInteger(at) || at<=0 || !Number.isFinite(amount) ||
+           Math.abs(amount)>1e13) return fail('Invalid broker balance movement.');
+        if(amount!==0) statements.push(q(`INSERT OR IGNORE INTO mt5_cash_movements
+          (link,owner,account_id,ticket,amount,currency,direction,broker_time_msc,raw_evidence_key,raw_sha256,recorded_at)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+          link.id,device.owner,link.account_id,ticket,String(amount),link.currency,
+          amount>0?'in':'out',at,event.key,sha,time));
+      }
     }
     if(event.kind==='lifecycle') {
       if(!/^lifecycle:\d+:\d+$/.test(String(event.key)) || f.calculation_version!==1
@@ -541,6 +593,19 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     if(equity!==null) { snapshot.broker_equity=equity; snapshot.broker_equity_at=now(); }
     const patch=JSON.stringify(snapshot);
     statements.push(q("UPDATE workspace_records SET payload=json_patch(payload,?),updated_at=? WHERE id=? AND user_id=? AND table_name='trading_accounts'",patch,now(),link.account_id,device.owner));
+  }
+  if(input.cashScan!==undefined) {
+    if(!isObject(input.cashScan) || (typeof input.cashScan.cursor!=='number' || !Number.isSafeInteger(input.cashScan.cursor)) ||
+       Number(input.cashScan.cursor)<0 ||
+       Number(input.cashScan.cursor)>Date.parse(String(link.linked_at)) ||
+       typeof input.cashScan.complete!=='boolean' ||
+       (input.cashScan.complete && input.cashScan.cursor!==0)) return fail('Invalid broker cash scan checkpoint.');
+    statements.push(q(`UPDATE mt5_links SET cash_history_cursor=CASE
+      WHEN cash_history_cursor IS NULL OR cash_history_cursor>? THEN ?
+      ELSE cash_history_cursor END,
+      cash_history_completed_at=CASE WHEN ?=1 THEN COALESCE(cash_history_completed_at,?) ELSE cash_history_completed_at END
+      WHERE id=?`,input.cashScan.cursor,input.cashScan.cursor,
+      Number(input.cashScan.complete),now(),link.id));
   }
   if(input.history_done) statements.push(q("UPDATE mt5_links SET history_status='ready' WHERE id=? AND history_id=? AND history_status='requested'",link.id,input.history_done));
   await db.batch(statements);
