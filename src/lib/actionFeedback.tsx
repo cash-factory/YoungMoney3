@@ -43,7 +43,7 @@ export function ActionFeedbackHost() {
     {messages.map(item=><div key={item.id} className="ym-feedback-toast" data-tone={item.tone}
       role={item.tone==='error'?'alert':'status'}>
       <span className="ym-feedback-toast-icon">{item.tone==='success'?<CheckCircle2 size={18}/>:item.tone==='error'||item.tone==='warning'?<AlertTriangle size={18}/>:<Info size={18}/>}</span>
-      <p>{item.message}</p>
+      <div className="ym-feedback-toast-body"><strong>{item.tone==='success'?'Saved successfully':item.tone==='error'?'Action unsuccessful':item.tone==='warning'?'Needs attention':'Update'}</strong><p>{item.message}</p></div>
       <button type="button" aria-label="Dismiss notification" onClick={()=>setMessages(previous=>previous.filter(x=>x.id!==item.id))}><X size={17}/></button>
     </div>)}
   </div>;

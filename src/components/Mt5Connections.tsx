@@ -95,9 +95,12 @@ export function Mt5Connections() {
     try {
       setError('');
       await operation();
-      await refresh();
       setFeedback({kind:'success',message:success});
       announceAction('success',success);
+      try { await refresh(); } catch {
+        setFeedback({kind:'info',message:'Change saved, but account details could not refresh. Retry shortly.'});
+        announceAction('warning','Change saved; the latest account details could not be fetched.');
+      }
     } catch (e) {
       const message=e instanceof Error?e.message:'Request failed. Please try again.';
       setError(message);
@@ -155,12 +158,13 @@ export function Mt5Connections() {
           }}>Pair another PC</button>
         </div>
       </header>
-      {code && <div className="ym-connection-code" role="status"><span>Enter this code in your connector within five minutes</span><strong className="select-all">{code}</strong><button type="button" className="btn-secondary" onClick={()=>{void navigator.clipboard.writeText(code);announceAction('info','Pairing code copied.');}}>Copy code</button></div>}
+      {code && <div className="ym-connection-code" role="status"><span>Enter this code in your connector within five minutes</span><strong className="select-all">{code}</strong><button type="button" className="btn-secondary" onClick={()=>{void navigator.clipboard.writeText(code).then(()=>announceAction('success','Pairing code copied.')).catch(()=>announceAction('error','Clipboard unavailable. Select and copy the code manually.'));}}>Copy code</button></div>}
       {loaded && !devices.length && <div className="ym-connection-empty"><Laptop size={27}/><strong>No paired computers yet</strong><p>Install the connector, then pair this computer once.</p></div>}
       <div className="ym-selectable-stack" role="list" aria-label="Select a paired PC">
         {devices.map(d=>{
           const online=pcOnline(d);
-          const count=links.filter(l=>l.device===d.id&&l.status==='connected').length;
+          const deviceLinks=activeLinks.filter(l=>l.device===d.id);
+          const count=deviceLinks.filter(l=>l.status==='connected').length;
           const expanded=selectedPcId===d.id;
           return <div key={d.id} role="listitem" className="ym-selectable-card" data-selected={expanded}>
             <button type="button" aria-expanded={expanded} aria-controls={'ym-pc-details-'+d.id} className="ym-selectable-trigger" onClick={()=>{setSelectedPcId(expanded?null:d.id);setSelectedAccountId(null);setEditingPc(null);}}>
@@ -183,7 +187,23 @@ export function Mt5Connections() {
                   <button type="button" className="btn-secondary" onClick={()=>{if(window.confirm('Unpair '+pairedPcName(d)+'? This revokes its connected broker sessions. Do not unpair the PC currently capturing your trades.'))void run(()=>action('revoke',{device:d.id}),'PC unpaired. Historical trade evidence was retained.','revoke-pc');}}>Unpair PC</button>
                 </div>}
               <details className="ym-context-help"><summary><CircleHelp size={15}/>Connection and safety details</summary><p>Use Add broker account to connect more logins without pairing again. Unpairing revokes monitoring for accounts on this PC. An offline PC retains its saved pairing; reopen the Windows connector on that computer.</p><div className="ym-connection-actions"><a href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.2-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer">Download Windows Connector</a><a href="/connector-download.html">Release details and checksum</a></div></details>
-              {count>0 && <button type="button" className="ym-select-account-jump" onClick={()=>document.getElementById('ym-linked-accounts')?.scrollIntoView({behavior:'smooth',block:'start'})}>Manage this PC's {count} linked {count===1?'account':'accounts'} <ArrowRight size={15}/></button>}
+              <div className="ym-pc-accounts">
+                <div className="ym-pc-accounts-header"><strong>Accounts on this PC</strong><span className="ym-section-count">{deviceLinks.length}</span></div>
+                {deviceLinks.length?deviceLinks.map(link=>{
+                  const accountStatus=monitoringStatus(link,d,capturePaused);
+                  return <button type="button" className="ym-pc-account-link" key={link.id}
+                    onClick={()=>{
+                      setSelectedAccountId(link.id);setAccountPanel('overview');
+                      window.requestAnimationFrame(()=>document.getElementById('ym-linked-accounts')?.scrollIntoView({behavior:'smooth',block:'start'}));
+                    }}>
+                    <span><strong>{accountNames[link.account_id||'']||link.company||link.server||'Broker account'}</strong>
+                      <small>{link.server||'Server pending'} · {link.login||'Login pending'}</small></span>
+                    <span className="ym-connection-badge" data-tone={accountStatus==='Monitoring'?'success':accountStatus.includes('attention')?'danger':'warning'}>{accountStatus}</span>
+                    <ArrowRight size={15} className="text-muted"/>
+                  </button>;
+                }):<p className="ym-pc-accounts-empty">No linked accounts yet. Use Add broker account to connect a demo login.</p>}
+              </div>
+              {count>0 && <button type="button" className="ym-select-account-jump" onClick={()=>document.getElementById('ym-linked-accounts')?.scrollIntoView({behavior:'smooth',block:'start'})}>Open account manager <ArrowRight size={15}/></button>}
             </div>}
           </div>;
         })}
@@ -279,7 +299,7 @@ export function Mt5Connections() {
                   <label className="ym-proof-check"><input type="checkbox" checked={Boolean(timezoneProof[l.id])} onChange={e=>setTimezoneProof(old=>({...old,[l.id]:e.target.checked}))}/>I verified a broker statement against raw MT5 timestamps.</label>
                   <div className="ym-connection-actions">
                     <button className="btn-primary" disabled={!!busyAction||!(timezoneDraft[l.id]??l.broker_timezone??'').trim()} onClick={()=>void run(async()=>{const zone=(timezoneDraft[l.id]??l.broker_timezone??'').trim();await action('timezone-confirm',{link:l.id,timezone:zone,confirm:true,utcEvidence:timezoneProof[l.id]?'broker_statement_checked':undefined});},'Timezone saved for this broker account. UTC evidence remains '+(timezoneProof[l.id]?'confirmed.':'unverified.'),'timezone')}>{busyAction==='timezone'?'Confirming…':'Confirm timezone'}</button>
-                    {l.timezone_confirmed_at&&<span className="ym-confirmation-stamp"><CheckCircle2 size={15}/>Saved {new Date(l.timezone_confirmed_at).toLocaleString()}</span>}
+                    {l.timezone_confirmed_at&&<span className="ym-confirmation-stamp" role="status"><CheckCircle2 size={15}/>Confirmed {new Date(l.timezone_confirmed_at).toLocaleString()}</span>}
                   </div>
                   <div className="ym-detail-grid"><div><span>Saved timezone</span><strong>{l.broker_timezone||'Unconfirmed'}</strong></div><div><span>UTC conversion</span><strong>{l.utc_conversion_status||'Not verified'}</strong></div></div>
                   <details className="ym-context-help"><summary><CircleHelp size={15}/>Why verify timezone?</summary><p>Incorrect offsets can mislabel sessions and distort the interpretation of historical trade timestamps. Confirm against the broker's statement before relying on session reports.</p></details>

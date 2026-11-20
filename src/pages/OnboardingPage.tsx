@@ -106,7 +106,8 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
       setStrategyDesc('');
       announceAction('success','Strategy created with its starter checklist.');
     } catch (err: unknown) {
-      setError(err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to add strategy.');
+      const message=err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to add strategy.';
+      setError(message);announceAction('error',message);
     }
     setAddingStrategy(false);
   };
@@ -120,7 +121,8 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
         setSelectedStrategyId(remaining.length > 0 ? remaining[0].id : null);
       }
     } catch (err: unknown) {
-      setError(err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to delete strategy.');
+      const message=err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to delete strategy.';
+      setError(message);announceAction('error',message);
     }
   };
 
@@ -133,7 +135,8 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
       setNewChecklistRequired(true);
       announceAction('success','Checklist item saved.');
     } catch (err: unknown) {
-      setError(err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to add checklist item.');
+      const message=err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to add checklist item.';
+      setError(message);announceAction('error',message);
     }
     setAddingChecklist(false);
   };
@@ -143,7 +146,8 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
       await deleteItem(id);
       announceAction('success','Checklist item removed.');
     } catch (err: unknown) {
-      setError(err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to delete checklist item.');
+      const message=err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' ? err.message : 'Failed to delete checklist item.';
+      setError(message);announceAction('error',message);
     }
   };
 
@@ -185,14 +189,16 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
             <p className="ym-setup-step-label">STEP 01 / WELCOME</p>
             <h2 ref={stepHeading} tabIndex={-1}>Build your trading foundation.</h2>
             <p className="ym-setup-lead">Four short steps. Your trading process stays yours.</p>
-            <figure className="ym-setup-feature-media" aria-label="Illustration of a structured trading workspace">
-              <img src="/assets/page-art/workspace-setup.svg" alt="Decorative trading workstation composition" width="960" height="540" loading="eager"/>
-              <figcaption><strong>YOUR WORKSPACE</strong><span>Risk · Strategy · Review</span></figcaption>
-            </figure>
-            <div className="ym-setup-welcome-list">
-              <div><span><Wallet size={20} /></span><div><h3>Start with your capital</h3><p>Anchor your workspace risk defaults.</p></div></div>
-              <div><span><Target size={20} /></span><div><h3>Name your approach</h3><p>Keep the strategies you trade close at hand.</p></div></div>
-              <div><span><ListChecks size={20} /></span><div><h3>Make the process repeatable</h3><p>Turn entry rules into a practical checklist.</p></div></div>
+            <div className="ym-setup-welcome-grid">
+              <div className="ym-setup-welcome-list">
+                <div><span><Wallet size={20} /></span><div><h3>Start with your capital</h3><p>Anchor your workspace risk defaults.</p></div></div>
+                <div><span><Target size={20} /></span><div><h3>Name your approach</h3><p>Keep the strategies you trade close at hand.</p></div></div>
+                <div><span><ListChecks size={20} /></span><div><h3>Make the process repeatable</h3><p>Turn entry rules into a practical checklist.</p></div></div>
+              </div>
+              <figure className="ym-setup-feature-media" aria-label="Illustration of a structured trading workspace">
+                <img src="/assets/page-art/workspace-setup.svg" alt="Decorative trading workstation composition" width="960" height="540" loading="eager"/>
+                <figcaption><strong>YOUR WORKSPACE</strong><span>Risk · Strategy · Review</span></figcaption>
+              </figure>
             </div>
             <div className="ym-setup-footer"><p>One step at a time.</p><button type="button" onClick={() => goToStep(1)} className="btn-primary">Get started <ArrowRight size={17} /></button></div>
           </div>}

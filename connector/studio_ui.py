@@ -172,18 +172,10 @@ class StudioArt(tk.Canvas):
             self._job = None
 
     def reveal(self):
+        """Keep the illustration stable. Only real connection stages animate."""
         self._cleanup()
-        self._progress = 0 if self.motion() and self.variant != "Account monitor" else 1
+        self._progress = 1
         self.draw()
-        if self._progress == 1:
-            return
-        def tick():
-            self._job = None
-            self._progress = min(1, self._progress + .09)
-            self.draw()
-            if self._progress < 1:
-                self._job = self.after(24, tick)
-        tick()
 
     def draw(self):
         self.delete("all")
@@ -221,47 +213,54 @@ class StudioArt(tk.Canvas):
                 self.create_line(151, y - 2, 156, y + 2, 165, y - 5,
                                  fill=success, width=1.9)
             return
+        # Compact enterprise vector scene instead of an animated zig-zag.
+        # The art carries structure; actual connection progress is shown
+        # separately by ConnectionPath only after server acknowledgements.
+        border = blend(background, "#ffffff", .24)
+        field = blend(background, "#ffffff", .065)
+        dark = blend(background, "#000000", .16)
+        self.create_rectangle(13, 12, 183, 94, fill=dark, outline=border, width=1)
+        self.create_rectangle(18, 17, 178, 88, fill=field, outline="")
+        self.create_line(18, 36, 178, 36, fill=border, width=1)
+        for cx in (29, 37, 45):
+            self.create_oval(cx - 2, 25, cx + 2, 29,
+                             fill=self.accent if cx == 29 else soft, outline="")
         if self.variant == "Account sessions":
-            for index in range(3):
-                x = 24 + index * 51
-                self.create_rectangle(x, 19, x + 37, 84, fill=blend(background, self.accent, .055),
-                                      outline=dim if index != 1 else self.accent, width=1)
-                self.create_oval(x + 12, 36, x + 25, 49, outline=bright, width=2)
-                self.create_line(x + 10, 68, x + 27, 68, fill=self.accent, width=2)
-            points = [22, 91, 70, 100, 122, 98, 172, 88]
-        elif self.variant == "Connect this PC":
-            self.create_arc(72, 15, 122, 70, start=0, extent=180,
-                            style="arc", outline=dim, width=4)
-            self.create_rectangle(72, 43, 122, 81, fill=self.accent, outline="")
-            self.create_oval(93, 54, 102, 63, fill=background, outline="")
-            self.create_line(98, 61, 98, 71, fill=background, width=3)
-            for x in (25, 159):
-                self.create_oval(x, 48, x + 10, 58, fill=bright, outline="")
-            points = [36, 53, 58, 53, 66, 60, 72, 53, 123, 53, 139, 53, 150, 53]
-        elif self.variant == "Setup & troubleshooting":
-            for index in range(4):
-                x = 20 + index * 42
-                self.create_rectangle(x, 25 - index * 3, x + 31, 84 - index * 3,
-                                      fill=blend(background, self.accent, .045), outline=dim)
-                self.create_line(x + 7, 45 - index * 3, x + 24, 45 - index * 3,
+            for i in range(3):
+                x, y = 30, 44 + i * 13
+                self.create_rectangle(x, y, 166, y + 10, fill=background,
+                                      outline=border if i == 0 else dim, width=1)
+                self.create_oval(x + 5, y + 3, x + 9, y + 7,
+                                 fill="#75c8a7" if i != 2 else self.accent, outline="")
+                self.create_line(x + 17, y + 5, x + 83, y + 5, fill=soft, width=2)
+                self.create_line(x + 103, y + 5, x + 125, y + 5,
                                  fill=self.accent, width=2)
-                self.create_line(x + 7, 56 - index * 3, x + 20, 56 - index * 3,
-                                 fill=soft, width=2)
-            points = [20, 97, 62, 93, 104, 89, 146, 85, 178, 81]
+        elif self.variant == "Connect this PC":
+            self.create_rectangle(29, 46, 86, 76, outline=bright, fill=background, width=2)
+            self.create_line(50, 80, 66, 80, fill=soft, width=2)
+            self.create_line(57, 76, 57, 80, fill=soft, width=2)
+            self.create_line(87, 61, 122, 61, fill=border, width=2)
+            self.create_rectangle(127, 50, 162, 72, outline=border, fill=background)
+            self.create_line(134, 61, 140, 66, 151, 55,
+                             fill="#75c8a7", width=2.5)
+        elif self.variant == "Setup & troubleshooting":
+            for i in range(3):
+                y = 46 + i * 12
+                self.create_oval(28, y, 35, y + 7, outline="",
+                                 fill="#75c8a7" if i == 0 else soft)
+                self.create_line(43, y + 4, 114 + i * 12, y + 4,
+                                 fill=bright if i == 0 else border, width=2)
+                self.create_line(143, y + 4, 161, y + 4,
+                                 fill=self.accent if i == 2 else soft, width=2)
         else:
-            for index in range(6):
-                x = 23 + index * 27
-                height = (22, 36, 27, 49, 40, 62)[index]
-                self.create_rectangle(x, 89 - height, x + 10, 89,
-                                      fill=blend(background, self.accent, .12 + index * .025), outline="")
-            points = ([13, 61, 35, 61, 49, 34, 66, 82, 82, 44, 103, 44, 121, 62, 142, 20, 160, 48, 180, 48]
-                      if self.variant == "Activity & diagnostics" else
-                      [15, 79, 36, 68, 57, 73, 79, 45, 100, 53, 122, 29, 144, 37, 166, 17, 184, 24])
-        visible = max(2, round(len(points) / 2 * self._progress)) * 2
-        self.create_line(*points[:visible], fill=self.accent, width=2.5, smooth=True)
-        self.create_oval(points[visible - 2] - 3, points[visible - 1] - 3,
-                         points[visible - 2] + 3, points[visible - 1] + 3,
-                         fill=bright, outline="")
+            # Diagnostic timeline with distinct receipts, not flashing pulses.
+            self.create_line(38, 44, 38, 77, fill=border, width=2)
+            for i in range(3):
+                y = 45 + i * 14
+                self.create_oval(34, y - 3, 42, y + 5,
+                                 fill="#75c8a7" if i < 2 else self.accent, outline="")
+                self.create_line(52, y + 1, 125 + i * 7, y + 1,
+                                 fill=soft if i else bright, width=2)
 
 
 class ConnectionPath(tk.Canvas):

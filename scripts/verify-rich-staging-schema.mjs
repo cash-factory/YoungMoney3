@@ -13,13 +13,18 @@ const query = [
   "(SELECT COUNT(*) FROM d1_migrations WHERE name='0013_mt5_history_modes.sql') AS history_migration,",
   "(SELECT COUNT(*) FROM d1_migrations WHERE name='0015_mt5_cash_movements.sql') AS cash_migration,",
   "(SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='mt5_cash_movements') AS cash_table,",
-  "(SELECT COUNT(*) FROM pragma_table_info('mt5_links') WHERE name IN ('cash_history_cursor','cash_history_completed_at')) AS cash_columns",
+  "(SELECT COUNT(*) FROM pragma_table_info('mt5_links') WHERE name IN ('cash_history_cursor','cash_history_completed_at')) AS cash_columns,",
+  "(SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('mt5_cash_reviews','mt5_cash_review_events')) AS cash_review_tables,",
+  "(SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND name='mt5_cash_review_events_no_update') AS cash_review_audit_trigger,",
+  "(SELECT COUNT(*) FROM pragma_table_info('mt5_links') WHERE name IN ('performance_baseline_balance','performance_baseline_equity','performance_baseline_at')) AS baseline_columns,",
+  "(SELECT COUNT(*) FROM d1_migrations WHERE name='0016_mt5_cash_reconciliation.sql') AS cash_review_migration",
 ].join(' ');
 
 export function assertRichSchema(data) {
   if (!Array.isArray(data) || data[0]?.success !== true) throw new Error('Staging D1 returned an invalid schema response.');
   const row=data[0]?.results?.[0];
-  if(row?.rich_tables!==4 || row?.timezone_columns!==4 || row?.new_migration!==1 || row.history_triggers!==3 || row.retry_columns!==2 || row.setup_columns!==2 || row.monitoring_column!==1 || row.extended_history_columns!==6 || row.history_migration!==1 || row.cash_migration!==1 || row.cash_table!==1 || row.cash_columns!==2) {
+  if(row?.rich_tables!==4 || row?.timezone_columns!==4 || row?.new_migration!==1 || row.history_triggers!==3 || row.retry_columns!==2 || row.setup_columns!==2 || row.monitoring_column!==1 || row.extended_history_columns!==6 || row.history_migration!==1 || row.cash_migration!==1 || row.cash_table!==1 || row.cash_columns!==2 || row.cash_review_tables!==2 ||
+      row.cash_review_audit_trigger!==1 || row.baseline_columns!==3 || row.cash_review_migration!==1) {
     throw new Error('Capture or decision-review schema is incomplete. Refusing staging Worker deployment.');
   }
   return true;

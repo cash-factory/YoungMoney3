@@ -109,3 +109,20 @@
  .ym-setup-risk-preview dd { font-size:19px; }
 }
 @media(prefers-reduced-motion:reduce) { .ym-setup-stage { animation:none; }.ym-setup-steps button {transition:none;} }
+
+/* A composed image-and-copy welcome rather than a large dropped-in graphic. */
+.ym-setup-welcome-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(210px,.95fr);gap:clamp(18px,3vw,32px);align-items:center;margin:4px 0 24px}
+.ym-setup-welcome-grid .ym-setup-welcome-list{gap:15px;padding:0}
+.ym-setup-welcome-grid .ym-setup-welcome-list>div{gap:12px}
+.ym-setup-welcome-grid .ym-setup-welcome-list>div>span{width:36px;height:36px}
+.ym-setup-feature-media{min-width:0;margin:0;background:color-mix(in srgb,var(--brand) 5%,var(--bg-secondary));border:1px solid var(--border);border-radius:14px;overflow:hidden;align-self:stretch;display:flex;flex-direction:column;justify-content:center}
+.ym-setup-feature-media img{width:100%;height:100%;max-height:250px;object-fit:contain;object-position:center;display:block;padding:10px 12px}
+.ym-setup-feature-media figcaption{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--bg-card);border-top:1px solid var(--border);padding:10px 12px;font-size:10px}
+.ym-setup-feature-media figcaption strong{font-weight:750;font-size:10px;letter-spacing:.07em}
+.ym-setup-feature-media figcaption span{color:var(--text-secondary);font-size:10px}
+.ym-setup-heading{align-items:center}
+.ym-setup-step-label{display:inline-flex;align-items:center;gap:8px}
+.ym-setup-guide{position:sticky;top:16px}
+.ym-setup-stage .ym-setup-lead{line-height:1.6;max-width:62ch}
+@media(max-width:1050px){.ym-setup-welcome-grid{grid-template-columns:1fr}.ym-setup-feature-media{max-height:225px}.ym-setup-feature-media img{max-height:175px}}
+@media(max-width:767px){.ym-setup-guide{position:static}.ym-setup-welcome-grid{gap:14px}.ym-setup-feature-media{order:-1;max-height:190px}.ym-setup-feature-media img{max-height:145px}}

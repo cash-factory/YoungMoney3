@@ -63,26 +63,89 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       const states=await Promise.all(links.results.map(async link=>({...link,pending_reviews:(await remainingReviews(String(link.id)))?.n??0})));
       return json({ accounts:accounts.results, devices: devices.results, links: states, demoOnly: env.MT5_ALLOW_LIVE !== 'true', capturePaused: await capturePaused() });
     }
+    if (action === 'cash-review') {
+      if(!limited(input.link,64) || !limited(input.ticket,24) || !/^\d+$/.test(String(input.ticket)))
+        return fail('Select a broker balance transaction.');
+      const category=String(input.classification||'');
+      if(!['external_deposit','external_withdrawal','broker_adjustment','internal_transfer','unresolved'].includes(category))
+        return fail('Choose what this balance transaction represents.');
+      const statement=typeof input.statementReference==='string'?input.statementReference.trim():'';
+      const note=typeof input.note==='string'?input.note.trim():'';
+      if(statement.length>120 || note.length>320 || input.confirm!==true)
+        return fail('Review the broker record and confirm your classification.');
+      if((category==='external_deposit'||category==='external_withdrawal') && statement.length<3)
+        return fail('Provide a statement reference before confirming external money movement.');
+      const movement=await q(`SELECT c.ticket,c.direction FROM mt5_cash_movements c
+        JOIN mt5_links l ON l.id=c.link JOIN mt5_devices d ON d.id=l.device
+        WHERE c.link=? AND c.ticket=? AND c.owner=? AND d.owner=? AND d.revoked=0
+          AND l.status='connected'`,input.link,input.ticket,owner,owner)
+        .first<{ticket:string;direction:string}>();
+      if(!movement) return fail('This broker transaction is unavailable.',404);
+      if((category==='external_deposit'&&movement.direction!=='in') ||
+         (category==='external_withdrawal'&&movement.direction!=='out'))
+        return fail('This category disagrees with the broker transaction sign.');
+      const reviewedAt=now();
+      await db.batch([
+        q(`INSERT INTO mt5_cash_reviews(link,ticket,owner,classification,statement_reference,note,attested_at,revision)
+           VALUES(?,?,?,?,?,?,?,1)
+           ON CONFLICT(link,ticket) DO UPDATE SET classification=excluded.classification,
+             statement_reference=excluded.statement_reference,note=excluded.note,
+             attested_at=excluded.attested_at,revision=mt5_cash_reviews.revision+1
+           WHERE mt5_cash_reviews.owner=excluded.owner`,
+          input.link,input.ticket,owner,category,statement||null,note||null,reviewedAt),
+        q(`INSERT INTO mt5_cash_review_events
+           (id,link,ticket,owner,classification,statement_reference,note,revision,attested_at)
+           SELECT ?,link,ticket,owner,classification,statement_reference,note,revision,attested_at
+           FROM mt5_cash_reviews WHERE link=? AND ticket=? AND owner=?`,
+          uuid(),input.link,input.ticket,owner)
+      ]);
+      return json({ok:true,classification:category,reviewedAt});
+    }
     if (action === 'cash-movements') {
       if(!limited(input.link,64)) return fail('Select a linked broker account.');
       const account=await q(`SELECT l.id,l.currency,l.broker_balance,l.broker_equity,l.linked_at,
-        l.cash_history_cursor,l.cash_history_completed_at
+        l.cash_history_cursor,l.cash_history_completed_at,l.performance_baseline_balance,
+        l.performance_baseline_equity,l.performance_baseline_at,l.gap,l.utc_conversion_status
         FROM mt5_links l JOIN mt5_devices d ON d.id=l.device
         WHERE l.id=? AND d.owner=? AND d.revoked=0 AND l.status='connected'`,
         input.link,owner).first<{id:string;currency:string;broker_balance:number|null;
-        broker_equity:number|null;linked_at:string;cash_history_cursor:number|null;cash_history_completed_at:string|null}>();
+        broker_equity:number|null;linked_at:string;cash_history_cursor:number|null;cash_history_completed_at:string|null;
+        performance_baseline_balance:number|null;performance_baseline_equity:number|null;performance_baseline_at:string|null;
+        gap:number;utc_conversion_status:string|null}>();
       if(!account) return fail('Linked broker account unavailable.',404);
       const offset=Number(input.offset??0);
       if(!Number.isSafeInteger(offset)||offset<0||offset>100000) return fail('Invalid cash ledger page.');
-      const page=await q(`SELECT ticket,amount,currency,direction,classification,broker_time_msc,
-         recorded_at FROM mt5_cash_movements WHERE link=? AND owner=?
-         ORDER BY broker_time_msc DESC,ticket DESC LIMIT 51 OFFSET ?`,
+      const page=await q(`SELECT c.ticket,c.amount,c.currency,c.direction,c.classification,c.broker_time_msc,c.recorded_at,
+         r.classification AS reviewed_classification,r.statement_reference,r.note,r.attested_at,r.revision
+         FROM mt5_cash_movements c LEFT JOIN mt5_cash_reviews r
+           ON r.link=c.link AND r.ticket=c.ticket AND r.owner=c.owner
+         WHERE c.link=? AND c.owner=?
+         ORDER BY c.broker_time_msc DESC,c.ticket DESC LIMIT 51 OFFSET ?`,
          account.id,owner,offset).all();
       const totals=await q(`SELECT COUNT(*) AS count,
          SUM(CASE WHEN direction='in' THEN CAST(amount AS REAL) ELSE 0 END) AS incoming,
          SUM(CASE WHEN direction='out' THEN CAST(amount AS REAL) ELSE 0 END) AS outgoing
          FROM mt5_cash_movements WHERE link=? AND owner=?`,account.id,owner)
          .first<{count:number;incoming:number|null;outgoing:number|null}>();
+      const baselineAt=account.performance_baseline_at?Date.parse(account.performance_baseline_at):null;
+      // Before-link credits remain visible, but must not be subtracted again.
+      // The MT5 raw timestamp's broker-clock offset requires account verification.
+      const sinceBaseline=baselineAt===null ? null : await q(`SELECT
+        COUNT(*) AS count,
+        SUM(CASE WHEN r.classification IN ('external_deposit','external_withdrawal')
+          THEN CAST(c.amount AS REAL) ELSE 0 END) AS reviewed_external_net,
+        SUM(CASE WHEN r.classification IS NULL OR r.classification='unresolved' THEN 1 ELSE 0 END) AS unresolved
+        FROM mt5_cash_movements c LEFT JOIN mt5_cash_reviews r
+          ON r.link=c.link AND r.ticket=c.ticket AND r.owner=c.owner
+        WHERE c.link=? AND c.owner=? AND c.broker_time_msc>=?`,
+        account.id,owner,baselineAt)
+        .first<{count:number;reviewed_external_net:number|null;unresolved:number|null}>();
+      const pending=sinceBaseline?.unresolved??null;
+      const externalNet=sinceBaseline?.reviewed_external_net??0;
+      const deltaBalance=account.broker_balance===null||account.performance_baseline_balance===null
+        ?null:account.broker_balance-account.performance_baseline_balance-externalNet;
+      const deltaEquity=account.broker_equity===null||account.performance_baseline_equity===null
+        ?null:account.broker_equity-account.performance_baseline_equity-externalNet;
       const cashIn=totals?.incoming??0,cashOut=totals?.outgoing??0;
       const netCash=cashIn+cashOut;
       const fullyScanned=Boolean(account.cash_history_completed_at);
@@ -95,6 +158,19 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
           cashAdjustedEquity:account.broker_equity==null?null:account.broker_equity-netCash,
           scanStatus:fullyScanned?'epoch_scanned':account.cash_history_cursor==null?'not_started':'scanning',
           cursor:account.cash_history_cursor,scanCompletedAt:account.cash_history_completed_at,
+          linkedPeriod:{
+            baselineAt:account.performance_baseline_at,
+            openingBalance:account.performance_baseline_balance,
+            openingEquity:account.performance_baseline_equity,
+            reviewedExternalNet:externalNet,
+            unresolvedMovements:pending,reviewedCount:sinceBaseline?.count??null,
+            deltaBalance:pending===0?deltaBalance:null,
+            deltaEquity:pending===0?deltaEquity:null,
+            status:baselineAt===null?'awaiting_baseline':pending!==0?'review_required':
+              account.gap?'capture_gap':account.utc_conversion_status!=='confirmed'?'timezone_unverified':'indicative',
+            independentlyVerified:false,
+            basis:'Change since first observed snapshot, less owner-attested external movements. Not verified lifetime P&L.'
+          },
           // A DEAL_TYPE_BALANCE credit may be a broker correction; neither this
           // nor subtracting cash flow proves profit since account inception.
           externalFlowsVerified:false, overallProfitVerified:false,
@@ -586,7 +662,13 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   const syncedAt=now();
   statements.push(q('UPDATE mt5_devices SET last_seen=? WHERE id=?',unix,device.id));
   statements.push(q("UPDATE mt5_links SET retry_requested_at=NULL,capture_health='synced' WHERE id=?",link.id));
-  statements.push(q('UPDATE mt5_links SET last_sync=?,gap=MAX(gap,?),broker_balance=COALESCE(?,broker_balance),broker_equity=COALESCE(?,broker_equity) WHERE id=?',syncedAt,input.gap===true?1:0,balance,equity,link.id));
+  statements.push(q(`UPDATE mt5_links SET last_sync=?,gap=MAX(gap,?),
+    broker_balance=COALESCE(?,broker_balance),broker_equity=COALESCE(?,broker_equity),
+    performance_baseline_balance=CASE WHEN performance_baseline_at IS NULL THEN ? ELSE performance_baseline_balance END,
+    performance_baseline_equity=CASE WHEN performance_baseline_at IS NULL THEN ? ELSE performance_baseline_equity END,
+    performance_baseline_at=COALESCE(performance_baseline_at,CASE WHEN ? IS NOT NULL AND ? IS NOT NULL THEN ? END)
+    WHERE id=?`,
+    syncedAt,input.gap===true?1:0,balance,equity,balance,equity,balance,equity,syncedAt,link.id));
   if(balance!==null || equity!==null) {
     const snapshot: Fields = {};
     if(balance!==null) { snapshot.broker_balance=balance; snapshot.broker_balance_at=now(); }

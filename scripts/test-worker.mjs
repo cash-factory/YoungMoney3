@@ -315,6 +315,24 @@ try {
   cash=(await (await call('mt5/cash-movements',{link})).json());
   assert.equal(cash.summary.scanStatus,'epoch_scanned');
   assert.equal(cash.rows[0].ticket,'900002');
+  // Owner-reviewed classifications are separate from immutable broker deals.
+  assert.equal((await call('mt5/cash-review',{link,ticket:'900001',classification:'external_deposit',confirm:true})).status,400,
+    'A deposit must have statement provenance');
+  assert.equal((await call('mt5/cash-review',{link,ticket:'900002',classification:'external_deposit',statementReference:'Statement #12',confirm:true})).status,400,
+    'A debit must not be reclassified as a positive deposit');
+  assert.equal((await call('mt5/cash-review',{link,ticket:'not-a-ticket',classification:'unresolved',confirm:true})).status,400);
+  assert.equal((await call('mt5/cash-review',{link,ticket:'900999',classification:'unresolved',confirm:true})).status,404);
+  assert.equal((await call('mt5/cash-review',{link,ticket:'900001',classification:'external_deposit',statementReference:'STAT-001',confirm:true})).status,200);
+  assert.equal((await call('mt5/cash-review',{link,ticket:'900002',classification:'external_withdrawal',statementReference:'STAT-002',confirm:true})).status,200);
+  cash=(await (await call('mt5/cash-movements',{link})).json());
+  assert.equal(cash.rows.find(r=>r.ticket==='900001').reviewed_classification,'external_deposit');
+  assert.equal(cash.rows.find(r=>r.ticket==='900002').reviewed_classification,'external_withdrawal');
+  assert.equal(cash.summary.linkedPeriod.independentlyVerified,false,'Owner statement checks do not certify lifetime profitability');
+  assert.ok(cash.summary.linkedPeriod.baselineAt,'Broker first snapshot is captured once');
+  assert.equal((await call('mt5/cash-review',{link,ticket:'900001',classification:'broker_adjustment',note:'Broker corrected prior balance',confirm:true})).status,200);
+  const revisions=await db.prepare("SELECT COUNT(*) AS n FROM mt5_cash_review_events WHERE link=? AND ticket='900001'").bind(link).first();
+  assert.equal(revisions.n,2,'A reclassification is audited, not silently overwritten');
+  assert.equal((await db.prepare("SELECT revision FROM mt5_cash_reviews WHERE link=? AND ticket='900001'").bind(link).first()).revision,2);
   assert.equal((await call('mt5/cash-movements',{link:'not-a-real-link'})).status,404);
 
   const projected={

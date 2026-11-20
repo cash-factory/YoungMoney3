@@ -507,3 +507,33 @@ test('the MT5 workspace uses selective disclosure and names action outcomes',()=
   assert.ok(feedback.includes("'ym:action-result'")&&feedback.includes('role={item.tone'));
   assert.ok(css.includes('prefers-reduced-motion:reduce')&&css.includes('ym-feedback-toast'));
 });
+
+test('connection controls, cash provenance, notifications and media layouts are progressive and responsive',()=>{
+  const hub=read('src/components/Mt5Connections.tsx');
+  const account=read('src/components/CashFlowPanel.tsx');
+  const feedback=read('src/lib/actionFeedback.tsx');
+  const setup=read('src/pages/OnboardingPage.tsx');
+  const library=read('src/pages/MediaLibraryPage.tsx');
+  const worker=read('worker/mt5.ts');
+  const css=read('src/connection-hub.css');
+  const libraryCss=read('src/library-studio.css');
+  const setupCss=read('src/onboarding-studio.css');
+  assert.ok(hub.includes('ym-pc-accounts')&&hub.includes('ym-pc-account-link')&&hub.includes('aria-expanded={expanded}'),
+    'A paired PC must expand into selectable broker accounts');
+  assert.ok(hub.includes("accountPanel==='cash'")&&hub.includes("accountPanel==='timezone'"),
+    'Each broker account has focused management panels');
+  assert.ok(hub.includes('Confirmed {new Date(l.timezone_confirmed_at)')&&hub.includes('announceAction('),
+    'Timezone and other actions require visible server-backed feedback');
+  assert.ok(feedback.includes('Action unsuccessful')&&feedback.includes('Needs attention'),
+    'Global feedback must distinguish action success and failure');
+  assert.ok(account.includes("mt5Action('cash-review'")&&account.includes('statementReference'),
+    'Broker deposit classification requires statement provenance');
+  assert.ok(worker.includes('mt5_cash_review_events')&&worker.includes('performance_baseline_at'),
+    'Cash review is audited and period analysis uses the first observed broker snapshot');
+  assert.ok(library.includes('ym-library-image-open')&&libraryCss.includes('object-fit:cover'),
+    'Thumbnail images must remain prominent and operable with keyboard');
+  assert.ok(setup.includes('ym-setup-welcome-grid')&&setupCss.includes('.ym-setup-welcome-grid'),
+    'Workspace setup needs composed media and concise guided steps');
+  assert.ok(css.includes('ym-cash-review-card')&&css.includes('prefers-reduced-motion'),
+    'Financial review and alert animation should respect motion preferences');
+});

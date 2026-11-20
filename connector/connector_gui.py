@@ -43,7 +43,7 @@ ACCENT = "#ff365c"
 WARM = "#f9c9ab"
 DANGER = "#ff8da7"
 FONT = "Segoe UI"
-VERSION = "0.5.2-rc1"
+VERSION = "0.5.3-rc1"
 
 
 def terminal_candidates():
