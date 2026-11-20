@@ -333,6 +333,26 @@ try {
   const revisions=await db.prepare("SELECT COUNT(*) AS n FROM mt5_cash_review_events WHERE link=? AND ticket='900001'").bind(link).first();
   assert.equal(revisions.n,2,'A reclassification is audited, not silently overwritten');
   assert.equal((await db.prepare("SELECT revision FROM mt5_cash_reviews WHERE link=? AND ticket='900001'").bind(link).first()).revision,2);
+  // Post-baseline internal transfers and broker corrections are not trade P&L.
+  const postBaselineCash=[
+    {ticket:900004,type:2,time_msc:Date.now(),profit:400,comment:'Transfer into this account'},
+    {ticket:900005,type:2,time_msc:Date.now()+1,profit:-75,comment:'Broker correction'},
+    {ticket:900006,type:2,time_msc:Date.now()+2,profit:50,comment:'Verified external deposit'},
+  ];
+  assert.equal((await device('sync',{link,events:postBaselineCash.map(d=>({kind:'raw',key:'deal-'+d.ticket,fields:d}))})).status,200);
+  cash=(await (await call('mt5/cash-movements',{link})).json());
+  assert.equal(cash.summary.linkedPeriod.deltaBalance,null,'Unreviewed cash must prevent a profit estimate');
+  assert.equal((await call('mt5/cash-review',{link,ticket:'900004',classification:'internal_transfer',note:'Transfer from another account',confirm:true})).status,200);
+  assert.equal((await call('mt5/cash-review',{link,ticket:'900005',classification:'broker_adjustment',note:'Correction, not trading profit',confirm:true})).status,200);
+  assert.equal((await call('mt5/cash-review',{link,ticket:'900006',classification:'external_deposit',statementReference:'STMT-NEW',confirm:true})).status,200);
+  cash=(await (await call('mt5/cash-movements',{link})).json());
+  assert.equal(cash.summary.linkedPeriod.reviewedExternalNet,50);
+  assert.equal(cash.summary.linkedPeriod.reviewedNonTradingNet,375);
+  assert.equal(cash.summary.linkedPeriod.unresolvedMovements,0);
+  assert.equal(cash.summary.linkedPeriod.deltaBalance,
+    cash.summary.brokerBalance-cash.summary.linkedPeriod.openingBalance-375);
+  assert.equal(cash.summary.linkedPeriod.deltaEquity,
+    cash.summary.brokerEquity-cash.summary.linkedPeriod.openingEquity-375);
   assert.equal((await call('mt5/cash-movements',{link:'not-a-real-link'})).status,404);
 
   const projected={
