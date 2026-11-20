@@ -289,7 +289,7 @@ export function Mt5Connections() {
                   <details className="ym-context-help"><summary><CircleHelp size={15}/>What can the connector recover?</summary><p>Only records retained by the broker. Some balance entries can be broker adjustments rather than actual deposits. Historical stop changes and original risk are shown only when supporting records exist. Review fills before importing.</p></details>
                 </div>}
                 {accountPanel==='cash'&&<div className="ym-account-pane" role="tabpanel">
-                  <CashFlowPanel link={l} />
+                  <CashFlowPanel key={l.id} link={l} />
                 </div>}
                 {accountPanel==='timezone'&&<div className="ym-account-pane" role="tabpanel">
                   <div className="ym-account-pane-heading"><div><strong>Broker timezone</strong><span>Confirm the broker's statement time, not your current PC time.</span></div><Clock3 size={19}/></div>
