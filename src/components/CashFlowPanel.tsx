@@ -52,10 +52,17 @@ export function CashFlowPanel({link}:{link:Link}){
     try{
       await mt5Action('cash-review',{link:link.id,ticket,classification:category,
         statementReference:reference,note,confirm:true});
-      await refreshCash();
-      announceAction('success','Balance transaction '+ticket+' classified and its review recorded.');
     }catch(e){const message=e instanceof Error?e.message:'Could not save cash review.';
       setReviewError(message);announceAction('error',message);
+      setReviewBusy(false);
+      return;
+    }
+    // The mutation has succeeded even if fetching the refreshed ledger fails.
+    announceAction('success','Balance transaction '+ticket+' classified and its review recorded.');
+    try{await refreshCash();}
+    catch{
+      const message='Classification was saved, but the updated ledger could not be loaded. Refresh this account before reviewing another movement.';
+      setReviewError(message);announceAction('warning',message);
     }finally{setReviewBusy(false);}
   }
   if(loading)return <div className="ym-account-progress" role="status"><RefreshCw size={16} className="animate-spin"/>Loading recorded broker cash movements…</div>;
@@ -64,7 +71,7 @@ export function CashFlowPanel({link}:{link:Link}){
   if(!data)return null;
   const {summary}=data,period=summary.linkedPeriod;
   return <div className="ym-cash-ledger space-y-5">
-    <div className="ym-account-pane-heading"><div><strong>Funding and performance</strong><span>Captured automatically from your account's MT5 balance transactions, including older records the broker exposes.</span></div><Wallet size={19}/></div>
+    <div className="ym-account-pane-heading"><div><strong>Funding and performance</strong><span>Captured automatically from your account's MT5 balance transactions, including older records the broker exposes.</span></div><button type="button" className="btn-secondary" disabled={reviewBusy||moreBusy} onClick={()=>setAttempt(value=>value+1)}><RefreshCw size={15}/> Refresh ledger</button></div>
     <div className="ym-cash-figures" aria-label="Recorded balance movements">
       <div data-tone="positive"><small>Credits · deposit candidates</small><strong>{money(summary.incoming,data.currency)}</strong><span>Includes possible broker adjustments</span></div>
       <div data-tone="negative"><small>Debits · withdrawal candidates</small><strong>{money(summary.outgoing,data.currency)}</strong><span>Includes possible broker corrections</span></div>
@@ -136,7 +143,7 @@ export function CashFlowPanel({link}:{link:Link}){
     </div>
     {data.more&&<button type="button" className="btn-secondary" disabled={moreBusy} onClick={async()=>{
       setMoreBusy(true);try{const next=await mt5Action('cash-movements',{link:link.id,offset:data.nextOffset}) as CashView;
-        setData(current=>current?{...next,rows:[...current.rows,...next.rows]}:next);
+        setData(current=>current&&current.link===next.link?{...next,rows:[...new Map([...current.rows,...next.rows].map(row=>[row.ticket,row])).values()]}:next);
         announceAction('success','Older broker cash transactions loaded.');
       }catch(e){announceAction('error',e instanceof Error?e.message:'Could not load older movements.');}
       finally{setMoreBusy(false);}
