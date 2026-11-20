@@ -28,9 +28,13 @@ CREATE TABLE mt5_cash_review_events (
  FOREIGN KEY(link,ticket) REFERENCES mt5_cash_movements(link,ticket)
 );
 CREATE TRIGGER mt5_cash_review_events_no_update BEFORE UPDATE ON mt5_cash_review_events
- BEGIN SELECT RAISE(ABORT,'Cash review audit events are immutable'); END;
+BEGIN
+  SELECT RAISE(ABORT,'Cash review audit events are immutable');
+END;
 CREATE TRIGGER mt5_cash_review_events_no_delete BEFORE DELETE ON mt5_cash_review_events
- BEGIN SELECT RAISE(ABORT,'Cash review audit events are immutable'); END;
+BEGIN
+  SELECT RAISE(ABORT,'Cash review audit events are immutable');
+END;
 
 -- Capture the FIRST observed broker balance/equity exactly once. A later
 -- snapshot must not silently shift the comparison baseline.
