@@ -119,3 +119,18 @@ test('deep-dive analytics are not removed when the home screen is simplified',()
     assert.ok(dashboard.includes(text),'Existing financial safeguard or filter lost: '+text);
   }
 });
+
+test('MT5 workspace keeps device-account hierarchy, progressive disclosure and action feedback',()=>{
+  const ui=read('src/components/Mt5Connections.tsx');
+  const api=read('worker/mt5.ts');
+  assert.ok(api.includes('SELECT l.id,l.device,l.account_id'), 'Connection status must identify which PC owns each account');
+  assert.ok(ui.includes('links.filter(link => link.device === device.id)'), 'PC view must use actual account ownership');
+  assert.ok(ui.includes('aria-expanded={open}'), 'Paired PCs and account rows must be operable disclosures');
+  assert.ok(ui.includes('setExpandedDevice') && ui.includes('setExpandedLink'), 'Both levels must be selectable');
+  assert.ok(ui.includes('aria-live="polite"') && ui.includes('role="alert"'), 'Actions must give accessible success and failure feedback');
+  assert.ok(ui.includes("setBusy(key)") && ui.includes("disabled={busy !== null}"), 'Mutation controls must prevent duplicate pending actions');
+  assert.ok(ui.includes("'/downloads/YoungMoney3-Connector.zip'") || ui.includes('href="/downloads/YoungMoney3-Connector.zip"'), 'Connector download route must remain intact');
+  for(const endpoint of ["'pair'","'revoke'","'history-request'","'history-preview'","'history-import'","'history-decline'","'match'"]) {
+    assert.ok(ui.includes(endpoint), 'Previously available operation lost: '+endpoint);
+  }
+});
