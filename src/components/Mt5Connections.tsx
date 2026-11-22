@@ -243,10 +243,25 @@ export function Mt5Connections() {
                   <div><small>Broker equity</small><strong>{l.broker_equity==null?'—':l.broker_equity.toLocaleString()} <span>{l.currency}</span></strong></div>
                   <div><small>Decisions for review</small><strong>{l.pending_reviews||0}</strong></div>
                 </div>
-                <div className="ym-account-tabs" role="tablist" aria-label="Account management">
-                  {([{id:'overview',label:'Overview',Icon:Monitor},{id:'history',label:'Trade history',Icon:History},{id:'cash',label:'Cash movements',Icon:Wallet},{id:'timezone',label:'Timezone',Icon:Clock3}] as const).map(({id,label,Icon})=><button type="button" key={id} role="tab" aria-selected={accountPanel===id} onClick={()=>setAccountPanel(id)}><Icon size={15}/>{label}</button>)}
+                <div className="ym-account-tabs" role="tablist" aria-label="Account management"
+                  onKeyDown={event=>{
+                    if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+                    const tabs=Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+                    const current=tabs.indexOf(event.target as HTMLButtonElement);
+                    if(current<0||!tabs.length) return;
+                    event.preventDefault();
+                    const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:
+                      (current+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
+                    tabs[next].focus();
+                    tabs[next].click();
+                  }}>
+                  {([{id:'overview',label:'Overview',Icon:Monitor},{id:'history',label:'Trade history',Icon:History},{id:'cash',label:'Cash movements',Icon:Wallet},{id:'timezone',label:'Timezone',Icon:Clock3}] as const).map(({id,label,Icon})=>
+                    <button type="button" key={id} id={'ym-account-tab-'+l.id+'-'+id}
+                      role="tab" aria-selected={accountPanel===id} aria-controls={'ym-account-panel-'+l.id+'-'+id}
+                      tabIndex={accountPanel===id?0:-1}
+                      onClick={()=>setAccountPanel(id)}><Icon size={15}/>{label}</button>)}
                 </div>
-                {accountPanel==='overview' && <div className="ym-account-pane" role="tabpanel">
+                {accountPanel==='overview'&&<div className="ym-account-pane" role="tabpanel" id={'ym-account-panel-'+l.id+'-overview'} aria-labelledby={'ym-account-tab-'+l.id+'-overview'} tabIndex={0}>
                   <div className="ym-detail-grid">
                     <div><span>Device</span><strong>{pairedPcName(pc)}</strong></div>
                     <div><span>Broker login</span><strong>{l.login||'—'}</strong></div>
@@ -261,7 +276,7 @@ export function Mt5Connections() {
                   </div>
                   <details className="ym-context-help"><summary><CircleHelp size={15}/>Permissions and capture safety</summary><p>{l.access_level==='trading-enabled'?'The broker login has trading privileges, but this dashboard captures records only.':'This integration is capture-only.'} No orders are placed from YoungMoney3.</p></details>
                 </div>}
-                {accountPanel==='history' && <div className="ym-account-pane" role="tabpanel">
+                {accountPanel==='history'&&<div className="ym-account-pane" role="tabpanel" id={'ym-account-panel-'+l.id+'-history'} aria-labelledby={'ym-account-tab-'+l.id+'-history'} tabIndex={0}>
                   <div className="ym-account-pane-heading"><div><strong>Earlier trades</strong><span>Choose how far back to collect broker-available records.</span></div><History size={19}/></div>
                   <div className="ym-history-inputs">
                     <label>History starting point
@@ -288,10 +303,10 @@ export function Mt5Connections() {
                   {l.history_scanned_until!=null&&<p className="ym-context-short">Scanned through {new Date(l.history_scanned_until).toLocaleDateString()}.</p>}
                   <details className="ym-context-help"><summary><CircleHelp size={15}/>What can the connector recover?</summary><p>Only records retained by the broker. Some balance entries can be broker adjustments rather than actual deposits. Historical stop changes and original risk are shown only when supporting records exist. Review fills before importing.</p></details>
                 </div>}
-                {accountPanel==='cash'&&<div className="ym-account-pane" role="tabpanel">
+                {accountPanel==='cash'&&<div className="ym-account-pane" role="tabpanel" id={'ym-account-panel-'+l.id+'-cash'} aria-labelledby={'ym-account-tab-'+l.id+'-cash'} tabIndex={0}>
                   <CashFlowPanel key={l.id} link={l} />
                 </div>}
-                {accountPanel==='timezone'&&<div className="ym-account-pane" role="tabpanel">
+                {accountPanel==='timezone'&&<div className="ym-account-pane" role="tabpanel" id={'ym-account-panel-'+l.id+'-timezone'} aria-labelledby={'ym-account-tab-'+l.id+'-timezone'} tabIndex={0}>
                   <div className="ym-account-pane-heading"><div><strong>Broker timezone</strong><span>Confirm the broker's statement time, not your current PC time.</span></div><Clock3 size={19}/></div>
                   <div className="ym-history-inputs"><label>IANA timezone
                     <input list="broker-timezones" className="input-field" placeholder="Europe/Athens" value={timezoneDraft[l.id]??l.broker_timezone??''} onChange={e=>setTimezoneDraft(old=>({...old,[l.id]:e.target.value}))}/>
