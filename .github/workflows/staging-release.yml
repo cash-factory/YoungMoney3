@@ -1,5 +1,9 @@
-name: Deploy staging (manual only)
+name: Deploy staging from validated main
 on:
+  workflow_run:
+    workflows: [Validate]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       confirmation:
@@ -16,7 +20,15 @@ concurrency:
 
 jobs:
   staging:
-    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'DEPLOY-STAGING-ONLY'
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository) ||
+      (github.event_name == 'workflow_dispatch' &&
+       github.ref == 'refs/heads/main' &&
+       inputs.confirmation == 'DEPLOY-STAGING-ONLY')
     runs-on: ubuntu-latest
     environment: staging
     timeout-minutes: 30
@@ -27,8 +39,20 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - name: Checkout reviewed main branch
+      - name: Checkout validated main commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+      - name: Prevent stale commits from overwriting newer staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT="$(git ls-remote https://github.com/${GITHUB_REPOSITORY}.git refs/heads/main | cut -f1)"
+          test -n "$CURRENT" && test "$CURRENT" = "$(git rev-parse HEAD)" || {
+            echo "A newer main commit exists; refusing a stale staging deployment."
+            exit 1
+          }
       - name: Node.js 22
         uses: actions/setup-node@v4
         with:
@@ -41,6 +65,7 @@ jobs:
         run: |
           test -n "$CLOUDFLARE_API_TOKEN" || { echo "Configure a staging-only CLOUDFLARE_API_TOKEN environment secret"; exit 1; }
           test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "Configure CLOUDFLARE_ACCOUNT_ID in staging environment secrets"; exit 1; }
+          test "${YM3_STAGING_WORKER_NAME:-ym-fx-staging}" = 'ym-fx-staging' || { echo "Refusing deployment to an unexpected staging Worker"; exit 1; }
           npm run cf:staging:prepare
       - name: Validate source before touching staging
         run: |
@@ -56,18 +81,26 @@ jobs:
         run: npx wrangler d1 migrations list DB --remote --config wrangler.staging.jsonc
       - name: Apply migrations to staging D1 only
         run: npm run cf:staging:migrate
-      - name: Require MT5 and admin schema readiness
-        run: npm run cf:staging:verify
+      - name: Require MT5, admin and rich-capture schema readiness
+        run: |
+          npm run cf:staging:verify
+          node scripts/verify-rich-staging-schema.mjs
       - name: Deploy staging Worker and frontend only
         shell: bash
         run: |
           set -euo pipefail
+          CURRENT="$(git ls-remote https://github.com/${GITHUB_REPOSITORY}.git refs/heads/main | cut -f1)"
+          test "$CURRENT" = "$(git rev-parse HEAD)" || { echo "Refusing to deploy a stale main commit."; exit 1; }
           npx wrangler deploy --config wrangler.staging.jsonc | tee "$RUNNER_TEMP/ym3-staging-deploy.log"
       - name: Verify public API health and browser navigation
         shell: bash
         run: |
           set -euo pipefail
           DEPLOYED_URL="$(grep -Eo 'https://[a-zA-Z0-9-]+[.][a-zA-Z0-9-]+[.]workers[.]dev' "$RUNNER_TEMP/ym3-staging-deploy.log" | tail -n 1 || true)"
+          if [[ "$DEPLOYED_URL" != 'https://ym-fx-staging.ethical-hacker263.workers.dev' ]]; then
+            echo "Deployment URL does not match the designated staging Worker: $DEPLOYED_URL"
+            exit 1
+          fi
           if [[ -z "$DEPLOYED_URL" ]]; then
             echo "Wrangler did not print a staging workers.dev URL; cannot verify deployed API."
             exit 1
