@@ -51,7 +51,7 @@ const money = (value: number | undefined, currency?: string) =>
     : new Intl.NumberFormat(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(value) + ' ' + (currency || '');
 const accountStatus = (link: LinkedAccount) => {
   if (['pending', 'verifying'].includes(link.status) && link.expires < Date.now()) return 'Expired';
-  if (link.status !== 'connected') return link.status.replaceAll('-', ' ');
+  if (link.status !== 'connected') return link.status.replace(/-/g, ' ');
   if (!link.last_sync || !Number.isFinite(Date.parse(link.last_sync)) || Date.now() - Date.parse(link.last_sync) > 120_000) return 'Sync delayed';
   return 'Connected';
 };
