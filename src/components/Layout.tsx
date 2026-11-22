@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { LayoutDashboard, CandlestickChart, Calendar, BarChart3, BookOpen, Sparkles, Menu, X, Plus, LogOut, ChevronDown, ChevronRight, ClipboardList, Target, FlaskConical, Shield, CalendarClock, LayoutTemplate, BookMarked, StickyNote, GraduationCap, CreditCard, ClipboardCheck, MoreHorizontal, Archive, Settings, Search, Monitor, Images, Compass } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
-import { CommandPalette } from '@/components/CommandPalette';
+import { CommandPalette, rememberWorkspaceDestination } from '@/components/CommandPalette';
 import { ColorPaletteControl } from '@/components/ColorPaletteControl';
 import { DataBackupModal } from '@/components/DataBackupModal';
 import { DataRecoveryNotice } from '@/components/ui/DataRecoveryNotice';
@@ -99,6 +99,8 @@ export function Layout({ current, onNavigate, onQuickAdd, onOpenGuide, children 
 
   const handleNav = (page: PageId) => {
     onNavigate(page);
+    rememberWorkspaceDestination(page);
+    window.requestAnimationFrame(() => document.getElementById('workspace-content')?.focus());
     setMobileOpen(false);
     setProfileMenuOpen(false);
     window.scrollTo({ top: 0, behavior: 'instant' });
@@ -331,7 +333,7 @@ export function Layout({ current, onNavigate, onQuickAdd, onOpenGuide, children 
         <button type="button" className="ym-dock-item" data-active={current === 'journal'} aria-current={current === 'journal' ? 'page' : undefined} onClick={() => handleNav('journal')}><BookOpen size={20} /><span>Journal</span></button>
         <button type="button" className="ym-dock-item" data-active={current === 'weekly-reviews'} aria-current={current === 'weekly-reviews' ? 'page' : undefined} onClick={() => handleNav('weekly-reviews')}><ClipboardCheck size={20} /><span>Review</span></button>
       </nav>
-      <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} onNavigate={handleNav} onQuickAdd={onQuickAdd} />
+      <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} onNavigate={handleNav} onQuickAdd={onQuickAdd} onOpenGuide={onOpenGuide} captureEnabled={!isSample} />
       <DataBackupModal open={backupOpen} onClose={() => setBackupOpen(false)} />
     </div>
   );
