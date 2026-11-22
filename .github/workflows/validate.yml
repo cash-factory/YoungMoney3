@@ -29,6 +29,17 @@ jobs:
       - run: python -m unittest discover -s connector -p 'test_ledger.py'
       - run: python scripts/test-connector-archive.py
       - run: npm run build
+      - name: Browser-check responsive command centre
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          npm run preview -- --host 127.0.0.1 > "$RUNNER_TEMP/ymfx-command-preview.log" 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4173/ > /dev/null; then break; fi
+            sleep 1
+          done
+          YM3_PREVIEW_URL=http://127.0.0.1:4173/ node scripts/test-command-palette-browser.mjs
 
   mt5-terminal:
     runs-on: windows-latest
