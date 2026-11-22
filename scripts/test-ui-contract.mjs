@@ -550,3 +550,16 @@ test('connection controls, cash provenance, notifications and media layouts are 
     feedback.includes('Date.now()-item.createdAt'),
     'Independent action feedback must not be hidden and toast lifetime must not restart on new events');
 });
+
+test('MT5 management tabs support keyboard navigation and have associated panels',()=>{
+  const view=read('src/components/Mt5Connections.tsx');
+  for(const key of ['ArrowLeft','ArrowRight','Home','End'])
+    assert.ok(view.includes("'"+key+"'"),'Missing tab keyboard key '+key);
+  assert.ok(view.includes("tabs[next].focus()") && view.includes("tabs[next].click()"),'Arrow navigation must activate the focused tab');
+  assert.ok(view.includes('tabIndex={accountPanel===id?0:-1}'),'Inactive tabs must leave the normal tab order');
+  for(const panel of ['overview','history','cash','timezone']) {
+    assert.ok(view.includes("'ym-account-panel-'+l.id+'-"+panel+"'"),'Tab missing panel id '+panel);
+    assert.ok(view.includes("'ym-account-tab-'+l.id+'-"+panel+"'"),'Panel missing tab id '+panel);
+  }
+  assert.ok(view.includes('aria-labelledby='),'Panel must be named by its selected tab');
+});
