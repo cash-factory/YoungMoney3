@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ThemeProvider } from '@/context/ThemeProvider';
 import { AuthProvider } from '@/context/AuthProvider';
 import { useAuth } from '@/context/AuthContext';
 import { Layout, type PageId } from '@/components/Layout';
+import { PageExperience } from '@/components/PageExperience';
+import { MediaLibraryPage } from '@/pages/MediaLibraryPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { TradesPage } from '@/pages/TradesPage';
 import { CalendarPage } from '@/pages/CalendarPage';
@@ -28,13 +30,22 @@ import { AccountSettingsPage } from '@/pages/AccountSettingsPage';
 import { AdminOperationsPage } from '@/pages/AdminOperationsPage';
 import { LoadingSpinner } from '@/components/ui/Feedback';
 import { supabase } from '@/lib/supabase';
+import '@/decision-studio.css';
+import '@/trading-semantic.css';
+import '@/connection-hub.css';
+import '@/experience-refined.css';
+import type { FastCapture } from '@/components/DecisionDesk';
+import { SampleReplay } from '@/components/DecisionReplay';
 import { QuickCaptureModal } from '@/components/QuickCaptureModal';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { reportDataError } from '@/lib/recovery';
 import { Mt5Connections } from '@/components/Mt5Connections';
+import { ActionFeedbackHost } from '@/lib/actionFeedback';
+import { PlatformGuide } from '@/components/PlatformGuide';
+import { guideShouldWelcome, writeGuideState } from '@/lib/platformGuide';
 
 const PAGE_IDS: PageId[] = [
-  'dashboard', 'trades', 'calendar', 'analytics', 'journal', 'ai',
+  'media', 'dashboard', 'trades', 'calendar', 'analytics', 'journal', 'ai',
   'trading-plan', 'goals', 'risk-management', 'market-sessions', 'setups', 'strategy-testing',
   'strategies', 'resources', 'notes', 'study-material', 'brokers-charting', 'weekly-reviews',
   'account-settings', 'admin-operations', 'mt5', 'workspace-setup',
@@ -48,11 +59,21 @@ function pageFromLocation(): PageId {
 function AppContent() {
   const { session, loading, profile, signOut } = useAuth();
   const [page, setPage] = useState<PageId>(pageFromLocation);
-  const [quickAdd, setQuickAdd] = useState(false);
+  const [dashboardSelection, setDashboardSelection] = useState<{ owner: string; account: string } | null>(null);
+  const accountFilter = dashboardSelection && dashboardSelection.owner === session?.user.id
+    ? dashboardSelection.account : 'all';
+  const [quickCapture, setQuickCapture] = useState<{ mode: FastCapture; accountId?: string } | null>(null);
+  const [sample,setSample]=useState(false);
+  const openCapture = (mode: FastCapture) => setQuickCapture({
+    mode, accountId: page === 'dashboard' && accountFilter !== 'all' ? accountFilter : undefined,
+  });
   const [showLanding, setShowLanding] = useState(true);
   const [onboardingNeeded, setOnboardingNeeded] = useState<boolean | null>(null);
   const [onboardingError, setOnboardingError] = useState('');
   const [onboardingAttempt, setOnboardingAttempt] = useState(0);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const guideAutoEvaluated = useRef<string | null>(null);
+  const openGuide = () => { setQuickCapture(null); setGuideOpen(true); };
 
   useEffect(() => {
     const restorePageFromLocation = () => setPage(pageFromLocation());
@@ -73,6 +94,8 @@ function AppContent() {
 
   useEffect(() => {
     if (!session?.user) {
+      setQuickCapture(null);
+      setDashboardSelection(null);
       setOnboardingNeeded(null);
       setOnboardingError('');
       return;
@@ -96,6 +119,17 @@ function AppContent() {
     return () => { cancelled = true; };
   }, [session, onboardingAttempt]);
 
+  // New accounts see the optional explorer once, only after session/profile and
+  // setup checks resolve. Returning users can relaunch it from the dashboard.
+  useEffect(() => {
+    if (!session?.user) { setGuideOpen(false); return; }
+    const userId = session.user.id;
+    if (!profile || profile.id !== userId || onboardingNeeded === null || page !== 'dashboard') return;
+    if (guideAutoEvaluated.current === userId) return;
+    guideAutoEvaluated.current = userId;
+    if (guideShouldWelcome(userId, profile.created_at || session.user.created_at)) setGuideOpen(true);
+  }, [session?.user?.id, session?.user?.created_at, profile, onboardingNeeded, page]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-primary flex items-center justify-center">
@@ -117,12 +151,15 @@ function AppContent() {
   }
 
   return (
-    <Layout current={page} onNavigate={navigateToPage} onQuickAdd={() => setQuickAdd(true)}>
+    <Layout current={page} onNavigate={navigateToPage} onQuickAdd={() => openCapture('manual')} onOpenGuide={openGuide}>
       {onboardingError && <p role="alert" className="card p-3 mb-4 text-sm">Workspace setup could not be checked. <button className="btn-secondary" onClick={()=>setOnboardingAttempt(v=>v+1)}>Retry</button></p>}
       {onboardingNeeded && page !== 'workspace-setup' && <div className="card p-4 mb-4 flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-secondary">Create your first strategy and risk settings when you’re ready.</p><button className="btn-secondary" onClick={()=>navigateToPage('workspace-setup')}>Set up workspace</button></div>}
-      <div key={page} className="animate-fade-in">
+      <PageExperience key={page} page={page}>
         {page === 'workspace-setup' && <OnboardingPage onComplete={()=>{setOnboardingNeeded(false);navigateToPage('dashboard');}} />}
-        {page === 'dashboard' && <DashboardPage />}
+        {page === 'media' && <MediaLibraryPage />}
+        {page === 'dashboard' && <DashboardPage accountFilter={accountFilter}
+          onAccountChange={account => setDashboardSelection({owner: session.user.id, account})}
+          onOpenGuide={openGuide} onCapture={openCapture} openWeekly={()=>navigateToPage('weekly-reviews')}/>}
         {page === 'trades' && <TradesPage />}
         {page === 'calendar' && <CalendarPage />}
         {page === 'analytics' && <AnalyticsPage />}
@@ -143,8 +180,15 @@ function AppContent() {
         {page === 'mt5' && <Mt5Connections />}
         {page === 'account-settings' && <AccountSettingsPage />}
         {page === 'admin-operations' && (profile?.role === 'admin' && profile.account_status === 'active' ? <AdminOperationsPage /> : <p role="alert" className="card p-4">This area is reserved for the workspace administrator.</p>)}
-      </div>
-      {quickAdd && <QuickCaptureModal open onClose={() => setQuickAdd(false)} />}
+      </PageExperience>
+      {sample && <SampleReplay onClose={()=>setSample(false)}/>}
+      {quickCapture && <QuickCaptureModal open initialMode={quickCapture.mode} initialAccountId={quickCapture.accountId} onClose={() => setQuickCapture(null)} />}
+      <PlatformGuide onSample={()=>setSample(true)} open={guideOpen} userId={session.user.id} currentPage={page}
+        onNavigate={navigateToPage}
+        onDismiss={(completed, visited) => {
+          writeGuideState(session.user.id, completed ? 'completed' : 'dismissed', visited, visited[visited.length - 1]);
+          setGuideOpen(false);
+        }} />
     </Layout>
   );
 }
@@ -155,6 +199,7 @@ function App() {
       <AuthProvider>
         <AppErrorBoundary>
           <AppContent />
+          <ActionFeedbackHost />
         </AppErrorBoundary>
       </AuthProvider>
     </ThemeProvider>

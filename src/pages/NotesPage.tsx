@@ -1,3 +1,4 @@
+import '@/page-results.css';
 import { useState, useMemo } from 'react';
 import { StickyNote, Plus, Trash2, Save, Search, Pin } from 'lucide-react';
 import { ScreenshotUpload } from '@/components/ScreenshotUpload';
@@ -16,6 +17,7 @@ export function NotesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Note | null>(null);
   const [search, setSearch] = useState('');
+  const [selectedId, setSelectedId] = useState('');
 
   const filtered = useMemo(() => notes.filter(n => {
     if (search) {
@@ -23,7 +25,8 @@ export function NotesPage() {
       if (!n.title.toLowerCase().includes(q) && !n.content?.toLowerCase().includes(q) && !n.tags.some(t => t.toLowerCase().includes(q))) return false;
     }
     return true;
-  }), [notes, search]);
+  }).sort((a, b) => Number(b.is_pinned) - Number(a.is_pinned) || b.updated_at.localeCompare(a.updated_at)), [notes, search]);
+  const selected = filtered.find(note => note.id === selectedId) || filtered[0];
 
   const handleSave = async (data: NoteInput, id?: string) => {
     await upsertNote(data, id);
@@ -56,13 +59,12 @@ export function NotesPage() {
 
       {filtered.length === 0 ? (
         <div className="card p-8">
-          <EmptyState icon={<StickyNote size={40} />} title="No notes yet" message="Create notes to jot down trading ideas, market observations, lessons, or reminders. Pin important ones to the top." />
+          <EmptyState icon={<StickyNote size={40} />} title={notes.length ? 'No matching notes' : 'Your notebook starts here'} message={notes.length ? 'Try another title, phrase or tag.' : 'Capture an observation, a useful lesson or your next trading idea. Pin the notes you want to keep close.'} />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(note => (
-            <NoteCard key={note.id} note={note} onEdit={() => { setEditing(note); setShowForm(true); }} onDelete={() => handleDelete(note.id)} onPin={() => togglePin(note)} />
-          ))}
+        <div className="ym-notebook">
+          <nav className="ym-notebook-index" aria-label="Saved notes"><p className="ym-output-eyebrow">{filtered.length} NOTES / {filtered.filter(note => note.is_pinned).length} PINNED</p>{filtered.map(note => <button type="button" key={note.id} aria-pressed={note.id === selected.id} onClick={() => setSelectedId(note.id)}><span className="ym-notebook-index-title">{note.is_pinned && <Pin size={12} />}<strong>{note.title}</strong></span><span>{note.content || 'Image or reference note'}</span><small>{format(parseISO(note.updated_at), 'MMM d, yyyy')}</small></button>)}</nav>
+          <div className="ym-notebook-reader"><NoteCard key={selected.id} note={selected} onEdit={() => { setEditing(selected); setShowForm(true); }} onDelete={() => handleDelete(selected.id)} onPin={() => togglePin(selected)} /></div>
         </div>
       )}
 
@@ -75,21 +77,21 @@ export function NotesPage() {
 
 function NoteCard({ note, onEdit, onDelete, onPin }: { note: Note; onEdit: () => void; onDelete: () => void; onPin: () => void }) {
   return (
-    <div className={`card p-4 card-hover flex flex-col ${note.is_pinned ? 'ring-1 ring-brand-500/20' : ''}`}>
+    <div className={`ym-note-card card p-4 flex flex-col ${note.is_pinned ? 'ring-1 ring-brand-500/20' : ''}`}>
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
           {note.is_pinned && <Pin size={14} className="text-brand-500 fill-current" />}
           <h3 className="text-sm font-bold">{note.title}</h3>
         </div>
         <div className="flex gap-1">
-          <button onClick={onPin} className="btn-ghost p-1" title={note.is_pinned ? 'Unpin' : 'Pin'}>
+          <button type="button" aria-label={note.is_pinned ? `Unpin ${note.title}` : `Pin ${note.title}`} onClick={onPin} className="btn-ghost p-1" title={note.is_pinned ? 'Unpin' : 'Pin'}>
             <Pin size={14} className={note.is_pinned ? 'text-brand-500 fill-current' : ''} />
           </button>
-          <button onClick={onEdit} className="btn-ghost p-1 text-xs">Edit</button>
-          <button onClick={onDelete} className="btn-ghost p-1 text-error-500 hover:bg-error-500/10"><Trash2 size={14} /></button>
+          <button type="button" aria-label={`Edit ${note.title}`} onClick={onEdit} className="btn-ghost p-1 text-xs">Edit</button>
+          <button type="button" aria-label={`Delete ${note.title}`} onClick={onDelete} className="btn-ghost p-1 text-error-500 hover:bg-error-500/10"><Trash2 size={14} /></button>
         </div>
       </div>
-      {note.content && <p className="text-xs text-secondary whitespace-pre-wrap line-clamp-4 mb-2 flex-1">{note.content}</p>}
+      {note.content && <p className="ym-note-content text-sm text-secondary whitespace-pre-wrap mb-2 flex-1">{note.content}</p>}
       {note.screenshot_url && (
         <div className="rounded-lg overflow-hidden border border-themed mb-2">
           <MediaImage source={note.screenshot_url} alt={note.title} className="w-full max-h-40 object-cover" />

@@ -1,3 +1,4 @@
+import { Select } from '@/components/Select';
 import {tradeCurrency} from '@/lib/tradeFinance';
 import { useMemo, useState } from 'react';
 import { BarChart3, TrendingUp, Calendar, Compass, Activity, Layers } from 'lucide-react';
@@ -15,21 +16,30 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { StatCard } from '@/components/ui/StatCard';
 import { StrategyEdgeScore } from '@/components/StrategyEdgeScore';
+import { useMt5Lifecycles } from '@/hooks/useMt5Lifecycles';
+import { EvidenceList } from '@/components/DecisionEvidence';
+import { replayTargets } from '@/lib/decisionReplay';
+import { RichLifecycleAnalytics } from '@/components/RichLifecycleAnalytics';
 
 export function AnalyticsPage() {
   const { user } = useAuth();
   const [source, setSource] = useState('all');
   const sourceFilter = <label className="mb-4 block max-w-sm text-xs font-semibold text-secondary">Trade source
-    <select className="input-field mt-1.5" value={source} onChange={event => setSource(event.target.value)}>
+    <Select className="input-field mt-1.5" value={source} onChange={event => setSource(event.target.value)}>
       <option value="all">All sources</option><option value="manual">Manual</option><option value="mt5">MT5</option>
-    </select>
+    </Select>
   </label>;
   const { trades, loading } = useTrades(user?.id);
-  const { accounts, loading: accountsLoading } = useTradingAccounts(user?.id);
+  const { positions: richPositions } = useMt5Lifecycles(user?.id);
+  // Keep projected broker lifecycles separate from legacy fill-row metrics.
+  // Combining these without exact statement reconciliation would double-count.
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const accountId = selectedAccountId ?? 'all';
+  const selectedRich = source === 'manual' ? [] : richPositions.filter(p=>accountId==='all' || p.account_id===accountId);
+  const { accounts, loading: accountsLoading } = useTradingAccounts(user?.id);
   const accountTrades = useMemo(() => accountId==='all' ? trades : trades.filter(t=>(t.account_id || '__unassigned__')===accountId),[trades,accountId]);
   const closedTrades = useMemo(() => accountTrades.filter(trade => trade.status === 'closed' && (source === 'all' || (trade.trade_source ?? 'manual') === source)), [accountTrades, source]);
+  const evidence=<EvidenceList title="Inspect the selected records" accounts={accounts} targets={replayTargets(closedTrades,selectedRich.filter(r=>r.summary.status==='closed'))}/>;
   const groups = [...new Set(closedTrades.map(t=>tradeCurrency(t,accounts)))];
   const currency=groups[0] || 'Unknown';
   const formatMoney = (value: number) => !/^[A-Z]{3}$/.test(currency) ? value.toFixed(2)+' (currency unknown)' : new Intl.NumberFormat(undefined, {
@@ -56,13 +66,14 @@ export function AnalyticsPage() {
     return (
       <div>
         <SectionHeader title="Analytics" subtitle="Deep performance insights across your trading" />
-      {sourceFilter}
+      {sourceFilter}{evidence}
         <label className="mb-5 block max-w-sm text-xs font-semibold text-secondary">Account view
-          <select className="input-field mt-1.5" value={selectedAccountId ?? accountId} onChange={event => setSelectedAccountId(event.target.value || '__unassigned__')}>
+          <Select className="input-field mt-1.5" value={selectedAccountId ?? accountId} onChange={event => setSelectedAccountId(event.target.value || '__unassigned__')}>
             <option value="all">Whole portfolio</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}
             <option value="__unassigned__">Unassigned legacy trades</option>
-          </select>
+          </Select>
         </label>
+        {selectedRich.length > 0 && <div className="mb-6"><RichLifecycleAnalytics positions={selectedRich} accountId={accountId}/></div>}
         <div className="card p-8">
           <EmptyState icon={<BarChart3 size={40} />} title="No closed trades in this account" message="Choose another account or close/log trades to see realized performance." />
         </div>
@@ -73,20 +84,22 @@ export function AnalyticsPage() {
   return (
     <div>
       <SectionHeader title="Analytics" subtitle="Deep performance insights across your trading" />
-      {sourceFilter}
+      {sourceFilter}{evidence}
       <label className="mb-5 block max-w-sm text-xs font-semibold text-secondary">Account view
-        <select className="input-field mt-1.5" value={selectedAccountId ?? accountId} onChange={event => setSelectedAccountId(event.target.value || '__unassigned__')}>
+        <Select className="input-field mt-1.5" value={selectedAccountId ?? accountId} onChange={event => setSelectedAccountId(event.target.value || '__unassigned__')}>
           <option value="all">Whole portfolio</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.base_currency}</option>)}
           <option value="__unassigned__">Unassigned legacy trades</option>
-        </select>
+        </Select>
       </label>
 
-      {groups.length>1 ? <section className="card p-5"><h2>Realized P&amp;L by settlement currency</h2>{groups.map(group=><p key={group}>{group} � {closedTrades.filter(t=>tradeCurrency(t,accounts)===group).reduce((sum,t)=>sum+t.pnl,0).toFixed(2)}</p>)}<p>Select one account to inspect its detailed metrics.</p></section> : <>
+      {selectedRich.length > 0 && <div className="mb-6"><RichLifecycleAnalytics positions={selectedRich} accountId={accountId}/></div>}
+      <p className="text-xs text-muted mb-3">The charts below summarize legacy journal rows. Broker position-lifecycle analytics above are separate until exact matching and statement reconciliation are complete.</p>
+      {groups.length>1 ? <section className="card p-5"><h2>Realized P&amp;L by settlement currency</h2>{groups.map(group=><p key={group}>{group} · {closedTrades.filter(t=>tradeCurrency(t,accounts)===group).reduce((sum,t)=>sum+t.pnl,0).toFixed(2)}</p>)}<p>Select one account to inspect its detailed metrics.</p></section> : <>
       {/* Summary stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard label="Total Trades" value={String(stats.totalTrades)} icon={<Activity size={20} className="text-brand-500" />} />
         <StatCard label="Win Rate" value={formatPercent(stats.winRate)} icon={<TrendingUp size={20} className="text-accent-500" />} />
-        <StatCard label="Profit Factor" value={stats.profitFactor === Infinity ? '∞' : stats.profitFactor.toFixed(2)} icon={<BarChart3 size={20} className="text-brand-500" />} />
+        <StatCard label="Profit Factor" value={stats.profitFactor === Infinity ? 'âˆž' : stats.profitFactor.toFixed(2)} icon={<BarChart3 size={20} className="text-brand-500" />} />
         <StatCard label="Expectancy" value={formatMoney(stats.expectancy)} icon={<TrendingUp size={20} className="text-success-500" />} />
       </div>
 

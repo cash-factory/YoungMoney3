@@ -1,7 +1,8 @@
 import { createContext, useContext,  } from 'react';
 
 export type Theme = 'dark' | 'light';
-export type ColorPalette = 'obsidian' | 'sapphire-night' | 'black-opal' | 'royal-amethyst' | 'champagne-noir' | 'original' | 'true-pink' | 'tiffany' | 'charcoal-violet' | 'cyprus' | 'turmeric';
+export type ColorPalette = 'obsidian' | 'sapphire-night' | 'black-opal' | 'royal-amethyst' | 'champagne-noir' | 'original' | 'true-pink' | 'tiffany' | 'charcoal-violet' | 'cyprus' | 'turmeric' | 'craftylabs-studio';
+export const DEFAULT_COLOR_PALETTE: ColorPalette = 'craftylabs-studio';
 export const COLOR_PALETTES: { id: ColorPalette; name: string; detail: string; swatch: string; accents?: [string, string, string] }[] = [
   { id: 'original', name: 'Original Ember', detail: 'The original YoungMoney3 look · ember · gold', swatch: '#f97316', accents: ['#0a0807','#f97316','#facc15'] },
   { id: 'true-pink', name: 'True Pink', detail: 'Blush · graphite · orchid', swatch: '#e74791', accents: ['#242228','#ed6bab','#c696e0'] },
@@ -14,10 +15,11 @@ export const COLOR_PALETTES: { id: ColorPalette; name: string; detail: string; s
   { id: 'black-opal', name: 'Black Opal', detail: 'Ink · jade · antique brass', swatch: '#69c6a1', accents: ['#101d1a','#69c6a1','#dfbc78'] },
   { id: 'royal-amethyst', name: 'Royal Amethyst', detail: 'Aubergine · lilac · glacier', swatch: '#bb9cfb', accents: ['#21172e','#bb9cfb','#96d9e9'] },
   { id: 'champagne-noir', name: 'Champagne Noir', detail: 'Onyx · champagne · rose quartz', swatch: '#dfbd86', accents: ['#201b1c','#dfbd86','#e9aeb3'] },
+  { id: 'craftylabs-studio', name: 'CraftyLabs Studio', detail: 'Jet black · signal red · editorial white', swatch: '#ff2145', accents: ['#080808','#ff2145','#f8f8f8'] },
 ];
 interface ThemeCtx { theme: Theme; palette: ColorPalette; toggle: () => void; setPalette: (palette: ColorPalette) => void; }
 
-export const ThemeContext = createContext<ThemeCtx>({ theme: 'dark', palette: 'original', toggle: () => {}, setPalette: () => {} });
+export const ThemeContext = createContext<ThemeCtx>({ theme: 'dark', palette: DEFAULT_COLOR_PALETTE, toggle: () => {}, setPalette: () => {} });
 
 export const isPalette = (value: string | null): value is ColorPalette => COLOR_PALETTES.some(palette => palette.id === value);
 

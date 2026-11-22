@@ -1,3 +1,16 @@
+import { announceAction } from './actionFeedback';
+
+const displayTable = (name:string) => ({
+  trading_accounts:'Trading account',trades:'Trade',journal_entries:'Journal entry',
+  risk_settings:'Risk settings',trader_strategies:'Strategy',
+  strategy_checklist_items:'Strategy checklist',trading_plans:'Trading plan',
+  trading_rules:'Trading rule',goals:'Goal',weekly_reviews:'Weekly review',
+  notes:'Note',trading_setups:'Setup',strategy_test_sessions:'Strategy test',
+  strategy_test_trades:'Strategy test trade',study_materials:'Study material',
+  decision_reviews:'Decision review',trading_account_adjustments:'Account adjustment',
+  market_instruments:'Market instrument'
+} as Record<string,string>)[name]||name.replace(/_/g,' ');
+
 type Row = Record<string, unknown>;
 type Result = { data: Row | null; error: { message: string; status?:number } | null };
 type QueryResult = { data: unknown; error: { message: string } | null; count?: number | null };
@@ -107,6 +120,15 @@ class Query {
         if(typeof next==='number' && next<=page) return {data:null,error:{message:'Data pagination stalled.'}};
         page=next;
       }
+    }
+    // Most workspace Save/Delete buttons flow through this shared adapter.
+    // A resolved HTTP response, not the click event, is the success boundary.
+    // Reads/navigation stay silent; failed writes are always surfaced.
+    if(this.operation!=='select'){
+      const name=displayTable(this.table);
+      const verb=this.operation==='delete'?'deleted':this.operation==='insert'?'created':'saved';
+      if(result.error) announceAction('error',name+' could not be '+verb+': '+result.error.message);
+      else announceAction('success',name+' '+verb+'.');
     }
     if (result.error) return { data: null, error: result.error };
     const value = result.data?.data;

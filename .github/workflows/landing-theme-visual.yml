@@ -1,0 +1,64 @@
+name: Visual QA — landing icons (staging only)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/pages/LandingPage.tsx'
+      - 'src/components/LandingIcon.tsx'
+      - 'src/index.css'
+      - 'src/context/ThemeContext.ts'
+      - 'scripts/test-landing-icons-browser.mjs'
+      - '.github/workflows/landing-theme-visual.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  landing-theme-icons:
+    if: >-
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.head.ref == 'feat/rich-capture-staging-20261110') ||
+      (github.event_name == 'workflow_dispatch' &&
+       github.ref == 'refs/heads/feat/rich-capture-staging-20261110')
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+    timeout-minutes: 25
+    steps:
+      - name: Check out staging branch for visual QA
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Validate and build homepage
+        run: |
+          npm run test:ui
+          npm run build
+      - name: Use the browser preinstalled in the pinned Playwright container
+        run: npm install --no-save --ignore-scripts playwright@1.56.1
+      - name: Check 12 palettes in both modes at 4 responsive sizes
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx vite preview --host 127.0.0.1 --port 4173 > "$RUNNER_TEMP/ym3-preview.log" 2>&1 &
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail http://127.0.0.1:4173/ >/dev/null || { cat "$RUNNER_TEMP/ym3-preview.log"; exit 1; }
+          YM3_PREVIEW_URL=http://127.0.0.1:4173/ node scripts/test-landing-icons-browser.mjs
+      - name: Preserve feature-card screenshots for manual visual review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: landing-icon-palettes-${{ github.sha }}
+          path: artifacts/landing-icons/
+          if-no-files-found: warn
+          retention-days: 7

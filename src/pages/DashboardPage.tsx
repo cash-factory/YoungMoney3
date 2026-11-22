@@ -1,7 +1,9 @@
 import { accountLedger, tradeCurrency } from '@/lib/tradeFinance';
 import { dateKeyInTimeZone } from '@/lib/riskMetrics';
-import { useEffect, useMemo, useState } from 'react';
-import { Wallet, Target, TrendingUp, Flame, Activity, BarChart3, ChevronDown, Plus, ArrowUpRight, ArrowDownRight, Minus, Star, Clock, Eye } from 'lucide-react';
+import { pnlTone, signedMoney } from '@/lib/tradingTone';
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import '@/dashboard-studio.css';
+import { Wallet, Target, TrendingUp, Flame, Activity, BarChart3, ChevronDown, Plus, ArrowUpRight, ArrowDownRight, Minus, Star, Clock, Eye, AlertCircle, Compass } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { useAllTestTrades, useBacktests, useForwardTrades, useTestSessions, useTrades, useTradingAccounts, useTradingAccountAdjustments } from '@/hooks/useData';
 import { useAuth } from '@/context/AuthContext';
@@ -9,7 +11,9 @@ import { computeDashboardStats, equityCurveData, dailyPnlData, formatPercent, fo
 import { StatCard } from '@/components/ui/StatCard';
 import { LoadingSpinner, EmptyState } from '@/components/ui/Feedback';
 import { Modal } from '@/components/ui/Modal';
+import { AccountMonitor } from '@/components/AccountMonitor';
 import { TradeForm } from '@/components/TradeForm';
+import { ThemedSelect } from '@/components/ThemedSelect';
 import { TradeCalculator } from '@/components/TradeCalculator';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import { Achievements } from '@/components/Achievements';
@@ -18,13 +22,24 @@ import { StrategyEdgeScore } from '@/components/StrategyEdgeScore';
 import { RiskGuardian } from '@/components/RiskGuardian';
 import { RiskSettingsModal } from '@/components/RiskSettingsModal';
 import { TradeAttachments } from '@/components/TradeAttachments';
+import { RichLifecycleAnalytics } from '@/components/RichLifecycleAnalytics';
+import { useMt5Lifecycles } from '@/hooks/useMt5Lifecycles';
 import { useRiskSettings, useChecklist, useTradingPlans } from '@/hooks/useData';
 import type { Trade, TradeInput, RiskSettingsInput } from '@/lib/types';
 import { subDays, format } from 'date-fns';
 
-export function DashboardPage() {
+import { DecisionDesk, PerformancePin, type FastCapture } from '@/components/DecisionDesk';
+interface DashboardProps {
+  accountFilter: string;
+  onAccountChange: (account: string) => void;
+  onOpenGuide?: () => void;
+  onCapture: (mode: FastCapture) => void;
+  openWeekly: () => void;
+}
+export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onCapture, openWeekly }: DashboardProps) {
   const { user } = useAuth();
   const { trades: liveTrades, loading, loadError, asOf, addTrade } = useTrades(user?.id);
+  const { positions: lifecyclePositions } = useMt5Lifecycles(user?.id);
   const { accounts } = useTradingAccounts(user?.id);
   const { adjustments } = useTradingAccountAdjustments(user?.id);
   const { backtests } = useBacktests(user?.id);
@@ -37,11 +52,35 @@ export function DashboardPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const [showRiskSettings, setShowRiskSettings] = useState(false);
-  const [accountFilter, setAccountFilter] = useState('all');
   const [tradeOrigin, setTradeOrigin] = useState('all');
   const [source, setSource] = useState<'live' | 'backtest' | 'forward'>('live');
+  const pinKey='ymfx:opening-performance:'+user?.id;
+  const [pinned,setPinned]=useState(()=>{try{return localStorage.getItem(pinKey)==='1';}catch{return false;}});
+  const [selectedSection, setSelectedSection] = useState(pinned?'performance':'overview');
+  const activeSection = source !== 'live' && selectedSection === 'risk' ? 'overview' : selectedSection;
+  const sections = [
+    { id: 'overview', label: 'Overview', description: 'Your account snapshot and the figures that matter today.' },
+    ...(source === 'live' ? [{ id: 'risk', label: 'Risk & rules', description: 'Protect your capital. Review limits and the plan before your next trade.' }] : []),
+    { id: 'performance', label: 'Performance', description: 'Read your results over time and understand the shape of your progress.' },
+    { id: 'recent', label: 'Recent trades', description: 'Review your latest decisions, one trade at a time.' },
+    { id: 'deep-dive', label: 'Deep dive', description: 'Explore consistency, behavior, milestones and tools for your next review.' },
+  ];
+  const selectAdjacentSection = (event: KeyboardEvent<HTMLElement>) => {
+    const index = sections.findIndex(section => section.id === activeSection);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? sections.length - 1
+      : event.key === 'ArrowRight' ? (index + 1) % sections.length
+        : event.key === 'ArrowLeft' ? (index - 1 + sections.length) % sections.length : null;
+    if (next == null) return;
+    event.preventDefault();
+    setSelectedSection(sections[next].id);
+    document.getElementById(`dashboard-tab-${sections[next].id}`)?.focus();
+  };
 
   const account = accounts.find(a => a.id === accountFilter) || null;
+  const filteredLifecyclePositions = useMemo(() =>
+    source === 'live' && tradeOrigin !== 'manual' ?
+      lifecyclePositions.filter(row => accountFilter === 'all' || row.account_id === accountFilter) : [],
+    [lifecyclePositions,accountFilter,source,tradeOrigin]);
   const accountPlan = plans.find(plan => plan.id === account?.default_plan_id) || null;
   const sessionSourceTrades = useMemo(() => loggedTestTrades.flatMap(test => {
     const session = sessions.find(s => s.id === test.session_id);
@@ -130,7 +169,9 @@ export function DashboardPage() {
   }, [trades]);
 
   const topPairs = useMemo(() => groupByPair(trades).slice(0, 5), [trades]);
-  const recentTrades = useMemo(() => trades.slice(0, 6), [trades]);
+  const recentTrades = useMemo(() => [...trades].sort((a,b) =>
+    Date.parse(b.entry_time) - Date.parse(a.entry_time)).slice(0, 6), [trades]);
+  const openInView = trades.filter(t=>t.status==='open').length;
 
   const handleSubmit = async (data: TradeInput) => {
     await addTrade(data);
@@ -141,67 +182,101 @@ export function DashboardPage() {
     await saveSettings(input);
   };
 
-  const jumpToSection = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
-      block: 'start',
-    });
-  };
-
   if (loading) return <LoadingSpinner label="Loading your dashboard..." />;
 
   if (loadError && !asOf) return <p role="alert">Trade history unavailable. Risk figures will appear after the next successful refresh.</p>;
   return (
     <div className="ym-dashboard">
-      {loadError && <p role="alert">Trade history unavailable. Showing figures last refreshed {new Date(asOf!).toLocaleString()}.</p>}
-      {trades.some(t=>t.status==='closed' && (!t.exit_time || tradeCurrency(t,accounts)==='Unknown' || t.realized_r == null)) && <p className="card p-3 text-sm" role="status">Some closed trades need review for close time, currency or initial risk. Daily risk and R statistics may be incomplete.</p>}
-      {account?.broker_balance != null && (!account.broker_balance_at || Date.now()-Date.parse(account.broker_balance_at)>120000) && <p role="status" className="card p-3 text-xs text-secondary">Broker balance is a last-known snapshot, not a live quote. Check MT5 Connections for its latest sync before making trading decisions.</p>}
+      {loadError && <p role="alert" className="ym-dash-history-alert">Trade history unavailable. Showing figures last refreshed {new Date(asOf!).toLocaleString()}.</p>}
 
-      <div className="ym-dash-heading" id="ym-overview">
-        <div className="min-w-0">
-          <p className="ym-dash-eyebrow"><span aria-hidden="true" className="ym-dash-eyebrow-mark" /> TRADING OPERATIONS / OVERVIEW</p>
-          <h1>Trading overview</h1>
-          <p>Everything that matters, in one clear view. Review your results, risk and next decisions.</p>
+      <div className="ym-dash-heading ym-dash-heading--illustrated" id="ym-overview">
+        <img className="ym-dash-heading-art" src="/assets/page-art/dashboard.svg" alt="" aria-hidden="true" loading="eager" decoding="async" width="960" height="540" />
+        <div className="min-w-0 ym-dash-heading-copy">
+          <p className="ym-dash-eyebrow"><span aria-hidden="true" className="ym-dash-eyebrow-mark" /> TRADING OPERATIONS <span aria-hidden="true">/</span> <span className="ym-dash-topic-mark">OVERVIEW</span></p>
+          <h1>Trading <span className="ym-dash-title-mark">Overview</span></h1>
+          <p>Review your results. Plan your next decision.</p>
         </div>
-        <button type="button" onClick={() => setShowAdd(true)} className="btn-primary ym-dash-new-trade">
-          <Plus size={18} /> Add trade
-        </button>
+        <div className="ym-dash-heading-actions">
+          <button type="button" onClick={onOpenGuide} className="ym-dash-guide-launch" aria-label="Explore platform features">
+            <Compass size={17} /> Explore features <span className="ym-dash-guide-live">22 stops</span>
+          </button>
+          <button type="button" onClick={() => setShowAdd(true)} className="btn-primary ym-dash-new-trade">
+            <Plus size={18} /> Add trade
+          </button>
+        </div>
       </div>
 
       <div className="ym-dash-controls card" role="group" aria-label="Performance filters">
-        <label>
+        <div className="ym-dash-filter">
           <span>Trading account</span>
-          <select className="input-field" value={accountFilter} onChange={event => setAccountFilter(event.target.value)}>
-            <option value="all">All accounts</option>
-            {accounts.map(item => <option key={item.id} value={item.id}>{item.name} · {item.base_currency}</option>)}
-          </select>
-        </label>
-        <label>
+          <ThemedSelect label="Trading account" value={accountFilter} onChange={onAccountChange}
+            options={[{value:'all',label:'All accounts',description:'Review every journal account'},
+              ...accounts.map(item=>({value:item.id,label:`${item.name} · ${item.base_currency}`,description:'Journal account'}))]} />
+        </div>
+        <div className="ym-dash-filter">
           <span>Performance view</span>
-          <select className="input-field" value={source} onChange={event => setSource(event.target.value as 'live' | 'backtest' | 'forward')}>
-            <option value="live">Recorded trades</option>
-            <option value="backtest">Backtest results</option>
-            <option value="forward">Forward test results</option>
-          </select>
-        </label>
-        {source === 'live' ? <label>
+          <ThemedSelect label="Performance view" value={source}
+            onChange={value=>{
+              setSource(value as 'live'|'backtest'|'forward');
+              if (value !== 'live' && selectedSection === 'risk') setSelectedSection('overview');
+            }}
+            options={[{value:'live',label:'Recorded trades',description:'Broker imports and manual entries'},
+              {value:'backtest',label:'Backtest results',description:'Historical strategy experiments'},
+              {value:'forward',label:'Forward test results',description:'Practice and simulated trades'}]} />
+        </div>
+        {source === 'live' ? <div className="ym-dash-filter">
           <span>Trade origin</span>
-          <select className="input-field" value={tradeOrigin} onChange={event => setTradeOrigin(event.target.value)}>
-            <option value="all">All sources</option>
-            <option value="manual">Manual entries</option>
-            <option value="mt5">MT5 imports</option>
-          </select>
-        </label> : <div className="ym-dash-filter-note">Practice results are separate from recorded account balances.</div>}
+          <ThemedSelect label="Trade origin" value={tradeOrigin} onChange={setTradeOrigin}
+            options={[{value:'all',label:'All sources',description:'Manual entries and MT5 imports'},
+              {value:'manual',label:'Manual entries',description:'Trades recorded in the journal'},
+              {value:'mt5',label:'MT5 imports',description:'Trades captured from the connector'}]} />
+        </div> : <div className="ym-dash-filter-note">Practice results are separate from recorded account balances.</div>}
       </div>
 
-      <nav className="ym-dash-jump" aria-label="Dashboard sections">
-        <button type="button" onClick={() => jumpToSection('ym-overview')}>Overview</button>
-        {source === 'live' && <button type="button" onClick={() => jumpToSection('ym-risk')}>Risk &amp; rules</button>}
-        <button type="button" onClick={() => jumpToSection('ym-performance')}>Performance</button>
-        <button type="button" onClick={() => jumpToSection('ym-recent')}>Recent trades</button>
-        <button type="button" onClick={() => jumpToSection('ym-deep-dive')}>Deep dive</button>
-      </nav>
+      <section className="ym-dash-pulse" aria-label="Filtered performance at a glance">
+        <button type="button" data-tone={mixedCurrencyView?'neutral':pnlTone(stats.totalPnl)}
+          onClick={()=>setSelectedSection('performance')} aria-label="Open net realized performance">
+          <span className="ym-pulse-label"><Wallet size={14} /> NET CLOSED RESULT</span>
+          <strong className="ym-pulse-number">{mixedCurrencyView?'By currency':signedMoney(stats.totalPnl,formatCurrency(stats.totalPnl))}</strong>
+          <span className="ym-pulse-foot">{mixedCurrencyView?'Select an account to see one currency':'Realized trades · selected filters'}</span>
+        </button>
+        <button type="button" data-tone="positive" onClick={()=>setSelectedSection('recent')} aria-label="Review winning trades">
+          <span className="ym-pulse-label"><ArrowUpRight size={14} /> WINS</span>
+          <strong className="ym-pulse-number">{stats.wins}</strong>
+          <span className="ym-pulse-foot">Closed with profit</span>
+        </button>
+        <button type="button" data-tone="negative" onClick={()=>setSelectedSection('recent')} aria-label="Review losing trades">
+          <span className="ym-pulse-label"><ArrowDownRight size={14} /> LOSSES</span>
+          <strong className="ym-pulse-number">{stats.losses}</strong>
+          <span className="ym-pulse-foot">Closed with loss</span>
+        </button>
+        <button type="button" data-tone="pending" onClick={()=>setSelectedSection('recent')} aria-label="Review recent trades">
+          <span className="ym-pulse-label"><Clock size={14} /> OPEN TRADES</span>
+          <strong className="ym-pulse-number">{openInView}</strong>
+          <span className="ym-pulse-foot">No realized outcome yet</span>
+        </button>
+      </section>
 
+      {(trades.some(t=>t.status==='closed' && (!t.exit_time || tradeCurrency(t,accounts)==='Unknown' || t.realized_r == null)) || (account?.broker_balance != null && (!account.broker_balance_at || Date.now()-Date.parse(account.broker_balance_at)>120000))) && <aside className="ym-dash-data-quality" aria-label="Dashboard data quality" role="status">
+        {trades.some(t=>t.status==='closed' && (!t.exit_time || tradeCurrency(t,accounts)==='Unknown' || t.realized_r == null)) && <details className="ym-dash-quality-notice"><summary><AlertCircle size={16} aria-hidden="true" /><span><strong>Some trade data needs review</strong><small>Daily risk and R figures may be incomplete.</small></span><ChevronDown size={15} aria-hidden="true" /></summary><p>Some closed trades need review for close time, currency or initial risk. Daily risk and R statistics may be incomplete.</p></details>}
+        {account?.broker_balance != null && (!account.broker_balance_at || Date.now()-Date.parse(account.broker_balance_at)>120000) && <details className="ym-dash-quality-notice"><summary><Clock size={16} aria-hidden="true" /><span><strong>Broker balance is a last-known snapshot</strong><small>Check the latest sync before making trading decisions.</small></span><ChevronDown size={15} aria-hidden="true" /></summary><p>Broker balance is a last-known snapshot, not a live quote. Check MT5 Connections for its latest sync before making trading decisions.</p></details>}
+      </aside>}
+
+      <nav className="ym-dash-jump" role="tablist" aria-label="Dashboard sections" onKeyDown={selectAdjacentSection}>
+        {sections.map((section, index) => (
+          <button type="button" key={section.id} id={`dashboard-tab-${section.id}`} role="tab"
+            aria-selected={activeSection === section.id} aria-controls={`dashboard-panel-${section.id}`}
+            tabIndex={activeSection === section.id ? 0 : -1} onClick={() => setSelectedSection(section.id)}>
+            <span aria-hidden="true" className="ym-dash-tab-number">0{index + 1}</span>{section.label}
+          </button>
+        ))}
+      </nav>
+      <div key={activeSection} className="ym-dash-focus-panel" role="tabpanel" tabIndex={0}
+        id={`dashboard-panel-${activeSection}`} aria-labelledby={`dashboard-tab-${activeSection}`}>
+        <p className="ym-dash-focus-description">{sections.find(section => section.id === activeSection)?.description}</p>
+      {source==='live' && <PerformancePin pinned={pinned} onChange={()=>{try { localStorage.setItem(pinKey,pinned?'0':'1'); }catch{/* optional */}setPinned(!pinned);}}/>}
+      {activeSection === 'overview' && <>
+      {source==='live' && <DecisionDesk trades={trades} positions={filteredLifecyclePositions} account={account} accounts={accounts} onCapture={onCapture} openWeekly={openWeekly}/>}
       <section className="ym-dash-balance" aria-label="Account and trading result">
         <div className="ym-dash-balance-main">
           <p className="ym-dash-kicker">{source === 'live' ? 'ACCOUNT SNAPSHOT' : 'PRACTICE PERFORMANCE'}</p>
@@ -244,13 +319,14 @@ export function DashboardPage() {
             <span>Realized trading result</span>
             <span className="ym-dash-result-period">Current filters</span>
           </div>
-          <p className={stats.totalPnl < 0 && !mixedCurrencyView ? 'ym-dash-result-value is-negative' : 'ym-dash-result-value'}>
-            {mixedCurrencyView ? 'By currency' : formatCurrency(stats.totalPnl)}
+          <p className={stats.totalPnl < 0 && !mixedCurrencyView ? 'ym-dash-result-value is-negative' : 'ym-dash-result-value'}
+            data-neutral={mixedCurrencyView || stats.totalPnl===0}>
+            {mixedCurrencyView ? 'By currency' : signedMoney(stats.totalPnl,formatCurrency(stats.totalPnl))}
           </p>
           {mixedCurrencyView ? (
             <div className="ym-dash-currency-results">
               {currencyTotals.map(([code, amount]) => (
-                <div key={code}><span>{code}</span><strong className={amount < 0 ? 'is-negative' : ''}>{formatAccountMoney(amount, code)}</strong></div>
+                <div key={code}><span>{code}</span><strong className={amount < 0 ? 'is-negative' : ''} data-neutral={amount===0}>{signedMoney(amount,formatAccountMoney(amount, code))}</strong></div>
               ))}
             </div>
           ) : (
@@ -263,26 +339,35 @@ export function DashboardPage() {
         </div>
       </section>
 
-      <div className="ym-dash-section-title">
-        <div><p className="ym-dash-kicker">AT A GLANCE</p><h2>Key performance</h2></div>
-        <span>Closed trades · selected view</span>
-      </div>
-      <div className="ym-dash-metric-grid">
-        <StatCard label="Net P&L" value={mixedCurrencyView ? 'By currency' : formatCurrency(stats.totalPnl)}
-          icon={<Wallet size={19} />} trend={mixedCurrencyView ? 'neutral' : stats.totalPnl >= 0 ? 'up' : 'down'}
-          trendValue={mixedCurrencyView ? 'See the currency breakdown above' : String(stats.totalTrades) + ' closed trades'} accent="blue" />
-        <StatCard label="Win rate" value={formatPercent(stats.winRate)} icon={<Target size={19} />}
-          sublabel={stats.wins + ' wins · ' + stats.losses + ' losses · ' + stats.breakevens + ' break-even'} accent="amber" />
-        <StatCard label="Closed trades" value={String(stats.totalTrades)} icon={<Activity size={19} />}
-          sublabel={String(trades.filter(item => item.status === 'open').length) + ' open trades in this view'} accent="emerald" />
-        <StatCard label="Profit factor"
-          value={mixedCurrencyView ? 'Choose account' : stats.profitFactor === Infinity ? '∞' : stats.profitFactor.toFixed(2)}
-          icon={<TrendingUp size={19} />}
-          sublabel={mixedCurrencyView ? 'Not combined across currencies' : stats.totalTrades === 0 ? 'No closed trades yet' : 'Expectancy: ' + formatCurrency(stats.expectancy)}
-          accent="blue" />
-      </div>
+      {source === 'live' && account && (account.broker_balance != null || account.broker_equity != null) &&
+        <section className="card p-4 sm:p-5 mb-6" aria-label="Broker reported snapshots">
+          <div className="flex flex-wrap justify-between items-center gap-2 mb-3">
+            <div><p className="ym-dash-kicker">BROKER SNAPSHOT / CAPTURE HEALTH</p><h2 className="text-sm font-semibold mt-1">Last MT5 account snapshot</h2></div>
+            <span className="badge badge-neutral">{account.broker_balance_at && Date.now()-Date.parse(account.broker_balance_at)<120000 ? 'Recent observation' : 'Stale or unknown freshness'}</span>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="rounded-lg bg-secondary p-3">
+              <p className="text-xs text-muted">Broker-reported balance</p>
+              <p className="font-mono text-lg font-bold mt-2">{account.broker_balance == null ? 'Unavailable' : formatAccountMoney(account.broker_balance, account.base_currency)}</p>
+              <p className="text-xs text-muted mt-1">As of {account.broker_balance_at ? new Date(account.broker_balance_at).toLocaleString() : 'unknown'}</p>
+            </div>
+            <div className="rounded-lg bg-secondary p-3">
+              <p className="text-xs text-muted">Broker-reported equity</p>
+              <p className="font-mono text-lg font-bold mt-2">{account.broker_equity == null ? 'Unavailable' : formatAccountMoney(account.broker_equity, account.base_currency)}</p>
+              <p className="text-xs text-muted mt-1">As of {account.broker_equity_at ? new Date(account.broker_equity_at).toLocaleString() : 'unknown'}</p>
+            </div>
+          </div>
+          <p className="text-xs text-muted mt-3">Last reported broker values are snapshots, not live streaming quotes. Review MT5 Connections for sync health and unfinished history.</p>
+        </section>}
+      {source === 'live' && activeSection === 'overview' && <AccountMonitor accountId={accountFilter}/>}
+      {filteredLifecyclePositions.length > 0 && <div className="mb-6">
+        <RichLifecycleAnalytics positions={filteredLifecyclePositions} compact />
+      </div>}
 
-      {source === 'live' && <section id="ym-risk" className="ym-dash-section">
+
+      </>}
+
+      {activeSection === 'risk' && source === 'live' && <section id="ym-risk" className="ym-dash-section">
         <div className="ym-dash-section-title">
           <div><p className="ym-dash-kicker">CAPITAL PRESERVATION</p><h2>Risk &amp; trading rules</h2></div>
           <span>Review limits before the next trade</span>
@@ -293,7 +378,7 @@ export function DashboardPage() {
       {source === 'live' && account?.account_type === 'propfirm' && <div className="card p-4 mb-6 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold">Challenge progress</h3><span className="text-xs text-muted">Resets daily at midnight {account.challenge_reset_timezone || 'UTC'}</span></div>
         {account.challenge_target_pct != null ? <><div className="flex items-center justify-between text-xs"><span className="text-secondary">Profit target · {account.challenge_target_pct}%</span><strong>{challengeProgress.toFixed(0)}% complete</strong></div><div className="h-2 rounded-full bg-secondary overflow-hidden"><div className="h-full rounded-full bg-orange-500 transition-[width]" style={{ width: `${challengeProgress}%` }} /></div></> : <p className="text-xs text-muted">Set a profit target in account settings to track challenge progress.</p>}
-        <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs"><span>Today: <strong className={accountTodayPnl < 0 ? 'text-error-500' : 'text-secondary'}>{formatAccountMoney(accountTodayPnl, account.base_currency)}</strong>{account.daily_loss_limit_pct != null && <> · Daily loss limit {formatAccountMoney(account.balance * account.daily_loss_limit_pct / 100, account.base_currency)}</>}</span><span>Current balance: <strong>{formatAccountMoney(currentBalance || 0, account.base_currency)}</strong>{account.max_loss_limit_pct != null && <> · Max loss limit {formatAccountMoney(account.balance * account.max_loss_limit_pct / 100, account.base_currency)}</>}</span></div>
+        <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs"><span>Today: <strong className={`ym-market-${pnlTone(accountTodayPnl)}`}>{formatAccountMoney(accountTodayPnl, account.base_currency)}</strong>{account.daily_loss_limit_pct != null && <> · Daily loss limit {formatAccountMoney(account.balance * account.daily_loss_limit_pct / 100, account.base_currency)}</>}</span><span>Current balance: <strong>{formatAccountMoney(currentBalance || 0, account.base_currency)}</strong>{account.max_loss_limit_pct != null && <> · Max loss limit {formatAccountMoney(account.balance * account.max_loss_limit_pct / 100, account.base_currency)}</>}</span></div>
         {(account.daily_loss_limit_pct != null && accountTodayPnl <= -(account.balance * account.daily_loss_limit_pct / 100) || account.max_loss_limit_pct != null && accountPnl <= -(account.balance * account.max_loss_limit_pct / 100)) && <p role="alert" className="text-xs font-semibold text-error-500">One of this account’s configured loss limits has been reached or exceeded.</p>}
       </div>}
 
@@ -308,7 +393,26 @@ export function DashboardPage() {
 
       </section>}
 
-      <section className="ym-dash-section" id="ym-performance">
+      {activeSection === 'performance' && <section className="ym-dash-section" id="ym-performance">
+      <div className="ym-dash-section-title">
+        <div><p className="ym-dash-kicker">AT A GLANCE</p><h2>Key performance</h2></div>
+        <span>Closed trades · selected view</span>
+      </div>
+      <div className="ym-dash-metric-grid">
+        <StatCard label="Net P&L" value={mixedCurrencyView ? 'By currency' : signedMoney(stats.totalPnl,formatCurrency(stats.totalPnl))}
+          icon={<Wallet size={19} />} trend={mixedCurrencyView ? 'neutral' : stats.totalPnl >= 0 ? 'up' : 'down'}
+          trendValue={mixedCurrencyView ? 'See the currency breakdown above' : String(stats.totalTrades) + ' closed trades'} accent="blue" />
+        <StatCard label="Win rate" value={formatPercent(stats.winRate)} icon={<Target size={19} />}
+          sublabel={stats.wins + ' wins · ' + stats.losses + ' losses · ' + stats.breakevens + ' break-even'} accent="amber" />
+        <StatCard label="Closed trades" value={String(stats.totalTrades)} icon={<Activity size={19} />}
+          sublabel={String(trades.filter(item => item.status === 'open').length) + ' open trades in this view'} accent="emerald" />
+        <StatCard label="Profit factor"
+          value={mixedCurrencyView ? 'Choose account' : stats.profitFactor === Infinity ? '∞' : stats.profitFactor.toFixed(2)}
+          icon={<TrendingUp size={19} />}
+          sublabel={mixedCurrencyView ? 'Not combined across currencies' : stats.totalTrades === 0 ? 'No closed trades yet' : 'Expectancy: ' + formatCurrency(stats.expectancy)}
+          accent="blue" />
+      </div>
+
         <div className="ym-dash-section-title">
           <div><p className="ym-dash-kicker">PERFORMANCE REVIEW</p><h2>Performance trends</h2></div>
           <span>Results from closed trades</span>
@@ -321,8 +425,8 @@ export function DashboardPage() {
               <AreaChart data={equity} margin={{ left: -10, right: 10, top: 5, bottom: 0 }}>
                 <defs>
                   <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--brand)" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="var(--brand)" stopOpacity={0} />
+                    <stop offset="0%" stopColor={stats.totalPnl<0?'var(--ym-loss)':'var(--ym-gain)'} stopOpacity={0.23} />
+                    <stop offset="100%" stopColor={stats.totalPnl<0?'var(--ym-loss)':'var(--ym-gain)'} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
@@ -331,7 +435,7 @@ export function DashboardPage() {
                   contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 12 }}
                   formatter={(v) => [formatCurrency(Number(v)), 'Cumulative P&L']}
                 />
-                <Area type="monotone" dataKey="equity" stroke="var(--brand)" strokeWidth={2} fill="url(#equityGrad)" />
+                <Area type="monotone" dataKey="equity" stroke={stats.totalPnl<0?'var(--ym-loss)':'var(--ym-gain)'} strokeWidth={2.5} fill="url(#equityGrad)" />
               </AreaChart>
             </ResponsiveContainer>
           ) : (
@@ -352,7 +456,7 @@ export function DashboardPage() {
                 />
                 <Bar dataKey="pnl" radius={[6, 6, 0, 0]}>
                   {last7Days.map((d, i) => (
-                    <Cell key={i} fill={d.pnl >= 0 ? '#10b981' : '#f87171'} />
+                    <Cell key={i} fill={d.pnl > 0 ? 'var(--ym-gain)' : d.pnl<0?'var(--ym-loss)':'var(--text-muted)'} />
                   ))}
                 </Bar>
               </BarChart>
@@ -365,7 +469,9 @@ export function DashboardPage() {
 
       </section>
 
-      <section className="ym-dash-section" id="ym-recent">
+      }
+
+      {activeSection === 'recent' && <section className="ym-dash-section" id="ym-recent">
         <div className="ym-dash-section-title">
           <div><p className="ym-dash-kicker">THE LEDGER</p><h2>Recent trades</h2></div>
           <span>Open a trade to review its details</span>
@@ -387,30 +493,30 @@ export function DashboardPage() {
               </thead>
               <tbody>
                 {recentTrades.map(t => (
-                  <tr key={t.id} className="border-b border-themed/50 hover:bg-secondary transition-colors">
+                  <tr key={t.id} className="border-b border-themed/50 hover:bg-secondary transition-colors" data-result={t.status==='open'?'open':t.pnl>0?'win':t.pnl<0?'loss':'neutral'}>
                     <td className="py-2.5 px-2 text-xs text-muted">{formatDateTime(t.entry_time)}</td>
                     <td className="py-2.5 px-2 font-mono font-semibold">{t.pair}</td>
                     <td className="py-2.5 px-2">
-                      <span className={`badge ${t.direction === 'long' ? 'badge-success' : 'badge-error'}`}>
+                      <span className="ym-direction-tag" data-side={t.direction}>
                         {t.direction === 'long' ? 'Long' : 'Short'}
                       </span>
                     </td>
                     <td className="py-2.5 px-2">
                       {t.status === 'open' ? (
-                        <span className="badge bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20">
+                        <span className="ym-market-chip" data-tone="pending">
                           <Clock size={12} /> Open
                         </span>
                       ) : (
-                        <span className={`badge ${t.outcome === 'win' ? 'badge-success' : t.outcome === 'loss' ? 'badge-error' : 'badge-neutral'}`}>
-                          {t.outcome === 'win' ? <ArrowUpRight size={12} /> : t.outcome === 'loss' ? <ArrowDownRight size={12} /> : <Minus size={12} />}
-                          {t.outcome || '—'}
+                        <span className="ym-market-chip" data-tone={pnlTone(t.pnl)}>
+                          {t.pnl>0 ? <ArrowUpRight size={12} /> : t.pnl<0 ? <ArrowDownRight size={12} /> : <Minus size={12} />}
+                          {t.pnl>0?'Win':t.pnl<0?'Loss':'Break-even'}
                         </span>
                       )}
                     </td>
-                    <td className={`py-2.5 px-2 text-right font-mono font-semibold ${t.status === 'open' ? 'text-orange-500' : t.pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>
-                      {t.status === 'open' ? 'Pending' : mixedCurrencyView ? formatAccountMoney(t.pnl, tradeCurrency(t, accounts)) : account ? formatAccountMoney(t.pnl, account.base_currency) : formatCurrency(t.pnl)}
+                    <td className={`py-2.5 px-2 text-right font-semibold ym-market-value ym-market-${pnlTone(t.pnl,t.status==='open')}`}>
+                      {t.status === 'open' ? 'Pending' : signedMoney(t.pnl,mixedCurrencyView ? formatAccountMoney(t.pnl, tradeCurrency(t, accounts)) : account ? formatAccountMoney(t.pnl, account.base_currency) : formatCurrency(t.pnl))}
                     </td>
-                    <td className="py-2.5 px-2 text-right font-mono text-muted">{t.pips?.toFixed(1) || '0.0'}</td>
+                    <td className={`py-2.5 px-2 text-right ym-market-value text-xs ym-market-${pnlTone(t.pips,t.status==='open')}`}>{t.status==='open'?'—':(t.pips>0?'+':'')+(t.pips?.toFixed(1)||'0.0')}</td>
                     <td className="py-2.5 px-2 text-right">
                       <button
                         type="button"
@@ -434,7 +540,9 @@ export function DashboardPage() {
 
       </section>
 
-      <details className="ym-dash-details" id="ym-deep-dive">
+      }
+
+      {activeSection === 'deep-dive' && <details className="ym-dash-details" id="ym-deep-dive" open>
         <summary className="ym-dash-details-trigger">
           <span className="ym-dash-detail-icon"><BarChart3 size={19} /></span>
           <span className="ym-dash-detail-copy"><strong>Deep-dive analytics &amp; tools</strong><small>Streaks, best days, trade calculator, heatmap and coaching insights</small></span>
@@ -486,7 +594,7 @@ export function DashboardPage() {
           <div className="ym-dash-section-title"><div><p className="ym-dash-kicker">THE DETAILS</p><h2>Patterns &amp; behavior</h2></div></div>
       {/* Best/Worst day + Top pairs */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        {mixedCurrencyView ? <div className="card p-5"><h3 className="text-sm font-semibold mb-4">Currency Breakdown</h3><div className="space-y-2">{currencyTotals.length ? currencyTotals.map(([currency, pnl]) => <div key={currency} className="flex items-center justify-between rounded-lg bg-secondary px-3 py-2"><span className="text-sm font-medium">{currency}</span><span className={`font-mono text-sm font-semibold ${pnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>{pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}</span></div>) : <p className="text-sm text-muted">No closed trades in this view.</p>}</div></div> : <div className="card p-5">
+        {mixedCurrencyView ? <div className="card p-5"><h3 className="text-sm font-semibold mb-4">Currency Breakdown</h3><div className="space-y-2">{currencyTotals.length ? currencyTotals.map(([currency, pnl]) => <div key={currency} className="flex items-center justify-between rounded-lg bg-secondary px-3 py-2"><span className="text-sm font-medium">{currency}</span><span className={`ym-market-value text-sm font-semibold ym-market-${pnlTone(pnl)}`}>{pnl > 0 ? '+' : ''}{pnl.toFixed(2)}</span></div>) : <p className="text-sm text-muted">No closed trades in this view.</p>}</div></div> : <div className="card p-5">
           <h3 className="text-sm font-semibold mb-4">Best & Worst Days</h3>
           <div className="space-y-3">
             {stats.bestDay ? (
@@ -562,10 +670,11 @@ export function DashboardPage() {
       </div>
 
         </div>
-      </details>
+      </details>}
+      </div>
 
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add New Trade" size="lg">
-        <TradeForm onSubmit={handleSubmit} onCancel={() => setShowAdd(false)} />
+        <TradeForm preferredAccountId={accountFilter === 'all' ? undefined : accountFilter} onSubmit={handleSubmit} onCancel={() => setShowAdd(false)} />
       </Modal>
 
       <Modal

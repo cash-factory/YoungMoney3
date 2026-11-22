@@ -1,3 +1,5 @@
+import '@/page-results.css';
+import { Select } from '@/components/Select';
 import { useState } from 'react';
 import { ClipboardList, Plus, Trash2, Save, FileText, Target, Shield, GitBranch, Map, Eye, Layers, ScrollText, ListChecks, ChevronDown } from 'lucide-react';
 import { useChecklist, useTradingPlans, useTradingRules } from '@/hooks/useData';
@@ -32,6 +34,8 @@ export function TradingPlanPage() {
   const { rules, upsertRule, deleteRule } = useTradingRules(user?.id);
   const [showForm, setShowForm] = useState(false);
   const [editingPlan, setEditingPlan] = useState<TradingPlan | null>(null);
+  const [selectedPlanId, setSelectedPlanId] = useState('');
+  const selectedPlan = plans.find(plan => plan.id === selectedPlanId) || plans[0];
 
   const handleSave = async (data: TradingPlanInput, id?: string) => {
     await upsertPlan(data, id);
@@ -66,8 +70,9 @@ export function TradingPlanPage() {
           <EmptyState icon={<ClipboardList size={40} />} title="No trading plan yet" message="Create your trading plan to document your philosophy, entry models, risk rules, and mapping process." />
         </div>
       ) : (
-        <div className="space-y-4">
-          {plans.map(plan => (
+        <div className="ym-plan-library">
+          <nav className="ym-plan-switcher" aria-label="Trading plans">{plans.map((plan, index) => <button type="button" key={plan.id} aria-pressed={plan.id === selectedPlan?.id} onClick={() => setSelectedPlanId(plan.id)}><span>{String(index + 1).padStart(2, '0')}</span>{plan.title}</button>)}</nav>
+          {plans.filter(plan => plan.id === selectedPlan?.id).map(plan => (
             <PlanCard key={plan.id} plan={plan} rules={rules.filter(rule => rule.plan_id === plan.id)} checklist={checklist.filter(item => item.plan_id === plan.id)} onAddRule={(data) => upsertRule(data)} onUpdateRule={(rule) => upsertRule(rule, rule.id)} onDeleteRule={deleteRule} onAddChecklist={(label, required) => addChecklistItem(label, required, plan.id)} onUpdateChecklist={updateChecklistItem} onDeleteChecklist={deleteChecklistItem} onEdit={() => { setEditingPlan(plan); setShowForm(true); }} onDelete={() => handleDelete(plan.id)} />
           ))}
         </div>
@@ -98,7 +103,7 @@ function PlanCard({ plan, rules, checklist, onAddRule, onUpdateRule, onDeleteRul
   const adherence = plan.adherence_score != null ? `${plan.adherence_score}%` : null;
 
   return (
-    <div className="card p-5 card-hover">
+    <article className="ym-plan-document card p-5">
       <div className="flex items-start justify-between mb-3">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -108,18 +113,13 @@ function PlanCard({ plan, rules, checklist, onAddRule, onUpdateRule, onDeleteRul
           <p className="text-xs text-muted">Created {format(parseISO(plan.created_at), 'MMM d, yyyy')}</p>
         </div>
         <div className="flex gap-1">
-          <button onClick={onEdit} className="btn-ghost p-1.5"><FileText size={16} /></button>
-          <button onClick={onDelete} className="btn-ghost p-1.5 text-error-500 hover:bg-error-500/10"><Trash2 size={16} /></button>
+          <button type="button" aria-label={`Edit ${plan.title}`} onClick={onEdit} className="btn-ghost p-1.5"><FileText size={16} /></button>
+          <button type="button" aria-label={`Delete ${plan.title}`} onClick={onDelete} className="btn-ghost p-1.5 text-error-500 hover:bg-error-500/10"><Trash2 size={16} /></button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {sections.map(({ key, label, icon: Icon }) => (
-          <div key={key}>
-            <p className="text-xs font-semibold text-secondary mb-1 flex items-center gap-1.5"><Icon size={12} /> {label}</p>
-            <p className="text-sm whitespace-pre-wrap">{plan[key] as string}</p>
-          </div>
-        ))}
+      <div className="ym-plan-chapters">
+        {sections.map(({ key, label, icon: Icon }, index) => <details key={key} className="ym-plan-chapter" open={index === 0}><summary><span>{String(index + 1).padStart(2, '0')}</span><Icon size={16} /><strong>{label}</strong><ChevronDown size={16} /></summary><p>{plan[key] as string}</p></details>)}
       </div>
         <div className="mt-4 rounded-xl border border-themed bg-secondary/40 p-3">
           <p className="text-xs font-semibold text-secondary">Plan risk guardrails</p>
@@ -131,7 +131,7 @@ function PlanCard({ plan, rules, checklist, onAddRule, onUpdateRule, onDeleteRul
         <button type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)} className="flex w-full items-center justify-between text-left text-sm font-semibold"><span className="flex items-center gap-2"><ScrollText size={15} className="text-orange-500" /> Plan rules & checks <span className="text-xs font-normal text-muted">{rules.length} rules · {checklist.length} checks</span></span><ChevronDown size={16} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} /></button>
         {expanded && <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-5">
           <section className="space-y-2"><h4 className="text-xs font-bold flex gap-2 items-center"><ScrollText size={14} /> Trading rules</h4>
-            <div className="flex flex-col sm:flex-row gap-2"><input className="input-field flex-1" value={newRule} onChange={e => setNewRule(e.target.value)} placeholder="e.g. Risk no more than 1%" /><select className="input-field sm:w-36" value={ruleCategory} onChange={e => setRuleCategory(e.target.value as RuleCategory)}>{(['risk','entry','exit','discipline','news','position_sizing'] as RuleCategory[]).map(category => <option key={category} value={category}>{category.replace('_',' ')}</option>)}</select><button type="button" disabled={saving || !newRule.trim()} className="btn-secondary" onClick={async () => { setSaving(true); try { await onAddRule({ plan_id: plan.id, rule_text: newRule.trim(), category: ruleCategory, priority: rules.length + 1, is_active: true, times_broken: 0 }); setNewRule(''); } finally { setSaving(false); } }}><Plus size={14} /> Add</button></div>
+            <div className="flex flex-col sm:flex-row gap-2"><input className="input-field flex-1" value={newRule} onChange={e => setNewRule(e.target.value)} placeholder="e.g. Risk no more than 1%" /><Select className="input-field sm:w-36" value={ruleCategory} onChange={e => setRuleCategory(e.target.value as RuleCategory)}>{(['risk','entry','exit','discipline','news','position_sizing'] as RuleCategory[]).map(category => <option key={category} value={category}>{category.replace('_',' ')}</option>)}</Select><button type="button" disabled={saving || !newRule.trim()} className="btn-secondary" onClick={async () => { setSaving(true); try { await onAddRule({ plan_id: plan.id, rule_text: newRule.trim(), category: ruleCategory, priority: rules.length + 1, is_active: true, times_broken: 0 }); setNewRule(''); } finally { setSaving(false); } }}><Plus size={14} /> Add</button></div>
             {rules.length === 0 ? <p className="text-xs text-muted">No plan rules added.</p> : <div className="space-y-1">{rules.map(rule => <div key={rule.id} className="flex items-center gap-2 rounded-lg border border-themed px-2.5 py-2 text-xs"><input type="checkbox" aria-label={`Rule active: ${rule.rule_text}`} checked={rule.is_active} onChange={e => onUpdateRule({ ...rule, is_active: e.target.checked })} /><span className={`flex-1 ${rule.is_active ? '' : 'text-muted line-through'}`}>{rule.rule_text}</span><span className="text-muted">{rule.category.replace('_',' ')}</span><button type="button" aria-label="Delete rule" onClick={() => onDeleteRule(rule.id)} className="text-muted hover:text-error-500"><Trash2 size={13} /></button></div>)}</div>}
           </section>
           <section className="space-y-2"><h4 className="text-xs font-bold flex gap-2 items-center"><ListChecks size={14} /> Plan-level checks</h4>
@@ -142,7 +142,7 @@ function PlanCard({ plan, rules, checklist, onAddRule, onUpdateRule, onDeleteRul
       </div>
       {plan.screenshot_url && <div className="mt-4"><MediaImage source={plan.screenshot_url} alt={`${plan.title} attachment`} className="max-h-64 rounded-lg object-contain" /></div>}
       {plan.voice_note_url && <div className="mt-3"><MediaAudioPlayer source={plan.voice_note_url} /></div>}
-    </div>
+    </article>
   );
 }
 
@@ -151,7 +151,7 @@ function LegacyPlanItems({ plans, rules, checklist, onAssignRule, onAssignCheckl
   if (!plans.length) return <div className="mt-6 card p-4 text-xs text-secondary">Legacy global rules and checks are preserved here. Create a plan to assign them; they are not used in trade checklists while unassigned.</div>;
   if (!rules.length && !checklist.length) return null;
   return <details className="mt-6 card p-4"><summary className="cursor-pointer text-sm font-semibold">Unassigned legacy rules & checks <span className="text-xs font-normal text-muted">· preserved; select a plan to assign</span></summary><div className="mt-3 space-y-2">
-    {[...rules.map(item => ({ kind: 'rule' as const, id: item.id, label: item.rule_text, item })), ...checklist.map(item => ({ kind: 'check' as const, id: item.id, label: item.label, item }))].map(row => <div key={`${row.kind}-${row.id}`} className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border border-themed p-2.5"><span className="flex-1 text-xs"><strong className="text-muted">{row.kind === 'rule' ? 'Rule' : 'Check'} · </strong>{row.label}</span><select className="input-field sm:w-52" value={assignments[row.id] || ''} onChange={e => setAssignments(state => ({ ...state, [row.id]: e.target.value }))}><option value="">Choose plan</option>{plans.map(plan => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</select><button type="button" disabled={!assignments[row.id]} className="btn-secondary text-xs" onClick={() => row.kind === 'rule' ? onAssignRule(row.item as TradingRule, assignments[row.id]) : onAssignChecklist(row.item as PreTradeChecklistItem, assignments[row.id])}>Assign</button></div>)}
+    {[...rules.map(item => ({ kind: 'rule' as const, id: item.id, label: item.rule_text, item })), ...checklist.map(item => ({ kind: 'check' as const, id: item.id, label: item.label, item }))].map(row => <div key={`${row.kind}-${row.id}`} className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border border-themed p-2.5"><span className="flex-1 text-xs"><strong className="text-muted">{row.kind === 'rule' ? 'Rule' : 'Check'} · </strong>{row.label}</span><Select className="input-field sm:w-52" value={assignments[row.id] || ''} onChange={e => setAssignments(state => ({ ...state, [row.id]: e.target.value }))}><option value="">Choose plan</option>{plans.map(plan => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</Select><button type="button" disabled={!assignments[row.id]} className="btn-secondary text-xs" onClick={() => row.kind === 'rule' ? onAssignRule(row.item as TradingRule, assignments[row.id]) : onAssignChecklist(row.item as PreTradeChecklistItem, assignments[row.id])}>Assign</button></div>)}
   </div></details>;
 }
 

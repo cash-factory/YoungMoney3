@@ -10,6 +10,10 @@ if (window.parent !== window && window.parent.location.origin === location.origi
   });
 }
 const byId = id => document.getElementById(id);
+byId('view-accounts').addEventListener('click',()=>{
+  const dialog=window.frameElement?.closest('dialog');
+  if(dialog) dialog.close(); else location.assign('/#mt5');
+});
 const base64 = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes)));
 const api = async (action, data) => {
   const result = await fetch('/api/mt5/'+action,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});
@@ -20,7 +24,7 @@ const api = async (action, data) => {
 api('status',{}).then(result=>{populateMt5Brokers(result);for(const account of result.accounts) byId('account').add(new Option(account.name,account.id));}).catch(()=>{byId('status').textContent='Sign in to your dashboard to link an account.';});
 document.querySelector('form').addEventListener('submit',async event=>{
   event.preventDefault();
-  const button=event.currentTarget.querySelector('button');
+  const button=event.currentTarget.querySelector('button[type=submit]');
   button.disabled=true;
   const status=byId('status');
   try {
@@ -29,19 +33,37 @@ document.querySelector('form').addEventListener('submit',async event=>{
     const pub=await crypto.subtle.importKey('spki',Uint8Array.from(atob(device.public_key),c=>c.charCodeAt(0)),{name:'RSA-OAEP',hash:'SHA-256'},false,['wrapKey']);
     const key=await crypto.subtle.generateKey({name:'AES-GCM',length:256},true,['encrypt']);
     const iv=crypto.getRandomValues(new Uint8Array(12));
-    const bytes=new TextEncoder().encode(JSON.stringify({login:byId('login').value,server:byId('server-choice').value || byId('server').value.trim(),password:byId('password').value}));
+    const server=byId('server-choice').value || byId('server').value.trim();
+    const bytes=new TextEncoder().encode(JSON.stringify({login:byId('login').value,server,password:byId('password').value}));
     byId('password').value='';
     const data=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,bytes);
     bytes.fill(0);
     const wrapped=await crypto.subtle.wrapKey('raw',key,pub,'RSA-OAEP');
-    const result=await api('connect',{device:device.id,account:byId('account').value,envelope:{iv:base64(iv),data:base64(data),wrapped:base64(wrapped)}});
-    status.textContent='Waiting for your PC to verify the account…';
-    for (let attempt=0;attempt<32;attempt++) {
-      await new Promise(resolve=>setTimeout(resolve,4000));
-      const link=(await api('status',{})).links.find(l=>l.id===result.id);
-      if(link?.status==='connected'){status.textContent='Connected to '+link.company+' · '+link.login+'. View sync status in MT5 Connections.'; return;}
-      if(link && ['failed','expired','revoked'].includes(link.status)) throw Error(link.last_error || 'Login expired. Retry with the connector online.');
+    const result=await api('connect',{device:device.id,account:byId('account').value,server,envelope:{iv:base64(iv),data:base64(data),wrapped:base64(wrapped)}});
+    document.querySelector('form').hidden=true;
+    byId('view-accounts').hidden=false;
+    status.textContent='Your PC is preparing MetaTrader. You can follow this request in your account list.';
+    const deadline=Date.now()+15*60*1000;
+    while(Date.now()<deadline) {
+      await new Promise(resolve=>setTimeout(resolve,3000));
+      let snapshot;
+      try { snapshot=await api('status',{}); }
+      catch { status.textContent='Checking the dashboard connection. Your request has already been submitted.'; continue; }
+      const link=snapshot.links.find(l=>l.id===result.id);
+      if(!link) continue;
+      if(link.status==='connected') {
+        status.textContent=link.last_sync?'Monitoring '+link.company+' · '+link.login+'. Your first sync was received.':
+          'Broker login verified for '+link.company+' · '+link.login+'. Waiting for the first journal sync.';
+        if(link.last_sync) return;
+      } else if(['failed','expired','revoked'].includes(link.status) || link.expires<=Date.now()) {
+        document.querySelector('form').hidden=false;
+        throw Error(link.last_error || 'This login request expired. Check the connector, then try again.');
+      } else {
+        status.textContent=link.status==='verifying'
+          ?'Your PC is authenticating with the broker. Terminal startup and first-time server setup may take several minutes.'
+          :'Your PC is preparing an isolated MetaTrader session for this account.';
+      }
     }
-    throw Error('Verification timed out. Check MT5 Connections for the latest result.');
+    status.textContent='Open your account list for the latest status.';
   } catch(e){status.textContent=e.message;} finally{button.disabled=false;}
 });

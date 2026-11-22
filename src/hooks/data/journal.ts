@@ -21,7 +21,9 @@ export function useJournalEntries(userId?: string | null) {
   }, [userId]);
 
   useEffect(() => {
-    fetchEntries();
+    void fetchEntries();
+    window.addEventListener('ymfx:journal-saved',fetchEntries);
+    return ()=>window.removeEventListener('ymfx:journal-saved',fetchEntries);
   }, [fetchEntries]);
 
   const upsertEntry = async (entry: JournalInput, id?: string): Promise<void> => {
@@ -32,7 +34,7 @@ export function useJournalEntries(userId?: string | null) {
       const { error } = await supabase.from('journal_entries').insert(entry);
       if (error) throw error;
     }
-    await fetchEntries();
+    window.dispatchEvent(new Event('ymfx:journal-saved'));
   };
 
   const deleteEntry = async (id: string): Promise<void> => {

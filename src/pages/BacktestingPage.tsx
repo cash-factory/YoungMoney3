@@ -1,3 +1,4 @@
+import { Select } from '@/components/Select';
 import { useState } from 'react';
 import { FlaskConical, Plus, Trash2, Save, BarChart3, TrendingUp, Percent, Activity, Calendar } from 'lucide-react';
 import { ScreenshotUpload } from '@/components/ScreenshotUpload';
@@ -244,12 +245,12 @@ function BacktestForm({ onSave, onCancel }: { onSave: (data: BacktestInput) => v
       </div>
 
       <div className="grid grid-cols-4 gap-4">
-        <div><label className={labelCls}>Strategy</label><select className={inputCls} value={strategyId} onChange={e => { setStrategyId(e.target.value); setEntryModelId(''); }}><option value="">No strategy linked</option>{strategies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-        <div><label className={labelCls}>Setup</label><select className={inputCls} value={setupId} onChange={e => setSetupId(e.target.value)}><option value="">No setup linked</option>{setups.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-        <div><label className={labelCls}>Instrument catalog</label><select className={inputCls} value={instrumentId} onChange={e => { setInstrumentId(e.target.value); const item = instruments.find(i => i.id === e.target.value); if (item) setInstrument(item.symbol); }}><option value="">Custom / legacy</option>{instruments.map(i => <option key={i.id} value={i.id}>{i.symbol}</option>)}</select></div>
-        <div><label className={labelCls}>Account</label><select className={inputCls} value={accountId} onChange={e => setAccountId(e.target.value)}><option value="">No account linked</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.base_currency})</option>)}</select></div>
+        <div><label className={labelCls}>Strategy</label><Select className={inputCls} value={strategyId} onChange={e => { setStrategyId(e.target.value); setEntryModelId(''); }}><option value="">No strategy linked</option>{strategies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></div>
+        <div><label className={labelCls}>Setup</label><Select className={inputCls} value={setupId} onChange={e => setSetupId(e.target.value)}><option value="">No setup linked</option>{setups.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></div>
+        <div><label className={labelCls}>Instrument catalog</label><Select className={inputCls} value={instrumentId} onChange={e => { setInstrumentId(e.target.value); const item = instruments.find(i => i.id === e.target.value); if (item) setInstrument(item.symbol); }}><option value="">Custom / legacy</option>{instruments.map(i => <option key={i.id} value={i.id}>{i.symbol}</option>)}</Select></div>
+        <div><label className={labelCls}>Account</label><Select className={inputCls} value={accountId} onChange={e => setAccountId(e.target.value)}><option value="">No account linked</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({a.base_currency})</option>)}</Select></div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><label className={labelCls}>Entry model</label><select className={inputCls} value={entryModelId} onChange={e => setEntryModelId(e.target.value)}><option value="">General / unspecified</option>{entryModels.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}</select></div><div><label className={labelCls}>Trading plan</label><select className={inputCls} value={planId} onChange={e => setPlanId(e.target.value)}><option value="">No plan linked</option>{plans.map(plan => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</select></div></div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><label className={labelCls}>Entry model</label><Select className={inputCls} value={entryModelId} onChange={e => setEntryModelId(e.target.value)}><option value="">General / unspecified</option>{entryModels.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}</Select></div><div><label className={labelCls}>Trading plan</label><Select className={inputCls} value={planId} onChange={e => setPlanId(e.target.value)}><option value="">No plan linked</option>{plans.map(plan => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</Select></div></div>
       {selectedInstrument?.example_price != null && <p className="text-xs text-amber-600">Starter value for {selectedInstrument.symbol}: {selectedInstrument.example_price} (static example only).</p>}
 
       <div className="grid grid-cols-2 gap-4">

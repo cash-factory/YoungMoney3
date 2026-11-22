@@ -1,0 +1,47 @@
+name: Platform browser QA
+on:
+  pull_request:
+    branches: [main]
+    paths: ['src/**', 'public/visuals/**', 'public/assets/page-art/**', 'connector/assets/**', 'scripts/test-*-browser.mjs', 'package*.json', '.github/workflows/platform-visual.yml']
+permissions:
+  contents: read
+jobs:
+  platform:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Verify workspace layouts and rendered contrast in every theme
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx vite preview --host 127.0.0.1 --port 4174 > "$RUNNER_TEMP/platform-preview.log" 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4174/ >/dev/null; then break; fi
+            sleep 1
+          done
+          export YM3_PREVIEW_URL=http://127.0.0.1:4174/
+          node scripts/test-dashboard-browser.mjs
+          node scripts/test-controls-browser.mjs
+          node scripts/test-decisions-browser.mjs
+          node scripts/test-media-browser.mjs
+          node scripts/test-workspace-setup-browser.mjs
+          node scripts/test-page-results-browser.mjs --palettes
+          node scripts/test-platform-browser.mjs
+          node scripts/test-color-contrast-browser.mjs
+          node scripts/test-guide-browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: platform-screenshots
+          path: |
+            artifacts/platform/
+            artifacts/color-contrast/
+          retention-days: 7

@@ -1,3 +1,4 @@
+import { Select } from '@/components/Select';
 import { useState, useMemo, useEffect } from 'react';
 import { FlaskConical, Plus, Trash2, Save, ChevronDown, ChevronRight, TrendingUp, BarChart3 } from 'lucide-react';
 import { ScreenshotUpload } from '@/components/ScreenshotUpload';
@@ -334,26 +335,26 @@ function SessionForm({ initial, onSave, onCancel }: { initial: StrategyTestSessi
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className={labelCls}>Test Type</label>
-          <select className={inputCls} value={testType} onChange={e => setTestType(e.target.value as 'backtest' | 'forward_test')}>
+          <Select className={inputCls} value={testType} onChange={e => setTestType(e.target.value as 'backtest' | 'forward_test')}>
             <option value="backtest">Backtest</option>
             <option value="forward_test">Forward Test</option>
-          </select>
+          </Select>
         </div>
         <div>
           <label className={labelCls}>Strategy Name</label>
-          <select className={inputCls} value={strategyId} onChange={e => { setStrategyId(e.target.value); setEntryModelId(''); setStrategyName(strategies.find(s => s.id === e.target.value)?.name || ''); }}><option value="">Select strategy</option>{strategies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+          <Select className={inputCls} value={strategyId} onChange={e => { setStrategyId(e.target.value); setEntryModelId(''); setStrategyName(strategies.find(s => s.id === e.target.value)?.name || ''); }}><option value="">Select strategy</option>{strategies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select>
         </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-xs font-semibold text-secondary">Entry model scope
-          <select className={`${inputCls} mt-1.5`} value={entryModelMode} onChange={e => { const next = e.target.value as 'one' | 'all' | 'unspecified'; setEntryModelMode(next); if (next !== 'one') setEntryModelId(''); }}>
+          <Select className={`${inputCls} mt-1.5`} value={entryModelMode} onChange={e => { const next = e.target.value as 'one' | 'all' | 'unspecified'; setEntryModelMode(next); if (next !== 'one') setEntryModelId(''); }}>
             <option value="one">Use one model for this session</option>
             <option value="all">Use all models; choose per trade</option>
             <option value="unspecified">Not specified; choose during capture</option>
-          </select>
+          </Select>
         </label>
         {entryModelMode === 'one' && <label className="text-xs font-semibold text-secondary">Session entry model
-          <select className={`${inputCls} mt-1.5`} value={entryModelId} onChange={e => setEntryModelId(e.target.value)}><option value="">Choose later during trade capture</option>{entryModels.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}</select>
+          <Select className={`${inputCls} mt-1.5`} value={entryModelId} onChange={e => setEntryModelId(e.target.value)}><option value="">Choose later during trade capture</option>{entryModels.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}</Select>
         </label>}
       </div>
       <details className="rounded-xl border border-themed p-3">
@@ -370,8 +371,8 @@ function SessionForm({ initial, onSave, onCancel }: { initial: StrategyTestSessi
           <input className={inputCls} value={timeframe} onChange={e => setTimeframe(e.target.value)} placeholder="e.g. 15m" />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4"><div><label className={labelCls}>Account</label><select className={inputCls} value={accountId} onChange={e => { const a = accounts.find(x => x.id === e.target.value); setAccountId(e.target.value); if (a?.default_strategy_id) { setStrategyId(a.default_strategy_id); setStrategyName(strategies.find(s => s.id === a.default_strategy_id)?.name || ''); } setPlanId(a?.default_plan_id || ''); }}><option value="">No account</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name} · {a.base_currency}</option>)}</select></div><div><label className={labelCls}>Setup</label><select className={inputCls} value={setupId} onChange={e => setSetupId(e.target.value)}><option value="">No setup linked</option>{setups.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-        <div><label className={labelCls}>Trading plan</label><select className={inputCls} value={planId} onChange={e => setPlanId(e.target.value)}><option value="">No plan linked</option>{plans.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}</select></div>
+      <div className="grid grid-cols-2 gap-4"><div><label className={labelCls}>Account</label><Select className={inputCls} value={accountId} onChange={e => { const a = accounts.find(x => x.id === e.target.value); setAccountId(e.target.value); if (a?.default_strategy_id) { setStrategyId(a.default_strategy_id); setStrategyName(strategies.find(s => s.id === a.default_strategy_id)?.name || ''); } setPlanId(a?.default_plan_id || ''); }}><option value="">No account</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name} · {a.base_currency}</option>)}</Select></div><div><label className={labelCls}>Setup</label><Select className={inputCls} value={setupId} onChange={e => setSetupId(e.target.value)}><option value="">No setup linked</option>{setups.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></div>
+        <div><label className={labelCls}>Trading plan</label><Select className={inputCls} value={planId} onChange={e => setPlanId(e.target.value)}><option value="">No plan linked</option>{plans.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}</Select></div>
       </div>
       <div className="grid grid-cols-3 gap-4">
         <div>
@@ -493,22 +494,22 @@ function TradeForm({ sessionId, accountId, instrumentId, setupId, strategyId, en
 
   return (
     <div className="space-y-4">
-      {(entryModelMode !== 'one' || !entryModelId) && <label className={labelCls}>Entry model for this trade {entryModelMode === 'unspecified' ? '(optional)' : ''}<select className={`${inputCls} mt-1.5`} value={selectedEntryModelId} onChange={e => setSelectedEntryModelId(e.target.value)}><option value="">No model selected</option>{entryModels.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}</select></label>}
+      {(entryModelMode !== 'one' || !entryModelId) && <label className={labelCls}>Entry model for this trade {entryModelMode === 'unspecified' ? '(optional)' : ''}<Select className={`${inputCls} mt-1.5`} value={selectedEntryModelId} onChange={e => setSelectedEntryModelId(e.target.value)}><option value="">No model selected</option>{entryModels.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}</Select></label>}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className={labelCls}>Direction</label>
-          <select className={inputCls} value={direction} onChange={e => { const next = e.target.value as 'long' | 'short'; setDirection(next); if (instrument && entryPrice) { const levels = defaultTradeLevels(instrument, Number(entryPrice), next); if (!stopManual) setStopLoss(String(levels.stop)); if (!targetManual) setTakeProfit(String(levels.target)); } }}>
+          <Select className={inputCls} value={direction} onChange={e => { const next = e.target.value as 'long' | 'short'; setDirection(next); if (instrument && entryPrice) { const levels = defaultTradeLevels(instrument, Number(entryPrice), next); if (!stopManual) setStopLoss(String(levels.stop)); if (!targetManual) setTakeProfit(String(levels.target)); } }}>
             <option value="long">Long</option>
             <option value="short">Short</option>
-          </select>
+          </Select>
         </div>
         <div>
           <label className={labelCls}>Outcome</label>
-          <select className={inputCls} value={outcome} onChange={e => setOutcome(e.target.value as TestTradeOutcome)}>
+          <Select className={inputCls} value={outcome} onChange={e => setOutcome(e.target.value as TestTradeOutcome)}>
             <option value="win">Win</option>
             <option value="loss">Loss</option>
             <option value="breakeven">Breakeven</option>
-          </select>
+          </Select>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4">

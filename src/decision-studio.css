@@ -1,0 +1,237 @@
+.ym-replay-body,
+.ym-decision-details[open] {
+  display: grid;
+  gap: 1rem;
+}
+.ym-replay-body {
+  color: var(--text-primary);
+  line-height: 1.55;
+}
+.ym-replay-body header small,
+.ym-decision-desk small {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+.ym-replay-body header h3,
+.ym-decision-desk h2 {
+  font-size: clamp(1.35rem, 3vw, 2rem);
+  font-weight: 720;
+  letter-spacing: -0.045em;
+}
+.ym-replay-body header h3 span {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  letter-spacing: 0;
+}
+.ym-replay-body blockquote,
+.ym-decision-desk blockquote {
+  padding: 0.6rem 0.9rem;
+  border-inline-start: 3px solid var(--brand);
+  font-size: 1rem;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border-radius: 0 0.45rem 0.45rem 0;
+}
+.ym-entry-fill,
+.ym-replay-result h4,
+.ym-desk-quick,
+.ym-decision-desk aside,
+.ym-findings h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.ym-entry-fill {
+  padding: 0.65rem 0.8rem;
+  background: var(--bg-secondary);
+  border-radius: 0.5rem;
+  font-variant-numeric: tabular-nums;
+  flex-wrap: wrap;
+}
+.ym-replay-fields,
+.ym-decision-desk {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.ym-replay-fields label,
+.ym-decision-details label {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.ym-replay-fields .input-field,
+.ym-decision-details .input-field {
+  display: block;
+  width: 100%;
+  margin-top: 0.35rem;
+}
+.ym-decision-choices {
+  border: 0;
+  min-width: 0;
+}
+.ym-decision-choices legend,
+.ym-replay-result h4,
+.ym-decision-desk h3 {
+  font-size: 0.94rem;
+  font-weight: 650;
+}
+.ym-decision-choices > div,
+.ym-desk-quick {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+}
+.ym-decision-choices button,
+.ym-desk-quick button {
+  min-height: 40px;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  font-size: 0.86rem;
+}
+.ym-desk-quick button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.ym-decision-choices button[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 2px var(--brand);
+  background: var(--bg-secondary);
+  font-weight: 700;
+}
+.ym-replay-body > .btn-secondary,
+.ym-replay-body > .btn-primary {
+  justify-self: start;
+}
+.ym-replay-result {
+  display: grid;
+  gap: 0.8rem;
+}
+.ym-replay-result h4 {
+  margin: 0;
+}
+.ym-findings {
+  display: grid;
+  gap: 0.7rem;
+}
+.ym-findings > div {
+  padding: 0.7rem 0.85rem;
+  background: var(--bg-secondary);
+  border-radius: 0.5rem;
+}
+.ym-findings h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.ym-findings ul,
+.ym-decision-details ol {
+  margin: 0.35rem 0 0;
+  padding-inline-start: 1.15rem;
+}
+.ym-findings li span {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+}
+.ym-decision-details {
+  border-top: 1px solid var(--border);
+  padding-top: 0.65rem;
+}
+.ym-decision-details summary {
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ym-decision-details li time {
+  font-variant-numeric: tabular-nums;
+}
+.ym-decision-desk {
+  grid-template-columns: minmax(0, 1.8fr) minmax(180px, 1fr);
+  padding: clamp(1rem, 2.3vw, 1.65rem);
+  margin: 0 0 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--bg-card);
+}
+.ym-desk-main {
+  display: grid;
+  gap: 0.45rem;
+  justify-items: start;
+}
+.ym-decision-desk aside {
+  align-items: start;
+  justify-content: center;
+  flex-direction: column;
+  padding-inline-start: 1rem;
+  border-inline-start: 1px solid var(--border);
+}
+.ym-decision-desk p,
+.ym-default-view {
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+}
+.ym-default-view {
+  margin-bottom: 0.5rem;
+}
+.ym-replay-button {
+  font-size: 0.78rem;
+  white-space: normal;
+}
+.ym-review-ledger {
+  margin: 0.8rem 0;
+}
+.ym-review-ledger summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+.ym-review-ledger li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  border-bottom: 1px solid var(--border);
+  padding: 0.6rem 0;
+}
+.ym-review-result {
+  font-variant-numeric: tabular-nums;
+}
+.ym-weekly-focus-list {
+  display: grid;
+  gap: 0.45rem;
+}
+@media (max-width: 600px) {
+  .ym-replay-fields,
+  .ym-decision-desk {
+    grid-template-columns: 1fr;
+  }
+  .ym-decision-desk aside {
+    border-inline-start: 0;
+    border-top: 1px solid var(--border);
+    padding: 0.7rem 0 0;
+  }
+  .ym-decision-choices button,
+  .ym-desk-quick button,
+  .ym-replay-button {
+    min-height: 44px;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ym-replay-result {
+    animation: ym-reveal-in 0.18s ease-out;
+  }
+  @keyframes ym-reveal-in {
+    from {
+      transform: translateY(3px);
+      opacity: 0.6;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+}
