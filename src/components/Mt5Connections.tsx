@@ -281,7 +281,7 @@ export function Mt5Connections() {
                   {l.recovery?.state==='catching_up'&&<div className="ym-action-feedback" data-kind="info" role="status">
                     <RefreshCw size={16} className="animate-spin"/><span>Rebuilding broker history through {new Date(l.recovery.scanned_through).toLocaleString()} toward {new Date(l.recovery.target_at).toLocaleString()}. Progress is checkpointed.</span>
                   </div>}
-                  {l.recovery?.state==='awaiting_broker_history'&&<div className="ym-action-feedback" data-kind="warning" role="status">
+                  {(l.recovery?.unresolved_positions||0)>0&&<div className="ym-action-feedback" data-kind="warning" role="status">
                     <AlertTriangle size={16}/><span>{l.recovery.unresolved_positions} previously observed {l.recovery.unresolved_positions===1?'position':'positions'} cannot yet be confirmed closed from broker deals and orders. Their status remains unresolved.</span>
                   </div>}
                   {Boolean(l.recovery?.unobserved_stop_changes)&&<div className="ym-action-feedback" data-kind="info" role="status">
