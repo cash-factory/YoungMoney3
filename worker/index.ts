@@ -231,6 +231,20 @@ async function assertOwnedLinks(table: string, record: Record<string, unknown>, 
   }
 }
 
+async function assertOwnedExperimentSource(record:Record<string,unknown>,owner:string,db:D1Database) {
+  const reference=record.source_reference;
+  if(reference==null||reference==='') return;
+  if(typeof reference!=='string' || reference.length>300)
+    throw new RequestError(400,'Invalid originating decision reference.');
+  const id='review/'+owner+'/'+reference;
+  const row=await db.prepare("SELECT payload FROM workspace_records WHERE user_id=? AND table_name='decision_reviews' AND id=?")
+    .bind(owner,id).first<{payload:string}>();
+  if(!row) throw new RequestError(400,'The originating decision review must exist in your own journal.');
+  const source=JSON.parse(row.payload);
+  if(record.account_id && source.account_id && record.account_id!==source.account_id)
+    throw new RequestError(400,'Choose the originating review account or all accounts for this study.');
+}
+
 async function validateReview(record:Record<string,unknown>,key:string,owner:string,db:D1Database,restore:boolean) {
   if(typeof record.reference!=='string' || key!=='review/'+owner+'/'+record.reference || !['followed','changed','unsure',null].includes(record.verdict as string|null)) throw new RequestError(400,'Invalid decision review.');
   const source=await decisionSource(db,owner,record.reference);
@@ -321,6 +335,7 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
       if(table==='improvement_experiments') {
         const message=validateExperiment(cleanRecord as unknown as ImprovementExperimentInput);
         if(message) throw new RequestError(400,message);
+        await assertOwnedExperimentSource(cleanRecord,String(user.id),env.DB);
         // Server timestamps establish study activation. A restored backup cannot
         // falsely manufacture prospective evidence or historic preregistration.
         if(input.action==='insert' && 'activated_at' in cleanRecord)
@@ -382,7 +397,7 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
       if(table==='improvement_experiments') {
         if ('activated_at' in (patch as Record<string,unknown>))
           return response({error:'The recorded study activation cannot be changed.'},403);
-        const locked=['title','hypothesis','single_change','metric','start_date','end_date','baseline_days','minimum_samples','strategy_id','account_id'];
+        const locked=['title','hypothesis','single_change','metric','start_date','end_date','baseline_days','minimum_samples','strategy_id','account_id','source_reference'];
         if(old.status!=='draft' && locked.some(key=>key in patch! && JSON.stringify((patch as Record<string, unknown>)[key])!==JSON.stringify(old[key])))
           return response({error:'An active study design is locked. Create a new study for a different hypothesis.'},409);
         if((old.status==='active' && (patch as Record<string, unknown>).status==='draft') || (old.status==='completed' && (patch as Record<string, unknown>).status && (patch as Record<string, unknown>).status!=='completed'))
@@ -415,6 +430,8 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
       await validateReview(merged,input.id,String(user.id),env.DB,false);
     }
     if(table==='improvement_experiments') {
+      if('source_reference' in (patch as Record<string,unknown>) || 'account_id' in (patch as Record<string,unknown>))
+        await assertOwnedExperimentSource(merged,String(user.id),env.DB);
       merged.activated_at=old.activated_at??null;
       if(old.status==='draft' && merged.status==='active') {
         if(String(merged.start_date)<new Date().toISOString().slice(0,10))
