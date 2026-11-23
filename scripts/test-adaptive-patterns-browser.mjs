@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { mkdir } from 'node:fs/promises';
 import { installDashboardFixtures } from './test-dashboard-browser.mjs';
 
 const base=process.env.YM3_PREVIEW_URL || 'http://127.0.0.1:4173/';
 const browser=await chromium.launch({headless:true});
+await mkdir('artifacts/adaptive',{recursive:true});
 let scenarios=0;
 try {
   for(const width of [390,768,1440]) {
@@ -32,6 +34,7 @@ try {
     await modes.waitFor();
     assert.equal(await modes.getByRole('button').count(),4);
     assert.equal(await modes.getByRole('button',{name:/Capture/}).getAttribute('aria-pressed'),'true');
+    await page.locator('.ym-adaptive-desk').screenshot({path:'artifacts/adaptive/desk-interactive-'+width+'.png'});
 
     await modes.getByRole('button',{name:/Prepare/}).click();
     await page.locator('#dashboard-panel-risk').waitFor();
@@ -66,6 +69,7 @@ try {
     assert.equal(await patterns.getByText('15',{exact:true}).count()>=1,true);
     await patterns.getByRole('heading',{name:'Understand the process behind your decisions.'}).waitFor();
     await patterns.getByText('66.7%',{exact:true}).waitFor();
+    await page.locator('#ym-personal-patterns').screenshot({path:'artifacts/adaptive/patterns-populated-'+width+'.png'});
     assert.ok(await patterns.getByText(/15 eligible observations/).count());
     await patterns.getByLabel('Time window').selectOption('all');
     await patterns.getByRole('button',{name:'Refresh personal trading patterns'}).click();
