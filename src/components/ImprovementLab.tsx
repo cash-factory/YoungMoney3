@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   ArrowRight, ArrowUpRight, BookOpenCheck, Check, ChevronDown, CircleAlert,
   ClipboardCheck, FlaskConical, LockKeyhole, Plus, RefreshCw, ShieldCheck, Target, X,
@@ -162,12 +162,33 @@ export function ImprovementLab() {
   const { accounts } = useTradingAccounts(user?.id);
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState<ImprovementExperiment | null>(null);
+  const [seed, setSeed] = useState<ImprovementExperimentInput | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [operationError, setOperationError] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [reflections, setReflections] = useState<Record<string,string>>({});
   const demo = user?.id === '00000000-0000-4000-8000-00000000d3a0';
+  useEffect(() => {
+    if (!user?.id || demo) return;
+    try {
+      const key='ymfx:lab-intent:v1:' + user.id;
+      const item=sessionStorage.getItem(key);
+      if (!item) return;
+      const value: unknown = JSON.parse(item);
+      sessionStorage.removeItem(key);
+      if (!value || typeof value !== 'object') return;
+      const source=value as Record<string, unknown>;
+      setSeed({
+        ...draftExperiment(),
+        title: typeof source.symbol === 'string' ? (source.symbol + ' decision experiment').slice(0,100) : '',
+        strategy_id: typeof source.strategy_id === 'string' ? source.strategy_id : null,
+        account_id: typeof source.account_id === 'string' ? source.account_id : null,
+      });
+      setEdit(null);
+      setOpen(true);
+    } catch { /* Session storage can be unavailable or contain invalid values. */ }
+  }, [user?.id, demo]);
 
   const filtered = useMemo(() => studies.filter(study =>
     statusFilter === 'all' || study.status === statusFilter), [studies, statusFilter]);
@@ -191,7 +212,7 @@ export function ImprovementLab() {
     <div className="ym-improvement-lab">
       <SectionHeader title="Improvement Laboratory"
         subtitle="Test one trading behavior at a time. Compare documented decisions, not imagined outcomes."
-        action={<button className="btn-primary" type="button" disabled={demo} onClick={() => { setEdit(null); setOperationError(''); setOpen(true); }}>
+        action={<button className="btn-primary" type="button" disabled={demo} onClick={() => { setEdit(null); setSeed(null); setOperationError(''); setOpen(true); }}>
           <Plus size={16} /> New experiment
         </button>} />
       <div className="ym-lab-hero">
@@ -235,7 +256,7 @@ export function ImprovementLab() {
             <FlaskConical size={30} aria-hidden="true" />
             <h3>{statusFilter === 'all' ? 'Your first hypothesis starts here' : 'No studies in this category'}</h3>
             <p>Start with one behavior worth investigating—for example, waiting for a confirmed entry. You can save a draft before committing to the test.</p>
-            {!demo && <button className="btn-secondary" type="button" onClick={() => { setEdit(null); setOpen(true); }}>Design an experiment <ArrowRight size={16}/></button>}
+            {!demo && <button className="btn-secondary" type="button" onClick={() => { setEdit(null); setSeed(null); setOpen(true); }}>Design an experiment <ArrowRight size={16}/></button>}
           </div>}
           {filtered.map(study => {
             const evidence = evaluateExperiment(study, decisions);
@@ -318,7 +339,7 @@ export function ImprovementLab() {
       </div>
       <Modal open={open} title={edit ? 'Edit experiment draft' : 'Register an improvement experiment'}
         onClose={()=>{ if(!busy){setOpen(false);setEdit(null);} }} size="lg">
-        <StudyForm key={edit?.id || 'new-study'} initial={edit ? toInput(edit) : draftExperiment()} owner={user?.id || ''}
+        <StudyForm key={edit?.id || 'new-study'} initial={edit ? toInput(edit) : seed || draftExperiment()} owner={user?.id || ''}
           busy={busy} error={operationError} onSubmit={saveStudy}
           onCancel={()=>{setOpen(false);setEdit(null);}}/>
       </Modal>
