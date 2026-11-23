@@ -132,3 +132,21 @@ test('confidence ranges remain absent below minimum evidence and wide with small
   assert.equal(insufficient.plan.interval,null);
   assert.equal(insufficient.plan.sufficient,false);
 });
+
+test('10,000 trade/review histories remain linearithmic and account-scoped',()=>{
+  const largeTrades=Array.from({length:10000},(_,i)=>trade('bulk-'+i,{
+    pnl:i%2===0?-1:1, outcome:i%2===0?'loss':'win',
+    entry_time:'2026-11-20T08:00:00Z', exit_time:'2026-11-20T09:00:00Z',
+  }));
+  const largeReviews=largeTrades.map(t=>review('trade/'+t.id,'followed',{
+    entry_time:'2026-11-21T08:00:00Z',
+    strategy_name:'Breakout',model_name:'Retest',trigger:'',
+  }));
+  const started=performance.now();
+  const result=buildTradingPatterns(largeTrades,largeReviews,{now,minimum:12});
+  const elapsed=performance.now()-started;
+  assert.equal(result.reviewed,10000);
+  assert.equal(result.afterLoss.examined,10000);
+  assert.equal(result.setupAdherence[0].reviewed,10000);
+  assert.ok(elapsed<6000,'10k record analysis unexpectedly slow: '+elapsed.toFixed(0)+' ms');
+});
