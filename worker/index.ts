@@ -11,6 +11,7 @@ async function normalizeTrade(item: Record<string,unknown>, owner: unknown, db: 
   catch (e) { throw new RequestError(400,e instanceof Error ? e.message : 'Invalid trade.'); }
 }
 import { mt5Route } from './mt5';
+import { copyStudioRoute } from './copyStudio';
 /// <reference types="@cloudflare/workers-types" />
 import { WORKSPACE_TABLES } from '../src/lib/workspaceTables';
 import { deleteOwnedMedia } from '../src/lib/mediaCleanup';
@@ -932,6 +933,7 @@ export default {
       }
       if(request.method==='GET' && pathname==='/api/account-summaries') return response({rows:await accountSummaries(env.DB,user.id)});
       if (pathname.startsWith('/api/mt5/')) return await mt5Route(request, env, String(user.id));
+      if (pathname.startsWith('/api/copy/')) return await copyStudioRoute(request, env, String(user.id));
       if (request.method === 'GET' && pathname === '/api/me') return response({ user: profile(user) });
       if (request.method === 'POST' && ['/api/auth/profile', '/api/auth/password', '/api/auth/signout'].includes(pathname)) return await sessionRoute(request, env, user, pathname);
       if (request.method === 'POST' && pathname === '/api/data') return await databaseRoute(request, env, user);
