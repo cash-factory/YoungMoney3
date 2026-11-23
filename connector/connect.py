@@ -22,6 +22,7 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from ledger import closed_legs, iso
 from lifecycle import reconstruct
+from spec_evidence import first_position_spec
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args):
@@ -116,9 +117,7 @@ def lifecycle_projection(link,pid,end,start,timezone_settings):
     symbol=next((d["symbol"] for d in history if d.get("symbol")),"")
     if not symbol:
         return
-    spec=symbol_spec(symbol)
-    spec_key="spec-"+hashlib.sha256(json.dumps(spec,sort_keys=True,default=str).encode()).hexdigest()[:28]
-    enqueue(link,"raw",spec_key,{"position_id":str(pid),**spec})
+    spec=first_position_spec(db,link,pid,end,lambda: symbol_spec(symbol),enqueue)
     observed=[{"position_id":str(pid),"time_msc":row[0],"sl":row[1],"tp":row[2]}
               for row in db.execute("SELECT at_ms,sl,tp FROM position_observations WHERE link=? AND position_id=? ORDER BY at_ms",(link,str(pid)))]
     capital=[{"at_ms":row[0],"equity":row[1],"balance":row[2]}
@@ -579,6 +578,7 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
         CREATE TABLE IF NOT EXISTS links(link TEXT PRIMARY KEY,slot TEXT UNIQUE,login TEXT,server TEXT,start INTEGER,cursor INTEGER,last INTEGER,verified TEXT,gap INTEGER);
         CREATE TABLE IF NOT EXISTS broker_clock(link TEXT PRIMARY KEY,offset INTEGER);
         CREATE TABLE IF NOT EXISTS position_observations(link TEXT,position_id TEXT,at_ms INTEGER,sl TEXT,tp TEXT,PRIMARY KEY(link,position_id,at_ms));
+        CREATE TABLE IF NOT EXISTS position_specs(link TEXT,position_id TEXT,payload TEXT,observed_at_ms INTEGER,PRIMARY KEY(link,position_id));
         CREATE TABLE IF NOT EXISTS capital_snapshots(link TEXT,at_ms INTEGER,equity TEXT,balance TEXT,PRIMARY KEY(link,at_ms));
         CREATE TABLE IF NOT EXISTS history_seed(link TEXT,request TEXT,PRIMARY KEY(link,request));
         CREATE TABLE IF NOT EXISTS history_progress(link TEXT PRIMARY KEY,request TEXT,cursor INTEGER);
