@@ -3,7 +3,7 @@ import { Activity, ArrowUpRight, BookOpenCheck, Brain, CalendarRange, CircleHelp
   LockKeyhole, RefreshCw, ShieldCheck, TrendingUp } from 'lucide-react';
 import type { Trade } from '@/lib/types';
 import { useDecisionReviews } from '@/hooks/useDecisionReviews';
-import { buildTradingPatterns, type PatternCategory, type PatternMetric, type PatternWindow } from '@/lib/tradingPatterns';
+import { buildTradingPatterns, type PatternCategory, type PatternMetric, type PatternWindow, type SetupAdherence } from '@/lib/tradingPatterns';
 import '@/personal-patterns.css';
 
 interface Props {
@@ -29,6 +29,7 @@ function MetricCard({ icon, label, measure, note }: {
       <small>{label}</small></div>
     <EvidenceNumber measure={measure}/>
     <p className="ym-pattern-count">{measure.numerator} of {measure.denominator} eligible observations</p>
+    {measure.interval && <p className="ym-pattern-interval">Approximate 95% range: {measure.interval[0].toFixed(0)}–{measure.interval[1].toFixed(0)}%</p>}
     <p className="ym-pattern-proof" data-ready={measure.sufficient}>
       {measure.sufficient ? 'Descriptive sample · not causal proof' : 'Insufficient sample · fewer than 12 observations'}
     </p>
@@ -49,6 +50,32 @@ function RankedEvidence({ title, description, rows, empty }: {
         </div>
       </li>)}</ol>
     }
+  </section>;
+}
+
+
+function SetupDiscipline({ rows }: { rows: SetupAdherence[] }) {
+  return <section className="ym-pattern-ranked" aria-label="Setup-specific discipline">
+    <div className="ym-pattern-ranked-heading"><h3>Discipline by setup</h3>
+      <p>Plan adherence recorded for each named setup. This is not an estimate of profitability.</p>
+    </div>
+    {!rows.length ? <p className="ym-pattern-ranked-empty">Name the entry model or strategy in Decision Replay to compare documented decisions.</p>
+      : <div className="ym-pattern-setup-list">
+        {rows.slice(0,5).map(item=><div className="ym-pattern-setup-row" key={item.label}>
+          <div className="ym-pattern-rank-label">
+            <strong>{item.label}</strong>
+            <span>{item.reviewed} reviewed</span>
+          </div>
+          <div className="ym-pattern-setup-value">
+            <span>{item.sufficient && item.rate!==null ? item.rate.toFixed(0)+'% followed' : 'Not enough evidence'}</span>
+            <small>{item.sealed} pre-reveal · {item.retrospective} retrospective</small>
+          </div>
+          <div className="ym-pattern-rank-track" role="img"
+            aria-label={item.label+', '+item.followed+' plan-followed decisions of '+item.reviewed+' assessed'}>
+            {item.sufficient && item.rate!==null && <span style={{width:item.rate+'%'}}/>}
+          </div>
+        </div>)}
+      </div>}
   </section>;
 }
 
@@ -128,9 +155,7 @@ export function PersonalTradingPatterns({ owner, trades, accountId, accountName,
             </div>
           </section>
           <div className="ym-pattern-ranked-stack">
-            <RankedEvidence title="Most documented setups"
-              description="How often a strategy or entry model was named during reviews, not a ranking of profitability."
-              rows={report.setups} empty="Add a strategy or entry model when reviewing your trades."/>
+            <SetupDiscipline rows={report.setupAdherence}/>
             <RankedEvidence title="Documented action triggers"
               description="Your stated reasons for acting, recorded in Decision Replay."
               rows={report.triggers} empty="Reasons will appear as decisions are reviewed."/>
@@ -152,7 +177,7 @@ export function PersonalTradingPatterns({ owner, trades, accountId, accountName,
         <details className="ym-pattern-method">
           <summary><CircleHelp size={16}/> Evidence quality &amp; methodology</summary>
           <ul>{report.limitations.map(line => <li key={line}>{line}</li>)}</ul>
-          <p>Reports are calculated within your authenticated workspace. Denominators and missing data are displayed. A minimum of 12 usable observations is required to display aggregate percentage cards; even then, these remain descriptive estimates. Dates and weekly groupings use UTC. Broker fill rows are not merged into manual opening-time checklist evidence.</p>
+          <p>Reports are calculated within your authenticated workspace. Aggregate cards require 12 usable observations and individual setup rates require at least 5. Approximate 95% Wilson ranges assume independent decisions; repeated trades and regime changes violate that assumption. Neither those ranges nor observed adherence establish a profitable edge. Dates use UTC and broker fills are not combined with manual checklist evidence.</p>
         </details>
       </>
     )}
