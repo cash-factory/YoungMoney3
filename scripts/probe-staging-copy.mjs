@@ -61,10 +61,8 @@ try {
     const value=await page.locator('.ym-cs-result [data-highlight] strong').textContent({timeout:20000});
     if(!value?.includes('0.15'))throw Error('Wrong displayed capped lot estimate.');
     if(!await page.getByText('All plans paused').isVisible())throw Error('Copy execution guard not visible.');
-    await page.getByRole('button',{name:'Delete draft'}).click();
     page.once('dialog',dialog=>dialog.accept());
-    // above dialog event is registered only if it arrives after click; request uses confirm synchronously
-    // so prefer Playwright listener pre-registration in the caller. Verify deletion separately.
+    await page.getByRole('button',{name:'Delete draft'}).click();
     await page.getByText(/Draft deleted/).waitFor({timeout:20000});
     console.log('Staging browser accepted demo-only Copy Studio: save, cap simulation, paused status and delete.');
   }finally{await browser.close();}
