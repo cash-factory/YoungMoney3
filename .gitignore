@@ -28,3 +28,6 @@ artifacts/
 
 # Generated staging config contains deployment account resource IDs
 wrangler.staging.jsonc
+
+# Generated from current connector sources before website build.
+/public/mt5-connector.zip
