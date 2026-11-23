@@ -55,7 +55,7 @@ jobs:
           if ($env:SOURCE_SHA -ne (git rev-parse HEAD)) { throw 'Source checkout differs from validated commit' }
           $lines = git ls-remote "https://github.com/$env:GITHUB_REPOSITORY.git" 'refs/heads/main'
           if ($LASTEXITCODE -ne 0 -or !$lines) { throw 'Unable to verify current main' }
-          $remote = ($lines[0] -split '\\s+')[0]
+          $remote = (($lines | Select-Object -First 1) -split '\s+')[0]
           if ($remote -ne $env:SOURCE_SHA) { throw 'Main moved; refusing stale connector prerelease' }
           $declared = (python -c "import sys;sys.path.insert(0,'connector');from version import VERSION;print(VERSION)").Trim()
           if ($declared -ne $env:VERSION) { throw 'Desktop version differs from immutable release tag' }
@@ -91,7 +91,8 @@ jobs:
           $digest=(Get-FileHash 'staging-release/YoungMoney3.Connector.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
           "$digest *YoungMoney3.Connector.exe" | Set-Content -Encoding ascii 'staging-release/YoungMoney3.Connector.exe.sha256'
           Copy-Item connector-dependencies.txt staging-release/connector-dependencies.txt
-          '{"version":"' + $env:VERSION + '","commit":"' + '${{ env.SOURCE_SHA }}' + '","sha256":"' + $digest + '","signed":false,"platform":"windows-x64","environment":"staging"}' | Set-Content -Encoding utf8 'staging-release/build-manifest.json'
+          $manifest = @{version=$env:VERSION;commit=$env:SOURCE_SHA;sha256=$digest;signed=$false;platform='windows-x64';environment='staging'} | ConvertTo-Json -Compress
+          $manifest | Set-Content -Encoding utf8 'staging-release/build-manifest.json'
       - uses: actions/upload-artifact@v4
         with:
           name: youngmoney3-connector-staging-${{ env.VERSION }}
