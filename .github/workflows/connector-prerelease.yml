@@ -207,14 +207,34 @@ jobs:
     needs: [connector, startup-smoke]
     runs-on: windows-2022
     environment: staging
-    timeout-minutes: 8
+    timeout-minutes: 12
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: youngmoney3-connector-staging-${{ env.VERSION }}
           path: staging-release
+      - name: Require validated source already deployed to staging
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $verified = $false
+          foreach ($attempt in 1..18) {
+            $runs = gh api "repos/$env:GH_REPO/actions/workflows/staging-release.yml/runs?per_page=60" | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot verify staging deployment history' }
+            $same = @($runs.workflow_runs | Where-Object { $_.head_sha -eq $env:SOURCE_SHA -and $_.event -eq 'workflow_run' })
+            if (@($same | Where-Object { $_.conclusion -eq 'success' }).Count) { $verified = $true; break }
+            if (@($same | Where-Object { $_.conclusion -in @('failure','cancelled') }).Count) {
+              throw 'Staging Worker deployment for this commit failed or was cancelled'
+            }
+            Start-Sleep -Seconds 10
+          }
+          if (!$verified) { throw 'Staging did not pass deployment checks for this exact source SHA' }
       - name: Publish new immutable staging prerelease
         env:
           GH_TOKEN: ${{ github.token }}
