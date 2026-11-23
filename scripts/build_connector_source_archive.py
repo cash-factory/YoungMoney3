@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 FILES = {
     "README.md": "connector/README.md",
     "connect.py": "connector/connect.py",
+    "version.py": "connector/version.py",
     "ledger.py": "connector/ledger.py",
     "history_range.py": "connector/history_range.py",
     "cash_history.py": "connector/cash_history.py",
