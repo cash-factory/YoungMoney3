@@ -5,7 +5,7 @@
  * exist here: a separately consented local follower is the sole executor.
  * Paused by default, account-verified, version locked, and fail-closed.
  */
-interface Env {DB:D1Database}
+interface Env {DB:D1Database; MT5_LIVE_COPY_EXECUTION?:string}
 type Obj=Record<string,unknown>;
 type Link={id:string;device:string;owner:string;company:string|null;server:string|null;login:string|null;currency:string|null;trade_mode:number|null;access_level:string;status:string;monitoring_paused:number;last_sync:string|null;broker_balance:number|null;broker_equity:number|null;last_seen:number|null};
 type Fleet={id:string;owner:string;name:string;source_link:string;execution_mode:'demo'|'live';state:'paused'|'demo_armed'|'live_armed';version:number;max_age_ms:number;created_at:string;updated_at:string};
@@ -53,6 +53,7 @@ async function audit(db:D1Database,owner:string,fleet:string,event:string,detail
 }
 export async function copyFleetOwner(request:Request,env:Env,owner:string,action:string,input:Obj):Promise<Response>{
   const db=env.DB,q=(sql:string,...args:unknown[])=>db.prepare(sql).bind(...args);
+  const liveExecutionEnabled=env.MT5_LIVE_COPY_EXECUTION==='true';
   if(action==='fleet-status'){
     const [available,plans,targetRows,consents,reports,taskRows]=await Promise.all([
       links(db,owner),
@@ -62,7 +63,7 @@ export async function copyFleetOwner(request:Request,env:Env,owner:string,action
       q("SELECT * FROM copy_account_reports WHERE owner=? ORDER BY observed_at_ms DESC",owner).all(),
       q("SELECT id,fleet_id,source_key,action,status,follower_link,retcode,result_code,result_payload,created_at,finished_at FROM copy_execution_tasks WHERE owner=? ORDER BY created_at DESC LIMIT 100",owner).all(),
     ]);
-    return respond({mode:'demo-and-live',liveExecutionEnabled:true,requiresLocalConsent:true,
+    return respond({mode:'demo-and-live',liveExecutionEnabled,requiresLocalConsent:true,
       maxFollowersPerFleet:maxTargets,accounts:available,
       fleets:plans.results.map(p=>({...p,targets:targetRows.results.filter(x=>x.fleet_id===p.id).map(t=>({...t,symbol_map:JSON.parse(t.symbol_map)}))})),
       consents:consents.results,reports:reports.results,
@@ -180,6 +181,8 @@ export async function copyFleetOwner(request:Request,env:Env,owner:string,action
   }
   if(fleet.state!=='paused'||input.confirm!==true)
     return fail('Explicitly approve execution before arming.',409);
+  if(fleet.execution_mode==='live' && !liveExecutionEnabled)
+    return fail('Live-copy execution remains disabled until broker acceptance is approved.',423);
   if(fleet.execution_mode==='live' && input.liveConfirmation!=='ARM LIVE '+fleet.id.slice(0,8))
     return fail('Live execution requires the fleet-specific confirmation phrase.',409);
   const [owned,targets,consentRows]=await Promise.all([links(db,owner),
