@@ -1,0 +1,16 @@
+/* Accessible, theme-aware waiting and first-use states. */
+.ym-loading-halo {background:color-mix(in srgb,var(--brand) 18%,transparent);}
+.ym-loading-ring {border-color:color-mix(in srgb,var(--brand) 20%,var(--border));}
+.ym-loading-spinner {border-top-color:var(--brand);}
+.ym-loading-mark {color:color-mix(in srgb,var(--brand) 65%,var(--text-secondary));}
+.ym-loading-dot {background:var(--brand);}
+.ym-empty-icon {
+  color:var(--brand-text);border-color:color-mix(in srgb,var(--brand) 18%,var(--border));
+  background:color-mix(in srgb,var(--brand) 6%,var(--bg-card));
+}
+@media (prefers-reduced-motion:reduce) {
+  .ym-loading-state .animate-spin,.ym-loading-state .animate-arc,
+  .ym-loading-state .animate-pulse,.ym-loading-state .animate-pulse-glow,
+  .ym-loading-state [class*="dot-pulse-"] {animation:none!important;}
+  .ym-loading-spinner {border-top-color:var(--brand);border-left-color:var(--brand);}
+}
