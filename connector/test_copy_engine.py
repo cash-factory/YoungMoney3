@@ -88,6 +88,10 @@ class CopyEngineTests(unittest.TestCase):
                          symbol='EURUSD',ticket='777')['action'],self.mt5.TRADE_ACTION_REMOVE)
         self.assertEqual(build_lifecycle_request(self.mt5,'adjust_protection',
                          symbol='EURUSD',ticket='777',sl=1.1,tp=1.4)['action'],self.mt5.TRADE_ACTION_SLTP)
+        with self.assertRaises(CopyRejected):
+            build_lifecycle_request(self.mt5,'adjust_protection',symbol='EURUSD',ticket='777',sl=1.1)
+        with self.assertRaises(CopyRejected):
+            build_lifecycle_request(self.mt5,'adjust_protection',symbol='EURUSD',ticket='777',tp=1.4)
         self.assertEqual(build_lifecycle_request(self.mt5,'modify_pending',
                          symbol='EURUSD',ticket='777',price=1.2)['action'],self.mt5.TRADE_ACTION_MODIFY)
     def test_missing_stop_and_minimum_lot_cannot_be_rounded_up(self):
