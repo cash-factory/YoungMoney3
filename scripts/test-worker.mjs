@@ -348,6 +348,51 @@ try {
     'A conflicting candidate cannot be modified after receipt.');
   const rawCount=await db.prepare('SELECT COUNT(*) AS count FROM mt5_raw_evidence WHERE link=?').bind(link).first();
   assert.equal(rawCount.count,2);
+  // Old connectors keyed symbol specifications by symbol alone but added
+  // position_id after hashing. This was the observed 1,137-candidate defect.
+  // Only the proved legacy identity alias may be classified automatically.
+  const oldSpecKey='spec-'+'a'.repeat(28);
+  const oldSpecFields={position_id:'2233',symbol:'EURUSD',trade_tick_size:0.00001};
+  assert.equal((await device('sync',{link,events:[{kind:'raw',key:oldSpecKey,fields:oldSpecFields}]})).status,200);
+  const oldAlias=await device('sync',{link,events:[{kind:'raw',key:oldSpecKey,fields:{...oldSpecFields,position_id:'3344'}}]});
+  assert.equal(oldAlias.status,200);
+  assert.equal((await oldAlias.json()).evidence_conflicts_pending,1,
+    'Known spec-key alias cannot increase real broker discrepancy count.');
+  const classified=await db.prepare('SELECT classification,provenance FROM mt5_conflict_classifications WHERE link=? AND event_key=?')
+    .bind(link,oldSpecKey).first();
+  assert.equal(classified.classification,'connector_spec_position_alias_v1');
+  assert.ok(classified.provenance);
+  const specStatus=(await (await call('mt5/status',{})).json()).links.find(item=>item.id===link);
+  assert.equal(specStatus.connector_spec_artifacts,1);
+  assert.equal(specStatus.evidence_conflicts_pending,1);
+  // Changing a tick valuation remains a real, unreviewed conflict.
+  const changedSpec=await device('sync',{link,events:[{kind:'raw',key:oldSpecKey,fields:{...oldSpecFields,position_id:'5566',trade_tick_size:0.01}}]});
+  assert.equal(changedSpec.status,200);
+  assert.equal((await changedSpec.json()).evidence_conflicts_pending,2);
+
+  const recoveryStarted=await device('sync',{link,events:[],recovery:{
+    status:'catching_up',scanned_through:Date.now()-2*86400000,
+    target_at:Date.now(),unresolved_positions:7,unobserved_stop_changes:true
+  }});
+  assert.equal(recoveryStarted.status,200);
+  let recoveryState=(await (await call('mt5/status',{})).json()).links.find(item=>item.id===link).recovery;
+  assert.equal(recoveryState.state,'catching_up');
+  assert.equal(recoveryState.unresolved_positions,7);
+  assert.equal(recoveryState.unobserved_stop_changes,1);
+  assert.equal((await device('sync',{link,events:[],recovery:{
+    status:'bogus',scanned_through:Date.now(),target_at:Date.now(),unresolved_positions:0,
+    unobserved_stop_changes:false
+  }})).status,400);
+  const finishedAt=Date.now();
+  assert.equal((await device('sync',{link,events:[],recovery:{
+    status:'current',scanned_through:finishedAt,target_at:finishedAt,
+    unresolved_positions:0,unobserved_stop_changes:false
+  }})).status,200);
+  recoveryState=(await (await call('mt5/status',{})).json()).links.find(item=>item.id===link).recovery;
+  assert.equal(recoveryState.state,'current');
+  assert.equal(recoveryState.unresolved_positions,0);
+  assert.equal(recoveryState.unobserved_stop_changes,1,'Historical inability to observe stop moves remains recorded.');
+
   // Cash transfers are detected from raw immutable MT5 DEAL_TYPE_BALANCE
   // history, including deals predating the pairing. They are NOT trade P&L.
   const cashTime=Date.now()-12*86400000;
