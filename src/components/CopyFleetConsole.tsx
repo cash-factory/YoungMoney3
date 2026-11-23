@@ -28,7 +28,7 @@ type Fleet={
 type Report={link:string;account_balance:number;account_equity:number;account_currency:string;margin_free:number;
   open_positions:number;pending_orders:number;broker_connected:number;demo_trading_enabled:number;observed_at_ms:number};
 type Consent={follower_link:string;demo_authorized:number;expires_at:number};
-type Task={id:string;fleet_id:string;source_key:string;action:string;status:string;follower_link:string;retcode:number|null;result_code:string|null;result_payload?:unknown;created_at:number};
+type Task={id:string;fleet_id:string;source_key:string;action:string;status:string;follower_link:string;retcode:number|null;result_code:string|null;result_payload?:{lots?:number;risk_amount?:number;risk_pct_equity?:number;account_currency?:string}|null;created_at:number};
 type Status={mode:'demo-only';liveExecutionEnabled:false;requiresLocalConsent:true;maxFollowersPerFleet:number;
   accounts:Account[];fleets:Fleet[];reports:Report[];consents:Consent[];tasks:Task[]};
 type PreviewRow={followerLink:string;enabled:boolean;mode:RiskMode;accountCurrency:string|null;
@@ -252,6 +252,7 @@ export function CopyFleetConsole(){
             <label>Stop loss<input className="input-field" type="number" step="any" value={stop} onChange={e=>setStop(e.target.value)}/></label>
             <button className="btn-secondary" type="button" disabled={!!busy||!source} onClick={()=>void simulate()}><ArrowDownUp size={15}/>Calculate</button>
           </div>
+          <p className="ym-cf-note">Risk figures are estimated before execution. Actual risk depends on verified instrument specifications, fill price, conversion, fees and slippage; the follower terminal recalculates or rejects every DEMO order.</p>
           {preview&&<div className="ym-cf-table-scroll"><table className="ym-cf-table"><thead><tr><th>Follower</th><th>Policy</th><th>Risk budget</th><th>Lots</th><th>Broker proof</th></tr></thead>
             <tbody>{preview.map(row=><tr key={row.followerLink}><td>{title(accounts.find(a=>a.id===row.followerLink))}</td><td>{modeLabel[row.mode]}</td><td>{cash(row.plannedRiskBudget,row.accountCurrency)}</td><td>{row.indicativeLots==null?'Calculated by MT5':row.indicativeLots.toFixed(3)+' indicative'}</td><td>Required at execution</td></tr>)}</tbody>
           </table></div>}
@@ -265,8 +266,11 @@ export function CopyFleetConsole(){
       </tbody></table></div>
       <div className="ym-cf-smallhead ym-cf-task-head"><strong>EXECUTION & RECONCILIATION LOG</strong><span>LAST 100 COMMANDS</span></div>
       {status?.tasks.length===0?<div className="ym-cf-empty">No execution instructions yet. An armed demo fleet must first observe a fresh, actionable source change.</div>:
-        <div className="ym-cf-table-scroll"><table className="ym-cf-table"><thead><tr><th>Time</th><th>Follower</th><th>Action</th><th>Status</th><th>Broker</th></tr></thead><tbody>
-          {status?.tasks.map(task=><tr key={task.id}><td>{new Date(task.created_at).toLocaleTimeString()}</td><td>{title(accounts.find(a=>a.id===task.follower_link))}</td><td>{task.action.split('_').join(' ')}</td><td><span className="ym-cf-task-status" data-state={task.status}>{task.status}</span></td><td>{task.result_code||task.retcode||'—'}</td></tr>)}</tbody>
+        <div className="ym-cf-table-scroll"><table className="ym-cf-table"><thead><tr><th>Time</th><th>Follower</th><th>Action</th><th>Status</th><th>Lots</th><th>Initial SL risk</th><th>Equity risk</th><th>Broker</th></tr></thead><tbody>
+          {status?.tasks.map(task=><tr key={task.id}><td>{new Date(task.created_at).toLocaleTimeString()}</td><td>{title(accounts.find(a=>a.id===task.follower_link))}</td><td>{task.action.split('_').join(' ')}</td><td><span className="ym-cf-task-status" data-state={task.status}>{task.status}</span></td><td>{task.result_payload?.lots?.toFixed(2)??'—'}</td>
+              <td>{cash(task.result_payload?.risk_amount,task.result_payload?.account_currency)}</td>
+              <td>{task.result_payload?.risk_pct_equity==null?'—':task.result_payload.risk_pct_equity.toFixed(2)+'%'}</td>
+              <td>{task.result_code||task.retcode||'—'}</td></tr>)}</tbody>
         </table></div>}
     </div>
   </section>;
