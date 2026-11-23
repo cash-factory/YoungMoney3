@@ -2,6 +2,10 @@
 
 ## Windows app
 
+**Current staging Windows x64 build:** [v0.5.4-rc1](https://github.com/cash-factory/YoungMoney3/releases/tag/staging-connector-v0.5.4-rc1) — an unsigned, read-only MT5 connector built from validated main and tested on a clean Windows CI machine. [Download the executable](https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.4-rc1/YoungMoney3.Connector.exe) and compare its SHA-256 with the official [checksum file](https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.4-rc1/YoungMoney3.Connector.exe.sha256): `1057f2c94777f3a99c31647a16f119012406e0009247602e28705a0a944ea7b1`.
+
+The update reuses your existing Windows Credential Manager pairing and local durable capture database **when opened as the same Windows user**. The new release stops monitoring if the server reports a revoked or conflicting PC installation identity, without wiping queued evidence. Do not create a second pairing to resolve a conflict; inspect the paired PCs on your dashboard. Passing CI does **not** verify actual broker IPC on your device; use demo accounts for initial acceptance.
+
 1. Download the Windows connector from **MT5 Connections**. Open it using the same Windows user as your previous version.
 2. For a new PC, choose **Pair a PC** in the dashboard and paste its code into the connector. Existing pairings reconnect when you open the app.
 3. Choose **Add account** on either screen. Enter the broker server, account number and MT5 password. The connector finds the installed MetaTrader program, prepares an isolated profile and verifies the broker login. If it finds no installation, it offers MetaTrader's Windows installer and checks again automatically.
@@ -64,9 +68,10 @@ Broker balance and equity are snapshots from the last successful sync. If the te
 ## Rich capture staging source (Windows x64)
 
 The staging prerelease adds connector_gui.py and lifecycle.py alongside the existing CLI.
-The **versioned, unsigned YoungMoney3 Connector.exe** will be linked from the
-staging dashboard after the manual Windows prerelease workflow succeeds; this
-ZIP is the Python source fallback, **not the executable**.
+The **versioned, unsigned YoungMoney3.Connector.exe** is linked from the
+staging dashboard and the official GitHub prerelease above. The
+`/mt5-connector.zip` archive is the source fallback generated from current
+checked-in connector code during each website build, **not the executable**.
 
 For a Windows 64-bit Python 3.13 fallback:
 - py -3.13 -m venv .venv
