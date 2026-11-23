@@ -153,3 +153,8 @@
 @media (prefers-reduced-motion:reduce) {
   .ym-lab-meter>span,.ym-lab-study-trigger,.ym-lab-study-trigger>svg {transition:none;}
 }
+
+.ym-lab-linked-actions {display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.ym-lab-linked-actions button {display:inline-flex;align-items:center;gap:7px;
+  color:var(--brand-text);font-weight:750;font-size:11px;}
+.ym-lab-linked-actions button:hover,.ym-lab-linked-actions a:hover {text-decoration:underline;}
