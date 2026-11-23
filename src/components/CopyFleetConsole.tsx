@@ -232,7 +232,7 @@ export function CopyFleetConsole(){
       <div className="ym-cf-smallhead ym-cf-task-head"><strong>EXECUTION & RECONCILIATION LOG</strong><span>LAST 100 COMMANDS</span></div>
       {status?.tasks.length===0?<div className="ym-cf-empty">No execution instructions yet. An armed demo fleet must first observe a fresh, actionable source change.</div>:
         <div className="ym-cf-table-scroll"><table className="ym-cf-table"><thead><tr><th>Time</th><th>Follower</th><th>Action</th><th>Status</th><th>Broker</th></tr></thead><tbody>
-          {status?.tasks.map(task=><tr key={task.id}><td>{new Date(task.created_at).toLocaleTimeString()}</td><td>{title(accounts.find(a=>a.id===task.follower_link))}</td><td>{task.action.replaceAll('_',' ')}</td><td><span className="ym-cf-task-status" data-state={task.status}>{task.status}</span></td><td>{task.result_code||task.retcode||'—'}</td></tr>)}</tbody>
+          {status?.tasks.map(task=><tr key={task.id}><td>{new Date(task.created_at).toLocaleTimeString()}</td><td>{title(accounts.find(a=>a.id===task.follower_link))}</td><td>{task.action.split('_').join(' ')}</td><td><span className="ym-cf-task-status" data-state={task.status}>{task.status}</span></td><td>{task.result_code||task.retcode||'—'}</td></tr>)}</tbody>
         </table></div>}
     </div>
   </section>;
