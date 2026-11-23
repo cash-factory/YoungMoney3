@@ -321,6 +321,15 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
       if(table==='improvement_experiments') {
         const message=validateExperiment(cleanRecord as unknown as ImprovementExperimentInput);
         if(message) throw new RequestError(400,message);
+        // Server timestamps establish study activation. A restored backup cannot
+        // falsely manufacture prospective evidence or historic preregistration.
+        if(input.action==='insert' && 'activated_at' in cleanRecord)
+          throw new RequestError(403,'Study activation evidence is controlled by the server.');
+        if(input.action==='insert' && cleanRecord.status==='active') {
+          if(String(cleanRecord.start_date)<new Date().toISOString().slice(0,10))
+            throw new RequestError(409,'Prospective studies must start today or later. Save a draft to explore historical data.');
+          cleanRecord.activated_at=timestamp;
+        } else cleanRecord.activated_at=null;
       }
       if (table === 'trading_accounts') {
         // A user-provided backup must never impersonate an authenticated MT5 snapshot.
@@ -359,12 +368,20 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
     const old = JSON.parse(found.payload);
     const isFill = table === 'trades' && old.trade_source === 'mt5';
     const patch = input.payload;
+    if(input.action==='update' && (!patch || typeof patch!=='object' || Array.isArray(patch)))
+      return response({error:'Supply a record patch.'},400);
+    if(table==='improvement_experiments' && !filters.updated_at)
+      return response({error:'Refresh the experiment before modifying it.'},428);
+    if(table==='improvement_experiments' && input.action==='delete' && old.status!=='draft')
+      return response({error:'An activated experiment must remain in the evidence history.'},403);
     if (input.action === 'delete' && isFill) return response({ error: 'Broker fills cannot be deleted from the journal.' }, 403);
     if (input.action === 'update') {
       if(table==='decision_reviews' && !filters.updated_at) return response({error:'Refresh the review before editing.'},428);
       if(table==='decision_reviews' && ('pre_reveal_verdict' in (patch as Record<string, unknown>) || 'pre_reveal_at' in (patch as Record<string, unknown>)))
         return response({error:'The recorded pre-reveal judgement cannot be changed.'},403);
       if(table==='improvement_experiments') {
+        if ('activated_at' in (patch as Record<string,unknown>))
+          return response({error:'The recorded study activation cannot be changed.'},403);
         const locked=['title','hypothesis','single_change','metric','start_date','end_date','baseline_days','minimum_samples','strategy_id','account_id'];
         if(old.status!=='draft' && locked.some(key=>key in patch! && JSON.stringify((patch as Record<string, unknown>)[key])!==JSON.stringify(old[key])))
           return response({error:'An active study design is locked. Create a new study for a different hypothesis.'},409);
@@ -398,6 +415,14 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
       await validateReview(merged,input.id,String(user.id),env.DB,false);
     }
     if(table==='improvement_experiments') {
+      merged.activated_at=old.activated_at??null;
+      if(old.status==='draft' && merged.status==='active') {
+        if(String(merged.start_date)<new Date().toISOString().slice(0,10))
+          return response({error:'Prospective studies must start today or later. Change draft dates before activation.'},409);
+        merged.activated_at=now();
+      }
+      if(old.status==='draft' && merged.status==='completed')
+        return response({error:'Start and lock the study before completing it.'},409);
       const message=validateExperiment(merged as ImprovementExperimentInput);
       if(message) return response({error:message},400);
     }
