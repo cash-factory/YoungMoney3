@@ -11,6 +11,7 @@ try {
     page.on('pageerror', error=>errors.push(error.message));
     const { user }=await installDashboardFixtures(page);
     const studies=[];
+    const today=new Date().toISOString().slice(0,10);
     const decisions=[
       ...['2026-10-05','2026-10-07','2026-10-11','2026-10-14','2026-10-17'].map((date,i)=>({
         id:'review-baseline-'+i,entry_time:date+'T11:00:00Z',strategy_id:null,account_id:null,
@@ -30,9 +31,14 @@ try {
       assert.equal(q.table,'improvement_experiments','Laboratory must never modify decision evidence.');
       assert.ok(['insert','update'].includes(q.action));
       const now=new Date(Date.now()+mutations*1000).toISOString();
+      if(q.action==='update' && q.payload.status==='active' && q.payload.start_date<today)
+        return route.fulfill({status:409,json:{error:'Prospective studies must start today or later. Change draft dates before activation.'}});
+      const activatedAt=q.action==='update' && q.payload.status==='active'
+        ? now : q.action==='insert' && q.payload.status==='active' ? now
+          : studies.find(item=>item.id===q.id)?.activated_at || null;
       const record=q.action==='insert'
-        ? {...q.payload,id:'study-1',user_id:user.id,created_at:now,updated_at:now}
-        : {...studies.find(item=>item.id===q.id),...q.payload,updated_at:now};
+        ? {...q.payload,id:'study-1',user_id:user.id,created_at:now,updated_at:now,activated_at:activatedAt}
+        : {...studies.find(item=>item.id===q.id),...q.payload,updated_at:now,activated_at:activatedAt};
       if(q.action==='insert') studies.push(record);
       else studies[studies.findIndex(item=>item.id===q.id)]=record;
       mutations++;
@@ -64,7 +70,19 @@ try {
     await study.locator('summary').click();
     await study.getByText(/do not establish causation/).waitFor();
     await study.getByRole('button',{name:'Start & lock study'}).click();
+    await page.getByRole('alert').filter({hasText:'Prospective studies must start today or later'}).waitFor();
+    assert.equal(await study.getAttribute('data-study-status'),'draft');
+    await study.getByRole('button',{name:'Edit design'}).click();
+    const editor=page.getByRole('dialog',{name:'Edit experiment draft'});
+    await editor.waitFor();
+    await editor.getByLabel('Intervention begins (UTC)').fill(today);
+    await editor.getByRole('button',{name:'Save draft'}).click();
+    await editor.waitFor({state:'hidden'});
+    await study.getByRole('button',{name:/Wait for the entry confirmation/}).click();
+    await study.getByRole('button',{name:'Start & lock study'}).click();
     await page.waitForFunction(()=>document.querySelector('[data-lab-study="study-1"]')?.getAttribute('data-study-status')==='active');
+    assert.ok(Number.isFinite(Date.parse(studies[0].activated_at)), 'API simulation must seal activation time.');
+    await study.getByText(/Server-sealed at/).waitFor();
     await study.getByLabel('Your conclusion, including limitations')
       .fill('In this small record, adherence improved, but other factors were not controlled.');
     await study.getByRole('button',{name:'Complete with conclusion'}).click();
@@ -73,7 +91,7 @@ try {
     assert.equal(studies[0].metric,'plan_adherence');
     assert.equal(studies[0].minimum_samples,5);
     assert.equal(studies[0].status,'completed');
-    assert.equal(mutations,3,'One create, one activation, one completion');
+    assert.equal(mutations,4,'One create, one draft revision, one activation, one completion');
     const overflow=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,viewport:innerWidth}));
     assert.ok(overflow.scroll<=overflow.viewport+2,'Laboratory must not overflow phone layout: '+JSON.stringify(overflow));
     assert.deepEqual(errors,[], 'Improvement Lab should not trigger runtime errors');
