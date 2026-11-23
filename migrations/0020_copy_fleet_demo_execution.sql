@@ -62,6 +62,7 @@ CREATE TABLE copy_execution_tasks (
  broker_ticket TEXT,
  retcode INTEGER,
  result_code TEXT,
+ result_payload TEXT CHECK(result_payload IS NULL OR json_valid(result_payload)),
  created_at INTEGER NOT NULL,
  expires_at INTEGER NOT NULL,
  dispatched_at INTEGER,
