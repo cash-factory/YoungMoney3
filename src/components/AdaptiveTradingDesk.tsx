@@ -34,13 +34,15 @@ interface Props {
   onOpenGuide: () => void;
   onOpenWeekly: () => void;
   onOpenRisk: () => void;
+  onOpenLab: () => void;
+  activeExperiments: number;
   pendingReviews: number;
   accountName: string;
   tradesRecorded: number;
 }
 export function AdaptiveTradingDesk({
   mode, preferred, suggested, suggestionReason, suggestionBasis, onSelect, onStart, onPin, onCapture,
-  onOpenGuide, onOpenWeekly, onOpenRisk, pendingReviews, accountName, tradesRecorded,
+  onOpenGuide, onOpenWeekly, onOpenRisk, onOpenLab, activeExperiments, pendingReviews, accountName, tradesRecorded,
 }: Props) {
   const descriptionRoot = useId();
   const modeInfo: Record<DeskMode, { headline: string; detail: string; supporting: string }> = {
@@ -62,7 +64,9 @@ export function AdaptiveTradingDesk({
     analyze: {
       headline: 'Look for evidence, not explanations.',
       detail: 'Compare documented habits, original checklists and consistent behavior over time.',
-      supporting: 'Personal patterns follow the existing journal evidence; missing samples are marked.',
+      supporting: activeExperiments
+        ? activeExperiments + (activeExperiments===1 ? ' active improvement study is' : ' active improvement studies are') + ' collecting eligible decision evidence.'
+        : 'Personal patterns follow the existing journal evidence; missing samples are marked.',
     },
   };
 
@@ -121,7 +125,7 @@ export function AdaptiveTradingDesk({
         </>}
         {mode === 'analyze' && <>
           <button type="button" className="btn-primary" onClick={() => onStart('analyze')}><Activity size={16}/> Explore personal patterns</button>
-          <button type="button" className="btn-secondary" onClick={() => { window.location.hash = 'strategy-testing'; }}>Open testing workspace</button>
+          <button type="button" className="btn-secondary" onClick={onOpenLab}>Improvement Laboratory</button>
         </>}
       </div>
       <div className="ym-adaptive-utility">
