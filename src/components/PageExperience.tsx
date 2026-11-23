@@ -25,6 +25,7 @@ const experiences: Record<PageId, Experience> = {
   'account-settings': { chapter: 'Workspace / Preferences', cue: 'Make this space yours', variant: 'settings', art: '/assets/page-art/account-settings.svg' },
   'admin-operations': { chapter: 'Workspace / Administration', cue: 'Workspace access and operations', variant: 'operations', art: '/assets/page-art/admin-operations.svg' },
   mt5: { chapter: 'Workspace / Connection bridge', cue: 'Bring execution into focus', variant: 'connections', art: '/assets/page-art/mt5.svg' },
+  'copy-studio': { chapter: 'Workspace / Simulation studio', cue: 'Design before execution', variant: 'connections', art: '/assets/page-art/mt5.svg' },
   'workspace-setup': { chapter: 'Workspace / Getting started', cue: 'Build your trading foundation', variant: 'setup', art: '/assets/page-art/workspace-setup.svg' },
 };
 
