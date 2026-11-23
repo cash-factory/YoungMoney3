@@ -47,15 +47,25 @@ try {
         q.table === 'decision_reviews' ? reviews : q.table === 'journal_entries' ? journal : null;
       if (!rows) return route.fallback();
       if (q.action === 'select') return route.fulfill({ json: { data: rows, count: rows.length } });
-      assert.equal(q.action, 'insert');
-      const row = {
-        ...(Array.isArray(q.payload) ? q.payload[0] : q.payload),
-        user_id: user.id,
-        id: q.payload.id || 'journal-id',
-        updated_at: new Date().toISOString(),
-        created_at: new Date().toISOString(),
-      };
-      rows.push(row);
+      assert.ok(['insert','update'].includes(q.action));
+      const value = Array.isArray(q.payload) ? q.payload[0] : q.payload;
+      const now = new Date().toISOString();
+      let row;
+      if (q.action === 'insert') {
+        row = {
+          ...value, user_id: user.id, id: value.id || 'journal-id',
+          ...(q.table === 'decision_reviews' ? { pre_reveal_at: value.pre_reveal_verdict ? now : null } : {}),
+          updated_at: now, created_at: now,
+        };
+        rows.push(row);
+      } else {
+        const old = rows.find(item => item.id === q.id);
+        assert.ok(old, 'Existing review should be editable after outcome reveal');
+        assert.equal(value.pre_reveal_at, undefined, 'Sealed timestamp must not be edited');
+        assert.equal(value.pre_reveal_verdict, undefined, 'Sealed verdict must not be edited');
+        row = { ...old, ...value, updated_at: new Date(Date.now()+1000).toISOString() };
+        rows[rows.indexOf(old)] = row;
+      }
       writes.push(q.table);
       return route.fulfill({ json: { data: [row], count: 1 } });
     });
@@ -77,15 +87,21 @@ try {
     await dialog.getByRole('button', { name: 'My trigger fired' }).click();
     await dialog.getByRole('button', { name: 'Followed my plan' }).click();
     assert.equal(await dialog.getByText(/Net result/).count(), 0);
-    await dialog.getByRole('button', { name: 'Reveal outcome and evidence' }).click();
+    await dialog.getByRole('button', { name: 'Record judgement & reveal outcome' }).click();
+    await dialog.getByText('Pre-reveal judgement recorded:', { exact: false }).waitFor();
+    assert.equal(reviews[0].pre_reveal_verdict, 'followed');
+    assert.ok(reviews[0].pre_reveal_at, 'Pre-reveal timestamp must be minted by the server');
+    await dialog.getByRole('button', { name: 'Changed course' }).click();
+    await dialog.getByPlaceholder('Separate your next action from the P&L result.').fill('The result did not make the early entry disciplined.');
     await dialog.getByRole('heading', { name: 'Still unclear' }).waitFor();
     await dialog.getByText(/Opening-stop evidence is unavailable/).waitFor();
     await dialog.getByRole('button', { name: 'Save decision' }).click();
     await dialog.waitFor({ state: 'hidden' });
     assert.deepEqual(
-      [reviews[0].reference, reviews[0].strategy_id, reviews[0].entry_model_id],
-      ['trade/' + trade.id, 'fixture-strategy', 'model']
+      [reviews[0].reference, reviews[0].strategy_id, reviews[0].entry_model_id, reviews[0].pre_reveal_verdict, reviews[0].verdict],
+      ['trade/' + trade.id, 'fixture-strategy', 'model', 'followed', 'changed']
     );
+    assert.match(reviews[0].post_outcome_note, /early entry disciplined/);
 
     await page.getByRole('button', { name: 'I passed', exact: true }).click();
     const capture = page.getByRole('dialog', { name: 'Quick Capture' });
@@ -100,7 +116,7 @@ try {
     );
     await capture.getByRole('button', { name: 'Save capture' }).click();
     await capture.waitFor({ state: 'hidden' });
-    assert.deepEqual(writes, ['decision_reviews', 'journal_entries']);
+    assert.deepEqual(writes, ['decision_reviews', 'decision_reviews', 'journal_entries']);
     assert.equal(journal[0].decision_kind, 'pass');
     assert.deepEqual(errors, []);
     await page.close();
