@@ -210,8 +210,16 @@ def _request(mt5,db,link,task,account,now_ms):
             source_currency=body.get("sourceCurrency"),
             sizing_mode=risk["mode"],sizing_value=risk.get("value"),
             max_lots=risk.get("maxLots"))
-        if _daily_net_pnl(mt5,account)<= -(D(account.equity)*D(risk["maxDailyLossPct"])/100):
+        # Reserve new trade's STOP exposure within today's remaining downside
+        # allowance; simply checking current daily P&L would let a new order
+        # immediately risk more than the operator's daily-loss ceiling.
+        current_net=_daily_net_pnl(mt5,account)
+        daily_allowance=D(account.equity)*D(risk["maxDailyLossPct"])/100
+        loss_used=max(D("0"),-current_net)
+        if loss_used>=daily_allowance:
             raise CopyExecutionError("daily_loss_limit_reached")
+        if D(size["risk_amount"])>daily_allowance-loss_used:
+            raise CopyExecutionError("new_order_risk_exceeds_remaining_daily_limit")
         if not pending and int(getattr(info,"trade_exemode",2))==getattr(mt5,"SYMBOL_TRADE_EXECUTION_MARKET",2):
             price_field={}
         else:
