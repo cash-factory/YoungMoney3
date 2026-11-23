@@ -25,6 +25,8 @@ export async function copyFleetDevice(db:D1Database,device:Device,action:string,
     input.link,device.id,device.owner).first<Link>();
   if(!link||link.status!=='connected')return fail('Authorized linked account unavailable.',404);
   if(link.trade_mode!==0)return fail('Copy execution is restricted to verified demo accounts.',403);
+  if(link.monitoring_paused && action!=='device/copy-consent' && action!=='device/copy-report')
+    return fail('Monitoring is paused. No broker copy actions may run.',423);
   if(action==='device/copy-consent'){
     if(typeof input.allowed!=='boolean')return fail('Explicit local demo permission required.');
     if(input.allowed&&link.access_level!=='trading-enabled')
@@ -44,7 +46,9 @@ export async function copyFleetDevice(db:D1Database,device:Device,action:string,
     await q("INSERT INTO copy_account_reports(link,owner,device,account_currency,account_balance,account_equity,margin_free,open_positions,pending_orders,broker_connected,demo_trading_enabled,observed_at_ms) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(link) DO UPDATE SET account_balance=excluded.account_balance,account_equity=excluded.account_equity,margin_free=excluded.margin_free,open_positions=excluded.open_positions,pending_orders=excluded.pending_orders,broker_connected=excluded.broker_connected,demo_trading_enabled=excluded.demo_trading_enabled,observed_at_ms=excluded.observed_at_ms WHERE copy_account_reports.owner=excluded.owner AND copy_account_reports.device=excluded.device",
       link.id,device.owner,device.id,link.currency,input.balance,input.equity,input.freeMargin,input.openPositions,input.pendingOrders,
       input.connected?1:0,input.tradeAllowed?1:0,now).run();
-    return respond({ok:true});
+    const source=await q("SELECT 1 FROM copy_fleets WHERE owner=? AND source_link=? AND state='demo_armed' LIMIT 1",
+      device.owner,link.id).first();
+    return respond({ok:true,sourceActive:!!source && !link.monitoring_paused});
   }
   if(action==='device/copy-source'){
     if(!Array.isArray(input.items)||input.items.length>120||!input.items.every(validCopyItem)||
