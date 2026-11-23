@@ -1,3 +1,4 @@
+import { optionalBrokerDirectory } from './brokerDirectory';
 interface Bindings { DB: D1Database; MT5_ALLOW_LIVE?: string }
 type Fields = Record<string, unknown>;
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -69,6 +70,12 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     return changed.meta.changes ? json({ok:true}) : fail('Account unavailable.',404);
   }
   if (owner) {
+    if(action==='broker-directory') {
+      // Public catalogue lookup; never forward login, password, device ID,
+      // account identifiers or the request payload to this provider.
+      const directory=await optionalBrokerDirectory();
+      return json(directory);
+    }
     if (action === 'status') {
       const devices = await q('SELECT id,pc_name,public_key,last_seen,setup_state,connector_version FROM mt5_devices WHERE owner=? AND revoked=0 AND public_key IS NOT NULL', owner).all();
       const links = await q('SELECT l.device,l.monitoring_paused,l.retry_requested_at,l.capture_health,l.id,l.account_id,l.status,l.company,l.server,l.login,l.access_level,l.trade_mode,l.history_id,l.history_status,l.history_since,l.history_authorized_since,l.history_mode,l.history_anchor_at,l.history_anchor_ticket,l.history_anchor_amount,l.history_scanned_until,l.cash_history_cursor,l.cash_history_completed_at,l.last_sync,l.broker_balance,l.broker_equity,l.currency,l.gap,l.last_error,l.expires,l.broker_timezone,l.timezone_confirmed_at,l.timezone_source,l.utc_conversion_status FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND d.revoked=0', owner).all();
