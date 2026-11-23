@@ -150,3 +150,16 @@ test('10,000 trade/review histories remain linearithmic and account-scoped',()=>
   assert.equal(result.setupAdherence[0].reviewed,10000);
   assert.ok(elapsed<6000,'10k record analysis unexpectedly slow: '+elapsed.toFixed(0)+' ms');
 });
+
+test('restored reviews cannot contribute forged pre-reveal evidence to behavioral patterns',()=>{
+  const historical=review('trade/restore','changed',{
+    imported_unverified:true,
+    pre_reveal_verdict:'followed',pre_reveal_at:'2026-11-21T09:30:00Z',
+  });
+  const result=buildTradingPatterns([],[historical],{now,minimum:3});
+  assert.equal(result.importedUnverified,1);
+  assert.equal(result.preReveal,0);
+  assert.equal(result.retrospective,1);
+  assert.equal(result.plan.numerator,0,'Restored unverified seal must not replace the self-report.');
+  assert.ok(result.limitations.some(line=>line.includes('restored reviews')));
+});
