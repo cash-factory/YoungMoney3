@@ -36,7 +36,7 @@ try {
     await modes.getByRole('button',{name:/Prepare/}).click();
     await page.locator('#dashboard-panel-risk').waitFor();
     assert.equal(await modes.getByRole('button',{name:/Prepare/}).getAttribute('aria-pressed'),'true');
-    await page.getByRole('button',{name:'Configure limits'}).click();
+    await page.locator('.ym-adaptive-focus').getByRole('button',{name:'Configure limits'}).click();
     const risk=page.getByRole('dialog',{name:/Risk/i});
     await risk.waitFor();
     await risk.getByRole('button',{name:'Close dialog'}).click();
@@ -51,6 +51,14 @@ try {
     await modes.getByRole('button',{name:/Review/}).click();
     await page.locator('#dashboard-panel-recent').waitFor();
     assert.ok(await page.locator('#ym-recent .ym-decision-desk').count());
+    const ledger=page.locator('#ym-recent .ym-dash-recent-card');
+    await ledger.getByText('Concealed').waitFor();
+    assert.equal(await ledger.getByText('Hidden').count(),2,'Trade outcome and pips must be concealed by default.');
+    assert.equal(await ledger.getByText('10.00', {exact:false}).count(),0);
+    await page.getByRole('button',{name:'Reveal financial outcomes'}).click();
+    assert.equal(await ledger.getByText('Concealed').count(),0);
+    await page.getByRole('button',{name:'Hide financial outcomes'}).click();
+    await ledger.getByText('Concealed').waitFor();
     await modes.getByRole('button',{name:/Understand/}).click();
     await page.locator('#dashboard-panel-deep-dive').waitFor();
     const patterns=page.getByRole('region',{name:'Personal trading patterns'});
