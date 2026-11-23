@@ -22,6 +22,8 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from ledger import closed_legs, iso
 from lifecycle import reconstruct
+from spec_evidence import first_position_spec
+from recovery import history_window, due_positions, mark_checked
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args):
@@ -116,26 +118,26 @@ def lifecycle_projection(link,pid,end,start,timezone_settings):
     symbol=next((d["symbol"] for d in history if d.get("symbol")),"")
     if not symbol:
         return
-    spec=symbol_spec(symbol)
-    spec_key="spec-"+hashlib.sha256(json.dumps(spec,sort_keys=True,default=str).encode()).hexdigest()[:28]
-    enqueue(link,"raw",spec_key,{"position_id":str(pid),**spec})
+    spec=first_position_spec(db,link,pid,end,lambda: symbol_spec(symbol),enqueue)
     observed=[{"position_id":str(pid),"time_msc":row[0],"sl":row[1],"tp":row[2]}
               for row in db.execute("SELECT at_ms,sl,tp FROM position_observations WHERE link=? AND position_id=? ORDER BY at_ms",(link,str(pid)))]
     capital=[{"at_ms":row[0],"equity":row[1],"balance":row[2]}
              for row in db.execute("SELECT at_ms,equity,balance FROM capital_snapshots WHERE link=? ORDER BY at_ms",(link,))]
     settings=timezone_settings or {}
-    for record in reconstruct(history,{o["ticket"]:o for o in orders},observed,spec,
+    projections=reconstruct(history,{o["ticket"]:o for o in orders},observed,spec,
                               capital_samples=capital,
                               broker_timezone=settings.get("broker_timezone"),
                               timezone_confirmed=bool(settings.get("timezone_confirmed_at")),
                               conversion_provenance=settings.get("utc_conversion_status"),
-                              observed_at_ms=end):
+                              observed_at_ms=end)
+    for record in projections:
         # A historical closed lifecycle is not implicitly imported by a live
         # scan. Preserve the existing history-review approval boundary.
         last=record.get("final_exit_at")
         if record["status"]=="closed" and last and int(datetime.fromisoformat(last).timestamp()*1000)<start:
             continue
         enqueue(link,"lifecycle","lifecycle:"+record["lifecycle_id"],record)
+    return bool(projections and projections[-1]["status"]=="closed")
 
 
 def enqueue(link, kind, key, fields):
@@ -344,8 +346,7 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
         return [{k:(v-offset if k.endswith("_msc") and v else v) for k,v in row.items()} for row in rows]
 
     # Advance a bounded history window on every cycle while catching up.
-    until=min(end,cursor+86400000)
-    since=max(start,cursor-86400000)
+    since,until,catching_up=history_window(start,cursor,end)
     raw_deals=records(mt5.history_deals_get(utc(since+offset-1000),utc(until+offset+1000)))
     raw_orders=records(mt5.history_orders_get(utc(since+offset-1000),utc(until+offset+1000)))
     deals=normalize(raw_deals)
@@ -362,16 +363,18 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
             if start<=max(order["time_done_msc"],order["time_setup_msc"])<=until:
                 enqueue(link,"raw","order-"+str(order["ticket"]),raw(original))
         exits={d["position_id"] for d in deals if d["entry"] in (1,2,3) and d["type"] in (0,1) and start<=d["time_msc"]<=until}
-        for pid in exits:
-            position_orders={o["ticket"]:o for o in records(mt5.history_orders_get(position=pid))}
-            position_deals=normalize(records(mt5.history_deals_get(position=pid)))
+        def save_closures(pid,position_deals,position_orders):
             for leg in closed_legs(position_deals,start,position_orders):
                 previous_open=db.execute("SELECT payload FROM latest WHERE link=? AND key=?",(link,"open-"+str(pid))).fetchone()
-                if previous_open:
+                if previous_open and json.loads(previous_open[0]).get("kind")=="trade":
                     previous_fields=json.loads(previous_open[0])["fields"]
                     for level in ("stop_loss","take_profit"):
                         leg["fields"][level]=leg["fields"].get(level) or previous_fields.get(level)
                 enqueue(link,leg["kind"],leg["key"],leg["fields"])
+        for pid in exits:
+            position_orders={o["ticket"]:o for o in records(mt5.history_orders_get(position=pid))}
+            position_deals=normalize(records(mt5.history_deals_get(position=pid)))
+            save_closures(pid,position_deals,position_orders)
         previous={row[0] for row in db.execute("SELECT key FROM latest WHERE link=? AND key LIKE 'open-%' AND json_extract(payload,'$.kind')='trade'",(link,))}
         for p in positions:
             ident=str(p["identifier"])
@@ -397,12 +400,36 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
             # writer for this poll. Do not overwrite that immutable evidence
             # using a second payload with the same event key.
             enqueue(link,"trade",key,fields)
-        for key in previous:
-            enqueue(link,"retire",key,{})
-        # Each lifecycle is reconstructed from fills and original orders on the
-        # same MT5/SQLite worker. Separate summaries remain immutable by version.
+        # Recover all previously observed positions that have disappeared.
+        # Older connector versions may already have retired open-* prematurely;
+        # their position_observations still identify these pending lifecycles.
+        current_pids={str(p["identifier"]) for p in positions}
+        missing_due,missing_total=due_positions(db,link,current_pids,end)
+        verified_missing=set()
+        for pid in missing_due:
+            try:
+                closed=lifecycle_projection(link,pid,end,start,timezone_cache.get(link,{}))
+                if closed:
+                    all_deals=normalize(records(mt5.history_deals_get(position=int(pid))))
+                    all_orders=records(mt5.history_orders_get(position=int(pid)))
+                    save_closures(pid,all_deals,{o["ticket"]:o for o in all_orders})
+                    enqueue(link,"retire","open-"+str(pid),{})
+                    verified_missing.add(str(pid))
+                    missing_total-=1
+                mark_checked(db,link,pid,end,bool(closed))
+            except (RuntimeError, ValueError, OSError):
+                # Missing broker history is unresolved, never proof of closure.
+                mark_checked(db,link,pid,end,False)
+        if gap and last and end-last>60000:
+            # This is an *observation-gap marker*, not an invented stop change.
+            for pid in sorted(current_pids | {key[5:] for key in previous}):
+                enqueue(link,"raw",f"stops-gap-{pid}-{last}-{end}",{
+                    "position_id":pid,"gap_from_ms":int(last),"gap_until_ms":end,
+                    "stop_changes_unobservable":True,
+                    "provenance":"offline_interval_not_broker_execution"})
+        # Reconstruct full lifecycles from actual fills and executed orders.
         settings=timezone_cache.get(link,{})
-        for pid in sorted({str(p["identifier"]) for p in positions}|{str(pid) for pid in exits}):
+        for pid in sorted((current_pids|{str(pid) for pid in exits})-verified_missing):
             lifecycle_projection(link,pid,end,start,settings)
         db.execute("UPDATE links SET cursor=?,last=?,gap=? WHERE link=?",(until,end,int(gap),link))
     # Independently collect earlier cash movements without waiting for a
@@ -419,7 +446,10 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
         active_history=db.execute("SELECT 1 FROM history_progress WHERE link=?",(link,)).fetchone()
         if not page and not gap and not active_history and end-heartbeats.get(link,0)<15000: break
         payload={"link":link,"events":[json.loads(row[1]) for row in page],
-                 "balance":account.balance,"equity":account.equity,"gap":gap}
+                 "balance":account.balance,"equity":account.equity,"gap":gap,
+                 "recovery":{"status":"catching_up" if catching_up else "awaiting_broker_history" if missing_total>0 else "current",
+                             "scanned_through":until,"target_at":end,
+                             "unresolved_positions":missing_total,"unobserved_stop_changes":bool(gap)}}
         # A scan checkpoint is acknowledged only with its last outbox page,
         # after all earlier cash deal evidence is in-flight or acknowledged.
         if cash_scan is not None and len(page)<24:
@@ -579,6 +609,8 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
         CREATE TABLE IF NOT EXISTS links(link TEXT PRIMARY KEY,slot TEXT UNIQUE,login TEXT,server TEXT,start INTEGER,cursor INTEGER,last INTEGER,verified TEXT,gap INTEGER);
         CREATE TABLE IF NOT EXISTS broker_clock(link TEXT PRIMARY KEY,offset INTEGER);
         CREATE TABLE IF NOT EXISTS position_observations(link TEXT,position_id TEXT,at_ms INTEGER,sl TEXT,tp TEXT,PRIMARY KEY(link,position_id,at_ms));
+        CREATE TABLE IF NOT EXISTS position_specs(link TEXT,position_id TEXT,payload TEXT,observed_at_ms INTEGER,PRIMARY KEY(link,position_id));
+        CREATE TABLE IF NOT EXISTS position_recovery(link TEXT,position_id TEXT,status TEXT NOT NULL,checked_ms INTEGER NOT NULL,PRIMARY KEY(link,position_id));
         CREATE TABLE IF NOT EXISTS capital_snapshots(link TEXT,at_ms INTEGER,equity TEXT,balance TEXT,PRIMARY KEY(link,at_ms));
         CREATE TABLE IF NOT EXISTS history_seed(link TEXT,request TEXT,PRIMARY KEY(link,request));
         CREATE TABLE IF NOT EXISTS history_progress(link TEXT PRIMARY KEY,request TEXT,cursor INTEGER);

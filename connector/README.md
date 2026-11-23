@@ -2,7 +2,9 @@
 
 ## Windows app
 
-**Current staging Windows x64 build:** [v0.5.6-rc1](https://github.com/cash-factory/YoungMoney3/releases/tag/staging-connector-v0.5.6-rc1) — an unsigned, read-only MT5 diagnostic build from the reviewed staging branch and tested on a clean Windows CI machine. [Download the executable](https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.6-rc1/YoungMoney3.Connector.exe) and compare its SHA-256 with the official [checksum file](https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.6-rc1/YoungMoney3.Connector.exe.sha256): `5921d93c6dc7be8486ca10989887f5c69f324512f34fe2e771659b2d3227470c`.
+**Current staging Windows x64 build:** [v0.5.7-rc1](https://github.com/cash-factory/YoungMoney3/releases/tag/staging-connector-v0.5.7-rc1) — an unsigned, read-only MT5 recovery build from the reviewed staging branch and smoke-validated on a clean Windows CI machine. [Download the executable](https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.7-rc1/YoungMoney3.Connector.exe) and compare its SHA-256 with the official [checksum file](https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.7-rc1/YoungMoney3.Connector.exe.sha256): `4fe6ca4278f608ebb876d327f1672e694fe7b916e854a2b21a276bd2f0d4e4fb`.
+
+**This build corrects an MT5 specification-evidence identity defect**: older connectors reused a symbol-specification key across multiple position IDs, generating thousands of false integrity conflicts. v0.5.7 uses position-scoped, first-observed snapshots and reconstructs previously observed positions from broker deals/orders after an offline interval. Unobserved interim SL/TP changes are flagged as such, not invented. **Do not delete local capture.db or unpair the PC**; close the old app and open v0.5.7 in the same Windows user. Real MT5 broker recovery remains an acceptance check.
 
 **This build retains the named-tuple fix from v0.5.5-rc1 and additionally identifies repeated Capture API HTTP failures.** Record the first message with HTTP status and fixed category to diagnose the server rejection. **This diagnostic update does not, by itself, bypass an HTTP rejection.**
 
@@ -16,7 +18,7 @@ The update reuses your existing Windows Credential Manager pairing and local dur
 4. Keep the connector open. **PC online** confirms the connection to the dashboard. **Broker verified** confirms the login. **Journal synced** follows an acknowledged account upload.
 5. Use **Broker accounts** on the trading dashboard to see each login, check its last sync, or pause and resume monitoring. **Manage accounts** opens retries, timezones and historical imports.
 
-## Identify a paired Windows PC (staging v0.5.6-rc1)
+## Identify a paired Windows PC (staging v0.5.7-rc1)
 
 Each connector installation has one random, persistent installation identifier in
 the current Windows user's LOCALAPPDATA/YMFX folder. It is not a hardware ID,
@@ -176,6 +178,6 @@ from fills alone. Reviews and manual duplicate matching are still mandatory
 before older closed fills become journal trades. Connected accounts and
 live evidence are never deleted by the failed-login cleanup controls.
 
-## Automatic historical balance movements (v0.5.6-rc1)
+## Automatic historical balance movements (v0.5.7-rc1)
 
 The connected demo/contest account is checked for past MT5 DEAL_TYPE_BALANCE transactions automatically, independently of the approved closed-trade history importer. Positive entries can be deposits **or** broker corrections; negative entries can be withdrawals **or** corrections. Raw broker deals are preserved, no claim of verified lifetime profit is made, and the staging account ledger labels credit/debit candidates as *unverified*. The connector scans older available records in bounded resumable windows without blocking normal trade capture. Broker retention remains a limitation; compare amounts with an original broker account statement before drawing lifetime P&L conclusions.

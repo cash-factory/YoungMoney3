@@ -76,7 +76,11 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       const states=await Promise.all(links.results.map(async link=>({
         ...link,
         pending_reviews:(await remainingReviews(String(link.id)))?.n??0,
-        evidence_conflicts_pending:(await q("SELECT COUNT(*) AS n FROM mt5_evidence_conflicts WHERE link=? AND owner=? AND review_status='needs_review'",link.id,owner).first<{n:number}>())?.n??0
+        evidence_conflicts_pending:(await q(`SELECT COUNT(*) AS n FROM mt5_evidence_conflicts c WHERE c.link=? AND c.owner=? AND c.review_status='needs_review'
+        AND NOT EXISTS (SELECT 1 FROM mt5_conflict_classifications k
+          WHERE k.link=c.link AND k.event_key=c.event_key AND k.candidate_sha256=c.candidate_sha256)`,link.id,owner).first<{n:number}>())?.n??0,
+        connector_spec_artifacts:(await q("SELECT COUNT(*) AS n FROM mt5_conflict_classifications WHERE link=? AND owner=?",link.id,owner).first<{n:number}>())?.n??0,
+        recovery:(await q("SELECT state,scanned_through,target_at,unresolved_positions,unobserved_stop_changes,updated_at FROM mt5_recovery_status WHERE link=? AND owner=?",link.id,owner).first())??null
       })));
       return json({ accounts:accounts.results, devices: devices.results, links: states, demoOnly: env.MT5_ALLOW_LIVE !== 'true', capturePaused: await capturePaused() });
     }
@@ -86,7 +90,9 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         input.link,owner,owner).first();
       if(!account) return fail('Broker account unavailable.',404);
       const items=await q(`SELECT event_key,evidence_kind,changed_fields,original_sha256,candidate_sha256,recorded_at,review_status
-        FROM mt5_evidence_conflicts WHERE link=? AND owner=? ORDER BY recorded_at DESC,event_key LIMIT 101`,input.link,owner)
+        FROM mt5_evidence_conflicts c WHERE c.link=? AND c.owner=? AND c.review_status='needs_review'
+        AND NOT EXISTS (SELECT 1 FROM mt5_conflict_classifications k
+          WHERE k.link=c.link AND k.event_key=c.event_key AND k.candidate_sha256=c.candidate_sha256) ORDER BY c.recorded_at DESC,c.event_key LIMIT 101`,input.link,owner)
         .all<{event_key:string;evidence_kind:string;changed_fields:string;original_sha256:string;candidate_sha256:string;recorded_at:string;review_status:string}>();
       return json({rows:items.results.slice(0,100).map(item=>({
         event_key:item.event_key,evidence_kind:item.evidence_kind,
@@ -630,13 +636,26 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         // JSON key reordering is semantically identical and not a broker revision.
         if(sortedEvidenceJson(JSON.parse(prior.payload))!==sortedEvidenceJson(f)) {
           const changed=changedEvidenceFields(JSON.parse(prior.payload),f);
+          const alias=evidenceKind==='specification'
+            && /^spec-[0-9a-f]{28}$/.test(String(event.key))
+            && changed.length===1 && changed[0]==='position_id'
+            && (() => {
+              const base={...JSON.parse(prior.payload) as Fields},next={...f};
+              delete base.position_id;delete next.position_id;
+              return sortedEvidenceJson(base)===sortedEvidenceJson(next);
+            })();
           // A genuine conflict is retained separately for review, not treated as a
           // broker-authorized correction. The existing immutable evidence stays.
           statements.push(q(`INSERT OR IGNORE INTO mt5_evidence_conflicts
             (link,owner,account_id,event_key,evidence_kind,original_sha256,candidate_sha256,candidate_payload,changed_fields,review_status,recorded_at)
             VALUES(?,?,?,?,?,?,?,?,?,'needs_review',?)`,
             link.id,device.owner,link.account_id,event.key,evidenceKind,prior.sha256,sha,payload,JSON.stringify(changed),time));
-          quarantinedInBatch++;
+          if(alias) statements.push(q(`INSERT OR IGNORE INTO mt5_conflict_classifications
+            (link,event_key,candidate_sha256,owner,classification,provenance,recorded_at)
+            VALUES(?,?,?,?,'connector_spec_position_alias_v1',
+              'old_spec_hash_omitted_position_id',?)`,
+            link.id,event.key,sha,device.owner,time));
+          else quarantinedInBatch++;
           continue;
         }
       }
@@ -719,8 +738,11 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   const syncedAt=now();
   statements.push(q('UPDATE mt5_devices SET last_seen=? WHERE id=?',unix,device.id));
   statements.push(q(`UPDATE mt5_links SET retry_requested_at=NULL,
-     capture_health=CASE WHEN EXISTS(SELECT 1 FROM mt5_evidence_conflicts
-       WHERE link=? AND review_status='needs_review') THEN 'needs_attention' ELSE 'synced' END
+     capture_health=CASE WHEN EXISTS(SELECT 1 FROM mt5_evidence_conflicts c
+       WHERE c.link=? AND c.review_status='needs_review'
+         AND NOT EXISTS(SELECT 1 FROM mt5_conflict_classifications k
+           WHERE k.link=c.link AND k.event_key=c.event_key AND k.candidate_sha256=c.candidate_sha256))
+       THEN 'needs_attention' ELSE 'synced' END
      WHERE id=?`,link.id,link.id));
   statements.push(q(`UPDATE mt5_links SET last_sync=?,gap=MAX(gap,?),
     broker_balance=COALESCE(?,broker_balance),broker_equity=COALESCE(?,broker_equity),
@@ -749,11 +771,36 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       WHERE id=?`,input.cashScan.cursor,input.cashScan.cursor,
       Number(input.cashScan.complete),now(),link.id));
   }
+  if(input.recovery!==undefined) {
+    const r=input.recovery;
+    if(!isObject(r)||!['catching_up','awaiting_broker_history','current'].includes(String(r.status))
+      || !Number.isSafeInteger(r.scanned_through)||Number(r.scanned_through)<0
+      || !Number.isSafeInteger(r.target_at)||Number(r.target_at)<Number(r.scanned_through)
+      || Number(r.target_at)>Date.now()+86400000
+      || !Number.isSafeInteger(r.unresolved_positions)||Number(r.unresolved_positions)<0
+      || Number(r.unresolved_positions)>100000
+      || typeof r.unobserved_stop_changes!=='boolean') return fail('Invalid broker recovery checkpoint.');
+    statements.push(q(`INSERT INTO mt5_recovery_status
+      (link,owner,state,scanned_through,target_at,unresolved_positions,unobserved_stop_changes,updated_at)
+      VALUES(?,?,?,?,?,?,?,?)
+      ON CONFLICT(link) DO UPDATE SET
+        state=CASE WHEN excluded.scanned_through>=mt5_recovery_status.scanned_through THEN excluded.state ELSE mt5_recovery_status.state END,
+        scanned_through=MAX(mt5_recovery_status.scanned_through,excluded.scanned_through),
+        target_at=MAX(mt5_recovery_status.target_at,excluded.target_at),
+        unresolved_positions=CASE WHEN excluded.scanned_through>=mt5_recovery_status.scanned_through THEN excluded.unresolved_positions ELSE mt5_recovery_status.unresolved_positions END,
+        unobserved_stop_changes=MAX(mt5_recovery_status.unobserved_stop_changes,excluded.unobserved_stop_changes),
+        updated_at=excluded.updated_at WHERE mt5_recovery_status.owner=excluded.owner`,
+      link.id,device.owner,r.status,r.scanned_through,r.target_at,r.unresolved_positions,
+      r.unobserved_stop_changes?1:0,syncedAt));
+  }
   if(input.history_done) statements.push(q("UPDATE mt5_links SET history_status='ready' WHERE id=? AND history_id=? AND history_status='requested'",link.id,input.history_done));
   await db.batch(statements);
   const history=await q('SELECT history_id AS id,history_since AS since,history_status AS status,history_mode AS mode,history_anchor_at AS anchor_at,history_anchor_ticket AS anchor_ticket,history_scanned_until AS scanned_until FROM mt5_links WHERE id=?',link.id).first();
   const preferences=await q('SELECT broker_timezone,timezone_confirmed_at,utc_conversion_status FROM mt5_links WHERE id=?',link.id).first();
-  const unresolved=(await q("SELECT COUNT(*) AS n FROM mt5_evidence_conflicts WHERE link=? AND review_status='needs_review'",link.id).first<{n:number}>())?.n??0;
+  const unresolved=(await q(`SELECT COUNT(*) AS n FROM mt5_evidence_conflicts c WHERE c.link=? AND c.review_status='needs_review'
+      AND NOT EXISTS(SELECT 1 FROM mt5_conflict_classifications k WHERE k.link=c.link
+        AND k.event_key=c.event_key AND k.candidate_sha256=c.candidate_sha256)`,
+      link.id).first<{n:number}>())?.n??0;
    return json({ok:true,history,preferences,synced_at:syncedAt,pending_reviews:(await remainingReviews(link.id))?.n??0,
      evidence_conflicts_pending:unresolved,evidence_quarantined_in_batch:quarantinedInBatch,
      evidence_integrity_status:unresolved?'needs_review':'verified_no_conflict'});

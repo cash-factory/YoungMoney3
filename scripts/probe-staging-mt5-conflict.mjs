@@ -80,6 +80,22 @@ try{
   assert.equal(status.capture_health,'needs_attention');
   assert.ok(status.last_sync);
   console.log('Verified deployed staging: original immutable, changed candidate audited, other events accepted, retries deduplicated, sync advanced, review remains visible.');
+  const legacySpec='spec-'+'b'.repeat(28);
+  const sourceSpec={position_id:'3301',symbol:'XAUUSD',trade_tick_size:0.01};
+  assert.equal((await query({link,events:[{kind:'raw',key:legacySpec,fields:sourceSpec}]})).evidence_conflicts_pending,1);
+  const alias=await query({link,events:[{kind:'raw',key:legacySpec,fields:{...sourceSpec,position_id:'3302'}}]});
+  assert.equal(alias.evidence_conflicts_pending,1,'Only true broker trade conflicts should count as unresolved.');
+  assert.equal(sql("SELECT COUNT(*) AS n FROM mt5_conflict_classifications WHERE link='"+link+"'").n,1);
+  const startAt=Date.now()-2*86400000;
+  const catchup=await query({link,events:[],recovery:{
+    status:'catching_up',scanned_through:startAt,target_at:Date.now(),
+    unresolved_positions:7,unobserved_stop_changes:true}});
+  assert.equal(catchup.ok,true);
+  const r=sql("SELECT state,unresolved_positions,unobserved_stop_changes FROM mt5_recovery_status WHERE link='"+link+"'");
+  assert.equal(r.state,'catching_up');
+  assert.equal(r.unresolved_positions,7);
+  assert.equal(r.unobserved_stop_changes,1);
+  console.log('Verified additional MT5 recovery protocol: 7 unresolved broker positions tracked and known connector alias classified separately.');
   if(process.env.YM3_PROBE_BROWSER==='1'){
     const { chromium }=await import('playwright');
     const browser=await chromium.launch({headless:true});
@@ -101,6 +117,9 @@ try{
       await accountCard.getByText('1 broker evidence discrepancy preserved for review.').waitFor({timeout:20000});
       await accountCard.getByRole('button',{name:'Inspect conflicting evidence'}).click();
       await accountCard.getByText('Changed: price').waitFor({timeout:20000});
+      await accountCard.getByText(/1 historical connector specification-key aliases identified/).waitFor({timeout:20000});
+      await accountCard.getByText(/Rebuilding broker history through/).waitFor({timeout:20000});
+      await accountCard.getByText(/7 previously observed positions cannot yet be confirmed closed/).waitFor({timeout:20000});
       const status=await accountCard.getByText(/Last sync/).count();
       assert.equal(status>0,true,'Browser should show a real sync timestamp.');
       console.log('Verified staging Chromium: evidence-review badge, original-protection notice, account expansion and safe changed-field inspection.');
@@ -108,6 +127,8 @@ try{
   }
 }finally{
   if(inserted){
+    sql("DELETE FROM mt5_conflict_classifications WHERE owner='"+id+"'");
+    sql("DELETE FROM mt5_recovery_status WHERE owner='"+id+"'");
     sql("DELETE FROM mt5_evidence_conflicts WHERE owner='"+id+"'");
     sql("DELETE FROM mt5_events WHERE link='"+link+"'");
     sql("DELETE FROM mt5_raw_evidence WHERE link='"+link+"'");
