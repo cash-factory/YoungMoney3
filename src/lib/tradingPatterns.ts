@@ -105,7 +105,7 @@ export function buildTradingPatterns(
   const manual = trades.filter(trade =>
     trade.trade_source !== 'mt5' && belongs(trade.account_id) && inWindow(trade.entry_time)
   );
-  let checked = 0, recordedChecklist = 0, completed = 0;
+  let checked = 0, recordedChecklist = 0;
   for (const trade of manual) {
     // Only the immutable opening snapshot qualifies as documented execution evidence.
     const entry = trade.decision_entry;
@@ -117,7 +117,6 @@ export function buildTradingPatterns(
       }
     }
     if (trade.emotional_state) add(byEmotion, trade.emotional_state);
-    if (trade.status === 'closed' && trade.exit_time) completed++;
   }
 
   // "Following a documented loss" describes order of recorded events, not a trader's emotional response.
@@ -137,7 +136,7 @@ export function buildTradingPatterns(
       t.id !== reviewedTrade.id && t.account_id === review.account_id
       && (safeTime(t.exit_time) ?? Infinity) < entryTime
       && entryTime - (safeTime(t.exit_time) ?? 0) <= 24 * 3600000
-    ).at(-1);
+    ).pop();
     if (preceding) {
       afterLossSeen++;
       if (evidenceVerdict(review) === 'followed') afterLossFollowed++;
