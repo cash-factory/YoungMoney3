@@ -81,6 +81,8 @@ try{
       .bind(l,d,user,accountIds[i++],'connected','DemoServer',String(5000+i),'Demo broker',
         currency,mode,'trading-enabled',new Date().toISOString(),equity,equity,now+86400000).run();
   }
+  const loginFor=Object.fromEntries([source,f1,f2,f3,live,foreign].map((l,i)=>[l,String(5001+i)]));
+  const deviceConsent=(link,allowed,mode='demo')=>({link,allowed,mode,login:loginFor[link],server:'DemoServer'});
   const targets=[
     {link:f1,mode:'risk_pct_equity',value:1,maxLots:2,maxDailyLossPct:2,enabled:true,symbolMap:{},mirrorPending:true,mirrorProtection:true},
     {link:f2,mode:'fixed_risk',value:25,maxLots:1,maxDailyLossPct:2,enabled:true,symbolMap:{'EURUSD':'EURUSD.a'},mirrorPending:true,mirrorProtection:true},
@@ -106,10 +108,10 @@ try{
   assert.equal(preview.result.executionOccurred,false);
   assert.equal((await call('copy/fleet-arm',{id:fleet,version:1,confirm:true},owner.cookie)).status,409,
     'No browser permission may override local follower authorization.');
-  assert.equal((await call('mt5/device/copy-consent',{link:live,allowed:true},'',token)).status,403);
-  assert.equal((await call('mt5/device/copy-consent',{link:f1,allowed:true},'',strangerToken)).status,404);
+  assert.equal((await call('mt5/device/copy-consent',deviceConsent(live,true,'demo'),'',token)).status,403);
+  assert.equal((await call('mt5/device/copy-consent',deviceConsent(f1,true),'',strangerToken)).status,404);
   for(const l of [f1,f2,f3]){
-    const approved=await call('mt5/device/copy-consent',{link:l,allowed:true},'',token);
+    const approved=await call('mt5/device/copy-consent',deviceConsent(l,true),'',token);
     assert.equal(approved.status,200,JSON.stringify(approved.result));
     const t=await call('mt5/device/copy-report',{link:l,balance:2000,equity:1950,freeMargin:1800,
       currency:l===f2?'EUR':'USD',openPositions:1,pendingOrders:2,connected:true,
@@ -171,7 +173,7 @@ try{
   assert.equal(count,3,'All still-queued SL/TP modifications must be canceled immediately.');
   assert.equal((await call('mt5/device/copy-poll',{link:f1},'',token)).result.task,null);
   assert.equal((await call('copy/fleet-status',{},owner.cookie)).result.fleets[0].state,'paused');
-  assert.equal((await call('mt5/device/copy-consent',{link:f1,allowed:false},'',token)).result.authorized,false);
+  assert.equal((await call('mt5/device/copy-consent',deviceConsent(f1,false),'',token)).result.authorized,false);
   assert.equal((await call('mt5/device/copy-poll',{link:f1},'',token)).result.consentRequired,true);
   await assert.rejects(
     db.prepare("UPDATE copy_execution_audit SET event='rewritten' WHERE fleet_id=?").bind(fleet).run(),
