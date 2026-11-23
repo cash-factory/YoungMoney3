@@ -77,6 +77,9 @@ export async function copyFleetOwner(request:Request,env:Env,owner:string,action
     const parsed=input.targets.map(parseTarget);
     if(parsed.some(x=>!x))return fail('A follower has invalid sizing, risk or symbol mapping.');
     const targets=parsed as NonNullable<ReturnType<typeof parseTarget>>[];
+    if(executionMode==='live' && targets.some(t=>t.maxDailyLossPct>5||
+      (t.mode==='risk_pct_equity'&&t.value>2)))
+      return fail('Live pilot policies require at most 2% equity risk per entry and 5% daily loss.',409);
     const ids=targets.map(x=>x.link);
     if(new Set(ids).size!==ids.length||ids.includes(String(input.sourceLink)))
       return fail('Each follower must be unique and different from the source.');
