@@ -515,6 +515,10 @@ try {
   const secondAccount = linked.find(l => l.id === secondLink);
   assert.equal(secondAccount.access_level,'trading-restricted');
   assert.notEqual(secondAccount.account_id,linkedAccount);
+  const crossAccountSource=await call('data',{action:'insert',table:'improvement_experiments',
+    payload:{...draft,source_reference:brokerRef,account_id:secondAccount.account_id}});
+  assert.equal(crossAccountSource.status,400,'A second trading account cannot claim a different account\'s review as its source.');
+  assert.match((await crossAccountSource.json()).error,/originating.*account/i);
   assert.equal(secondAccount.server,verifiedAccess.server);
   assert.equal((await call('mt5/set-monitoring',{link:secondLink,paused:true})).status,200);
   assert.deepEqual((await presence()).paused,[secondLink]);
