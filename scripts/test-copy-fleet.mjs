@@ -124,22 +124,23 @@ try{
     freeMargin:1000,currency:'USD',openPositions:0,pendingOrders:0,
     connected:true,tradeAllowed:true},'',token);
   assert.equal(sourceReport.result.sourceActive,true);
+  const observedAt=Date.now();
   const item={
     key:'position:888',kind:'position',symbol:'EURUSD',type:0,volume:0.2,
-    price:1.1,sl:1.095,tp:1.115,stoplimit:0,expiration:0,time_ms:now,
+    price:1.1,sl:1.095,tp:1.115,stoplimit:0,expiration:0,time_ms:observedAt,
   };
   const snapshot=async(when,items,proofs=[])=>call('mt5/device/copy-source',{
     link:source,sourceEquity:1000,sourceCurrency:'USD',items,proofs,observedAt:when},'',token);
-  const baseline=await snapshot(now+1,[]);
+  const baseline=await snapshot(observedAt+1,[]);
   assert.equal(baseline.status,200,JSON.stringify(baseline.result));
   assert.equal(baseline.result.intents_queued,0);
-  const opened=await snapshot(now+2,[item]);
+  const opened=await snapshot(observedAt+2,[item]);
   assert.equal(opened.status,200,JSON.stringify(opened.result));
   assert.equal(opened.result.intents_queued,3);
   let pending=(await db.prepare("SELECT COUNT(*) AS n FROM copy_execution_tasks WHERE fleet_id=? AND action='open_market'").bind(fleet).first()).n;
   assert.equal(pending,3);
-  assert.equal((await snapshot(now+2,[item])).result.ignored,'out_of_order');
-  assert.equal((await snapshot(now+3,[item])).result.intents_queued,0);
+  assert.equal((await snapshot(observedAt+2,[item])).result.ignored,'out_of_order');
+  assert.equal((await snapshot(observedAt+3,[item])).result.intents_queued,0);
   for(const follower of [f1,f2,f3]){
     const claim=await call('mt5/device/copy-poll',{link:follower},'',token);
     assert.equal(claim.status,200,JSON.stringify(claim.result));
@@ -155,10 +156,10 @@ try{
     assert.equal((await call('mt5/device/copy-ack',{link:follower,task:issued.id,
       status:'applied',code:'again',brokerTicket:'123456',retcode:10009},'',token)).status,409);
   }
-  const move=await snapshot(now+4,[{...item,sl:1.098}]);
+  const move=await snapshot(observedAt+4,[{...item,sl:1.098}]);
   assert.equal(move.status,200,JSON.stringify(move.result));
   assert.equal(move.result.intents_queued,3);
-  const closeNoProof=await snapshot(now+5,[]);
+  const closeNoProof=await snapshot(observedAt+5,[]);
   assert.equal(closeNoProof.result.intents_queued,0,
     'An offline/missing source position must not invent a closing trade.');
   const status=await call('copy/fleet-status',{},owner.cookie);
