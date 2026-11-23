@@ -27,6 +27,7 @@ interface Props {
   suggested: DeskMode;
   suggestionReason: string;
   onSelect: (mode: DeskMode) => void;
+  onStart: (mode: DeskMode) => void;
   onPin: (mode: DeskMode | null) => void;
   onCapture: (mode: FastCapture) => void;
   onOpenGuide: () => void;
@@ -37,7 +38,7 @@ interface Props {
   tradesRecorded: number;
 }
 export function AdaptiveTradingDesk({
-  mode, preferred, suggested, suggestionReason, onSelect, onPin, onCapture,
+  mode, preferred, suggested, suggestionReason, onSelect, onStart, onPin, onCapture,
   onOpenGuide, onOpenWeekly, onOpenRisk, pendingReviews, accountName, tradesRecorded,
 }: Props) {
   const headlineId = useId();
@@ -107,11 +108,11 @@ export function AdaptiveTradingDesk({
           <button type="button" className="btn-secondary" onClick={() => onCapture('pass')}>Record a deliberate pass</button>
         </>}
         {mode === 'review' && <>
-          <button type="button" className="btn-primary" onClick={() => onSelect('review')}><BookOpenCheck size={16}/> Review recent trades</button>
+          <button type="button" className="btn-primary" onClick={() => onStart('review')}><BookOpenCheck size={16}/> Review recent trades</button>
           <button type="button" className="btn-secondary" onClick={onOpenWeekly}>Weekly reflection</button>
         </>}
         {mode === 'analyze' && <>
-          <button type="button" className="btn-primary" onClick={() => onSelect('analyze')}><Activity size={16}/> Explore personal patterns</button>
+          <button type="button" className="btn-primary" onClick={() => onStart('analyze')}><Activity size={16}/> Explore personal patterns</button>
           <button type="button" className="btn-secondary" onClick={() => { window.location.hash = 'strategy-testing'; }}>Open testing workspace</button>
         </>}
       </div>
