@@ -116,8 +116,21 @@ export async function copyFleetDevice(db:D1Database,device:Device,action:string,
       "SELECT t.id FROM copy_execution_tasks t JOIN copy_fleets f ON f.id=t.fleet_id JOIN copy_fleet_followers target ON target.fleet_id=f.id AND target.follower_link=t.follower_link WHERE t.owner=? AND t.follower_link=? AND t.status='queued' AND t.expires_at>? AND f.state='demo_armed' AND target.enabled=1 AND f.owner=? ORDER BY t.created_at,t.id LIMIT 1",
       device.owner,link.id,now,device.owner).first<{id:string}>();
     if(!selected)return respond({task:null});
-    const task=await q("UPDATE copy_execution_tasks SET status='dispatched',dispatched_at=? WHERE id=? AND status='queued' AND expires_at>? RETURNING id,source_key,action,payload,expires_at",
-      now,selected.id,now).first<{id:string;source_key:string;action:string;payload:string;expires_at:number}>();
+    // Recheck consent AND armed policy inside the atomic claim itself. A
+    // concurrent Pause All or local revoke must never dispatch after it wins.
+    const task=await q(`UPDATE copy_execution_tasks SET status='dispatched',dispatched_at=?
+      WHERE id=? AND owner=? AND follower_link=? AND status='queued' AND expires_at>?
+      AND EXISTS(SELECT 1 FROM copy_fleets f JOIN copy_fleet_followers t
+        ON t.fleet_id=f.id WHERE f.id=copy_execution_tasks.fleet_id
+        AND f.owner=copy_execution_tasks.owner AND f.state='demo_armed'
+        AND t.follower_link=copy_execution_tasks.follower_link AND t.enabled=1)
+      AND EXISTS(SELECT 1 FROM copy_device_consents c
+        WHERE c.follower_link=copy_execution_tasks.follower_link
+        AND c.device=? AND c.owner=copy_execution_tasks.owner
+        AND c.demo_authorized=1 AND c.expires_at>?)
+      RETURNING id,source_key,action,payload,expires_at`,
+      now,selected.id,device.owner,link.id,now,device.id,now)
+      .first<{id:string;source_key:string;action:string;payload:string;expires_at:number}>();
     return respond({task:task?{id:task.id,sourceKey:task.source_key,action:task.action,
       payload:JSON.parse(task.payload),expiresAt:task.expires_at}:null});
   }
