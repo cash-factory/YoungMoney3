@@ -25,11 +25,18 @@ class TerminalLoginTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, patch('subprocess.Popen') as launch:
             self.slot=Path(tmp)/'terminal64.exe'
             (self.slot.parent/'.ym-managed.json').write_text('{}')
+            self.slot.touch()  # New launcher requires a real executable path; Popen is mocked.
             self.api.terminal_info.return_value=SimpleNamespace(data_path=tmp,connected=True)
             self.api.initialize.side_effect=[False,True]
             self.api.last_error.return_value=(-10005,'IPC timeout')
             self.assertEqual(self.verify(),self.account)
-            launch.assert_called_once_with([str(self.slot),'/portable'],cwd=str(self.slot.parent.resolve()))
+            launch.assert_called_once()
+            args,kwargs=launch.call_args
+            self.assertEqual(args[0],[str(self.slot.resolve()),'/portable'])
+            self.assertEqual(kwargs['cwd'],str(self.slot.parent.resolve()))
+            if __import__('os').name=='nt':
+                import subprocess
+                self.assertEqual(kwargs['startupinfo'].wShowWindow,subprocess.SW_HIDE)
             self.assertEqual(self.api.initialize.call_count,2)
 
     def test_existing_investor_session_can_sync_without_reauthenticating(self):
@@ -85,6 +92,7 @@ class TerminalLoginTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, patch('subprocess.Popen') as launch:
             self.slot=Path(tmp)/'terminal64.exe'
             (self.slot.parent/'.ym-managed.json').write_text('{}')
+            self.slot.touch()  # New launcher requires a real executable path; Popen is mocked.
             self.api.terminal_info.return_value=SimpleNamespace(data_path=tmp,connected=True)
             self.api.initialize.side_effect=[False,False,True]
             self.api.last_error.return_value=(-10005,'IPC timeout')
@@ -92,7 +100,13 @@ class TerminalLoginTests(unittest.TestCase):
             self.assertEqual(self.api.initialize.call_count,3)
             self.assertEqual(self.api.initialize.call_args.kwargs['login'],42)
             self.assertEqual(self.api.initialize.call_args.kwargs['password'],'fixture')
-            launch.assert_called_once_with([str(self.slot),'/portable'],cwd=str(self.slot.parent.resolve()))
+            launch.assert_called_once()
+            args,kwargs=launch.call_args
+            self.assertEqual(args[0],[str(self.slot.resolve()),'/portable'])
+            self.assertEqual(kwargs['cwd'],str(self.slot.parent.resolve()))
+            if __import__('os').name=='nt':
+                import subprocess
+                self.assertEqual(kwargs['startupinfo'].wShowWindow,subprocess.SW_HIDE)
 
     def test_wrong_profile_is_rejected_before_login(self):
         self.api.terminal_info.return_value.data_path=str(Path.cwd())
