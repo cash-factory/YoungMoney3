@@ -19,6 +19,12 @@ function different(a:SourceItem,b:SourceItem,keys:(keyof SourceItem)[]) {
 }
 export function deriveCopySignals(before:SourceItem[],after:SourceItem[],proofs:SourceProof[],nowMs:number,maxAgeMs=12000):CopySignal[] {
   const old=new Map(before.map(x=>[x.key,x])),current=new Map(after.map(x=>[x.key,x]));
+  // A source pending order disappearing while a new position appears may be
+  // the pending order being triggered. Never ALSO submit a market order for
+  // the same instrument without independently proving a distinct entry.
+  // Future reconciliation can link filled source order->position ID.
+  const vanishedPendingSymbols=new Set(before.filter(x=>x.kind==='pending'&&!current.has(x.key))
+    .map(x=>x.symbol));
   const confirmed=(key:string,kind:SourceProof['kind'])=>proofs.some(p=>p.key===key&&p.kind===kind&&
     /^[0-9]{1,24}$/.test(p.ticket)&&p.time_ms<=nowMs&&nowMs-p.time_ms<=maxAgeMs);
   const result:CopySignal[]=[];
@@ -29,7 +35,8 @@ export function deriveCopySignals(before:SourceItem[],after:SourceItem[],proofs:
     // Do not copy trades found on reconnection; their opening price has passed.
     if(!prior){
       if(next.time_ms>nowMs||nowMs-next.time_ms>maxAgeMs)continue;
-      if(next.kind==='position'&&(next.type===0||next.type===1))add(next,'open_market');
+      if(next.kind==='position'&&(next.type===0||next.type===1) &&
+        !vanishedPendingSymbols.has(next.symbol))add(next,'open_market');
       else if(next.kind==='pending'&&next.type>=2&&next.type<=7)add(next,'place_pending');
       continue;
     }
