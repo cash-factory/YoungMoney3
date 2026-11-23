@@ -333,6 +333,11 @@ def execute(mt5,db,link,task,account,*,now_ms=None):
             if retcode not in SUCCESS_RET_CODES:
                 result=receipt("rejected","broker_retcode_rejected",retcode=retcode,
                                details={"volume":request.get("volume"),"symbol":request.get("symbol")})
+            elif retcode==10010:
+                # A partial broker fill is NOT a full-size mapped position.
+                # Never multiply or close using the requested volume until
+                # independent broker history establishes the exact fill.
+                result=receipt("unknown","partial_fill_requires_broker_reconciliation",retcode=retcode)
             else:
                 if task["action"]=="open_market":
                     ticket=_market_mapping_ticket(mt5,broker,marker,request["symbol"])
