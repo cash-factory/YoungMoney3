@@ -3,6 +3,7 @@ import { pnlTone, signedMoney } from '@/lib/tradingTone';
 import { Monitor, Link2, X, ChevronDown, CheckCircle2, AlertTriangle, CircleHelp, RefreshCw, Wallet, Clock3, History, Laptop, ArrowRight } from 'lucide-react';
 import { announceAction } from '@/lib/actionFeedback';
 import { CashFlowPanel } from '@/components/CashFlowPanel';
+import { EvidenceConflictPanel } from '@/components/EvidenceConflictPanel';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
@@ -128,6 +129,7 @@ export function Mt5Connections() {
   const historyAccount = links.find(link => link.id === historyScan?.link);
   const failedLinks = links.filter(link => ['failed','expired'].includes(link.status));
   const activeLinks = links.filter(link => !['failed','expired'].includes(link.status));
+  const outdatedCapturePc = activeLinks.some(link => link.status==='connected' && devices.some(pc=>pc.id===link.device && pc.connector_version!=='0.5.7-rc1'));
   const visibleLinks = selectedPcId ? activeLinks.filter(link=>link.device===selectedPcId):activeLinks;
   const selectedPc=devices.find(pc=>pc.id===selectedPcId);
   const selected = trades.find(t=>t.id===imported);
@@ -147,6 +149,7 @@ export function Mt5Connections() {
     {setupHint && <div className="ym-action-feedback" data-kind="info" role="status"><CircleHelp size={17}/><span>{setupHint}</span><button type="button" aria-label="Dismiss" onClick={()=>setSetupHint('')}><X size={16}/></button></div>}
     {error && !feedback && <div className="ym-action-feedback" data-kind="error" role="alert"><AlertTriangle size={16}/>{error}</div>}
     {capturePaused && <div className="ym-action-feedback" data-kind="warning" role="alert"><AlertTriangle size={17}/>Capture paused by your staging administrator.</div>}
+    {outdatedCapturePc && <div className="ym-action-feedback" data-kind="warning" role="status"><AlertTriangle size={17}/><span>A newer connector may be available for your linked MT5 account. Check the latest published version and checksum before updating; retain the same Windows user to preserve pairing and pending capture records. Do not unpair or remove the account. <a href="/connector-download.html" rel="noopener noreferrer" className="underline font-semibold">View latest connector</a>.</span></div>}
     <section className="card ym-connection-section" aria-labelledby="paired-pc-title">
       <header className="ym-connection-heading">
         <div><p className="ym-connection-eyebrow">01 / YOUR DEVICES</p><h2 id="paired-pc-title">Paired PCs</h2></div>
@@ -186,7 +189,7 @@ export function Mt5Connections() {
                   <button type="button" className="btn-secondary" onClick={()=>{setEditingPc(d.id);setPcNameDraft(pairedPcName(d));}}>Rename PC</button>
                   <button type="button" className="btn-secondary" onClick={()=>{if(window.confirm('Unpair '+pairedPcName(d)+'? This revokes its connected broker sessions. Do not unpair the PC currently capturing your trades.'))void run(()=>action('revoke',{device:d.id}),'PC unpaired. Historical trade evidence was retained.','revoke-pc');}}>Unpair PC</button>
                 </div>}
-              <details className="ym-context-help"><summary><CircleHelp size={15}/>Connection and safety details</summary><p>Use Add broker account to connect more logins without pairing again. Unpairing revokes monitoring for accounts on this PC. An offline PC retains its saved pairing; reopen the Windows connector on that computer.</p><div className="ym-connection-actions"><a href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.4-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer">Download Connector v0.5.4-rc1</a><a href="https://github.com/cash-factory/YoungMoney3/releases" rel="noopener noreferrer">Published versions and checksums</a></div></details>
+              <details className="ym-context-help"><summary><CircleHelp size={15}/>Connection and safety details</summary><p>Use Add broker account to connect more logins without pairing again. Unpairing revokes monitoring for accounts on this PC. An offline PC retains its saved pairing; reopen the Windows connector on that computer.</p><div className="ym-connection-actions"><a href="/connector-download.html" rel="noopener noreferrer">Download latest connector</a><a href="https://github.com/cash-factory/YoungMoney3/releases" rel="noopener noreferrer">Published versions and checksums</a></div></details>
               <div className="ym-pc-accounts">
                 <div className="ym-pc-accounts-header"><strong>Accounts on this PC</strong><span className="ym-section-count">{deviceLinks.length}</span></div>
                 {deviceLinks.length?deviceLinks.map(link=>{
@@ -210,11 +213,11 @@ export function Mt5Connections() {
       </div>
       <details className="ym-context-help ym-connector-downloads"><summary><CircleHelp size={15}/>Connector downloads and setup</summary>
         <div className="ym-connection-actions">
-          <a href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.4-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer">Download Connector v0.5.4-rc1</a>
+          <a href="/connector-download.html" rel="noopener noreferrer">Download latest connector</a>
           <a href="/connector-download.html">Release details &amp; SHA-256</a>
           <a href="/mt5-connector.zip" download>Python source fallback</a>
         </div>
-        <p>Use the Windows connector on the computer that runs MT5. Staging builds are unsigned and capture-only. Check the release checksum before opening the executable.</p>
+        <p>Use the Windows connector on the computer that runs MT5. Staging connector builds are unsigned. Trade copying requires account-specific authorization; real-money execution is independently disabled until the pilot is approved. Check the release checksum before opening the executable.</p>
       </details>
       {requestedPc && loaded && <p className="ym-context-short" role="status">{!devices.length?'Pair a PC once to continue.':requestedPc==='1'&&devices.length>1?'Select the PC to add this account to.':'Keep the connector open; the login will open when the selected PC is ready.'}</p>}
     </section>
@@ -242,6 +245,9 @@ export function Mt5Connections() {
                   <div><small>Broker balance</small><strong>{l.broker_balance==null?'—':l.broker_balance.toLocaleString()} <span>{l.currency}</span></strong></div>
                   <div><small>Broker equity</small><strong>{l.broker_equity==null?'—':l.broker_equity.toLocaleString()} <span>{l.currency}</span></strong></div>
                   <div><small>Decisions for review</small><strong>{l.pending_reviews||0}</strong></div>
+                   {(l.evidence_conflicts_pending||0)>0&&<div><small>Evidence integrity reviews</small><strong>{l.evidence_conflicts_pending}</strong></div>}
+                   {l.recovery?.state==='catching_up'&&<div><small>History recovery</small><strong>Scanning</strong></div>}
+                   {(l.recovery?.unresolved_positions||0)>0&&<div><small>Waiting for broker records</small><strong>{l.recovery?.unresolved_positions}</strong></div>}
                 </div>
                 <div className="ym-account-tabs" role="tablist" aria-label="Account management"
                   onKeyDown={event=>{
@@ -268,6 +274,19 @@ export function Mt5Connections() {
                     <div><span>Last sync</span><strong>{l.last_sync?new Date(l.last_sync).toLocaleString():'Awaiting first sync'}</strong></div>
                     <div><span>Account class</span><strong>{l.trade_mode===0?'Demo':l.trade_mode===1?'Contest':l.trade_mode===2?'Real':'Unknown'}</strong></div>
                   </div>
+                  {(l.evidence_conflicts_pending||0)>0&&<EvidenceConflictPanel link={l.id} count={l.evidence_conflicts_pending||0}/>}
+                  {(l.connector_spec_artifacts||0)>0&&<div className="ym-action-feedback" data-kind="info" role="status">
+                    <CheckCircle2 size={17}/><span><strong>{l.connector_spec_artifacts} historical connector specification-key aliases identified.</strong> These are preserved in the audit but no longer counted as broker-trade discrepancies. The corrected connector prevents new ones.</span>
+                  </div>}
+                  {l.recovery?.state==='catching_up'&&<div className="ym-action-feedback" data-kind="info" role="status">
+                    <RefreshCw size={16} className="animate-spin"/><span>Rebuilding broker history through {new Date(l.recovery.scanned_through).toLocaleString()} toward {new Date(l.recovery.target_at).toLocaleString()}. Progress is checkpointed.</span>
+                  </div>}
+                  {(l.recovery?.unresolved_positions||0)>0&&<div className="ym-action-feedback" data-kind="warning" role="status">
+                    <AlertTriangle size={16}/><span>{(l.recovery?.unresolved_positions||0)} previously observed {(l.recovery?.unresolved_positions||0)===1?'position':'positions'} cannot yet be confirmed closed from broker deals and orders. Their status remains unresolved.</span>
+                  </div>}
+                  {Boolean(l.recovery?.unobserved_stop_changes)&&<div className="ym-action-feedback" data-kind="info" role="status">
+                    <CircleHelp size={16}/><span>An offline observation gap was detected. Executions can be recovered from history; SL/TP modifications made entirely offline may not be reconstructable.</span>
+                  </div>}
                   {l.last_error && <div className="ym-action-feedback" data-kind="warning" role="alert"><AlertTriangle size={16}/><span>{l.last_error}</span></div>}
                   {Boolean(l.gap)&&<div className="ym-action-feedback" data-kind="warning">An offline interval may have left gaps in observed stop changes.</div>}
                   <div className="ym-connection-actions">

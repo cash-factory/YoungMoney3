@@ -28,7 +28,15 @@ const stage={
   // Force API routes to reach the backend even on browser navigation.
   assets:{...production.assets,run_worker_first:['/api/*']},
   d1_databases:[{binding:'DB',database_name:name,database_id:id}],
-  vars:{MT5_ALLOW_LIVE:'false',DEMO_SHOWCASE_ENABLED:'true'},
+  // Isolated staging KDF: separate Durable Object CPU allowance avoids
+  // Cloudflare Free Worker 1102 errors without weakening stored verifiers.
+  durable_objects:{bindings:[{name:'AUTH_KDF',class_name:'AuthKdf'}]},
+  exports:{AuthKdf:{type:'durable-object',storage:'sqlite'}},
+  // Permit read-only linking and reconciliation of REAL MT5 accounts for the
+  // invite-only pilot. This NEVER authorizes orders; live copy execution
+  // remains independently disabled until broker acceptance.
+  vars:{MT5_ALLOW_LIVE:'false',MT5_ALLOW_LIVE_COPY:'true',
+    MT5_LIVE_COPY_EXECUTION:'false',DEMO_SHOWCASE_ENABLED:'true'},
 };
 const output=resolve('wrangler.staging.jsonc');
 writeFileSync(output,JSON.stringify(stage,null,2)+'\n',{flag:'w',mode:0o600});

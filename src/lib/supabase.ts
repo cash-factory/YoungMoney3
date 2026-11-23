@@ -20,19 +20,42 @@ localStorage.removeItem('trade-journal-session');
 const listeners = new Set<(event: string, session: unknown) => void>();
 
 async function api(path: string, body?: unknown, method = 'POST'): Promise<Result> {
+  let reply: Response;
   try {
-    const response = await fetch(path, {
+    reply = await fetch(path, {
       method,
       headers: { 'content-type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    const data = await response.json() as Row;
-    return { data: response.ok ? data : null, error: response.ok ? null : { message: String(data.error || 'Request failed.'),status:response.status } };
   } catch {
-    return { data: null, error: { message: 'Could not reach the workspace service.' } };
+    return { data: null, error: { message: 'The browser could not connect to the workspace API (no HTTP response). Check your site address, connectivity and browser network settings.' } };
   }
+  const ray = reply.headers.get('cf-ray');
+  const requestId = ray ? ' Cloudflare request ID: ' + ray + '.' : '';
+  let payload: Row;
+  let raw = '';
+  try {
+    raw = await reply.text();
+    payload = JSON.parse(raw) as Row;
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw Error('Invalid API payload');
+  } catch {
+    const resourceLimit = /Error 1102|Worker exceeded resource limits/i.test(raw);
+    return { data: null, error: {
+      message: resourceLimit
+        ? 'Cloudflare terminated the workspace request because it exceeded its execution limit (1102).' + requestId
+        : 'Workspace API returned HTTP ' + reply.status + ' without a valid JSON response.' + requestId,
+      status: reply.status,
+    } };
+  }
+  if (!reply.ok) {
+    const workerLimit = /1102|worker exceeded resource limits/i.test(String(payload.title || '') + String(payload.detail || ''));
+    const message = workerLimit
+      ? 'Cloudflare terminated the workspace request because it exceeded its execution limit (1102).'
+      : String(payload.error || payload.title || 'Workspace request failed.');
+    return { data: null, error: { message: message + requestId, status: reply.status } };
+  }
+  return { data: payload, error: null };
 }
-
 async function mediaApi(path: string, method = 'GET', body?: BodyInit, contentType?: string) {
   try {
     const response = await fetch(path, {

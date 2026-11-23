@@ -16,7 +16,7 @@
     "cf:deploy": "npm run build && wrangler deploy",
     "cf:media:configure": "node scripts/configure-supabase-media.mjs",
     "cf:media:create-project": "node scripts/create-supabase-media-project.mjs",
-    "test:worker": "node scripts/test-worker.mjs",
+    "test:worker": "node scripts/test-worker.mjs && node scripts/test-copy-studio.mjs && node scripts/test-copy-signals.mjs && node scripts/test-copy-fleet.mjs",
     "cf:staging:prepare": "node scripts/prepare-staging.mjs",
     "cf:staging:migrate": "wrangler d1 migrations apply DB --remote --config wrangler.staging.jsonc",
     "cf:staging:deploy": "npm run build && wrangler deploy --config wrangler.staging.jsonc",
@@ -31,7 +31,8 @@
     "lucide-react": "^0.446.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "recharts": "^3.10.1"
+    "recharts": "^3.10.1",
+    "@noble/hashes": "2.0.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261010.1",

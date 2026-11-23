@@ -6,7 +6,7 @@ import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { buildDemoStatements } from './write-staging-demo-sql.mjs';
 import { DEMO_ID, demoCounts } from './staging-demo-fixtures.mjs';
 
-const bundle=await build({entryPoints:['worker/index.ts'],bundle:true,format:'esm',write:false});
+const bundle=await build({entryPoints:['worker/index.ts'],bundle:true,format:'esm',external:['cloudflare:workers'],write:false});
 const objects=new Set();
 const storage=async req=>{
   const data=await req.json();
@@ -22,7 +22,7 @@ const storage=async req=>{
   return Response.json([...entries.values()].slice(data.offset||0,(data.offset||0)+data.limit));
 };
 const mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:'journal',modules:true,script:bundle.outputFiles[0].text,compatibilityDate:'2025-12-01',
-  outboundService:storage,d1Databases:['DB'],bindings:{PILOT_INVITE_CODE:'integration',SUPABASE_URL:'https://storage.test',SUPABASE_SERVICE_ROLE_KEY:'fixture',DEMO_SHOWCASE_ENABLED:'true'}}],port:0}));
+  outboundService:storage,d1Databases:['DB'],durableObjects:{AUTH_KDF:{className:'AuthKdf',useSQLite:true}},bindings:{PILOT_INVITE_CODE:'integration',SUPABASE_URL:'https://storage.test',SUPABASE_SERVICE_ROLE_KEY:'fixture',DEMO_SHOWCASE_ENABLED:'true'}}],port:0}));
 try {
   const db=await mf.getD1Database('DB');
   for(const name of (await readdir('migrations')).sort()){
@@ -300,10 +300,99 @@ try {
   const evidenceEvent={kind:'raw',key:'deal-781',fields:fill};
   assert.equal((await device('sync',{link,events:[evidenceEvent]})).status,200);
   assert.equal((await device('sync',{link,events:[evidenceEvent]})).status,200);
-  assert.equal((await device('sync',{link,events:[{...evidenceEvent,fields:{...fill,price:1.2}}]})).status,409,
-    'An immutable broker ticket must not silently mutate on replay');
+  // The same record can be serialized with different property order, which
+  // must not be mistaken for a changed broker fact or silently rewrite the SHA.
+  const reordered=Object.fromEntries(Object.entries(fill).reverse());
+  const equivalent=await device('sync',{link,events:[{...evidenceEvent,fields:reordered}]});
+  assert.equal(equivalent.status,200);
+  assert.equal((await (await equivalent.json()).evidence_conflicts_pending),0);
+  const beforeEvidence=await db.prepare("SELECT payload,sha256 FROM mt5_raw_evidence WHERE link=? AND event_key='deal-781'").bind(link).first();
+  // A genuine changed value must be quarantined, NOT used to overwrite the
+  // original immutable evidence, and NOT block unrelated valid live fills.
+  const conflictingEvidence={...evidenceEvent,fields:{...fill,price:1.2}};
+  const unrelated={kind:'raw',key:'deal-782',fields:{...fill,ticket:'782',position_id:'9901',price:1.4}};
+  const replay=await device('sync',{link,events:[conflictingEvidence,unrelated]});
+  assert.equal(replay.status,200,'Conflicting raw evidence cannot starve valid following events.');
+  const result=await replay.json();
+  assert.equal(result.evidence_conflicts_pending,1);
+  assert.equal(result.evidence_quarantined_in_batch,1);
+  assert.equal(result.evidence_integrity_status,'needs_review');
+  assert.equal((await db.prepare("SELECT payload,sha256 FROM mt5_raw_evidence WHERE link=? AND event_key='deal-781'").bind(link).first()).payload,beforeEvidence.payload);
+  assert.equal((await db.prepare("SELECT sha256 FROM mt5_raw_evidence WHERE link=? AND event_key='deal-781'").bind(link).first()).sha256,beforeEvidence.sha256);
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM mt5_raw_evidence WHERE link=? AND event_key='deal-782'").bind(link).first()).n,1);
+  const discrepancy=await db.prepare("SELECT candidate_payload,changed_fields,review_status FROM mt5_evidence_conflicts WHERE link=? AND event_key='deal-781'").bind(link).first();
+  assert.equal(JSON.parse(discrepancy.candidate_payload).price,1.2);
+  assert.deepEqual(JSON.parse(discrepancy.changed_fields),['price']);
+  assert.equal(discrepancy.review_status,'needs_review');
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM mt5_evidence_conflicts WHERE link=?").bind(link).first()).n,1);
+  const replayAgain=await device('sync',{link,events:[conflictingEvidence]});
+  assert.equal(replayAgain.status,200);
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM mt5_evidence_conflicts WHERE link=?").bind(link).first()).n,1,'Repeats are deduplicated by candidate hash.');
+  const confidential=await call('mt5/evidence-conflicts',{link});
+  assert.equal(confidential.status,200);
+  const safeList=await confidential.json();
+  assert.equal(safeList.rows.length,1);
+  assert.equal(safeList.rows[0].evidence_kind,'deal');
+  assert.deepEqual(safeList.rows[0].changed_fields,['price']);
+  assert.equal(safeList.rows[0].review_status,'needs_review');
+  assert.equal('candidate_payload' in safeList.rows[0],false,'The summary API must not return full broker payload.');
+  assert.equal((await call('mt5/evidence-conflicts',{link:'nonexistent'})).status,404);
+  assert.equal((await call('mt5/evidence-conflicts',{link},{})).status,200);
+  const linkStatus=(await (await call('mt5/status',{})).json()).links.find(item=>item.id===link);
+  assert.equal(linkStatus.capture_health,'needs_attention');
+  assert.equal(linkStatus.evidence_conflicts_pending,1);
+  assert.ok(linkStatus.last_sync,'Regular capture timestamp must advance despite an audited conflict.');
+  await assert.rejects(
+    db.prepare("UPDATE mt5_evidence_conflicts SET review_status='needs_review' WHERE link=?").bind(link).run(),
+    /immutable|not authorized|constraint|error/i,
+    'A conflicting candidate cannot be modified after receipt.');
   const rawCount=await db.prepare('SELECT COUNT(*) AS count FROM mt5_raw_evidence WHERE link=?').bind(link).first();
-  assert.equal(rawCount.count,1);
+  assert.equal(rawCount.count,2);
+  // Old connectors keyed symbol specifications by symbol alone but added
+  // position_id after hashing. This was the observed 1,137-candidate defect.
+  // Only the proved legacy identity alias may be classified automatically.
+  const oldSpecKey='spec-'+'a'.repeat(28);
+  const oldSpecFields={position_id:'2233',symbol:'EURUSD',trade_tick_size:0.00001};
+  assert.equal((await device('sync',{link,events:[{kind:'raw',key:oldSpecKey,fields:oldSpecFields}]})).status,200);
+  const oldAlias=await device('sync',{link,events:[{kind:'raw',key:oldSpecKey,fields:{...oldSpecFields,position_id:'3344'}}]});
+  assert.equal(oldAlias.status,200);
+  assert.equal((await oldAlias.json()).evidence_conflicts_pending,1,
+    'Known spec-key alias cannot increase real broker discrepancy count.');
+  const classified=await db.prepare('SELECT classification,provenance FROM mt5_conflict_classifications WHERE link=? AND event_key=?')
+    .bind(link,oldSpecKey).first();
+  assert.equal(classified.classification,'connector_spec_position_alias_v1');
+  assert.ok(classified.provenance);
+  const specStatus=(await (await call('mt5/status',{})).json()).links.find(item=>item.id===link);
+  assert.equal(specStatus.connector_spec_artifacts,1);
+  assert.equal(specStatus.evidence_conflicts_pending,1);
+  // Changing a tick valuation remains a real, unreviewed conflict.
+  const changedSpec=await device('sync',{link,events:[{kind:'raw',key:oldSpecKey,fields:{...oldSpecFields,position_id:'5566',trade_tick_size:0.01}}]});
+  assert.equal(changedSpec.status,200);
+  assert.equal((await changedSpec.json()).evidence_conflicts_pending,2);
+
+  const recoveryStarted=await device('sync',{link,events:[],recovery:{
+    status:'catching_up',scanned_through:Date.now()-2*86400000,
+    target_at:Date.now(),unresolved_positions:7,unobserved_stop_changes:true
+  }});
+  assert.equal(recoveryStarted.status,200);
+  let recoveryState=(await (await call('mt5/status',{})).json()).links.find(item=>item.id===link).recovery;
+  assert.equal(recoveryState.state,'catching_up');
+  assert.equal(recoveryState.unresolved_positions,7);
+  assert.equal(recoveryState.unobserved_stop_changes,1);
+  assert.equal((await device('sync',{link,events:[],recovery:{
+    status:'bogus',scanned_through:Date.now(),target_at:Date.now(),unresolved_positions:0,
+    unobserved_stop_changes:false
+  }})).status,400);
+  const finishedAt=Date.now();
+  assert.equal((await device('sync',{link,events:[],recovery:{
+    status:'current',scanned_through:finishedAt,target_at:finishedAt,
+    unresolved_positions:0,unobserved_stop_changes:false
+  }})).status,200);
+  recoveryState=(await (await call('mt5/status',{})).json()).links.find(item=>item.id===link).recovery;
+  assert.equal(recoveryState.state,'current');
+  assert.equal(recoveryState.unresolved_positions,0);
+  assert.equal(recoveryState.unobserved_stop_changes,1,'Historical inability to observe stop moves remains recorded.');
+
   // Cash transfers are detected from raw immutable MT5 DEAL_TYPE_BALANCE
   // history, including deals predating the pairing. They are NOT trade P&L.
   const cashTime=Date.now()-12*86400000;
@@ -324,7 +413,11 @@ try {
   assert.equal(cash.summary.overallProfitVerified,false);
   assert.equal(cash.summary.scanStatus,'not_started');
   const oldRaw=await device('sync',{link,events:[{kind:'raw',key:'deal-900001',fields:{...deposit,profit:2000}}]});
-  assert.equal(oldRaw.status,409,'Existing broker balance evidence cannot be changed');
+  assert.equal(oldRaw.status,200,'A broker correction candidate is audited separately rather than blocking the batch');
+  assert.equal((await oldRaw.json()).evidence_conflicts_pending,3);
+  assert.equal((await db.prepare("SELECT amount FROM mt5_cash_movements WHERE link=? AND ticket='900001'").bind(link).first()).amount,'1250',
+    'The original broker cash movement must NEVER be overwritten by a conflicting replay');
+  assert.equal((await db.prepare("SELECT JSON_EXTRACT(candidate_payload,'$.profit') AS candidate FROM mt5_evidence_conflicts WHERE link=? AND event_key='deal-900001'").bind(link).first()).candidate,2000);
   assert.equal((await device('sync',{link,events:[],cashScan:{cursor:-1,complete:false}})).status,400);
   assert.equal((await device('sync',{link,events:[],cashScan:{cursor:0,complete:false}})).status,200);
   cash=(await (await call('mt5/cash-movements',{link})).json());

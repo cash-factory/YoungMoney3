@@ -1,4 +1,5 @@
-interface Bindings { DB: D1Database; MT5_ALLOW_LIVE?: string }
+import {copyFleetDevice} from './copyFleetDevice';
+interface Bindings { DB: D1Database; MT5_ALLOW_LIVE?: string; MT5_ALLOW_LIVE_COPY?: string; MT5_LIVE_COPY_EXECUTION?:string }
 type Fields = Record<string, unknown>;
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 const fail = (message: string, status = 400) => json({ error: message }, status);
@@ -8,6 +9,19 @@ const hash = async (value: string) => [...new Uint8Array(await crypto.subtle.dig
 const limited = (value: unknown, max: number): value is string => typeof value === 'string' && value.length > 0 && value.length <= max;
 const isObject = (v: unknown): v is Fields => v !== null && typeof v === 'object' && !Array.isArray(v);
 const timestamp = (v: unknown): v is string => limited(v, 40) && Number.isFinite(Date.parse(v));
+const sortedEvidenceJson = (value: unknown): string => {
+  // Preserve array ordering, values and number/string types; sort only object keys.
+  const sorted = (entry: unknown): unknown => Array.isArray(entry) ? entry.map(sorted)
+    : isObject(entry) ? Object.fromEntries(Object.keys(entry).sort().map(key => [key,sorted(entry[key])])) : entry;
+  return JSON.stringify(sorted(value));
+};
+const changedEvidenceFields = (oldFields: unknown, nextFields: Fields) => {
+  if (!isObject(oldFields)) return ['record_shape'];
+  return [...new Set([...Object.keys(oldFields),...Object.keys(nextFields)])]
+    .filter(key=>sortedEvidenceJson(oldFields[key])!==sortedEvidenceJson(nextFields[key]))
+    .sort().slice(0,100);
+};
+
 const installationId = (v: unknown): v is string =>
   typeof v === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(v);
 const pcLabel = (v: unknown): string | null => {
@@ -40,6 +54,9 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if (!parsed) return fail('Invalid connector request.');
   const input: Fields = parsed;
   const unix = Date.now();
+  // Live account capture is independently gated from explicit local order consent.
+  // The copy pilot flag does not, by itself, enable trading or arm any fleet.
+  const liveAccountCaptureAllowed = env.MT5_ALLOW_LIVE==='true'||env.MT5_ALLOW_LIVE_COPY==='true';
   const capturePaused = async () => {
     const setting=await q("SELECT value FROM site_settings WHERE key='mt5_capture_paused'").first<{value:string}>();
     return setting?.value==='true';
@@ -60,8 +77,34 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       const devices = await q('SELECT id,pc_name,public_key,last_seen,setup_state,connector_version FROM mt5_devices WHERE owner=? AND revoked=0 AND public_key IS NOT NULL', owner).all();
       const links = await q('SELECT l.device,l.monitoring_paused,l.retry_requested_at,l.capture_health,l.id,l.account_id,l.status,l.company,l.server,l.login,l.access_level,l.trade_mode,l.history_id,l.history_status,l.history_since,l.history_authorized_since,l.history_mode,l.history_anchor_at,l.history_anchor_ticket,l.history_anchor_amount,l.history_scanned_until,l.cash_history_cursor,l.cash_history_completed_at,l.last_sync,l.broker_balance,l.broker_equity,l.currency,l.gap,l.last_error,l.expires,l.broker_timezone,l.timezone_confirmed_at,l.timezone_source,l.utc_conversion_status FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND d.revoked=0', owner).all();
       const accounts=await q("SELECT id,json_extract(payload,'$.name') AS name FROM workspace_records WHERE user_id=? AND table_name='trading_accounts' ORDER BY created_at",owner).all();
-      const states=await Promise.all(links.results.map(async link=>({...link,pending_reviews:(await remainingReviews(String(link.id)))?.n??0})));
-      return json({ accounts:accounts.results, devices: devices.results, links: states, demoOnly: env.MT5_ALLOW_LIVE !== 'true', capturePaused: await capturePaused() });
+      const states=await Promise.all(links.results.map(async link=>({
+        ...link,
+        pending_reviews:(await remainingReviews(String(link.id)))?.n??0,
+        evidence_conflicts_pending:(await q(`SELECT COUNT(*) AS n FROM mt5_evidence_conflicts c WHERE c.link=? AND c.owner=? AND c.review_status='needs_review'
+        AND NOT EXISTS (SELECT 1 FROM mt5_conflict_classifications k
+          WHERE k.link=c.link AND k.event_key=c.event_key AND k.candidate_sha256=c.candidate_sha256)`,link.id,owner).first<{n:number}>())?.n??0,
+        connector_spec_artifacts:(await q("SELECT COUNT(*) AS n FROM mt5_conflict_classifications WHERE link=? AND owner=?",link.id,owner).first<{n:number}>())?.n??0,
+        recovery:(await q("SELECT state,scanned_through,target_at,unresolved_positions,unobserved_stop_changes,updated_at FROM mt5_recovery_status WHERE link=? AND owner=?",link.id,owner).first())??null
+      })));
+      return json({ accounts:accounts.results, devices: devices.results, links: states, demoOnly: !liveAccountCaptureAllowed, capturePaused: await capturePaused() });
+    }
+    if (action === 'evidence-conflicts') {
+      if (!limited(input.link,64)) return fail('Select a connected MT5 account.');
+      const account=await q("SELECT l.id FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE l.id=? AND l.owner=? AND d.owner=? AND d.revoked=0 AND l.status='connected'",
+        input.link,owner,owner).first();
+      if(!account) return fail('Broker account unavailable.',404);
+      const items=await q(`SELECT event_key,evidence_kind,changed_fields,original_sha256,candidate_sha256,recorded_at,review_status
+        FROM mt5_evidence_conflicts c WHERE c.link=? AND c.owner=? AND c.review_status='needs_review'
+        AND NOT EXISTS (SELECT 1 FROM mt5_conflict_classifications k
+          WHERE k.link=c.link AND k.event_key=c.event_key AND k.candidate_sha256=c.candidate_sha256) ORDER BY c.recorded_at DESC,c.event_key LIMIT 101`,input.link,owner)
+        .all<{event_key:string;evidence_kind:string;changed_fields:string;original_sha256:string;candidate_sha256:string;recorded_at:string;review_status:string}>();
+      return json({rows:items.results.slice(0,100).map(item=>({
+        event_key:item.event_key,evidence_kind:item.evidence_kind,
+        changed_fields:JSON.parse(item.changed_fields),recorded_at:item.recorded_at,
+        review_status:item.review_status,
+        original_fingerprint:item.original_sha256.slice(0,12),
+        candidate_fingerprint:item.candidate_sha256.slice(0,12),
+      })),has_more:items.results.length>100});
     }
     if (action === 'cash-review') {
       if(!limited(input.link,64) || !limited(input.ticket,24) || !/^\d+$/.test(String(input.ticket)))
@@ -258,7 +301,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       if (action==='history-request' && link.monitoring_paused) return fail('Resume monitoring before requesting a scan.',409);
       if(['history-request','history-import'].includes(action) && await capturePaused())
         return fail('MT5 capture is paused by the administrator.',403);
-      if(link.trade_mode===2 && env.MT5_ALLOW_LIVE!=='true' && ['history-request','history-import'].includes(action))
+      if(link.trade_mode===2 && !liveAccountCaptureAllowed && ['history-request','history-import'].includes(action))
         return fail('Real-account capture is paused by the release gate.',403);
       if(action==='history-request') {
         if(link.history_status==='requested' || link.history_status==='resolving')
@@ -417,6 +460,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if (!token) return fail('Device authentication required.',401);
   const device=await q("SELECT d.id,d.owner,d.pc_name,d.installation_hash FROM mt5_devices d JOIN users u ON u.id=d.owner WHERE token_hash=? AND revoked=0 AND u.account_status='active'",await hash(token)).first<{id:string;owner:string;pc_name:string|null;installation_hash:string|null}>();
   if (!device) return json({error:'Device access revoked.',code:'device_revoked'},403);
+  if (action.startsWith('device/copy-')) return copyFleetDevice(db,device,action,input,env.MT5_LIVE_COPY_EXECUTION==='true');
   if (action === 'device/set-monitoring') return setMonitoring(device.owner, device.id);
   if (action === 'device/rename') {
     const name=pcLabel(input.name);
@@ -532,7 +576,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     if (link.status!=='verifying' || link.expires<=unix) return fail('Login expired.',409);
     // Require an actual numeric MT5 mode before testing the real-account release gate.
     if(input.ok && (typeof input.mode!=='number' || ![0,1,2].includes(input.mode))) return fail('Invalid MT5 account mode.');
-    if (!input.ok || (env.MT5_ALLOW_LIVE!=='true' && input.mode===2)) {
+    if (!input.ok || (!liveAccountCaptureAllowed && input.mode===2)) {
       const reasons: Record<string,string> = {
         terminal_start:'MetaTrader could not start. Open the connector on your PC, finish any MetaTrader update, then choose Add account again.',
         terminal_ipc_timeout:'MetaTrader did not respond to the connector in time. Close any stalled MT5 update or login dialogs on the paired PC, then retry.',
@@ -572,9 +616,11 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   }
   if(action!=='device/sync'||link.status!=='connected') return fail('Link unavailable.',409);
   if(await capturePaused()) return fail('MT5 capture is paused by the administrator.',403);
-  if(link.trade_mode===2 && env.MT5_ALLOW_LIVE!=='true') return fail('Real-account capture is paused by the release gate.',403);
+  if(link.trade_mode===2 && !liveAccountCaptureAllowed) return fail('Real-account capture is paused by the release gate.',403);
   if (!Array.isArray(input.events)||input.events.length>40) return fail('Invalid capture batch.');
   const statements:D1PreparedStatement[]=[];
+   const rawSeen = new Map<string,{sha256:string;payload:string}>();
+   let quarantinedInBatch = 0;
   for(const event of input.events) {
     if(!isObject(event)||!limited(event.key,120)||!isObject(event.fields)) return fail('Invalid capture event.');
     const f=event.fields, time=now();
@@ -587,9 +633,39 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         :String(event.key).startsWith('spec-')?'specification':'position';
       const payload=JSON.stringify(f);
       const sha=await hash(payload);
-      const prior=await q('SELECT sha256 FROM mt5_raw_evidence WHERE link=? AND event_key=?',link.id,event.key).first<{sha256:string}>();
-      if(prior && prior.sha256!==sha)
-        return fail('Broker evidence changed for an existing ticket. Import halted; an audited correction is required.',409);
+      let evidenceSha=sha;
+      const staged=rawSeen.get(String(event.key));
+      const prior=staged ?? await q('SELECT sha256,payload FROM mt5_raw_evidence WHERE link=? AND event_key=?',
+        link.id,event.key).first<{sha256:string;payload:string}>();
+      if(prior && prior.sha256!==sha) {
+        // JSON key reordering is semantically identical and not a broker revision.
+        if(sortedEvidenceJson(JSON.parse(prior.payload))!==sortedEvidenceJson(f)) {
+          const changed=changedEvidenceFields(JSON.parse(prior.payload),f);
+          const alias=evidenceKind==='specification'
+            && /^spec-[0-9a-f]{28}$/.test(String(event.key))
+            && changed.length===1 && changed[0]==='position_id'
+            && (() => {
+              const base={...JSON.parse(prior.payload) as Fields},next={...f};
+              delete base.position_id;delete next.position_id;
+              return sortedEvidenceJson(base)===sortedEvidenceJson(next);
+            })();
+          // A genuine conflict is retained separately for review, not treated as a
+          // broker-authorized correction. The existing immutable evidence stays.
+          statements.push(q(`INSERT OR IGNORE INTO mt5_evidence_conflicts
+            (link,owner,account_id,event_key,evidence_kind,original_sha256,candidate_sha256,candidate_payload,changed_fields,review_status,recorded_at)
+            VALUES(?,?,?,?,?,?,?,?,?,'needs_review',?)`,
+            link.id,device.owner,link.account_id,event.key,evidenceKind,prior.sha256,sha,payload,JSON.stringify(changed),time));
+          if(alias) statements.push(q(`INSERT OR IGNORE INTO mt5_conflict_classifications
+            (link,event_key,candidate_sha256,owner,classification,provenance,recorded_at)
+            VALUES(?,?,?,?,'connector_spec_position_alias_v1',
+              'old_spec_hash_omitted_position_id',?)`,
+            link.id,event.key,sha,device.owner,time));
+          else quarantinedInBatch++;
+          continue;
+        }
+      }
+      if(prior) evidenceSha=prior.sha256; // Preserve original fingerprint for cash ledger provenance.
+      if(!prior) rawSeen.set(String(event.key),{sha256:sha,payload});
       statements.push(q('INSERT OR IGNORE INTO mt5_raw_evidence(link,owner,account_id,event_key,evidence_kind,payload,sha256,recorded_at) VALUES(?,?,?,?,?,?,?,?)',
         link.id,device.owner,link.account_id,event.key,evidenceKind,payload,sha,time));
       if(evidenceKind==='deal' && Number(f.type)===2 && /^deal-\d+$/.test(event.key)) {
@@ -604,7 +680,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
           (link,owner,account_id,ticket,amount,currency,direction,broker_time_msc,raw_evidence_key,raw_sha256,recorded_at)
           VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
           link.id,device.owner,link.account_id,ticket,String(amount),link.currency,
-          amount>0?'in':'out',at,event.key,sha,time));
+          amount>0?'in':'out',at,event.key,evidenceSha,time));
       }
     }
     if(event.kind==='lifecycle') {
@@ -666,7 +742,13 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   const equity = typeof input.equity === 'number' && Number.isFinite(input.equity) ? input.equity : null;
   const syncedAt=now();
   statements.push(q('UPDATE mt5_devices SET last_seen=? WHERE id=?',unix,device.id));
-  statements.push(q("UPDATE mt5_links SET retry_requested_at=NULL,capture_health='synced' WHERE id=?",link.id));
+  statements.push(q(`UPDATE mt5_links SET retry_requested_at=NULL,
+     capture_health=CASE WHEN EXISTS(SELECT 1 FROM mt5_evidence_conflicts c
+       WHERE c.link=? AND c.review_status='needs_review'
+         AND NOT EXISTS(SELECT 1 FROM mt5_conflict_classifications k
+           WHERE k.link=c.link AND k.event_key=c.event_key AND k.candidate_sha256=c.candidate_sha256))
+       THEN 'needs_attention' ELSE 'synced' END
+     WHERE id=?`,link.id,link.id));
   statements.push(q(`UPDATE mt5_links SET last_sync=?,gap=MAX(gap,?),
     broker_balance=COALESCE(?,broker_balance),broker_equity=COALESCE(?,broker_equity),
     performance_baseline_balance=CASE WHEN performance_baseline_at IS NULL THEN ? ELSE performance_baseline_balance END,
@@ -694,9 +776,37 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       WHERE id=?`,input.cashScan.cursor,input.cashScan.cursor,
       Number(input.cashScan.complete),now(),link.id));
   }
+  if(input.recovery!==undefined) {
+    const r=input.recovery;
+    if(!isObject(r)||!['catching_up','awaiting_broker_history','current'].includes(String(r.status))
+      || !Number.isSafeInteger(r.scanned_through)||Number(r.scanned_through)<0
+      || !Number.isSafeInteger(r.target_at)||Number(r.target_at)<Number(r.scanned_through)
+      || Number(r.target_at)>Date.now()+86400000
+      || !Number.isSafeInteger(r.unresolved_positions)||Number(r.unresolved_positions)<0
+      || Number(r.unresolved_positions)>100000
+      || typeof r.unobserved_stop_changes!=='boolean') return fail('Invalid broker recovery checkpoint.');
+    statements.push(q(`INSERT INTO mt5_recovery_status
+      (link,owner,state,scanned_through,target_at,unresolved_positions,unobserved_stop_changes,updated_at)
+      VALUES(?,?,?,?,?,?,?,?)
+      ON CONFLICT(link) DO UPDATE SET
+        state=CASE WHEN excluded.scanned_through>=mt5_recovery_status.scanned_through THEN excluded.state ELSE mt5_recovery_status.state END,
+        scanned_through=MAX(mt5_recovery_status.scanned_through,excluded.scanned_through),
+        target_at=MAX(mt5_recovery_status.target_at,excluded.target_at),
+        unresolved_positions=CASE WHEN excluded.scanned_through>=mt5_recovery_status.scanned_through THEN excluded.unresolved_positions ELSE mt5_recovery_status.unresolved_positions END,
+        unobserved_stop_changes=MAX(mt5_recovery_status.unobserved_stop_changes,excluded.unobserved_stop_changes),
+        updated_at=excluded.updated_at WHERE mt5_recovery_status.owner=excluded.owner`,
+      link.id,device.owner,r.status,r.scanned_through,r.target_at,r.unresolved_positions,
+      r.unobserved_stop_changes?1:0,syncedAt));
+  }
   if(input.history_done) statements.push(q("UPDATE mt5_links SET history_status='ready' WHERE id=? AND history_id=? AND history_status='requested'",link.id,input.history_done));
   await db.batch(statements);
   const history=await q('SELECT history_id AS id,history_since AS since,history_status AS status,history_mode AS mode,history_anchor_at AS anchor_at,history_anchor_ticket AS anchor_ticket,history_scanned_until AS scanned_until FROM mt5_links WHERE id=?',link.id).first();
   const preferences=await q('SELECT broker_timezone,timezone_confirmed_at,utc_conversion_status FROM mt5_links WHERE id=?',link.id).first();
-  return json({ok:true,history,preferences,synced_at:syncedAt,pending_reviews:(await remainingReviews(link.id))?.n??0});
+  const unresolved=(await q(`SELECT COUNT(*) AS n FROM mt5_evidence_conflicts c WHERE c.link=? AND c.review_status='needs_review'
+      AND NOT EXISTS(SELECT 1 FROM mt5_conflict_classifications k WHERE k.link=c.link
+        AND k.event_key=c.event_key AND k.candidate_sha256=c.candidate_sha256)`,
+      link.id).first<{n:number}>())?.n??0;
+   return json({ok:true,history,preferences,synced_at:syncedAt,pending_reviews:(await remainingReviews(link.id))?.n??0,
+     evidence_conflicts_pending:unresolved,evidence_quarantined_in_batch:quarantinedInBatch,
+     evidence_integrity_status:unresolved?'needs_review':'verified_no_conflict'});
 }

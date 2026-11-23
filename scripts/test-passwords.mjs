@@ -23,6 +23,19 @@ test('existing unversioned 100k hashes remain verifiable until they are transpar
     { valid: false, needsUpgrade: false });
 });
 
+test('Cloudflare-compatible derivation retains byte-for-byte existing 600k hashes', async () => {
+  const salt = Buffer.from('sixteen-byte-key').toString('base64');
+  const phrase = 'preserve the already stored D1 verifier';
+  const expected = pbkdf2Sync(phrase, Buffer.from(salt, 'base64'), 600000, 32, 'sha256').toString('base64');
+  assert.deepEqual(await verifyPassword(phrase, salt, 'pbkdf2-sha256$600000$' + expected),
+    { valid: true, needsUpgrade: false });
+  assert.deepEqual(await verifyPassword('incorrect', salt, 'pbkdf2-sha256$600000$' + expected),
+    { valid: false, needsUpgrade: false });
+  const created = await hashPassword('standards-interoperable-password');
+  const saltBytes = Buffer.from(created.salt, 'base64');
+  const canonical = pbkdf2Sync('standards-interoperable-password',saltBytes,PASSWORD_ITERATIONS,32,'sha256').toString('base64');
+  assert.equal(created.hash,'pbkdf2-sha256$'+PASSWORD_ITERATIONS+'$'+canonical);
+});
 test('unknown formats, truncated hashes and pathological work factors fail closed', async () => {
   const salt = Buffer.from('this-is-16-bytes').toString('base64');
   for (const hash of [

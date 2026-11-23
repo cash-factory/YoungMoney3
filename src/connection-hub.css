@@ -195,3 +195,17 @@
 @keyframes ym-toast-icon-in{from{transform:scale(.7);opacity:.4}to{transform:scale(1);opacity:1}}
 @media(max-width:650px){.ym-cash-review-amount{font-size:11px}.ym-cash-review-trigger{gap:8px;padding:11px}.ym-cash-review-glyph{width:29px;height:29px}.ym-cash-performance-head{display:block}}
 @media(prefers-reduced-motion:reduce){.ym-feedback-toast::after,.ym-feedback-toast-icon,.ym-cash-review-body{animation:none}.ym-pc-account-link:hover{transform:none}}
+
+
+/* Evidence-integrity notice: distinct from transport health and never an auto-approval. */
+.ym-evidence-conflict-panel{display:grid;gap:11px;margin:13px 0;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--bg-secondary)}
+.ym-evidence-conflict-panel>.ym-action-feedback{margin:0}
+.ym-evidence-conflict-panel>.btn-secondary{justify-self:start}
+.ym-evidence-review-details{display:grid;gap:12px;padding-top:12px;border-top:1px solid var(--border)}
+.ym-evidence-review-details>.btn-secondary{justify-self:start}
+.ym-evidence-review-list{list-style:none;display:grid;gap:8px;max-height:330px;overflow:auto}
+.ym-evidence-review-list li{border:1px solid var(--border);border-radius:8px;background:var(--bg-card);display:grid;gap:6px;padding:12px;overflow-wrap:anywhere;font-size:12px}
+.ym-evidence-review-list li>div>strong{text-transform:capitalize}
+.ym-evidence-review-details .ym-context-short{font-size:11px;line-height:1.65;color:var(--text-secondary)}
+.ym-evidence-review-details p:last-child{display:flex;align-items:center;gap:9px}
+@media(prefers-reduced-motion:reduce){.ym-evidence-review-details *{transition:none}}
