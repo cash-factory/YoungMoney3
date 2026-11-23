@@ -59,7 +59,7 @@ try {
     assert.equal(await study.getAttribute('data-study-status'),'draft');
     await study.getByRole('button',{name:/Wait for the entry confirmation/}).click();
     await study.getByText('+60.0 percentage points').waitFor();
-    assert.ok((await study.getByText('Before-and-after observations do not establish causation. Market conditions and trader behavior may also change.').count())===0,
+    assert.equal(await study.getByText('Before-and-after observations do not establish causation. Market conditions and trader behavior may also change.').isVisible(),false,
       'Methodology must stay behind its progressive disclosure until requested');
     await study.locator('summary').click();
     await study.getByText(/do not establish causation/).waitFor();
