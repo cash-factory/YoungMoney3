@@ -51,5 +51,8 @@ export async function saveDecision(
         .eq('updated_at', previous.updated_at)
     : await query.insert({ ...record, id });
   if (result.error) throw new Error(result.error.message);
+  const saved = Array.isArray(result.data) ? result.data[0] as DecisionReview | undefined : null;
+  if (!saved?.updated_at) throw new Error('The workspace did not confirm the saved review revision. Refresh before continuing.');
   window.dispatchEvent(new Event('ymfx:decision-saved'));
+  return saved;
 }
