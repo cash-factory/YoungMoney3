@@ -1,0 +1,23 @@
+/* Global dialog system: inherits every YoungMoney3 palette, without baked-in ember colours. */
+.ym-modal-aura {
+  background:radial-gradient(ellipse at 40% 35%,color-mix(in srgb,var(--brand) 17%,transparent),
+    color-mix(in srgb,var(--brand) 5%,transparent) 70%,transparent);
+  opacity:.65;
+}
+.ym-modal-panel {
+  border:1px solid color-mix(in srgb,var(--brand) 13%,var(--border-strong));
+  box-shadow:0 24px 90px hsl(var(--shadow-color)/.3);
+  animation:ym-dialog-settle .18s ease-out both;
+}
+.ym-modal-accent {
+  background:linear-gradient(90deg,transparent 1%,var(--brand) 25%,
+    color-mix(in srgb,var(--brand) 70%,var(--accent)) 66%,transparent);
+}
+.ym-modal-close {color:var(--text-secondary);transition:color .16s ease,background .16s ease;}
+.ym-modal-close:hover {color:var(--text-primary);background:var(--bg-secondary);}
+.ym-modal-close:focus-visible {outline:2px solid var(--brand);outline-offset:2px;}
+@keyframes ym-dialog-settle {from {opacity:.8;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@media (prefers-reduced-motion:reduce) {
+  .ym-modal-panel {animation:none;}
+  .ym-modal-close {transition:none;}
+}
