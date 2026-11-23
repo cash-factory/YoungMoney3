@@ -31,6 +31,7 @@ jobs:
       - run: python -m py_compile connector/connect.py connector/ledger.py
       - run: python -m unittest discover -s connector -p 'test_ledger.py'
       - run: python scripts/test-connector-archive.py
+      - run: python scripts/test-connector-release-contract.py
       - run: npm run build
       - run: python scripts/test-connector-archive.py --check-dist
       - name: Browser-check responsive command centre
