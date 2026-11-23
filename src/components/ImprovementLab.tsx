@@ -290,7 +290,7 @@ export function ImprovementLab({ onShowSessions }: { onShowSessions: () => void 
                 </div>
                 {study.status==='draft' && <p className="ym-lab-caution"><CircleAlert size={16} /> Draft measurements are exploratory. Start the experiment to lock the plan.</p>}
                 {!evidence.prospective && study.status!=='draft' && <p className="ym-lab-caution"><CircleAlert size={16} /> This earlier study lacks a verified activation timestamp. Its comparisons are historical, not independently prospectively registered.</p>}
-                {evidence.excluded_intervention>0 && <p className="ym-lab-caution" role="status"><CircleAlert size={16} /> {evidence.excluded_intervention} retrospective or pre-activation {evidence.excluded_intervention===1?'review was':'reviews were'} excluded from the intervention percentage.</p>
+                {evidence.excluded_intervention>0 && <p className="ym-lab-caution" role="status"><CircleAlert size={16} /> {evidence.excluded_intervention} retrospective or pre-activation {evidence.excluded_intervention===1?'review was':'reviews were'} excluded from the intervention percentage.</p>}
                 <div className="ym-lab-measures">
                   <EvidenceMeter label="Earlier baseline" period={evidence.baseline} required={study.minimum_samples}/>
                   <EvidenceMeter label={evidence.prospective?'Prospective observations':'After the change (exploratory)'} period={evidence.intervention} required={study.minimum_samples}/>
