@@ -170,11 +170,22 @@ def terminal_account(slot, login, server, password, verify_password):
     receive account credentials. Do not send a password to a terminal whose
     data_path fails the identity check on the ordinary path.
     """
-    import subprocess
+    from terminal_launch import TerminalLaunchError, start_managed_terminal
 
     mt5.shutdown()
     target = Path(slot).resolve().parent
     managed = (target / ".ym-managed.json").is_file()
+    # A newly generated managed terminal is started as a background process
+    # before the MT5 Python extension attempts IPC. Without that first start,
+    # initialize() may spawn a foreground MT5 window with a second login wizard.
+    # No credentials are ever put in process arguments or plaintext INI files.
+    prelaunched = False
+    if managed and verify_password:
+        try:
+            start_managed_terminal(slot)
+            prelaunched = True
+        except (OSError, TerminalLaunchError) as error:
+            raise LoginFailure("terminal_start") from error
 
     def attach():
         try:
@@ -189,10 +200,11 @@ def terminal_account(slot, login, server, password, verify_password):
         # A fresh portable clone can still be extracting its broker configuration
         # or waiting for the first GUI startup. Never launch a different MT5.
         mt5.shutdown()
-        try:
-            subprocess.Popen([slot, "/portable"], cwd=str(target))
-        except OSError as error:
-            raise LoginFailure("terminal_start", code) from error
+        if not prelaunched:
+            try:
+                start_managed_terminal(slot)
+            except (OSError, TerminalLaunchError) as error:
+                raise LoginFailure("terminal_start", code) from error
         if not attach():
             code = mt5.last_error()[0]
             if code not in (-10003, -10005):
