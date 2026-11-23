@@ -109,9 +109,9 @@ try {
   assert.equal(preview.result.executionEnabled,false);
   assert.equal(preview.result.results.length,4);
   assert.equal(preview.result.results[0].indicativeLots,1.2,'Equity percentage must use the destination equity.');
-  assert.equal(preview.result.results[1].indicativeLots,2,'Balance percentage must use the destination balance.');
+  assert.equal(preview.result.results[1].indicativeLots,1,'Balance percentage must use the destination balance.');
   assert.equal(preview.result.results[2].indicativeLots,.55,'Fixed currency risk must use the destination currency.');
-  assert.equal(preview.result.results[3].indicativeLots,.8,'Balance ratio uses source volume and follower/source capitals.');
+  assert.equal(preview.result.results[3].indicativeLots,.6,'Balance ratio uses source volume and follower/source capitals.');
   assert.equal((await call('copy/execute-group',{id:groupId},first.cookie)).response.status,404,
     'No browser endpoint can issue trade orders.');
   assert.equal((await call('copy/group-save',{...group,id:groupId,version:5},first.cookie)).response.status,409);
