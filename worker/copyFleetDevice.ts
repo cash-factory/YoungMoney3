@@ -100,7 +100,7 @@ export async function copyFleetDevice(db:D1Database,device:Device,action:string,
               mirrorProtection:!!target.mirror_protection},
             confirmedBy:matchingProof?.ticket||null,
           };
-          const revision=await hash(safeCanonical({action:signal.action,body}));
+          const revision=await hash(safeCanonical({action:signal.action,executionMode:fleet.execution_mode,body}));
           commands.push(q("INSERT OR IGNORE INTO copy_execution_tasks(id,owner,fleet_id,follower_link,source_link,source_key,execution_mode,action,source_revision,payload,status,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,'queued',?,?)",
             crypto.randomUUID(),device.owner,fleet.id,target.follower_link,link.id,signal.source_key,fleet.execution_mode,signal.action,revision,JSON.stringify(body),now,now+Math.min(fleet.max_age_ms,12000)));
           queued++;
