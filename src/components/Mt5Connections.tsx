@@ -148,7 +148,7 @@ export function Mt5Connections() {
     {setupHint && <div className="ym-action-feedback" data-kind="info" role="status"><CircleHelp size={17}/><span>{setupHint}</span><button type="button" aria-label="Dismiss" onClick={()=>setSetupHint('')}><X size={16}/></button></div>}
     {error && !feedback && <div className="ym-action-feedback" data-kind="error" role="alert"><AlertTriangle size={16}/>{error}</div>}
     {capturePaused && <div className="ym-action-feedback" data-kind="warning" role="alert"><AlertTriangle size={17}/>Capture paused by your staging administrator.</div>}
-    {outdatedCapturePc && <div className="ym-action-feedback" data-kind="warning" role="status"><AlertTriangle size={17}/><span>Your PC is online, but its older connector cannot complete broker capture. Close the old connector, install the latest staging build and reopen it under the same Windows account. Do not unpair or remove your MT5 account. <a href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.5-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer" className="underline font-semibold">Download v0.5.5-rc1</a>.</span></div>}
+    {outdatedCapturePc && <div className="ym-action-feedback" data-kind="warning" role="status"><AlertTriangle size={17}/><span>Your PC is online, but broker capture needs attention. Install the diagnostic connector to see the exact API action, HTTP status and failure category, then reopen it under the same Windows user. Do not unpair or remove your MT5 account. <a href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.6-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer" className="underline font-semibold">Download v0.5.6-rc1</a>.</span></div>}
     <section className="card ym-connection-section" aria-labelledby="paired-pc-title">
       <header className="ym-connection-heading">
         <div><p className="ym-connection-eyebrow">01 / YOUR DEVICES</p><h2 id="paired-pc-title">Paired PCs</h2></div>
@@ -188,7 +188,7 @@ export function Mt5Connections() {
                   <button type="button" className="btn-secondary" onClick={()=>{setEditingPc(d.id);setPcNameDraft(pairedPcName(d));}}>Rename PC</button>
                   <button type="button" className="btn-secondary" onClick={()=>{if(window.confirm('Unpair '+pairedPcName(d)+'? This revokes its connected broker sessions. Do not unpair the PC currently capturing your trades.'))void run(()=>action('revoke',{device:d.id}),'PC unpaired. Historical trade evidence was retained.','revoke-pc');}}>Unpair PC</button>
                 </div>}
-              <details className="ym-context-help"><summary><CircleHelp size={15}/>Connection and safety details</summary><p>Use Add broker account to connect more logins without pairing again. Unpairing revokes monitoring for accounts on this PC. An offline PC retains its saved pairing; reopen the Windows connector on that computer.</p><div className="ym-connection-actions"><a href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.5-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer">Download Connector v0.5.5-rc1</a><a href="https://github.com/cash-factory/YoungMoney3/releases" rel="noopener noreferrer">Published versions and checksums</a></div></details>
+              <details className="ym-context-help"><summary><CircleHelp size={15}/>Connection and safety details</summary><p>Use Add broker account to connect more logins without pairing again. Unpairing revokes monitoring for accounts on this PC. An offline PC retains its saved pairing; reopen the Windows connector on that computer.</p><div className="ym-connection-actions"><a href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.6-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer">Download Connector v0.5.6-rc1</a><a href="https://github.com/cash-factory/YoungMoney3/releases" rel="noopener noreferrer">Published versions and checksums</a></div></details>
               <div className="ym-pc-accounts">
                 <div className="ym-pc-accounts-header"><strong>Accounts on this PC</strong><span className="ym-section-count">{deviceLinks.length}</span></div>
                 {deviceLinks.length?deviceLinks.map(link=>{
@@ -212,7 +212,7 @@ export function Mt5Connections() {
       </div>
       <details className="ym-context-help ym-connector-downloads"><summary><CircleHelp size={15}/>Connector downloads and setup</summary>
         <div className="ym-connection-actions">
-          <a href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.5-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer">Download Connector v0.5.5-rc1</a>
+          <a href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.6-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer">Download Connector v0.5.6-rc1</a>
           <a href="/connector-download.html">Release details &amp; SHA-256</a>
           <a href="/mt5-connector.zip" download>Python source fallback</a>
         </div>
