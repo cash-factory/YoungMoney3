@@ -1,4 +1,5 @@
 name: Staging-only MT5 offline recovery and specification identity repair
+# Verify the latest UI displays unresolved closes while historical catch-up is also active.
 on:
   push:
     branches: [fix/mt5-reconnect-recovery-20261123]
