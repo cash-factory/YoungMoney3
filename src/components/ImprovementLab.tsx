@@ -87,7 +87,7 @@ function StudyForm({
       <div className="ym-lab-form-intro">
         <span className="ym-lab-kicker">PREREGISTRATION / STEP 01</span>
         <h3>Change one thing. Observe what follows.</h3>
-        <p>Define the rule before collecting the next set of reviews. When you start, the hypothesis, dates, filters and measurement cannot be changed.</p>
+        <p>Define the rule before collecting the next set of reviews. Starting a new prospective study requires today or a future start date; the server records when it was activated. Old trades cannot count as new observations.</p>
       </div>
       <div className="ym-lab-form-fields">
         <label>Experiment name
@@ -138,7 +138,7 @@ function StudyForm({
       </div>
       <div className="ym-lab-method">
         <ShieldCheck size={19} aria-hidden="true" />
-        <p><strong>Primary measure: self-reported plan adherence.</strong> YoungMoney3 compares your decision reviews before and after the selected date. Uncertain decisions are excluded from the percentage and shown separately. This is not a randomized causal study.</p>
+        <p><strong>Primary measure: self-reported plan adherence.</strong> After activation, intervention evidence requires a new trade and a server-sealed pre-reveal review. Earlier or retrospective interventions are excluded. This is not a randomized causal study.</p>
       </div>
       {(validation || error) && <p className="ym-lab-form-error" role="alert">{validation || error}</p>}
       <div className="ym-lab-form-actions">
@@ -283,24 +283,27 @@ export function ImprovementLab({ onShowSessions }: { onShowSessions: () => void 
                 </div>
                 <div className="ym-lab-study-method">
                   <span><LockKeyhole size={15}/> {study.status==='draft'?'Design editable until activated':'Study design locked'}</span>
+                  <span>{evidence.prospective ? 'Server-sealed at '+new Date(study.activated_at!).toLocaleString() : 'Legacy/draft · no verified activation timestamp'}</span>
                   <span>Baseline: {study.baseline_days} days</span>
                   <span>Trial: {study.start_date} through {study.end_date || 'present'}</span>
                   <span>Measure: plan adherence</span>
                 </div>
                 {study.status==='draft' && <p className="ym-lab-caution"><CircleAlert size={16} /> Draft measurements are exploratory. Start the experiment to lock the plan.</p>}
+                {!evidence.prospective && study.status!=='draft' && <p className="ym-lab-caution"><CircleAlert size={16} /> This earlier study lacks a verified activation timestamp. Its comparisons are historical, not independently prospectively registered.</p>}
+                {evidence.excluded_intervention>0 && <p className="ym-lab-caution" role="status"><CircleAlert size={16} /> {evidence.excluded_intervention} retrospective or pre-activation {evidence.excluded_intervention===1?'review was':'reviews were'} excluded from the intervention percentage.</p>
                 <div className="ym-lab-measures">
                   <EvidenceMeter label="Earlier baseline" period={evidence.baseline} required={study.minimum_samples}/>
-                  <EvidenceMeter label="After the change" period={evidence.intervention} required={study.minimum_samples}/>
+                  <EvidenceMeter label={evidence.prospective?'Prospective observations':'After the change (exploratory)'} period={evidence.intervention} required={study.minimum_samples}/>
                 </div>
                 <div className="ym-lab-finding" data-evidence-ready={evidence.enough_evidence}>
                   <div><small>Observed change in plan adherence</small>
                     <strong>{evidence.percentage_point_change === null ? 'Not yet comparable'
                       : (evidence.percentage_point_change>0?'+':'')+evidence.percentage_point_change.toFixed(1)+' percentage points'}</strong></div>
-                  <span>{evidence.enough_evidence?'Minimum samples reached · descriptive only':'Insufficient evidence for the study’s sample target'}</span>
+                  <span>{evidence.enough_evidence ? (evidence.prospective?'Minimum samples reached · still descriptive':'Historical comparison · not prospective') : 'Insufficient evidence for the study’s sample target'}</span>
                 </div>
                 <details className="ym-lab-limitations"><summary><CircleAlert size={16}/> Evidence limitations & methodology</summary>
                   <ul>{evidence.limitations.map(item=><li key={item}>{item}</li>)}</ul>
-                  <p>Entry dates determine the comparison windows (UTC). A broker timezone awaiting confirmation can weaken the classification. Existing testing sessions are not silently combined with real decision reviews.</p>
+                  <p>Entry and server-sealed assessment times determine eligible prospective observations (UTC). Broker timezone uncertainty can weaken trade classification. Existing strategy-testing sessions are separate evidence and are never silently combined with real decision reviews.</p>
                 </details>
                 <div className="ym-lab-linked">
                   <span><ClipboardCheck size={17}/> {linkedSessions.length} related testing {linkedSessions.length===1?'session':'sessions'} (separate evidence)</span>
