@@ -8,6 +8,7 @@ export async function checkTwoAccounts(browser, base, width) {
   const first = { ...account, name: 'Dollar demo' };
   const second = { ...account, id: 'second-account', name: 'Euro demo', base_currency: 'EUR' };
   const entries = [],
+    reviews = [],
     imports = [],
     errors = [],
     replayRequests = [];
@@ -16,6 +17,16 @@ export async function checkTwoAccounts(browser, base, width) {
     const query = route.request().postDataJSON();
     if (query.table === 'trading_accounts')
       return route.fulfill({ json: { data: [first, second], count: 2 } });
+    if (query.table === 'decision_reviews') {
+      if(query.action==='select') return route.fulfill({json:{data:reviews,count:reviews.length}});
+      assert.equal(query.action,'insert');
+      const now=new Date().toISOString();
+      const row={...query.payload,user_id:'browser-fixture-owner',
+        pre_reveal_at:query.payload.pre_reveal_verdict?now:null,
+        created_at:now,updated_at:now};
+      reviews.push(row);
+      return route.fulfill({json:{data:[row],count:1}});
+    }
     if (query.table !== 'journal_entries') return route.fallback();
     if (query.action === 'select')
       return route.fulfill({ json: { data: entries, count: entries.length } });
@@ -279,7 +290,8 @@ export async function checkTwoAccounts(browser, base, width) {
       const replay = page.getByRole('dialog', { name: 'Decision replay' });
       await replay.getByText(new RegExp(a.name)).waitFor();
       assert.equal(await replay.getByText(/Net result/).count(), 0);
-      await replay.getByRole('button', { name: 'Reveal outcome and evidence' }).click();
+      await replay.getByRole('button', { name: 'Unsure', exact: true }).click();
+      await replay.getByRole('button', { name: 'Record judgement & reveal outcome' }).click();
       await replay.getByRole('heading', { name: 'Still unclear' }).waitFor();
       const outcome = await replay.getByText(/Net result/).innerText();
       assert.ok(outcome.includes(a.base_currency) && outcome.includes(amount), outcome);
