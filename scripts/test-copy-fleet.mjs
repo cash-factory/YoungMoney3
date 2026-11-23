@@ -192,6 +192,11 @@ try{
   const consentLive=await call('mt5/device/copy-consent',deviceConsent(live,true,'live'),'',token);
   assert.equal(consentLive.status,200,JSON.stringify(consentLive.result));
   assert.equal(consentLive.result.mode,'live');
+  await db.prepare("UPDATE mt5_links SET login='999999' WHERE id=?").bind(live).run();
+  assert.equal((await call('copy/fleet-arm',{id:liveFleet,version:1,confirm:true,
+    liveConfirmation:confirmation},owner.cookie)).status,409,
+    'A local consent cannot be reused after broker account identity changes.');
+  await db.prepare("UPDATE mt5_links SET login=? WHERE id=?").bind(loginFor[live],live).run();
   const armedLive=await call('copy/fleet-arm',{
     id:liveFleet,version:1,confirm:true,liveConfirmation:confirmation},owner.cookie);
   assert.equal(armedLive.status,200,JSON.stringify(armedLive.result));
