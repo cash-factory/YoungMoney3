@@ -937,7 +937,7 @@ export default {
       return response({ error: 'Not found.' }, 404);
     } catch (error) {
       if (error instanceof RequestError) return response({ error: error.message }, error.status);
-      console.error('Workspace request failed', { path: pathname, requestId: request.headers.get('cf-ray') });
+      console.error('Workspace request failed', { path: pathname, requestId: request.headers.get('cf-ray'), errorType: error instanceof Error ? error.name : typeof error });
       return response({ error: 'The workspace service could not complete this request.' }, 500);
     }
   },
