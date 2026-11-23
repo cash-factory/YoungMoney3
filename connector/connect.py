@@ -474,9 +474,9 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
     # These non-secret, account-bound values are displayed in the selected
     # connector session only after verified MT5 identity and successful sync.
     account_snapshots[link]={
-        "login":str(account.login),"server":str(account.server),
+        "login":str(getattr(account,"login",login)),"server":str(getattr(account,"server",server)),
         "company":str(getattr(account,"company","")),
-        "currency":str(account.currency),"trade_mode":int(account.trade_mode),
+        "currency":str(getattr(account,"currency","")),"trade_mode":int(getattr(account,"trade_mode",0)),
         "balance":float(account.balance),"equity":float(account.equity),
         "margin_free":float(getattr(account,"margin_free",0) or 0),
         "open_positions":len(positions),"pending_orders":pending_count,
