@@ -349,15 +349,15 @@ test('failed MT5 login attempts are removable without affecting connected accoun
   assert.ok(mt5.includes("window.confirm("),'Removal must be confirmed');
 });
 
-test('staging MT5 Connections downloads the latest published Windows installer directly',()=>{
+test('staging MT5 Connections routes downloads through the verified latest-release page',()=>{
   const mt5=read('src/components/Mt5Connections.tsx');
   const page=read('public/connector-download.html');
   const tag='staging-connector-v0.5.7-rc1';
   const executable='https://github.com/cash-factory/YoungMoney3/releases/download/'+tag+'/YoungMoney3.Connector.exe';
   const checksum=executable+'.sha256';
-  assert.ok(mt5.includes('href="'+executable+'"'),'Download Connector must go directly to latest official executable');
-  assert.ok(mt5.includes('Download Connector v0.5.7-rc1'),'Users must know the version they are getting');
-  assert.ok(mt5.includes('href="/connector-download.html"'),'Release details must be accessible next to the main download');
+  assert.ok(mt5.includes('href="/connector-download.html"'),'Connector downloads must go through the verified release details page');
+  assert.ok(mt5.includes('Download latest connector'),'Dashboard must advertise the dynamic latest verified connector');
+  assert.ok(!mt5.includes('href="'+executable+'"'),'Dashboard may not hardcode an older binary after a newer prerelease becomes available');
   assert.ok(page.includes('href="'+executable+'"'),'Release page must provide a working link without GitHub API');
   assert.ok(page.includes('href="'+checksum+'"'),'Show the published checksum next to the executable');
   assert.ok(page.includes('id="digest"'),'The download page must show checksum verification instructions');
