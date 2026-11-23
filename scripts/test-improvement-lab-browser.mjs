@@ -70,7 +70,7 @@ try {
     await study.locator('summary').click();
     await study.getByText(/do not establish causation/).waitFor();
     await study.getByRole('button',{name:'Start & lock study'}).click();
-    await page.getByRole('alert').filter({hasText:'Prospective studies must start today or later'}).waitFor();
+    await page.locator('.ym-improvement-lab .ym-lab-error').filter({hasText:'Prospective studies must start today or later'}).waitFor();
     assert.equal(await study.getAttribute('data-study-status'),'draft');
     await study.getByRole('button',{name:'Edit design'}).click();
     const editor=page.getByRole('dialog',{name:'Edit experiment draft'});
