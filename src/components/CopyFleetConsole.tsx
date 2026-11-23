@@ -30,7 +30,7 @@ type Report={link:string;account_balance:number;account_equity:number;account_cu
   open_positions:number;pending_orders:number;broker_connected:number;demo_trading_enabled:number;observed_at_ms:number};
 type Consent={follower_link:string;demo_authorized:number;authorization_mode:string;expires_at:number};
 type Task={id:string;fleet_id:string;source_key:string;action:string;status:string;follower_link:string;retcode:number|null;result_code:string|null;result_payload?:{lots?:number;risk_amount?:number;risk_pct_equity?:number;account_currency?:string}|null;created_at:number};
-type Status={mode:'demo-and-live';liveExecutionEnabled:true;requiresLocalConsent:true;maxFollowersPerFleet:number;
+type Status={mode:'demo-and-live';liveExecutionEnabled:boolean;requiresLocalConsent:true;maxFollowersPerFleet:number;
   accounts:Account[];fleets:Fleet[];reports:Report[];consents:Consent[];tasks:Task[]};
 type PreviewRow={followerLink:string;enabled:boolean;mode:RiskMode;accountCurrency:string|null;
   plannedRiskBudget:number|null;indicativeLots:number|null;brokerValidated:false;needsBrokerPreflight:true;notice:string};
@@ -197,6 +197,7 @@ export function CopyFleetConsole(){
           </select></label>
         </div>
         <div className="ym-cf-smallhead ym-cf-target-header"><strong>FOLLOWER ALLOCATIONS</strong><span>{draft.targets.length} / 24</span></div>
+        {draft.executionMode==='live'&&status&&!status.liveExecutionEnabled&&<p className="ym-cf-note" role="status"><strong>LIVE EXECUTION NOT ACTIVE:</strong> live-account configurations can be saved, but arming is disabled until a broker-tested release is explicitly enabled by the operator.</p>}
         {draft.executionMode==='live'&&<p className="ym-cf-note" role="note"><strong>REAL MONEY MODE:</strong> account-specific Windows authorization and broker verification are mandatory. Per-entry stop risk is capped at 2% of follower equity and configured daily loss at 5%. Markets can gap beyond stops, and costs may exceed estimates.</p>}
         {draft.targets.map((target,i)=>{
           const a=accounts.find(x=>x.id===target.link);
@@ -249,7 +250,7 @@ export function CopyFleetConsole(){
           <button type="button" className="btn-primary" disabled={!!busy||!canSave||(picked&&picked.state!=='paused')} onClick={()=>void act('fleet-save',{
             ...draft, ...(picked?{id:picked.id,version:picked.version}:{})
           },'Fleet saved in paused state.')}><Save size={16}/>Save fleet</button>
-          {picked?.state==='paused'&&<button type="button" className="btn-secondary" disabled={!!busy||!picked} onClick={()=>{
+          {picked?.state==='paused'&&<button type="button" className="btn-secondary" disabled={!!busy||!picked||(picked.execution_mode==='live'&&!status?.liveExecutionEnabled)} onClick={()=>{
             if(picked.execution_mode==='live'){
               const phrase='ARM LIVE '+picked.id.slice(0,8);
               const typed=window.prompt('REAL MONEY: live broker orders may be placed across all enabled followers. All accounts require separate local Windows authorization. A pause cannot undo already dispatched trades.\nType '+phrase+' to arm this fleet:', '');
