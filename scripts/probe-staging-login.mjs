@@ -58,6 +58,32 @@ try {
     try { body = JSON.parse(text); } catch { throw Error('Successful response was not JSON.'); }
     if (!body?.user?.id || body.user.id !== id) throw Error('Sign-in succeeded but returned another user.');
     console.log('Validated ' + (legacy ? 'legacy 100k upgrade' : 'existing 600k') + ' login against deployed staging Worker.');
+    if (process.env.YM3_PROBE_BROWSER === '1') {
+      const { chromium } = await import('playwright');
+      const browser = await chromium.launch({ headless: true });
+      try {
+        const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+        await page.goto(worker, { waitUntil: 'domcontentloaded', timeout: 25000 });
+        await page.getByRole('button', { name: 'Get Started', exact: true }).first().click();
+        await page.locator('input[type=email]').fill(email);
+        await page.locator('input[type=password]').fill(password);
+        const [login] = await Promise.all([
+          page.waitForResponse(response => response.url() === worker + '/api/auth/signin' && response.request().method() === 'POST', { timeout: 30000 }),
+          page.locator('button[type=submit]').click(),
+        ]);
+        if (login.status() !== 200) throw Error('Browser authentication received HTTP ' + login.status());
+        await page.locator('input[type=email]').waitFor({ state: 'detached', timeout: 20000 });
+        const session = await page.evaluate(async () => {
+          const r = await fetch('/api/me', { credentials: 'same-origin' });
+          return { status: r.status, body: await r.json() };
+        });
+        if (session.status !== 200 || session.body?.user?.id !== id)
+          throw Error('Browser session cookie did not authenticate the correct account.');
+        console.log('Validated rendered browser sign-in and authenticated session cookie on staging.');
+      } finally {
+        await browser.close();
+      }
+    }
   }
 } finally {
   if (inserted) {
