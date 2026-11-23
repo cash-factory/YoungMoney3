@@ -552,6 +552,14 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
         with db:
             db.execute("DELETE FROM history_progress WHERE link=?",(link,))
             db.execute("DELETE FROM history_anchor_scan WHERE link=?",(link,))
+    # The copy bridge is independent of journal capture. A broker preflight or
+    # copy-control network error cannot discard evidence or unpair this account.
+    # Only locally approved, verified demo follower accounts may place orders.
+    try:
+        from copy_bridge import cycle as copy_cycle
+        copy_cycle(mt5,db,link,account,post,token,now_ms=end)
+    except Exception as error:
+        print("Copy Fleet needs attention ("+type(error).__name__+"). Journal evidence remains safe.",flush=True)
     return True
 
 def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
@@ -621,6 +629,8 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
         CREATE TABLE IF NOT EXISTS outbox(seq INTEGER PRIMARY KEY,link TEXT,payload TEXT);
         CREATE INDEX IF NOT EXISTS outbox_link ON outbox(link,seq);
     """)
+    from copy_execution import prepare_database as prepare_copy_database
+    prepare_copy_database(db)
     if parallel_capture and not args.sync_once and not args.pair:
         from concurrent_capture import run_supervisor
         try:
