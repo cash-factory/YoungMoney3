@@ -71,6 +71,58 @@ try {
   assert.deepEqual(status.result.accounts.map(a=>a.id).sort(),[source,follower].sort(),
     'Real accounts and other users must be invisible');
 
+  const followers=[follower,id(7),id(8),id(9)];
+  for(let i=1;i<followers.length;i++) {
+    await db.prepare("INSERT INTO mt5_links(id,device,owner,account_id,status,server,login,company,currency,trade_mode,access_level,last_sync,expires,monitoring_paused,broker_balance,broker_equity) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?)")
+      .bind(followers[i],device1,first.user.id,id(500+i),'connected','DemoBroker-'+i,String(4000+i),
+        'MultiDemo','USD',0,'trading-enabled',time,expires,10000*i,12000*i).run();
+  }
+  await db.prepare("UPDATE mt5_links SET broker_balance=10000,broker_equity=12000 WHERE id IN (?,?)")
+    .bind(source,follower).run();
+  const groupFollowers=followers.map((link,i)=>({
+    link,mode:['equity_percentage','balance_percentage','fixed_amount','balance_ratio'][i],
+    value:i===2?55:1,maxLots:4,maxRiskPct:3,
+  }));
+  const group={name:'Multi-account four followers',sourceLink:source,followers:groupFollowers};
+  assert.equal((await call('copy/group-save',{...group,followers:[...groupFollowers,groupFollowers[0]]},first.cookie)).response.status,400,
+    'Duplicate followers cannot be queued.');
+  assert.equal((await call('copy/group-save',{...group,followers:[...groupFollowers,{...groupFollowers[0],link:theirs}]},first.cookie)).response.status,403,
+    'Cross-owner followers must be rejected.');
+  assert.equal((await call('copy/group-save',{...group,followers:[{...groupFollowers[0],link:live}]},first.cookie)).response.status,403,
+    'Live followers are excluded even from demo plans.');
+  assert.equal((await call('copy/group-save',{...group,followers:groupFollowers.map(x=>({...x,link:source}))},first.cookie)).response.status,400,
+    'Source to self cannot be saved.');
+  const groupCreated=await call('copy/group-save',group,first.cookie);
+  assert.equal(groupCreated.response.status,200,JSON.stringify(groupCreated.result));
+  assert.equal(groupCreated.result.executionEnabled,false);
+  const groupId=groupCreated.result.id;
+  const groupList=await call('copy/group-status',{},first.cookie);
+  assert.equal(groupList.response.status,200);
+  assert.equal(groupList.result.groups[0].followers.length,4);
+  assert.equal(groupList.result.groups[0].state,'paused');
+  assert.equal((await call('copy/group-status',{},second.cookie)).result.groups.length,0,'No group leak across users.');
+  assert.equal((await call('copy/group-preview',{id:groupId,sourceLots:.2,lossPerLot:Object.fromEntries(followers.map(link=>[link,100]))},second.cookie)).response.status,404);
+  const preview=await call('copy/group-preview',{id:groupId,sourceLots:.2,lossPerLot:Object.fromEntries(followers.map(link=>[link,100]))},first.cookie);
+  assert.equal(preview.response.status,200,JSON.stringify(preview.result));
+  assert.equal(preview.result.simulation,true);
+  assert.equal(preview.result.brokerValidated,false);
+  assert.equal(preview.result.executionEnabled,false);
+  assert.equal(preview.result.results.length,4);
+  assert.equal(preview.result.results[0].indicativeLots,1.2,'Equity percentage must use the destination equity.');
+  assert.equal(preview.result.results[1].indicativeLots,2,'Balance percentage must use the destination balance.');
+  assert.equal(preview.result.results[2].indicativeLots,.55,'Fixed currency risk must use the destination currency.');
+  assert.equal(preview.result.results[3].indicativeLots,.8,'Balance ratio uses source volume and follower/source capitals.');
+  assert.equal((await call('copy/execute-group',{id:groupId},first.cookie)).response.status,404,
+    'No browser endpoint can issue trade orders.');
+  assert.equal((await call('copy/group-save',{...group,id:groupId,version:5},first.cookie)).response.status,409);
+  assert.equal((await call('copy/group-save',{...group,id:groupId,version:1,name:'Edited group'},first.cookie)).response.status,200);
+  assert.equal((await call('copy/group-delete',{id:groupId,version:1},first.cookie)).response.status,409);
+  assert.equal((await call('copy/group-delete',{id:groupId,version:2},first.cookie)).response.status,200);
+  assert.equal((await call('copy/group-status',{},first.cookie)).result.groups.length,0);
+  const audit=await db.prepare("SELECT event FROM copy_group_events WHERE owner=? ORDER BY recorded_at")
+    .bind(first.user.id).all();
+  assert.deepEqual(audit.results.map(x=>x.event).sort(),['created','deleted','updated']);
+
   const draft={
     name:'Test currency position sizing',sourceLink:source,followerLink:follower,
     multiplier:2,maxFollowerLots:0.70,maxDailyLossPct:2,
