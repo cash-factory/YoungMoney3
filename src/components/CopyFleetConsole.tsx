@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowDownUp, CheckCircle2, CircleHelp, Copy, PauseCircle, Play, Plus, RefreshCw, Save, ShieldCheck, Square, X } from 'lucide-react';
+import { AlertTriangle, ArrowDownUp, CheckCircle2, CircleHelp, PauseCircle, Play, Plus, RefreshCw, Save, ShieldCheck, Square, X } from 'lucide-react';
 import { copyAction } from '@/lib/copyStudio';
 import { announceAction } from '@/lib/actionFeedback';
 import './copy-fleet-console.css';
