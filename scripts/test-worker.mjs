@@ -145,6 +145,7 @@ try {
   const firstCheckin=await presence('install');
   assert.equal(firstCheckin.device,devices[0].id);
   assert.equal(firstCheckin.name,'Trading Laptop - Main');
+  assert.equal(firstCheckin.pairedAs,'member@example.test','A paired PC can identify its authenticated YoungMoney3 owner.');
   // Cross-member device ownership is visible only through authenticated admin oversight.
   assert.equal((await call('admin',{action:'connector-directory'})).status,403,
     'Ordinary members must not enumerate the platform device inventory.');
