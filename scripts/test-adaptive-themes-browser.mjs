@@ -27,6 +27,7 @@ try {
       await page.reload({waitUntil:'domcontentloaded'});
       const taskModes=page.getByRole('group',{name:'Trading desk modes'});
       await taskModes.waitFor();
+      await page.waitForFunction(expected => document.documentElement.dataset.palette === expected, palette);
       assert.equal(await page.evaluate(()=>document.documentElement.dataset.palette),palette);
       assert.equal(await taskModes.getByRole('button').count(),4);
       await taskModes.getByRole('button',{name:/Understand/}).click();
