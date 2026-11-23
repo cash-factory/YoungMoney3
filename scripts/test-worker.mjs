@@ -434,6 +434,22 @@ try {
   assert.equal(reviewed.pre_reveal_verdict,'followed','The sealed value survives post-outcome editing.');
   assert.equal(reviewed.verdict,'changed');
 
+  // Restored backups must not turn client-supplied timestamps into verified blind evidence.
+  const importedRef='trade/phantom-restored-source';
+  const importedResponse=await call('data',{action:'upsert',table:'decision_reviews',payload:{
+    id:'review/'+subject+'/'+importedRef,reference:importedRef,verdict:'followed',
+    pre_reveal_verdict:'followed',pre_reveal_at:'2026-11-22T00:00:00Z',
+    account_id:linkedAccount,entry_time:'2026-11-22T09:00:00Z',
+  }});
+  assert.equal(importedResponse.status,200);
+  const imported=(await importedResponse.json()).data[0];
+  assert.equal(imported.pre_reveal_verdict,null,'Backup restore cannot forge an original judgement.');
+  assert.equal(imported.pre_reveal_at,null,'Backup restore cannot forge a server timestamp.');
+  assert.equal(imported.imported_unverified,true);
+  assert.equal((await call('data',{action:'update',table:'decision_reviews',id:imported.id,
+    filters:{updated_at:imported.updated_at},payload:{imported_unverified:false}})).status,403,
+    'A historical imported assessment cannot be relabeled as verified.');
+
   // Improvement Laboratory: owner-scoped experiments, durable draft-to-active locks.
   const draft={
     title:'Entry confirmation discipline',
@@ -445,6 +461,9 @@ try {
   };
   assert.equal((await call('data',{action:'insert',table:'improvement_experiments',
     payload:{...draft,strategy_id:'not-owned'}})).status,400);
+  assert.equal((await call('data',{action:'insert',table:'improvement_experiments',
+    payload:{...draft,source_reference:importedRef}})).status,400,
+    'An unlinked restored review cannot substantiate the source of an experiment.');
   assert.equal((await call('data',{action:'insert',table:'improvement_experiments',
     payload:{...draft,source_reference:'trade/not-a-review'}})).status,400,
     'Source decision must exist in the signed-in owner journal.');
