@@ -1,7 +1,8 @@
-"""YoungMoney3 DEMO-only MT5 copy execution adapter.
+"""YoungMoney3 explicitly consented DEMO/LIVE MT5 copy execution adapter.
 
 The normal connector remains read-only unless a specific follower was locally
-authorized AND the dashboard fleet is armed AND a short-lived signed-device
+authorized for its exact broker login, server and account mode AND its fleet
+is independently armed AND a short-lived signed-device
 task was issued for that follower. Trade execution occurs only in that
 follower's isolated /portable MT5 process. No website order_send or credentials.
 
@@ -29,7 +30,9 @@ def prepare_database(db):
     db.executescript("""
       CREATE TABLE IF NOT EXISTS copy_local_permissions (
         link TEXT PRIMARY KEY, approved INTEGER NOT NULL DEFAULT 0 CHECK(approved IN (0,1)),
-        changed_at_ms INTEGER NOT NULL
+        changed_at_ms INTEGER NOT NULL,
+        mode TEXT NOT NULL DEFAULT 'none' CHECK(mode IN ('none','demo','live')),
+        broker_login TEXT,broker_server TEXT
       );
       CREATE TABLE IF NOT EXISTS copy_local_tasks (
         task_id TEXT PRIMARY KEY, link TEXT NOT NULL, status TEXT NOT NULL,
@@ -53,19 +56,47 @@ def prepare_database(db):
         last_execution_result TEXT
       );
     """)
+    # Existing local databases predate the live-mode fields. These additive
+    # columns preserve old monitoring data, but an old approval never becomes
+    # a LIVE approval automatically.
+    existing={row[1] for row in db.execute("PRAGMA table_info(copy_local_permissions)")}
+    if "mode" not in existing:
+        db.execute("ALTER TABLE copy_local_permissions ADD COLUMN mode TEXT NOT NULL DEFAULT 'none'")
+    if "broker_login" not in existing:
+        db.execute("ALTER TABLE copy_local_permissions ADD COLUMN broker_login TEXT")
+    if "broker_server" not in existing:
+        db.execute("ALTER TABLE copy_local_permissions ADD COLUMN broker_server TEXT")
+
+def authorization_mode(db,link,account=None):
+    row=db.execute("SELECT approved,mode,broker_login,broker_server FROM copy_local_permissions WHERE link=?",
+                   (link,)).fetchone()
+    if not row or row[0]!=1 or row[1] not in ("demo","live"):
+        return "none"
+    if row[1]=="live":
+        if account is None or str(getattr(account,"login",""))!=str(row[2]) or (
+            str(getattr(account,"server","")).casefold()!=str(row[3] or "").casefold()):
+            return "none"
+    return row[1]
 
 def consent(db,link):
-    row=db.execute("SELECT approved FROM copy_local_permissions WHERE link=?",(link,)).fetchone()
-    return bool(row and row[0]==1)
+    return authorization_mode(db,link)!="none"
 
-def set_consent(db,link,approved):
-    # Caller MUST be the local Windows GUI after an explicit confirmation.
-    # This function never follows a remote device command.
+def set_consent(db,link,approved,mode="demo",login=None,server=None):
+    # Caller MUST be the local GUI after explicit account-specific approval.
+    if approved and mode not in ("demo","live"):
+        raise ValueError("Unsupported account execution permission")
+    if approved and mode=="live" and (
+        not str(login or "").isdecimal() or not str(server or "").strip()):
+        raise ValueError("Live copier requires a bound login and broker server")
     with db:
-        db.execute("""INSERT INTO copy_local_permissions VALUES(?,?,?)
+        db.execute("""INSERT INTO copy_local_permissions
+          (link,approved,changed_at_ms,mode,broker_login,broker_server) VALUES(?,?,?,?,?,?)
           ON CONFLICT(link) DO UPDATE SET approved=excluded.approved,
-          changed_at_ms=excluded.changed_at_ms""",
-          (link,int(bool(approved)),int(time.time()*1000)))
+          changed_at_ms=excluded.changed_at_ms,mode=excluded.mode,
+          broker_login=excluded.broker_login,broker_server=excluded.broker_server""",
+          (link,int(bool(approved)),int(time.time()*1000),
+           mode if approved else "none",str(login) if approved and login is not None else None,
+           str(server) if approved and server is not None else None))
 
 def receipt(status,code,*,ticket=None,retcode=None,details=None):
     return {"status":status,"code":code,"brokerTicket":str(ticket) if ticket is not None else None,
@@ -130,15 +161,24 @@ def _daily_net_pnl(mt5,account):
         net+=D(getattr(item,"profit",0))
     return net
 
-def _validate_demo(mt5,account,terminal):
-    if int(getattr(account,"trade_mode",-1))!=0:
-        raise CopyExecutionError("real_or_contest_account_execution_blocked")
+def _validate_account(mt5,account,terminal,mode):
+    expected=0 if mode=="demo" else 2 if mode=="live" else -1
+    if int(getattr(account,"trade_mode",-1))!=expected:
+        raise CopyExecutionError("broker_account_mode_mismatch")
     if not getattr(account,"trade_allowed",False):
         raise CopyExecutionError("investor_or_restricted_broker_access")
+    if not getattr(account,"trade_expert",mode=="demo"):
+        raise CopyExecutionError("broker_algorithmic_trading_not_authorized")
     if terminal is None or not getattr(terminal,"connected",False):
         raise CopyExecutionError("mt5_terminal_offline")
-    if not getattr(terminal,"trade_allowed",True):
+    if not getattr(terminal,"trade_allowed",False):
         raise CopyExecutionError("mt5_autotrading_disabled")
+    if mode=="live" and getattr(terminal,"tradeapi_disabled",True):
+        raise CopyExecutionError("mt5_python_trading_api_disabled")
+    actual=mt5.account_info()
+    if actual is None or str(getattr(actual,"login",""))!=str(getattr(account,"login","")) or (
+        str(getattr(actual,"server","")).casefold()!=str(getattr(account,"server","")).casefold()):
+        raise CopyExecutionError("terminal_account_identity_changed")
 
 def _mapping(db,link,key,kind):
     row=db.execute("SELECT ticket,kind,source_volume,follower_volume FROM copy_local_mappings WHERE link=? AND source_key=?",(link,key)).fetchone()
@@ -290,8 +330,11 @@ def execute(mt5,db,link,task,account,*,now_ms=None):
     now_ms=now_ms or int(time.time()*1000)
     if not _identity(task):
         return receipt("rejected","invalid_task_identity")
-    if not consent(db,link):
-        return receipt("rejected","local_demo_execution_not_consented")
+    mode=task.get("executionMode")
+    if mode not in ("demo","live"):
+        return receipt("rejected","copy_execution_mode_missing")
+    if authorization_mode(db,link,account)!=mode:
+        return receipt("rejected","account_bound_execution_permission_missing")
     existing=db.execute("SELECT status,result FROM copy_local_tasks WHERE task_id=? AND link=?",
                         (task["id"],link)).fetchone()
     if existing:
@@ -300,8 +343,13 @@ def execute(mt5,db,link,task,account,*,now_ms=None):
     if now_ms>int(task.get("expiresAt") or 0) or int(task["expiresAt"])-now_ms>MAX_TASK_AGE_MS:
         return receipt("rejected","expired_or_future_copy_instruction")
     try:
-        _validate_demo(mt5,account,mt5.terminal_info())
+        _validate_account(mt5,account,mt5.terminal_info(),mode)
+        risk=task.get("payload",{}).get("risk",{})
+        if mode=="live" and D(risk.get("maxDailyLossPct",99))>D("5"):
+            raise CopyExecutionError("live_daily_loss_policy_exceeds_five_percent")
         request,size,marker,info,pending=_request(mt5,db,link,task,account,now_ms)
+        if mode=="live" and size is not None and D(size["risk_pct_equity"])>D("2"):
+            raise CopyExecutionError("live_order_risk_exceeds_two_percent_equity")
         if request["action"] in (mt5.TRADE_ACTION_DEAL,mt5.TRADE_ACTION_PENDING):
             candidates=_fill_candidates(mt5,info,pending)
             if not candidates:
