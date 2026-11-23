@@ -362,7 +362,7 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
     if (input.action === 'delete' && isFill) return response({ error: 'Broker fills cannot be deleted from the journal.' }, 403);
     if (input.action === 'update') {
       if(table==='decision_reviews' && !filters.updated_at) return response({error:'Refresh the review before editing.'},428);
-      if(table==='decision_reviews' && ('pre_reveal_verdict' in patch || 'pre_reveal_at' in patch))
+      if(table==='decision_reviews' && ('pre_reveal_verdict' in (patch as Record<string, unknown>) || 'pre_reveal_at' in (patch as Record<string, unknown>)))
         return response({error:'The recorded pre-reveal judgement cannot be changed.'},403);
       if(table==='improvement_experiments') {
         const locked=['title','hypothesis','single_change','metric','start_date','end_date','baseline_days','minimum_samples','strategy_id','account_id'];
