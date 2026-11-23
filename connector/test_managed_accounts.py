@@ -193,7 +193,7 @@ class PresenceTests(unittest.TestCase):
         self.assertEqual([e.get("name") for e in events],["Trading Laptop","Office Laptop"])
         self.assertEqual(request.call_args.args[0]["version"],"0.5.3-rc1")
 
-    def test_duplicate_installation_conflict_does_not_revoke_pairing(self):
+    def test_duplicate_installation_conflict_halts_capture_without_erasing_pairing(self):
         error=HTTPError("https://example.test",409,"Conflict",{},
                         io.BytesIO(b'{"code":"pc_already_paired"}'))
         stop=threading.Event()
@@ -201,7 +201,8 @@ class PresenceTests(unittest.TestCase):
         service=DevicePresence(Mock(side_effect=[error]),Mock(sources=lambda:[]),
                                events.append,stop)
         self.assertFalse(service.check())
-        self.assertFalse(stop.is_set())
+        self.assertTrue(stop.is_set(), "A disputed installation cannot keep monitoring.")
+        self.assertIsNone(service.snapshot(), "Prior monitoring policy must not survive a conflict.")
         self.assertEqual(events[0]["state"],"pc-identity-conflict")
 
     def test_only_explicit_revocation_requests_repair(self):
