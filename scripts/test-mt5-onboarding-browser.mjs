@@ -33,7 +33,7 @@ try {
     await page.locator('#broker').fill('Example Broker');
     await page.locator('#server').fill('Example-Private-Demo-7');
     releaseDirectory();
-    await page.locator('#server-choice option[value="Example-Demo"]').waitFor();
+    await page.locator('#server-choice option[value="Example-Demo"]').waitFor({state:'attached'});
     assert.equal(await page.locator('#broker').inputValue(),'Example Broker');
     assert.equal(await page.locator('#server').inputValue(),'Example-Private-Demo-7',
       'Background directory lookup must not erase a manually entered exact server.');
