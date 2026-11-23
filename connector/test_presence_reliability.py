@@ -69,6 +69,7 @@ class PresenceRecoveryTests(unittest.TestCase):
         self.assertFalse(monitor.check())
         self.assertEqual(self.events[-1]["state"],"pc-revoked")
         self.assertTrue(self.stop.is_set())
+        self.assertIsNone(monitor.snapshot())
 
     def test_network_401_without_revocation_code_remains_retryable(self):
         monitor=self.make(lambda _:(_ for _ in ()).throw(http_error(401,{"code":"temporary_auth"})))
@@ -80,7 +81,24 @@ class PresenceRecoveryTests(unittest.TestCase):
         monitor=self.make(lambda _:(_ for _ in ()).throw(http_error(409,{"code":"pc_identity_mismatch"})))
         self.assertFalse(monitor.check())
         self.assertEqual(self.events[-1]["state"],"pc-identity-conflict")
-        self.assertFalse(self.stop.is_set())
+        self.assertTrue(self.stop.is_set(),
+                        "Identity conflict must stop capture instead of retrying under stale authorization.")
+
+    def test_identity_conflict_invalidates_previous_monitoring_policy_without_deleting_pairing(self):
+        responses=[{"device":"pc-1","paused":["link-a"]}]
+        def send(_):
+            if responses:
+                return responses.pop()
+            raise http_error(409,{"code":"pc_identity_mismatch"})
+        monitor=self.make(send)
+        self.assertTrue(monitor.check())
+        self.assertEqual(monitor.snapshot()["paused"],["link-a"])
+        self.assertFalse(monitor.check())
+        self.assertIsNone(monitor.snapshot(),
+                          "A rejected installation must not reuse previous monitoring permissions.")
+        self.assertTrue(self.stop.is_set())
+        self.assertEqual([event["state"] for event in self.events],
+                         ["pc-online","pc-identity-conflict"])
 
     def test_malformed_server_response_is_not_success(self):
         monitor=self.make(lambda _:{"device":"pc-1","paused":"yes"})
