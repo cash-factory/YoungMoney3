@@ -27,7 +27,12 @@ export function StrategyTestingPage({ initialMode = 'sessions' }: { initialMode?
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [mode, setMode] = useState(initialMode);
 
-  useEffect(() => setMode(initialMode), [initialMode]);
+  useEffect(() => {
+    let labIntent = false;
+    try { labIntent = Boolean(user?.id && sessionStorage.getItem('ymfx:lab-intent:v1:' + user.id)); }
+    catch { /* Session storage may be disabled. */ }
+    setMode(labIntent ? 'lab' : initialMode);
+  }, [initialMode, user?.id]);
 
   const handleSave = async (data: StrategyTestSessionInput, id?: string) => {
     await upsertSession(data, id);
