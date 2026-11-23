@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Activity, ArrowUpRight, BookOpenCheck, Brain, CalendarRange, CircleHelp, Compass,
   LockKeyhole, RefreshCw, ShieldCheck, TrendingUp } from 'lucide-react';
 import type { Trade } from '@/lib/types';
@@ -22,7 +22,7 @@ function EvidenceNumber({ measure, suffix = '%' }: { measure: PatternMetric; suf
   </strong>;
 }
 function MetricCard({ icon, label, measure, note }: {
-  icon: React.ReactNode; label: string; measure: PatternMetric; note: string;
+  icon: ReactNode; label: string; measure: PatternMetric; note: string;
 }) {
   return <article className="ym-pattern-metric">
     <div className="ym-pattern-metric-header"><span className="ym-pattern-metric-icon" aria-hidden="true">{icon}</span>
@@ -59,7 +59,7 @@ export function PersonalTradingPatterns({ owner, trades, accountId, accountName,
     accountId, window, minimum: 12,
   }), [trades, rows, accountId, window]);
 
-  return <section className="ym-personal-patterns" id="ym-personal-patterns" aria-label="Personal trading patterns">
+  return <section className="ym-personal-patterns" id="ym-personal-patterns" aria-label="Personal trading patterns" tabIndex={-1}>
     <header className="ym-pattern-heading">
       <div className="ym-pattern-heading-copy">
         <p className="ym-pattern-kicker"><Brain size={15}/> YOUR PRACTICE / REFLECTIVE PATTERNS</p>
