@@ -174,18 +174,21 @@ export function SampleReplay({ onClose }: { onClose: () => void }) {
 export function TradeReplay({ target, onClose }: { target: ReplayTarget; onClose: () => void }) {
   const { user } = useAuth();
   const { rows, loading, error, refresh } = useDecisionReviews(user?.id);
+  const [initialReady, setInitialReady] = useState(false);
+  useEffect(() => {
+    if (!loading && !error) setInitialReady(true);
+  }, [loading, error]);
   const previous = rows.find((r) => r.reference === referenceFor(target));
   return (
     <Modal open title="Decision replay" onClose={onClose}>
-      {error ? (
+      {error && (
         <p role="alert">
           {error}{' '}
-          <button className="btn-secondary" onClick={refresh}>
-            Retry
-          </button>
+          <button className="btn-secondary" onClick={refresh}>Retry</button>
         </p>
-      ) : loading ? (
-        <p role="status">Opening your decision…</p>
+      )}
+      {!initialReady ? (
+        <p role="status">{error ? 'Review unavailable. Retry to continue.' : 'Opening your decision…'}</p>
       ) : user ? (
         <ReplayForm
           key={referenceFor(target)}
