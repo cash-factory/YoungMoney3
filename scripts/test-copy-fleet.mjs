@@ -12,7 +12,7 @@ const mf=new Miniflare(convertV4MiniflareOptions({
   workers:[{name:'copy-fleet',modules:true,script:bundle.outputFiles[0].text,
     compatibilityDate:'2026-10-10',d1Databases:['DB'],
     durableObjects:{AUTH_KDF:{className:'AuthKdf',useSQLite:true}},
-    bindings:{PILOT_INVITE_CODE:'fleet-demo',MT5_ALLOW_LIVE:'false'}}],port:0,
+    bindings:{PILOT_INVITE_CODE:'fleet-demo',MT5_ALLOW_LIVE:'false',MT5_LIVE_COPY_EXECUTION:'true'}}],port:0,
 }));
 const id=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
 const now=Date.now();
