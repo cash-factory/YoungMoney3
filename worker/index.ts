@@ -366,9 +366,9 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
         return response({error:'The recorded pre-reveal judgement cannot be changed.'},403);
       if(table==='improvement_experiments') {
         const locked=['title','hypothesis','single_change','metric','start_date','end_date','baseline_days','minimum_samples','strategy_id','account_id'];
-        if(old.status!=='draft' && locked.some(key=>key in patch && JSON.stringify(patch[key])!==JSON.stringify(old[key])))
+        if(old.status!=='draft' && locked.some(key=>key in patch! && JSON.stringify((patch as Record<string, unknown>)[key])!==JSON.stringify(old[key])))
           return response({error:'An active study design is locked. Create a new study for a different hypothesis.'},409);
-        if((old.status==='active' && patch.status==='draft') || (old.status==='completed' && patch.status && patch.status!=='completed'))
+        if((old.status==='active' && (patch as Record<string, unknown>).status==='draft') || (old.status==='completed' && (patch as Record<string, unknown>).status && (patch as Record<string, unknown>).status!=='completed'))
           return response({error:'An activated experiment cannot return to an earlier status.'},409);
       }
       if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return response({ error: 'Supply a record patch.' }, 400);
