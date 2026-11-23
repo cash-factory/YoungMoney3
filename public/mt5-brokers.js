@@ -39,7 +39,7 @@ function brokerEditDistance(a,b) {
   }
   return previous[b.length];
 }
-function buildBrokerRegistry(links=[],demoOnly=true) {
+function buildBrokerRegistry(links=[],demoOnly=true,catalogue=[]) {
   const rows=new Map();
   for(const entry of mt5Directory) {
     const key=normalizeBrokerName(entry.broker);
@@ -47,6 +47,25 @@ function buildBrokerRegistry(links=[],demoOnly=true) {
     for(const name of entry.demo) servers.set(name.toLowerCase(),{name,mode:'Demo',origin:'directory'});
     if(!demoOnly) for(const name of entry.live) servers.set(name.toLowerCase(),{name,mode:'Live',origin:'directory'});
     rows.set(key,{name:entry.broker,aliases:entry.aliases||[],servers});
+  }
+  // External listings are search hints, not authenticated MetaQuotes
+  // server discovery. Preserve exact names for eventual broker authorization.
+  // Never infer a valid server from spelling, aliases or an account login.
+  for(const entry of catalogue) {
+    if(!entry||typeof entry.name!=='string'||!Array.isArray(entry.servers))continue;
+    const key=normalizeBrokerName(entry.name);
+    if(!key)continue;
+    if(!rows.has(key))rows.set(key,{name:entry.name,aliases:[],servers:new Map()});
+    const row=rows.get(key);
+    for(const item of entry.servers) {
+      if(!item||typeof item.name!=='string'||!item.name.trim())continue;
+      if(demoOnly&&item.type==='real')continue;
+      const id=item.name.toLowerCase();
+      if(!row.servers.has(id))row.servers.set(id,{
+        name:item.name,mode:item.type==='demo'?'Demo':item.type==='real'?'Live':'Unclassified',
+        origin:'external'
+      });
+    }
   }
   for(const link of links) {
     if(link.status!=='connected'||!link.company||!link.server||(demoOnly && link.trade_mode===2)) continue;
@@ -137,8 +156,8 @@ function getServerSuggestions(typed,registry,brokerName,demoOnly=true) {
   return suggestions.slice(0,8);
 }
 
-function populateMt5Brokers({links=[],demoOnly=true}) {
-  const registry=buildBrokerRegistry(links,demoOnly);
+function populateMt5Brokers({links=[],demoOnly=true,catalogue=[],catalogueUpdatedAt=null}) {
+  let registry=buildBrokerRegistry(links,demoOnly,catalogue);
   const broker=document.getElementById('broker');
   const suggestions=document.getElementById('broker-results');
   const choices=document.getElementById('server-choice');
@@ -172,21 +191,23 @@ function populateMt5Brokers({links=[],demoOnly=true}) {
     const normalized=normalizeBrokerName(broker.value);
     return registry.find(row=>[row.name,...row.aliases].some(name=>normalizeBrokerName(name)===normalized));
   }
-  function updateServerChoices(){
+  function updateServerChoices(preserveSelection=false){
+    const previousChoice=choices.value;
+    const previousManual=exact.value;
     const row=matchingBroker();
     choices.replaceChildren(new Option('Enter my exact MT5 server',''));
     const serverList=row?Array.from(row.servers.values()).sort((a,b)=>a.name.localeCompare(b.name)):[];
     for(const server of serverList) {
-      const label=server.name+' · '+server.mode+(server.origin==='linked'?' (previously linked)':' (suggested)');
+      const label=server.name+' · '+server.mode+(server.origin==='linked'?' (previously linked)':server.origin==='external'?' (external directory, unverified)':' (suggested)');
       choices.add(new Option(label,server.name));
     }
     choices.closest('label').hidden=serverList.length===0;
-    choices.value='';
-    exact.value='';
+    choices.value=preserveSelection&&serverList.some(item=>item.name===previousChoice)?previousChoice:'';
+    exact.value=preserveSelection?previousManual:'';
     serverHelp.textContent='Search server names with spaces or hyphens. Choose a known exact name when available; other formatting examples are unverified.';
     selectServer();
     if(row) help.textContent='Selected broker: '+row.name+'. Choose the exact server assigned to your account. Suggested server names are not automatically verified.';
-    else if(broker.value.trim()) help.textContent='No exact broker selection yet. You can choose a suggestion or enter the exact server shown in MetaTrader 5.';
+    else if(broker.value.trim()) help.textContent='Choose a broker from the list or enter the exact server assigned to your account. The external directory may be incomplete.';
     else help.textContent='Start typing a broker name. For unlisted brokers, enter the server shown in MetaTrader 5.';
   }
   function chooseBroker(row){
@@ -247,6 +268,9 @@ function populateMt5Brokers({links=[],demoOnly=true}) {
     if(event.target!==broker&&!suggestions.contains(event.target))hideSuggestions();
   });
   choices.addEventListener('change',selectServer);
+  if(catalogue.length) {
+    help.title='External broker directory last updated: '+(catalogueUpdatedAt||'unknown')+'. This is not MetaQuotes live server validation.';
+  }
   function selectServerSuggestion(item){
     exact.value=item.name;
     choices.value='';
@@ -312,4 +336,19 @@ function populateMt5Brokers({links=[],demoOnly=true}) {
     if(event.target!==exact&&!serverResults.contains(event.target))hideServerSuggestions();
   });
   updateServerChoices();
+  // The remote directory is optional and arrives after the first local render.
+  // Updating it must not erase a broker/server/password the user is typing.
+  return {
+    updateCatalogue(next,updatedAt=null) {
+      if(!Array.isArray(next))return;
+      registry=buildBrokerRegistry(links,demoOnly,next);
+      updateServerChoices(true);
+      if(document.activeElement===broker)renderSuggestions();
+      if(document.activeElement===exact&&!exact.disabled)renderServerSuggestions();
+      if(next.length) {
+        help.title='External, unverified directory updated: '+(updatedAt||'unknown')+
+          '. Confirm the exact server in your broker account before connecting.';
+      }
+    }
+  };
 }
