@@ -1,4 +1,5 @@
 name: One-off v0.5.5 MT5 cash-capture hotfix staging prerelease
+# Revalidated after aligning PC-presence version assertions with connector/version.py.
 on:
   push:
     branches: [fix/mt5-namedtuple-capture-20261123]
