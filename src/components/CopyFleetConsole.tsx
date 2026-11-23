@@ -144,7 +144,7 @@ export function CopyFleetConsole(){
         id:picked.id,sourceLots:Number(lots),sourceEquity:Number(source?.broker_equity),
         entry:Number(entry),stop:Number(stop),direction:side,
       });
-      setPreview(answer.previews);setNotice('Planning estimate only. Each follower will calculate actual risk using MT5 before any demo submission.');
+      setPreview(answer.previews);setNotice('Planning estimate only. Each follower independently recalculates risk and broker requirements before a demo or live order; no trade was submitted by this preview.');
     }catch(e){setAlert(err(e));}finally{setBusy('');}
   }
   return <section className="ym-cf" aria-label="Multi-account Copy Fleet control centre">
