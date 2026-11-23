@@ -93,7 +93,9 @@ export function CopyFleetConsole(){
   const riskPass=useMemo(()=>draft.targets.every(t=>t.value>0&&t.maxLots>0&&t.maxDailyLossPct>0&&
     (t.mode!=='risk_pct_equity'||t.value<=10)&&
     (t.mode!=='equity_ratio'||t.value<=3)&&
-    (t.mode!=='lot_multiplier'||t.value<=5)),[draft.targets]);
+    (t.mode!=='lot_multiplier'||t.value<=5)&&
+    (draft.executionMode!=='live'||(t.maxDailyLossPct<=5&&
+      (t.mode!=='risk_pct_equity'||t.value<=2)))),[draft.targets,draft.executionMode]);
   const canSave=draft.name.trim().length>=2&&Boolean(source)&&sourceAllowed(source!)&&draft.targets.length>0&&riskPass&&
     draft.targets.every(t=>accounts.some(a=>a.id===t.link&&a.trade_mode===expectedTradeMode)&&t.link!==draft.sourceLink &&
       parseSymbolMapText(mappingInputs[t.link]??symbolMapText(t.symbolMap))!==null);
@@ -195,6 +197,7 @@ export function CopyFleetConsole(){
           </select></label>
         </div>
         <div className="ym-cf-smallhead ym-cf-target-header"><strong>FOLLOWER ALLOCATIONS</strong><span>{draft.targets.length} / 24</span></div>
+        {draft.executionMode==='live'&&<p className="ym-cf-note" role="note"><strong>REAL MONEY MODE:</strong> account-specific Windows authorization and broker verification are mandatory. Per-entry stop risk is capped at 2% of follower equity and configured daily loss at 5%. Markets can gap beyond stops, and costs may exceed estimates.</p>}
         {draft.targets.map((target,i)=>{
           const a=accounts.find(x=>x.id===target.link);
           const report=reports.get(target.link);
