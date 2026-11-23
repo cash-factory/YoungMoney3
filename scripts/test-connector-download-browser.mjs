@@ -4,11 +4,11 @@ import { chromium } from 'playwright';
 
 const base=(process.env.YM3_PREVIEW_URL || 'http://127.0.0.1:4173/').replace(/\/$/,'');
 const api='https://api.github.com/repos/cash-factory/YoungMoney3/releases?per_page=30';
-const tag='staging-connector-v0.5.4-rc1';
+const tag='staging-connector-v0.5.7-rc1';
 const root='https://github.com/cash-factory/YoungMoney3/releases/download/'+tag+'/';
 const exe=root+'YoungMoney3.Connector.exe';
 const checksum=exe+'.sha256';
-const digest='1057f2c94777f3a99c31647a16f119012406e0009247602e28705a0a944ea7b1';
+const digest='4fe6ca4278f608ebb876d327f1672e694fe7b916e854a2b21a276bd2f0d4e4fb';
 const verified=[{
   tag_name:tag,prerelease:true,draft:false,published_at:'2026-11-23T06:29:29Z',
   assets:[
@@ -28,7 +28,7 @@ try{
     const response=await page.goto(base+'/connector-download.html',{waitUntil:'domcontentloaded'});
     assert.equal(response?.status(),200,'The compiled site must serve its connector download page.');
     await page.getByRole('status').filter({hasText:/Staging prerelease is available/}).waitFor();
-    const button=page.getByRole('link',{name:'Download Connector v0.5.4-rc1'});
+    const button=page.getByRole('link',{name:'Download Connector v0.5.7-rc1'});
     assert.equal(await button.getAttribute('href'),exe,
       'One-click install must target the verified official release executable.');
     assert.equal(await page.getByRole('link',{name:'Download SHA-256 checksum'}).getAttribute('href'),checksum);
@@ -44,7 +44,7 @@ try{
     await page.route(api,route=>route.fulfill({status:429,contentType:'application/json',body:'{}'}));
     await page.reload({waitUntil:'domcontentloaded'});
     await page.getByRole('status').filter({hasText:/Automatic release check unavailable/}).waitFor();
-    assert.equal(await page.getByRole('link',{name:'Download Connector v0.5.4-rc1'}).getAttribute('href'),exe);
+    assert.equal(await page.getByRole('link',{name:'Download Connector v0.5.7-rc1'}).getAttribute('href'),exe);
     assert.equal((await page.locator('#digest').textContent()).trim(),digest);
 
     // A draft or URL from an unrelated host must never replace trusted links.
@@ -55,7 +55,7 @@ try{
       ])}));
     await page.reload({waitUntil:'domcontentloaded'});
     await page.getByRole('status').filter({hasText:/Latest release could not be verified automatically/}).waitFor();
-    assert.equal(await page.getByRole('link',{name:'Download Connector v0.5.4-rc1'}).getAttribute('href'),exe);
+    assert.equal(await page.getByRole('link',{name:'Download Connector v0.5.7-rc1'}).getAttribute('href'),exe);
     assert.deepEqual(exceptions,[]);
     await context.close();
   }

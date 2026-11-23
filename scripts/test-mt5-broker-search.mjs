@@ -96,3 +96,28 @@ test('server search is keyboard accessible and submit uses the literal selected 
   assert.match(login,/byId\('server-choice'\)\.value \|\| byId\('server'\)\.value\.trim\(\)/);
   assert.match(source,/NOT a verified server/);
 });
+
+test('external broker catalogue augments local server discovery but never silently validates a login',()=>{
+  const remote=[{name:'Exness',servers:[
+    {name:'Exness-MT5Trial9',type:'demo'},
+    {name:'Exness-MT5Real9',type:'real'},
+  ]},{name:'Example Broker',servers:[{name:'Example-Demo',type:'demo'}]}];
+  const registry=buildBrokerRegistry([],true,remote);
+  const exness=registry.find(row=>row.name==='Exness');
+  assert.ok(exness.servers.has('exness-mt5trial9'));
+  assert.equal(exness.servers.get('exness-mt5trial9').origin,'external');
+  assert.equal(exness.servers.has('exness-mt5real9'),false);
+  assert.equal(getBrokerMatches('example brker',registry)[0].name,'Example Broker');
+  const all=buildBrokerRegistry([],false,remote);
+  assert.equal(all.find(row=>row.name==='Exness').servers.has('exness-mt5real9'),true);
+});
+test('account setup requests server directory separately from encrypted login and preserves the typed server',()=>{
+  const login=readFileSync('public/mt5-login.js','utf8');
+  assert.match(login,/api\('broker-directory',\{\}\)/);
+  assert.match(login,/brokerFinder\.updateCatalogue\(directory\.brokers,directory\.updatedAt\)/);
+  assert.match(login,/crypto\.subtle\.encrypt/);
+  assert.match(login,/api\('connect',\{device:device\.id/);
+  assert.match(source,/updateCatalogue\(next,updatedAt=null\)/);
+  assert.match(source,/preserveSelection\?previousManual:''/);
+  assert.match(source,/origin:'external'/);
+});

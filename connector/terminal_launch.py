@@ -19,6 +19,16 @@ def start_managed_terminal(slot):
         raise TerminalLaunchError("Only an isolated YoungMoney3-managed terminal may start in the background.")
     if not executable.is_file():
         raise TerminalLaunchError("Managed MetaTrader executable is unavailable.")
+    # The built-in MT5 MCP server is unrelated to MetaTrader5 Python IPC.
+    # Disable the unused listener only in YM-FX-owned portable profiles to
+    # avoid a port-22346 collision when the same PC monitors several accounts.
+    from managed_mcp import disable_internal_mcp
+    try:
+        disable_internal_mcp(executable.parent)
+    except (OSError, ValueError):
+        # Compatibility with future MT5 configuration formats must not block
+        # authentication; diagnostics remain available in terminal Journal.
+        pass
     kwargs={"cwd":str(executable.parent)}
     if os.name=="nt":
         settings=subprocess.STARTUPINFO()
