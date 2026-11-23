@@ -468,7 +468,8 @@ class ConnectorApp:
         self.copy_controls = self._actions(detail, [
             ("Account insights", self.inspect_selected_account, {"quiet": True}),
             ("Authorize DEMO copier", self.authorize_selected_demo_copy, {}),
-            ("Disable demo copier", self.disable_selected_demo_copy, {"quiet": True}),
+            ("Authorize LIVE copier", self.authorize_selected_live_copy, {}),
+            ("Disable copier on account", self.disable_selected_demo_copy, {"quiet": True}),
             ("Open Copy Studio", lambda: webbrowser.open(STAGING_URL + "/#copy-studio"), {"quiet": True})],
             minimum=158)
         self.copy_controls.pack_configure(pady=(10, 0))
@@ -766,7 +767,17 @@ class ConnectorApp:
             raise SessionError("Select a linked broker session before changing copy permissions.")
         return session["terminal"], str(linked["link"])
 
-    def _copy_consent_worker(self, slot, link, allow):
+    def _copy_account_identity(self, link):
+        path = self._copy_database_path()
+        if not path.is_file():
+            raise SessionError("The MT5 capture database is not yet initialized.")
+        with sqlite3.connect(path, timeout=20) as db:
+            row=db.execute("SELECT login,server FROM links WHERE link=?", (link,)).fetchone()
+        if not row or not str(row[0]).isdecimal() or not row[1]:
+            raise SessionError("This MT5 account has no verified broker login and server.")
+        return str(row[0]),str(row[1])
+
+    def _copy_consent_worker(self, slot, link, allow, mode="demo"):
         try:
             filename = self._copy_database_path()
             if not filename.is_file():
@@ -774,8 +785,13 @@ class ConnectorApp:
             with sqlite3.connect(filename, timeout=20) as db:
                 db.execute("PRAGMA busy_timeout=20000")
                 prepare_copy_database(db)
-                update_copy_consent(db, link, allow)
-            self.events.put({"state":"copy-consent-updated","slot":slot,"enabled":allow})
+                row=db.execute("SELECT login,server FROM links WHERE link=?", (link,)).fetchone()
+                if allow and (not row or not str(row[0]).isdecimal() or not row[1]):
+                    raise SessionError("Verified broker account login is unavailable.")
+                update_copy_consent(db, link, allow, mode=mode,
+                                    login=row[0] if row else None,
+                                    server=row[1] if row else None)
+            self.events.put({"state":"copy-consent-updated","slot":slot,"enabled":allow,"mode":mode})
         except Exception:
             self.events.put({"state":"copy-consent-error","slot":slot})
 
@@ -799,8 +815,36 @@ class ConnectorApp:
             self.banner_var.set("No demo execution permission was granted.")
             return
         self.banner_var.set("Authorizing this DEMO follower locally…")
-        threading.Thread(target=self._copy_consent_worker,args=(slot,link,True),
+        threading.Thread(target=self._copy_consent_worker,args=(slot,link,True,"demo"),
                          daemon=True,name="YMFX-demo-consent").start()
+
+    def authorize_selected_live_copy(self):
+        try:
+            slot, link = self._selected_copy_target()
+            login, server = self._copy_account_identity(link)
+        except (SessionError, StopIteration) as error:
+            messagebox.showwarning("Live copy authorization", str(error), parent=self.root)
+            return
+        if not messagebox.askyesno("REAL MONEY — authorize selected MT5 account",
+            "You are granting permission for this exact MT5 account to receive REAL broker "
+            "orders when its LIVE fleet is separately armed on the website. "
+            "Market orders, pending orders, SL/TP changes and closes may place real money "
+            "at risk. Broker prices can slip, gaps can exceed stop loss, and an emergency "
+            "pause cannot recall orders already sent. No other MT5 account is authorized.\n\n"
+            + "Login: " + login + "\nServer: " + server + "\n\n"
+            + "Only continue if you own/control this account and your broker allows copying.",
+            parent=self.root):
+            return
+        phrase="LIVE "+login
+        answer=simpledialog.askstring("Confirm REAL MONEY authorization",
+            "Type "+phrase+" to authorize this specific account for live trade copying:",
+            parent=self.root)
+        if answer!=phrase:
+            self.banner_var.set("No live broker execution permission was granted.")
+            return
+        self.banner_var.set("Saving account-bound LIVE copying permission locally…")
+        threading.Thread(target=self._copy_consent_worker,args=(slot,link,True,"live"),
+                         daemon=True,name="YMFX-live-consent").start()
 
     def disable_selected_demo_copy(self):
         try:
@@ -809,7 +853,7 @@ class ConnectorApp:
             messagebox.showwarning("Copy permissions", str(error), parent=self.root)
             return
         # Revocation is always available; no confirmation needed to halt new work.
-        self.banner_var.set("Revoking local demo execution permission…")
+        self.banner_var.set("Revoking local trade-copy execution permission…")
         threading.Thread(target=self._copy_consent_worker,args=(slot,link,False),
                          daemon=True,name="YMFX-demo-disable").start()
 
@@ -1297,12 +1341,13 @@ class ConnectorApp:
             self._log(message)
         elif state == "copy-consent-updated":
             self.copy_authorization_by_slot[slot] = bool(item.get("enabled"))
-            self.banner_var.set("DEMO copy execution authorized for selected account only." if item.get("enabled")
-                                else "DEMO copy execution disabled for selected account.")
-            self._log("Local DEMO copy permission changed. Other accounts remain independent.")
+            mode=item.get("mode","demo").upper()
+            self.banner_var.set((mode+" copy execution authorized for selected account only.") if item.get("enabled")
+                                else "Trade copy execution disabled for selected account.")
+            self._log("Local account-specific copy authorization updated. Other accounts remain independent.")
             self._selected_session_details()
         elif state == "copy-consent-error":
-            self.banner_var.set("Local demo permission could not be saved. Review the account and capture database.")
+            self.banner_var.set("Local account execution permission could not be saved. Review the verified broker session.")
         elif state == "copy-account-details":
             self._show_copy_account_details(item)
         elif state == "copy-account-details-error":
