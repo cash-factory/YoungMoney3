@@ -17,6 +17,8 @@ export interface DecisionReview {
   /** The first judgement recorded before this interface reveals the outcome. Immutable after insertion. */
   pre_reveal_verdict?: Verdict | null;
   pre_reveal_at?: string | null;
+  /** A restored review does not retain server-verifiable blind-assessment provenance. */
+  imported_unverified?: boolean;
   post_outcome_note?: string | null;
   trigger: string;
   note: string;
