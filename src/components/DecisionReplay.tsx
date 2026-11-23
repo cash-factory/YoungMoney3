@@ -367,7 +367,7 @@ function ReplayForm({
         <li data-current={show}>03 / Compare outcome</li>
       </ol>
       <div className="ym-replay-guidance" role="note">
-        `${show ? 'Outcome revealed · compare your original judgement with the evidence.' : 'Outcome hidden · examine the original information before judging your decision.'}`
+        {show ? 'Outcome revealed · compare your original judgement with the evidence.' : 'Outcome hidden · examine the original information before judging your decision.'}
       </div>
       <header>
         <small>
