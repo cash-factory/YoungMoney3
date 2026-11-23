@@ -45,3 +45,9 @@ jobs:
           set -euo pipefail
           node scripts/probe-staging-login.mjs
           YM3_PROBE_LEGACY=1 node scripts/probe-staging-login.mjs
+      - name: Verify actual browser sign-in form and authenticated session
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          YM3_PROBE_BROWSER=1 node scripts/probe-staging-login.mjs
