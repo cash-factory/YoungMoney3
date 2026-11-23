@@ -29,8 +29,12 @@ export function StrategyTestingPage({ initialMode = 'sessions' }: { initialMode?
 
   useEffect(() => {
     let labIntent = false;
-    try { labIntent = Boolean(user?.id && sessionStorage.getItem('ymfx:lab-intent:v1:' + user.id)); }
-    catch { /* Session storage may be disabled. */ }
+    try {
+      const handoff = user?.id && sessionStorage.getItem('ymfx:lab-intent:v1:' + user.id);
+      const openView = user?.id && sessionStorage.getItem('ymfx:lab-view:v1:' + user.id);
+      labIntent = Boolean(handoff || openView);
+      if(openView && user?.id) sessionStorage.removeItem('ymfx:lab-view:v1:' + user.id);
+    } catch { /* Session storage may be disabled. */ }
     setMode(labIntent ? 'lab' : initialMode);
   }, [initialMode, user?.id]);
 
