@@ -1,3 +1,4 @@
+import {copyFleetOwner} from './copyFleet';
 /**
  * Copy Studio — owner's simulation-only control plane.
  *
@@ -62,9 +63,11 @@ async function validatedPair(db: D1Database, owner: string, source: string, foll
 export async function copyStudioRoute(request: Request, env: CopyEnv, owner: string): Promise<Response> {
   if (request.method !== 'POST') return fail('POST required.', 405);
   const action = new URL(request.url).pathname.slice('/api/copy/'.length);
-  if (!['status','save','simulate','delete'].includes(action)) return fail('Not found.', 404);
+  if (!['status','save','simulate','delete'].includes(action) && !action.startsWith('fleet-'))
+    return fail('Not found.', 404);
   const input = await payload(request);
   if (!input) return fail('Invalid or oversized request.');
+  if(action.startsWith('fleet-')) return copyFleetOwner(request,env,owner,action,input);
   const db = env.DB;
 
   if (action === 'status') {
