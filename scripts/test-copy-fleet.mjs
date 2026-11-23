@@ -175,6 +175,31 @@ try{
   assert.equal((await call('copy/fleet-status',{},owner.cookie)).result.fleets[0].state,'paused');
   assert.equal((await call('mt5/device/copy-consent',deviceConsent(f1,false),'',token)).result.authorized,false);
   assert.equal((await call('mt5/device/copy-poll',{link:f1},'',token)).result.consentRequired,true);
+  const livePolicy={...targets[0],link:live,value:0.5,maxDailyLossPct:2};
+  const liveSaved=await call('copy/fleet-save',{
+    name:'Real account pilot',sourceLink:source,executionMode:'live',
+    targets:[livePolicy]},owner.cookie);
+  assert.equal(liveSaved.status,200,JSON.stringify(liveSaved.result));
+  const liveFleet=liveSaved.result.id;
+  const confirmation='ARM LIVE '+liveFleet.slice(0,8);
+  assert.equal((await call('copy/fleet-arm',{id:liveFleet,version:1,confirm:true},owner.cookie)).status,409);
+  assert.equal((await call('copy/fleet-arm',{id:liveFleet,version:1,confirm:true,
+    liveConfirmation:confirmation},owner.cookie)).status,409,'Local live consent is mandatory.');
+  assert.equal((await call('mt5/device/copy-consent',
+    deviceConsent(live,true,'demo'),'',token)).status,403);
+  assert.equal((await call('mt5/device/copy-consent',{
+    ...deviceConsent(live,true,'live'),login:'incorrect'},'',token)).status,403);
+  const consentLive=await call('mt5/device/copy-consent',deviceConsent(live,true,'live'),'',token);
+  assert.equal(consentLive.status,200,JSON.stringify(consentLive.result));
+  assert.equal(consentLive.result.mode,'live');
+  const armedLive=await call('copy/fleet-arm',{
+    id:liveFleet,version:1,confirm:true,liveConfirmation:confirmation},owner.cookie);
+  assert.equal(armedLive.status,200,JSON.stringify(armedLive.result));
+  assert.equal(armedLive.result.state,'live_armed');
+  assert.equal((await call('copy/fleet-pause-all',{},owner.cookie)).status,200);
+  assert.equal((await call('copy/fleet-status',{},owner.cookie)).result.fleets
+    .find(x=>x.id===liveFleet).state,'paused');
+
   await assert.rejects(
     db.prepare("UPDATE copy_execution_audit SET event='rewritten' WHERE fleet_id=?").bind(fleet).run(),
     /immutable|not authorized|constraint|error/i,
