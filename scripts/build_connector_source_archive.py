@@ -23,6 +23,8 @@ FILES = {
     "connector_gui.py": "connector/connector_gui.py",
     "studio_ui.py": "connector/studio_ui.py",
     "managed_accounts.py": "connector/managed_accounts.py",
+    "terminal_launch.py": "connector/terminal_launch.py",
+    "managed_mcp.py": "connector/managed_mcp.py",
     "copy_bridge.py": "connector/copy_bridge.py",
     "copy_execution.py": "connector/copy_execution.py",
     "copy_risk.py": "connector/copy_risk.py",
