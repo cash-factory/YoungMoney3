@@ -141,6 +141,13 @@ class ConnectorPresentationTests(unittest.TestCase):
         self.app._event({"state": "pc-revoked"})
         self.app._event({"state": "worker-exit", "mode": "capture"})
         self.assertIsNone(self.app.restart_due)
+        self.app.stop_event.set()
+        self.app._event({"state": "pc-identity-conflict"})
+        self.app._event({"state": "worker-exit", "mode": "capture"})
+        self.assertEqual(self.app.pc_state, "pc-identity-conflict")
+        self.assertIn("Duplicate PC identity", self.app.status_var.get(),
+                      "The identity-conflict explanation must survive a safe worker shutdown.")
+        self.assertIsNone(self.app.restart_due)
 
     def test_quick_setup_navigation_and_motion_toggle_do_not_start_capture(self):
         self.app.quick_setup_actions.buttons[0].invoke()
