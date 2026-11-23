@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 FILES = {
     "README.md": "connector/README.md",
     "connect.py": "connector/connect.py",
+    "version.py": "connector/version.py",
     "ledger.py": "connector/ledger.py",
     "history_range.py": "connector/history_range.py",
     "cash_history.py": "connector/cash_history.py",
@@ -17,6 +18,10 @@ FILES = {
     "connector_gui.py": "connector/connector_gui.py",
     "studio_ui.py": "connector/studio_ui.py",
     "managed_accounts.py": "connector/managed_accounts.py",
+    "terminal_launch.py": "connector/terminal_launch.py",
+    "managed_mcp.py": "connector/managed_mcp.py",
+    "spec_evidence.py": "connector/spec_evidence.py",
+    "recovery.py": "connector/recovery.py",
     "presence.py": "connector/presence.py",
     "pc_identity.py": "connector/pc_identity.py",
     "sessions.py": "connector/sessions.py",
