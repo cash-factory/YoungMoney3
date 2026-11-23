@@ -14,6 +14,10 @@ export interface DecisionReview {
   strategy_name: string;
   model_name: string;
   verdict: Verdict | null;
+  /** The first judgement recorded before this interface reveals the outcome. Immutable after insertion. */
+  pre_reveal_verdict?: Verdict | null;
+  pre_reveal_at?: string | null;
+  post_outcome_note?: string | null;
   trigger: string;
   note: string;
   voice_note_url: string | null;
