@@ -286,6 +286,7 @@ class LocalExecutionTests(unittest.TestCase):
         set_consent(self.db,self.link,True,mode='live',login=real.login,server=real.server)
         too_much={**self.task(),'executionMode':'live'}
         too_much['payload']['risk']['value']=3
+        too_much['payload']['risk']['maxDailyLossPct']=5
         denied=execute(self.mt5,self.db,self.link,too_much,real,now_ms=self.mt5.now)
         self.assertEqual(denied['code'],'live_order_risk_exceeds_two_percent_equity')
         daily={**self.task(),'executionMode':'live'}
