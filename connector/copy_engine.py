@@ -87,7 +87,8 @@ def _broker_round_down(volume,step,minimum,maximum,cap):
     normalized=(capped/step).to_integral_value(rounding=ROUND_FLOOR)*step
     if normalized<minimum:
         raise CopyRejected("Risk setting is smaller than broker minimum trade size; do not round up.")
-    return normalized
+    # Preserve the broker volume-step precision in API and UI output.
+    return normalized.quantize(step)
 
 def _symbol_constraints(mt5, symbol, info, account):
     if not isinstance(symbol,str) or len(symbol)>64 or not symbol or any(x in symbol for x in "\r\n\0"):
