@@ -14,7 +14,9 @@ import queue
 import sqlite3
 import sys
 import time
+import urllib.error
 import urllib.request
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -34,6 +36,66 @@ def _put(out, event):
     except (queue.Full, OSError, ValueError):
         # Event loss never drops trade evidence; local SQLite is authoritative.
         pass
+
+
+# Match only fixed public server errors. Never display a raw HTTP response body:
+# a server exception, intermediary, or future route may include private values.
+_HTTP_ERROR_CATEGORIES = {
+    "Broker evidence changed for an existing ticket. Import halted; an audited correction is required.": "immutable_broker_evidence_conflict",
+    "Invalid broker cash scan checkpoint.": "cash_checkpoint_rejected",
+    "Invalid broker balance movement.": "balance_movement_rejected",
+    "Invalid capture batch.": "capture_batch_rejected",
+    "Invalid capture event.": "capture_event_rejected",
+    "Invalid capture kind.": "capture_kind_rejected",
+    "Invalid lifecycle projection.": "lifecycle_projection_rejected",
+    "Invalid broker event key.": "event_key_rejected",
+    "Invalid trade.": "trade_fields_rejected",
+    "Invalid broker fill price, size or costs.": "fill_validation_rejected",
+    "Device authentication required.": "missing_device_authentication",
+    "Device access revoked.": "device_access_revoked",
+    "Unknown link.": "link_not_found",
+    "Link unavailable.": "link_unavailable",
+    "Account unavailable.": "account_unavailable",
+    "MT5 capture is paused by the administrator.": "administrator_capture_pause",
+    "Monitoring is paused for this account.": "monitoring_paused",
+    "Real-account capture is paused by the release gate.": "real_account_release_gate",
+    "Invalid connector request.": "malformed_request",
+}
+_HTTP_ACTIONS = frozenset({
+    "sync", "verified", "capture-issue", "history-anchor",
+    "history-progress", "poll", "retries", "presence",
+})
+def capture_http_error(error):
+    """Return only status, fixed request action, and an allowlisted category.
+
+    Avoid exposing error.url, error.reason, body fragments, account numbers,
+    request Authorization, or broker-specific payload fields. Read no more
+    than 2 KB from a remote response and ignore unknown/non-JSON responses.
+    """
+    status = int(error.code) if isinstance(error.code, int) and 100 <= error.code <= 599 else 0
+    action = getattr(error, "capture_action", "")
+    if action not in _HTTP_ACTIONS:
+        action = "unknown-action"
+    category = "unclassified_server_response"
+    try:
+        body = error.read(2048)
+        parsed = json.loads(body)
+        if isinstance(parsed, dict):
+            message = parsed.get("error")
+            if isinstance(message, str):
+                category = _HTTP_ERROR_CATEGORIES.get(message, category)
+            # Codes sent by authenticated device routes may be used, but only
+            # for the explicitly recognized device revocation condition.
+            if parsed.get("code") == "device_revoked":
+                category = "device_access_revoked"
+    except (OSError, UnicodeError, ValueError, TypeError):
+        pass
+    if status >= 500:
+        category = "server_unavailable_or_internal_error"
+    if status in (301, 302, 303, 307, 308):
+        category = "unexpected_api_redirect"
+    description = "Capture API " + action + " returned HTTP " + str(status) + " (" + category + ")."
+    return description
 
 
 _CAPTURE_MODULES = frozenset({
@@ -57,6 +119,8 @@ def safe_capture_error(error):
         if name in _CAPTURE_MODULES:
             detail = name + ":" + str(frame.tb_lineno)
         frame = frame.tb_next
+    if isinstance(error, urllib.error.HTTPError):
+        return capture_http_error(error)
     if detail:
         return "Broker capture error (" + type(error).__name__ + " at " + detail + ")."
     return "Broker capture error (" + type(error).__name__ + ")."
