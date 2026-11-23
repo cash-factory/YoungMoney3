@@ -58,6 +58,7 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
   const [showAdd, setShowAdd] = useState(false);
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const [showRiskSettings, setShowRiskSettings] = useState(false);
+  const [showRecentOutcomes, setShowRecentOutcomes] = useState(false);
   const [tradeOrigin, setTradeOrigin] = useState('all');
   const [source, setSource] = useState<'live' | 'backtest' | 'forward'>('live');
   const pinKey='ymfx:opening-performance:'+user?.id;
@@ -286,7 +287,7 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
         </div> : <div className="ym-dash-filter-note">Practice results are separate from recorded account balances.</div>}
       </div>
 
-      <section className="ym-dash-pulse" aria-label="Filtered performance at a glance">
+      {(source !== 'live' || selectedMode === 'analyze') && <section className="ym-dash-pulse" aria-label="Filtered performance at a glance">
         <button type="button" data-tone={mixedCurrencyView?'neutral':pnlTone(stats.totalPnl)}
           onClick={()=>setSelectedSection('performance')} aria-label="Open net realized performance">
           <span className="ym-pulse-label"><Wallet size={14} /> NET CLOSED RESULT</span>
@@ -308,7 +309,7 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
           <strong className="ym-pulse-number">{openInView}</strong>
           <span className="ym-pulse-foot">No realized outcome yet</span>
         </button>
-      </section>
+      </section>}
 
       {(trades.some(t=>t.status==='closed' && (!t.exit_time || tradeCurrency(t,accounts)==='Unknown' || t.realized_r == null)) || (account?.broker_balance != null && (!account.broker_balance_at || Date.now()-Date.parse(account.broker_balance_at)>120000))) && <aside className="ym-dash-data-quality" aria-label="Dashboard data quality" role="status">
         {trades.some(t=>t.status==='closed' && (!t.exit_time || tradeCurrency(t,accounts)==='Unknown' || t.realized_r == null)) && <details className="ym-dash-quality-notice"><summary><AlertCircle size={16} aria-hidden="true" /><span><strong>Some trade data needs review</strong><small>Daily risk and R figures may be incomplete.</small></span><ChevronDown size={15} aria-hidden="true" /></summary><p>Some closed trades need review for close time, currency or initial risk. Daily risk and R statistics may be incomplete.</p></details>}
@@ -529,7 +530,13 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
         account={account} accounts={accounts} onCapture={onCapture} openWeekly={openWeekly}/>}
         <div className="ym-dash-section-title">
           <div><p className="ym-dash-kicker">THE LEDGER</p><h2>Recent trades</h2></div>
-          <span>Open a trade to review its details</span>
+          <div className="ym-dash-recent-controls">
+            {source==='live' && <button type="button" className="btn-secondary ym-dash-outcome-toggle"
+              aria-pressed={showRecentOutcomes} onClick={() => setShowRecentOutcomes(v => !v)}>
+              <Eye size={15} /> {showRecentOutcomes ? 'Hide financial outcomes' : 'Reveal financial outcomes'}
+            </button>}
+            <span>{source==='live' && !showRecentOutcomes ? 'Financial outcomes hidden for a more impartial review' : 'Open a trade to review its details'}</span>
+          </div>
         </div>
       <div className="ym-dash-recent-card card p-4 sm:p-5">
         {recentTrades.length > 0 ? (
@@ -548,7 +555,7 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
               </thead>
               <tbody>
                 {recentTrades.map(t => (
-                  <tr key={t.id} className="border-b border-themed/50 hover:bg-secondary transition-colors" data-result={t.status==='open'?'open':t.pnl>0?'win':t.pnl<0?'loss':'neutral'}>
+                  <tr key={t.id} className="border-b border-themed/50 hover:bg-secondary transition-colors" data-result={source==='live' && !showRecentOutcomes && t.status!=='open'?'concealed':t.status==='open'?'open':t.pnl>0?'win':t.pnl<0?'loss':'neutral'}>
                     <td className="py-2.5 px-2 text-xs text-muted">{formatDateTime(t.entry_time)}</td>
                     <td className="py-2.5 px-2 font-mono font-semibold">{t.pair}</td>
                     <td className="py-2.5 px-2">
@@ -561,6 +568,8 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
                         <span className="ym-market-chip" data-tone="pending">
                           <Clock size={12} /> Open
                         </span>
+                      ) : source==='live' && !showRecentOutcomes ? (
+                        <span className="ym-market-chip" data-tone="neutral">Concealed</span>
                       ) : (
                         <span className="ym-market-chip" data-tone={pnlTone(t.pnl)}>
                           {t.pnl>0 ? <ArrowUpRight size={12} /> : t.pnl<0 ? <ArrowDownRight size={12} /> : <Minus size={12} />}
@@ -568,17 +577,17 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
                         </span>
                       )}
                     </td>
-                    <td className={`py-2.5 px-2 text-right font-semibold ym-market-value ym-market-${pnlTone(t.pnl,t.status==='open')}`}>
-                      {t.status === 'open' ? 'Pending' : signedMoney(t.pnl,mixedCurrencyView ? formatAccountMoney(t.pnl, tradeCurrency(t, accounts)) : account ? formatAccountMoney(t.pnl, account.base_currency) : formatCurrency(t.pnl))}
+                    <td className={`py-2.5 px-2 text-right font-semibold ym-market-value ym-market-${source==='live' && !showRecentOutcomes?'neutral':pnlTone(t.pnl,t.status==='open')}`}>
+                      {t.status === 'open' ? 'Pending' : source==='live' && !showRecentOutcomes ? 'Hidden' : signedMoney(t.pnl,mixedCurrencyView ? formatAccountMoney(t.pnl, tradeCurrency(t, accounts)) : account ? formatAccountMoney(t.pnl, account.base_currency) : formatCurrency(t.pnl))}
                     </td>
-                    <td className={`py-2.5 px-2 text-right ym-market-value text-xs ym-market-${pnlTone(t.pips,t.status==='open')}`}>{t.status==='open'?'—':(t.pips>0?'+':'')+(t.pips?.toFixed(1)||'0.0')}</td>
+                    <td className={`py-2.5 px-2 text-right ym-market-value text-xs ym-market-${source==='live' && !showRecentOutcomes?'neutral':pnlTone(t.pips,t.status==='open')}`}>{t.status==='open'?'—':source==='live' && !showRecentOutcomes?'Hidden':(t.pips>0?'+':'')+(t.pips?.toFixed(1)||'0.0')}</td>
                     <td className="py-2.5 px-2 text-right">
                       <button
                         type="button"
                         onClick={() => setSelectedTrade(t)}
                         className="btn-ghost p-1.5"
                         aria-label={`View ${t.pair} trade details`}
-                        title="View trade details"
+                        title={source==='live' && !showRecentOutcomes?'View trade details, including financial outcome':'View trade details'}
                       >
                         <Eye size={16} />
                       </button>
