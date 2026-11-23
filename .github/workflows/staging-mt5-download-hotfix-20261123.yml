@@ -1,4 +1,5 @@
 name: One-off staging MT5 connector hotfix download update
+# Source checksum and UI contract retested against official v0.5.5-rc1 prerelease.
 on:
   push:
     branches: [fix/mt5-namedtuple-capture-20261123]
@@ -41,7 +42,7 @@ jobs:
           test "$(git merge-base origin/feature/copy-studio-demo-control-plane-20261123 HEAD)" = 'e7319b6333326107d2ac5dcaab121c4838a51d92'
           while IFS= read -r path; do
             case "$path" in
-              .github/workflows/connector-prerelease.yml|.github/workflows/staging-capture-hotfix-release-20261123.yml|.github/workflows/staging-mt5-download-hotfix-20261123.yml|connector/README.md|connector/concurrent_capture.py|connector/connect.py|connector/test_cash_history.py|connector/test_concurrent_capture.py|connector/test_history_scan.py|connector/test_managed_accounts.py|connector/version.py|public/connector-download.html|scripts/test-connector-release-contract.py|src/components/Mt5Connections.tsx) ;;
+              .github/workflows/connector-prerelease.yml|.github/workflows/staging-capture-hotfix-release-20261123.yml|.github/workflows/staging-mt5-download-hotfix-20261123.yml|connector/README.md|connector/concurrent_capture.py|connector/connect.py|connector/test_cash_history.py|connector/test_concurrent_capture.py|connector/test_history_scan.py|connector/test_managed_accounts.py|connector/version.py|public/connector-download.html|scripts/test-connector-release-contract.py|scripts/test-ui-contract.mjs|src/components/Mt5Connections.tsx) ;;
               *) echo "Unapproved connector hotfix path: $path"; exit 1;;
             esac
           done < <(git diff --name-only origin/feature/copy-studio-demo-control-plane-20261123...HEAD)
