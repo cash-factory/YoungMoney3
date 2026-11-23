@@ -133,8 +133,8 @@ def build_lifecycle_request(mt5,kind,*,symbol,ticket,sl=None,tp=None,
     if kind=="cancel_pending":
         return {"action":mt5.TRADE_ACTION_REMOVE,"order":broker_ticket}
     if kind=="adjust_protection":
-        if sl is None and tp is None:
-            raise CopyRejected("A protective change must supply at least one value.")
+        if sl is None or tp is None:
+            raise CopyRejected("Both resulting SL and TP must be supplied; omitting one could silently remove the existing level.")
         return {"action":mt5.TRADE_ACTION_SLTP,"symbol":symbol,"position":broker_ticket,
                 "sl":float(sl) if sl is not None else 0.0,
                 "tp":float(tp) if tp is not None else 0.0}
