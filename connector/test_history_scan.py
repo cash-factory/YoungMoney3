@@ -1,5 +1,6 @@
 import sqlite3
 import time
+from collections import namedtuple
 import unittest
 from contextlib import ExitStack
 from types import SimpleNamespace
@@ -75,6 +76,33 @@ class HistoryResumptionTests(unittest.TestCase):
             if len(args)==2:
                 width=(args[1]-args[0]).total_seconds()*1000
                 self.assertLessEqual(width,90*DAY+2500)
+
+    def test_live_scan_keeps_uploading_when_broker_cash_history_contains_trade_deal_objects(self):
+        # Production MT5 returns namedtuple TradeDeal objects; old raw()
+        # accessed .items() and failed with AttributeError every retry.
+        Deal = namedtuple("TradeDeal", "ticket type time time_msc profit position_id order magic")
+        when = self.start - 2*DAY
+        deposit = Deal(2**53 + 77, 2, when//1000, when, 500.0, 0, 0, 0)
+        def broker_history(*args, **kwargs):
+            if kwargs.get("position") is not None:
+                return []
+            low, high = [int(dt.timestamp()*1000) for dt in args]
+            return [deposit] if low <= deposit.time_msc < high else []
+        self.api.history_deals_get.side_effect = broker_history
+        self.status = "declined"
+        self.scan()
+        updates = [row for row in self.calls if row.get("events")]
+        self.assertTrue(updates, "Cash evidence must be sent after capture rather than crash")
+        raw_events = [item for update in updates for item in update["events"]
+                      if item.get("key") == "deal-" + str(deposit.ticket)]
+        self.assertEqual(len(raw_events), 1)
+        self.assertEqual(raw_events[0]["fields"]["ticket"], str(deposit.ticket))
+        self.assertEqual(raw_events[0]["fields"]["profit"], 500.0)
+        self.assertEqual(self.db.execute(
+            "SELECT COUNT(*) FROM outbox WHERE link='link'").fetchone()[0], 0,
+            "Broker evidence is removed from local queue only after server acknowledgement")
+        self.assertIsNotNone(self.db.execute(
+            "SELECT cursor FROM cash_history_scan WHERE link='link'").fetchone())
 
     def test_cancelled_scan_stops_after_server_decline(self):
         self.scan()
