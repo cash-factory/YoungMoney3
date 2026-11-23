@@ -309,9 +309,9 @@ try {
   const beforeEvidence=await db.prepare("SELECT payload,sha256 FROM mt5_raw_evidence WHERE link=? AND event_key='deal-781'").bind(link).first();
   // A genuine changed value must be quarantined, NOT used to overwrite the
   // original immutable evidence, and NOT block unrelated valid live fills.
-  const amended={...evidenceEvent,fields:{...fill,price:1.2}};
+  const conflictingEvidence={...evidenceEvent,fields:{...fill,price:1.2}};
   const unrelated={kind:'raw',key:'deal-782',fields:{...fill,ticket:'782',price:1.4}};
-  const replay=await device('sync',{link,events:[amended,unrelated]});
+  const replay=await device('sync',{link,events:[conflictingEvidence,unrelated]});
   assert.equal(replay.status,200,'Conflicting raw evidence cannot starve valid following events.');
   const result=await replay.json();
   assert.equal(result.evidence_conflicts_pending,1);
@@ -325,7 +325,7 @@ try {
   assert.deepEqual(JSON.parse(discrepancy.changed_fields),['price']);
   assert.equal(discrepancy.review_status,'needs_review');
   assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM mt5_evidence_conflicts WHERE link=?").bind(link).first()).n,1);
-  const replayAgain=await device('sync',{link,events:[amended]});
+  const replayAgain=await device('sync',{link,events:[conflictingEvidence]});
   assert.equal(replayAgain.status,200);
   assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM mt5_evidence_conflicts WHERE link=?").bind(link).first()).n,1,'Repeats are deduplicated by candidate hash.');
   const confidential=await call('mt5/evidence-conflicts',{link});
