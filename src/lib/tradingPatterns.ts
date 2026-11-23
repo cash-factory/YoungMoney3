@@ -143,28 +143,39 @@ export function buildTradingPatterns(
     if (trade.emotional_state) add(byEmotion, trade.emotional_state);
   }
 
-  // "Following a documented loss" describes order of recorded events, not a trader's emotional response.
-  const losses = manual.filter(trade =>
-    trade.status === 'closed' && Number.isFinite(trade.pnl) && trade.pnl < 0
-    && trade.account_id && safeTime(trade.exit_time) !== null
-    && (safeTime(trade.exit_time) ?? Infinity) <= now
-  ).sort((a, b) => (safeTime(a.exit_time) ?? 0) - (safeTime(b.exit_time) ?? 0));
+  // Loss-following context comes only from dated, same-account manual close evidence.
+  // Index once by account and sort by exit time; individual decisions use binary
+  // search instead of scanning every previous trade (important for 10k+ histories).
+  const manualById = new Map(manual.map(trade => [trade.id, trade]));
+  type PriorLoss = { id: string; exit: number };
+  const lossIndex = new Map<string, PriorLoss[]>();
+  for (const trade of manual) {
+    const exit = safeTime(trade.exit_time);
+    if (trade.status!=='closed' || !trade.account_id || exit===null ||
+        exit>now || !Number.isFinite(trade.pnl) || trade.pnl>=0) continue;
+    const group = lossIndex.get(trade.account_id) || [];
+    group.push({ id:trade.id, exit });
+    lossIndex.set(trade.account_id,group);
+  }
+  for (const group of lossIndex.values()) group.sort((a,b)=>a.exit-b.exit);
   let afterLossSeen = 0, afterLossFollowed = 0;
   for (const review of assessable) {
     const entryTime = safeTime(review.entry_time);
-    // Only manual trade references are joined; an imported broker fill isn't an MT5 position lifecycle.
     if (!review.account_id || entryTime === null || !review.reference.startsWith('trade/')) continue;
-    const reviewedTrade = manual.find(trade => review.reference === 'trade/' + trade.id);
-    if (!reviewedTrade) continue;
-    const preceding = losses.filter(t =>
-      t.id !== reviewedTrade.id && t.account_id === review.account_id
-      && (safeTime(t.exit_time) ?? Infinity) < entryTime
-      && entryTime - (safeTime(t.exit_time) ?? 0) <= 24 * 3600000
-    ).pop();
-    if (preceding) {
-      afterLossSeen++;
-      if (evidenceVerdict(review) === 'followed') afterLossFollowed++;
+    const reviewedTrade = manualById.get(review.reference.slice(6));
+    if (!reviewedTrade || reviewedTrade.account_id!==review.account_id) continue;
+    const losses = lossIndex.get(review.account_id) || [];
+    let lo=0,hi=losses.length;
+    while(lo<hi){
+      const mid=(lo+hi)>>>1;
+      if(losses[mid].exit<entryTime) lo=mid+1;
+      else hi=mid;
     }
+    let index=lo-1;
+    while(index>=0 && losses[index].id===reviewedTrade.id) index--;
+    if(index<0 || entryTime-losses[index].exit>24*3600000) continue;
+    afterLossSeen++;
+    if (evidenceVerdict(review) === 'followed') afterLossFollowed++;
   }
 
   const buckets = new Map<string, { followed: number; changed: number; unknown: number }>();
