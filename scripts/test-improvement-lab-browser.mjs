@@ -1,15 +1,17 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { mkdir } from 'node:fs/promises';
 import { installDashboardFixtures } from './test-dashboard-browser.mjs';
 
 const base = process.env.YM3_PREVIEW_URL || 'http://127.0.0.1:4173/';
 const browser = await chromium.launch({ headless: true });
+await mkdir('artifacts/adaptive', { recursive: true });
 try {
   for (const width of [390, 1440]) {
     const page = await browser.newPage({viewport:{width,height:880},reducedMotion:'reduce'});
     const errors=[];
     page.on('pageerror', error=>errors.push(error.message));
-    const { user }=await installDashboardFixtures(page);
+    const { user, trade }=await installDashboardFixtures(page);
     const studies=[];
     const today=new Date().toISOString().slice(0,10);
     const decisions=[
@@ -37,7 +39,7 @@ try {
         ? now : q.action==='insert' && q.payload.status==='active' ? now
           : studies.find(item=>item.id===q.id)?.activated_at || null;
       const record=q.action==='insert'
-        ? {...q.payload,id:'study-1',user_id:user.id,created_at:now,updated_at:now,activated_at:activatedAt}
+        ? {...q.payload,id:'study-'+(studies.length+1),user_id:user.id,created_at:now,updated_at:now,activated_at:activatedAt}
         : {...studies.find(item=>item.id===q.id),...q.payload,updated_at:now,activated_at:activatedAt};
       if(q.action==='insert') studies.push(record);
       else studies[studies.findIndex(item=>item.id===q.id)]=record;
@@ -92,6 +94,47 @@ try {
     assert.equal(studies[0].minimum_samples,5);
     assert.equal(studies[0].status,'completed');
     assert.equal(mutations,4,'One create, one draft revision, one activation, one completion');
+    const sourceReference='trade/'+trade.id;
+    decisions.push({
+      id:'review/'+user.id+'/'+sourceReference,
+      reference:sourceReference,
+      symbol:trade.pair,
+      account_id:trade.account_id,
+      strategy_id:null,entry_model_id:null,strategy_name:'',model_name:'',
+      entry_time:trade.entry_time,updated_at:new Date().toISOString(),
+      verdict:'changed',pre_reveal_verdict:null,pre_reveal_at:null,
+      note:'Waited too little for the confirmation candle.',
+      trigger:'My confirmation was incomplete.',
+      commitment_id:null,commitment_text:'',commitment_result:null,
+      voice_note_url:null,screenshot_url:null,
+    });
+    await page.evaluate(({userId,reference,accountId,symbol})=>{
+      sessionStorage.setItem('ymfx:lab-intent:v1:'+userId,JSON.stringify({
+        source_reference:reference,account_id:accountId,strategy_id:null,symbol,
+      }));
+    },{userId:user.id,reference:sourceReference,accountId:trade.account_id,symbol:trade.pair});
+    await page.reload({waitUntil:'domcontentloaded'});
+    const linkedForm=page.getByRole('dialog',{name:'Register an improvement experiment'});
+    await linkedForm.waitFor();
+    const origin=linkedForm.getByLabel('Linked originating decision');
+    await origin.getByText(trade.pair).waitFor();
+    await origin.getByText(/Waited too little/).waitFor();
+    await linkedForm.getByLabel('Experiment name').fill('Wait for confirmed candle close');
+    await linkedForm.getByLabel('What is your hypothesis?').fill('Waiting for entry confirmation may improve my plan adherence.');
+    await linkedForm.getByLabel('The one rule or behavior you will change').fill('Wait for the candle to close before entering.');
+    await linkedForm.getByRole('button',{name:'Save draft'}).click();
+    await linkedForm.waitFor({state:'hidden'});
+    const linkedStudy=page.locator('[data-lab-study="study-2"]');
+    await linkedStudy.waitFor();
+    await linkedStudy.getByRole('button',{name:/Wait for confirmed candle close/}).click();
+    assert.equal(studies[1].source_reference,sourceReference,'Experiment retains exact originating decision reference.');
+    await linkedStudy.getByText(/Waited too little/).waitFor();
+    await linkedStudy.screenshot({path:'artifacts/adaptive/lab-linked-review-'+width+'.png'});
+    await linkedStudy.getByRole('button',{name:/Open original replay/}).click();
+    await page.getByRole('dialog',{name:'Decision replay'}).waitFor();
+    assert.match(new URL(page.url()).hash,/#dashboard$/, 'Linked study must return to dashboard replay.');
+    await page.getByRole('dialog',{name:'Decision replay'}).getByRole('button',{name:'Close dialog'}).click();
+    assert.equal(mutations,5,'Source handoff creates one additional draft, never modifies original evidence.');
     const overflow=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,viewport:innerWidth}));
     assert.ok(overflow.scroll<=overflow.viewport+2,'Laboratory must not overflow phone layout: '+JSON.stringify(overflow));
     assert.deepEqual(errors,[], 'Improvement Lab should not trigger runtime errors');
