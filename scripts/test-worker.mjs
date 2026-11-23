@@ -6,7 +6,7 @@ import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
 import { buildDemoStatements } from './write-staging-demo-sql.mjs';
 import { DEMO_ID, demoCounts } from './staging-demo-fixtures.mjs';
 
-const bundle=await build({entryPoints:['worker/index.ts'],bundle:true,format:'esm',write:false});
+const bundle=await build({entryPoints:['worker/index.ts'],bundle:true,format:'esm',external:['cloudflare:workers'],write:false});
 const objects=new Set();
 const storage=async req=>{
   const data=await req.json();
@@ -22,7 +22,7 @@ const storage=async req=>{
   return Response.json([...entries.values()].slice(data.offset||0,(data.offset||0)+data.limit));
 };
 const mf=new Miniflare(convertV4MiniflareOptions({workers:[{name:'journal',modules:true,script:bundle.outputFiles[0].text,compatibilityDate:'2025-12-01',
-  outboundService:storage,d1Databases:['DB'],bindings:{PILOT_INVITE_CODE:'integration',SUPABASE_URL:'https://storage.test',SUPABASE_SERVICE_ROLE_KEY:'fixture',DEMO_SHOWCASE_ENABLED:'true'}}],port:0}));
+  outboundService:storage,d1Databases:['DB'],durableObjects:{AUTH_KDF:{className:'AuthKdf',useSQLite:true}},bindings:{PILOT_INVITE_CODE:'integration',SUPABASE_URL:'https://storage.test',SUPABASE_SERVICE_ROLE_KEY:'fixture',DEMO_SHOWCASE_ENABLED:'true'}}],port:0}));
 try {
   const db=await mf.getD1Database('DB');
   for(const name of (await readdir('migrations')).sort()){
