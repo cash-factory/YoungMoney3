@@ -9,6 +9,8 @@ export interface ImprovementExperiment {
   single_change: string;
   strategy_id: string | null;
   account_id: string | null;
+  /** An optional, owner-verified Decision Replay record that motivated this experiment. */
+  source_reference?: string | null;
   metric: ExperimentMetric;
   start_date: string;
   end_date: string | null;
@@ -62,6 +64,11 @@ export function validateExperiment(input: ImprovementExperimentInput): string | 
   if (typeof input.hypothesis !== 'string' || input.hypothesis.trim().length < 12 || input.hypothesis.length > 600) return 'Write a testable hypothesis (12–600 characters).';
   if (typeof input.single_change !== 'string' || input.single_change.trim().length < 8 || input.single_change.length > 500) return 'Define the single behavior or rule to change.';
   if (input.metric !== 'plan_adherence') return 'Choose a supported outcome measure.';
+  if (input.source_reference != null &&
+      (typeof input.source_reference !== 'string' ||
+      input.source_reference.length > 300 ||
+      !/^(?:trade\/[^/\s]{1,150}|position\/[^/\s]{1,150}\/\d+:\d+)$/.test(input.source_reference)))
+    return 'Link a valid decision review or leave the originating observation empty.';
   if (!validStudyDate(input.start_date) || (input.end_date && (!validStudyDate(input.end_date) || input.end_date < input.start_date)))
     return 'Choose valid study dates; the end cannot precede the start.';
   if (!Number.isInteger(input.baseline_days) || input.baseline_days < 7 || input.baseline_days > 365)
