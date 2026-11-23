@@ -21,7 +21,20 @@ const api = async (action, data) => {
   if (!result.ok) throw Error(value.error || 'Connection failed.');
   return value;
 };
-api('status',{}).then(result=>{populateMt5Brokers(result);for(const account of result.accounts) byId('account').add(new Option(account.name,account.id));}).catch(()=>{byId('status').textContent='Sign in to your dashboard to link an account.';});
+api('status',{}).then(result=>{
+  const brokerFinder=populateMt5Brokers(result);
+  for(const account of result.accounts) byId('account').add(new Option(account.name,account.id));
+  // The broker directory is an optional, server-side lookup. No MT5 login,
+  // password, device identifier or account number is sent to the provider.
+  // Local names and previously linked servers remain usable if it is offline.
+  void api('broker-directory',{}).then(directory=>{
+    if(directory.source==='third-party-catalogue' && Array.isArray(directory.brokers)) {
+      brokerFinder.updateCatalogue(directory.brokers,directory.updatedAt);
+    }
+  }).catch(()=>{
+    byId('broker-help').title='Only built-in and previously linked broker hints are available. You can still enter your exact server.';
+  });
+}).catch(()=>{byId('status').textContent='Sign in to your dashboard to link an account.';});
 document.querySelector('form').addEventListener('submit',async event=>{
   event.preventDefault();
   const button=event.currentTarget.querySelector('button[type=submit]');
