@@ -14,6 +14,7 @@ import json
 import os
 import queue
 import re
+import sqlite3
 import sys
 import threading
 import time
@@ -29,6 +30,7 @@ from concurrent_capture import run_parallel_smoke
 from managed_accounts import ManagedAccounts, discover_installations, INSTALL_PAGE
 from studio_ui import AnimatedButton, ResponsiveActions, ConnectionPath, StudioArt, brand_mark, windows_motion_enabled, restart_wait_seconds
 from version import VERSION
+from copy_execution import prepare_database as prepare_copy_database, set_consent as update_copy_consent
 
 STAGING_URL = "https://ym-fx-staging.ethical-hacker263.workers.dev"
 ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "YMFX" / "staging-gui"
@@ -84,6 +86,7 @@ class ConnectorApp:
         self.sync_by_slot = {}
         self.retry_queue = queue.Queue()
         self.account_by_slot = {}
+        self.copy_authorization_by_slot = {}
         self._links_initialized = False
         self.log_items = []
         self.last_summary = None
@@ -462,6 +465,13 @@ class ConnectorApp:
             ("Resume", self.start_selected, {}), ("Retry this account", self.retry_selected, {}),
             ("Pause", self.pause_selected, {}), ("Rename locally", self.rename_selected, {"quiet": True}),
             ("Remove local session", self.remove_selected, {"quiet": True})], minimum=126)
+        self.copy_controls = self._actions(detail, [
+            ("Account insights", self.inspect_selected_account, {"quiet": True}),
+            ("Authorize DEMO copier", self.authorize_selected_demo_copy, {}),
+            ("Disable demo copier", self.disable_selected_demo_copy, {"quiet": True}),
+            ("Open Copy Studio", lambda: webbrowser.open(STAGING_URL + "/#copy-studio"), {"quiet": True})],
+            minimum=158)
+        self.copy_controls.pack_configure(pady=(10, 0))
 
     def toggle_advanced(self):
         if self.advanced.winfo_manager():
@@ -733,7 +743,145 @@ class ConnectorApp:
         receipt = self.sync_by_slot.get(s["terminal"])
         if receipt:
             identity += "  •  Last sync " + receipt[0] + "  •  " + str(receipt[1]) + " decisions awaiting review"
+        copy_state = self.copy_authorization_by_slot.get(s["terminal"])
+        if copy_state is not None:
+            identity += "  •  DEMO copier " + ("authorized" if copy_state else "disabled")
         self.selected_details_var.set(s["name"] + "  •  " + identity)
+
+    def _copy_database_path(self):
+        # The token is read from Windows Credential Manager strictly to derive
+        # the connector's existing local data directory. Never display it.
+        service = "YMFX MT5 " + hashlib.sha256(STAGING_URL.encode()).hexdigest()[:16]
+        connect.keyring.set_keyring(connect.WinVaultKeyring())
+        token = connect.keyring.get_password(service, "token")
+        if not token:
+            raise SessionError("The saved Windows PC pairing is unavailable.")
+        return Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "YMFX" / hashlib.sha256(
+            (STAGING_URL + token).encode()).hexdigest()[:20] / "capture.db"
+
+    def _selected_copy_target(self):
+        session = self._selected()
+        linked = self.account_by_slot.get(session["terminal"])
+        if not linked or not linked.get("link"):
+            raise SessionError("Select a linked broker session before changing copy permissions.")
+        return session["terminal"], str(linked["link"])
+
+    def _copy_consent_worker(self, slot, link, allow):
+        try:
+            filename = self._copy_database_path()
+            if not filename.is_file():
+                raise SessionError("The MT5 capture database is not yet initialized.")
+            with sqlite3.connect(filename, timeout=20) as db:
+                db.execute("PRAGMA busy_timeout=20000")
+                prepare_copy_database(db)
+                update_copy_consent(db, link, allow)
+            self.events.put({"state":"copy-consent-updated","slot":slot,"enabled":allow})
+        except Exception:
+            self.events.put({"state":"copy-consent-error","slot":slot})
+
+    def authorize_selected_demo_copy(self):
+        try:
+            slot, link = self._selected_copy_target()
+        except (SessionError, StopIteration) as error:
+            messagebox.showwarning("Copy permissions", str(error), parent=self.root)
+            return
+        if not messagebox.askyesno("Authorize DEMO execution on selected account",
+            "This grants real MT5 order placement on this selected DEMO follower "
+            "when you separately arm its Copy Fleet on the website. "
+            "The broker can still reject orders, prices may slip, and you may "
+            "incur simulated losses. This permission DOES NOT apply to real accounts. "
+            "All other broker accounts remain unauthorized. Continue?", parent=self.root):
+            return
+        answer = simpledialog.askstring("Confirm demo execution",
+            "To confirm local permission for this one selected broker account, type DEMO:",
+            parent=self.root)
+        if answer != "DEMO":
+            self.banner_var.set("No demo execution permission was granted.")
+            return
+        self.banner_var.set("Authorizing this DEMO follower locally…")
+        threading.Thread(target=self._copy_consent_worker,args=(slot,link,True),
+                         daemon=True,name="YMFX-demo-consent").start()
+
+    def disable_selected_demo_copy(self):
+        try:
+            slot, link = self._selected_copy_target()
+        except (SessionError, StopIteration) as error:
+            messagebox.showwarning("Copy permissions", str(error), parent=self.root)
+            return
+        # Revocation is always available; no confirmation needed to halt new work.
+        self.banner_var.set("Revoking local demo execution permission…")
+        threading.Thread(target=self._copy_consent_worker,args=(slot,link,False),
+                         daemon=True,name="YMFX-demo-disable").start()
+
+    def inspect_selected_account(self):
+        try:
+            slot, link = self._selected_copy_target()
+            session = self._selected()
+        except (SessionError, StopIteration) as error:
+            messagebox.showwarning("Account insights", str(error), parent=self.root)
+            return
+        account = self.account_by_slot.get(slot,{})
+        def read():
+            try:
+                path = self._copy_database_path()
+                with sqlite3.connect(path, timeout=20) as db:
+                    db.execute("PRAGMA busy_timeout=20000")
+                    prepare_copy_database(db)
+                    local = db.execute("""SELECT observed_at_ms,account_balance,account_equity,margin_free,
+                        open_positions,pending_orders,source_active,last_execution_result
+                        FROM copy_local_health WHERE link=?""",(link,)).fetchone()
+                    allowed = db.execute("SELECT approved FROM copy_local_permissions WHERE link=?",
+                        (link,)).fetchone()
+                    queued = db.execute("SELECT COUNT(*) FROM outbox WHERE link=?",(link,)).fetchone()[0]
+                    unresolved = db.execute("SELECT COUNT(*) FROM position_recovery WHERE link=? AND status!='broker_closure_verified'",
+                        (link,)).fetchone()[0]
+                    recent = db.execute("SELECT COUNT(*) FROM copy_local_tasks WHERE link=? AND status IN ('reserved','ack_pending')",
+                        (link,)).fetchone()[0]
+                self.events.put({"state":"copy-account-details","slot":slot,
+                    "name":session["name"],"broker":str(account.get("server","Unknown")),
+                    "login":str(account.get("login","Unknown")),"local":local,
+                    "allowed":bool(allowed and allowed[0]),"queued":queued,
+                    "unresolved":unresolved,"unacknowledged":recent})
+            except Exception:
+                self.events.put({"state":"copy-account-details-error"})
+        threading.Thread(target=read,daemon=True,name="YMFX-account-insights").start()
+        self.banner_var.set("Reading this account's local capture and execution state…")
+
+    def _show_copy_account_details(self, item):
+        window = tk.Toplevel(self.root)
+        window.title("Account insights  /  " + str(item.get("name","MT5"))[:55])
+        window.configure(bg=BACKGROUND)
+        window.geometry("600x520")
+        window.minsize(480,400)
+        frame = tk.Frame(window,bg=BACKGROUND,padx=24,pady=22)
+        frame.pack(fill="both",expand=True)
+        self._label(frame,"BROKER ACCOUNT  /  DIAGNOSTICS",size=9,bold=True,
+                    color=ACCENT).pack(anchor="w")
+        self._label(frame,str(item.get("name","Account")),size=20,bold=True).pack(anchor="w",pady=(8,5))
+        self._label(frame,str(item.get("broker",""))+" · "+str(item.get("login","")),
+                    size=11,color=MUTED).pack(anchor="w",pady=(0,17))
+        health=item.get("local")
+        rows=[
+            ("Broker connection", "Latest recorded account scan" if health else "Not observed yet"),
+            ("Last local observation", dt.datetime.fromtimestamp(health[0]/1000,dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC") if health else "Awaiting MT5 capture"),
+            ("Account balance", f"{health[1]:,.2f}" if health else "—"),
+            ("Account equity", f"{health[2]:,.2f}" if health else "—"),
+            ("Free margin", f"{health[3]:,.2f}" if health else "—"),
+            ("Open positions", str(health[4]) if health else "—"),
+            ("Pending orders", str(health[5]) if health else "—"),
+            ("Copy source", "Observed for an armed fleet" if health and health[6] else "Not acting as source"),
+            ("Local DEMO execution", "AUTHORIZED" if item.get("allowed") else "DISABLED"),
+            ("Journal evidence awaiting sync", str(item.get("queued",0))),
+            ("Positions awaiting broker closure", str(item.get("unresolved",0))),
+            ("Ambiguous/unacknowledged copy tasks", str(item.get("unacknowledged",0))),
+            ("Last copy result", str(health[7]) if health and health[7] else "No broker copy actions"),
+        ]
+        for label,value in rows:
+            line=tk.Frame(frame,bg=BACKGROUND)
+            line.pack(fill="x",pady=3)
+            self._label(line,label,size=10,color=MUTED).pack(side="left",anchor="w")
+            self._label(line,value,size=10,bold=True,wrap=330).pack(side="right",anchor="e")
+        self._button(frame,"Close details",window.destroy,quiet=True).pack(anchor="e",pady=(18,0))
 
     def _session_state(self, s):
         slot = s["terminal"]
@@ -1147,6 +1295,18 @@ class ConnectorApp:
         elif state in ("control-saved", "control-error"):
             self.banner_var.set(message)
             self._log(message)
+        elif state == "copy-consent-updated":
+            self.copy_authorization_by_slot[slot] = bool(item.get("enabled"))
+            self.banner_var.set("DEMO copy execution authorized for selected account only." if item.get("enabled")
+                                else "DEMO copy execution disabled for selected account.")
+            self._log("Local DEMO copy permission changed. Other accounts remain independent.")
+            self._selected_session_details()
+        elif state == "copy-consent-error":
+            self.banner_var.set("Local demo permission could not be saved. Review the account and capture database.")
+        elif state == "copy-account-details":
+            self._show_copy_account_details(item)
+        elif state == "copy-account-details-error":
+            self.banner_var.set("Could not read local account insights; the existing journal capture is unchanged.")
         elif state == "monitoring-policy":
             self.remote_paused = set(item["paused"])
         elif state in ("preparing-account", "setup-error"):
