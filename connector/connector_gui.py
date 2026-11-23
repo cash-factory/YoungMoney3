@@ -28,6 +28,7 @@ from terminal_factory import TerminalCopyError, create_terminal
 from concurrent_capture import run_parallel_smoke
 from managed_accounts import ManagedAccounts, discover_installations, INSTALL_PAGE
 from studio_ui import AnimatedButton, ResponsiveActions, ConnectionPath, StudioArt, brand_mark, windows_motion_enabled, restart_wait_seconds
+from version import VERSION
 
 STAGING_URL = "https://ym-fx-staging.ethical-hacker263.workers.dev"
 ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "YMFX" / "staging-gui"
@@ -43,7 +44,6 @@ ACCENT = "#ff365c"
 WARM = "#f9c9ab"
 DANGER = "#ff8da7"
 FONT = "Segoe UI"
-VERSION = "0.5.3-rc1"
 
 
 def terminal_candidates():
