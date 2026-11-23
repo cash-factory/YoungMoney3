@@ -285,6 +285,9 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
         onOpenGuide={() => onOpenGuide?.()}
         onOpenWeekly={openWeekly}
         onOpenRisk={() => {chooseDesk('prepare');setShowRiskSettings(true);}}
+        onOpenLab={openLaboratory}
+        activeExperiments={improvementStudies.filter(study=>study.status==='active'
+          && (accountFilter==='all'||!study.account_id||study.account_id===accountFilter)).length}
         pendingReviews={pendingReviewCount}
         accountName={account?.name || 'All accounts'}
         tradesRecorded={trades.length}
