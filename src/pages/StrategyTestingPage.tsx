@@ -17,8 +17,9 @@ import type { StrategyTestSession, StrategyTestSessionInput, StrategyTestTrade, 
 import { defaultTradeLevels, distancePresets, examplePriceIsUnconfirmed, instrumentDistanceLabel, instrumentPnl, priceAtDistance } from '@/lib/instrumentMath';
 import { format, parseISO } from 'date-fns';
 import { setupQualityFromChecklist } from '@/lib/setupQuality';
+import { ImprovementLab } from '@/components/ImprovementLab';
 
-export function StrategyTestingPage({ initialMode = 'sessions' }: { initialMode?: 'sessions' | 'legacy' | 'forward' }) {
+export function StrategyTestingPage({ initialMode = 'sessions' }: { initialMode?: 'sessions' | 'legacy' | 'forward' | 'lab' }) {
   const { user } = useAuth();
   const { sessions, loading, upsertSession, deleteSession } = useTestSessions(user?.id);
   const [showForm, setShowForm] = useState(false);
@@ -41,7 +42,8 @@ export function StrategyTestingPage({ initialMode = 'sessions' }: { initialMode?
     }
   };
 
-  const tabs = <div className="flex flex-wrap gap-2 mb-5">{([['sessions', 'Test Sessions'], ['legacy', 'Backtest Summaries'], ['forward', 'Forward Trades']] as const).map(([id, label]) => <button key={id} onClick={() => setMode(id)} className={`px-3 py-2 rounded-lg text-xs font-semibold border ${mode === id ? 'bg-orange-500/10 text-orange-600 border-orange-500/30' : 'bg-secondary border-themed text-secondary'}`}>{label}</button>)}</div>;
+  const tabs = <div className="flex flex-wrap gap-2 mb-5" aria-label="Testing workspace areas">{([['sessions', 'Test Sessions'], ['lab', 'Improvement Laboratory'], ['legacy', 'Backtest Summaries'], ['forward', 'Forward Trades']] as const).map(([id, label]) => <button key={id} type="button" aria-pressed={mode===id} onClick={() => setMode(id)} className={`px-3 py-2 rounded-lg text-xs font-semibold border ${mode === id ? 'bg-orange-500/10 text-orange-600 border-orange-500/30' : 'bg-secondary border-themed text-secondary'}`}>{label}</button>)}</div>;
+  if (mode === 'lab') return <div>{tabs}<ImprovementLab /></div>;
   if (mode === 'legacy') return <div>{tabs}<BacktestingPage /></div>;
   if (mode === 'forward') return <div>{tabs}<ForwardTestingPage /></div>;
   if (loading) return <div>{tabs}<LoadingSpinner label="Loading test sessions..." /></div>;
