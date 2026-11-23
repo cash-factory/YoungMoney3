@@ -442,12 +442,12 @@ try {
     account_id:linkedAccount,entry_time:'2026-11-22T09:00:00Z',
   }});
   assert.equal(importedResponse.status,200);
-  const imported=(await importedResponse.json()).data[0];
-  assert.equal(imported.pre_reveal_verdict,null,'Backup restore cannot forge an original judgement.');
-  assert.equal(imported.pre_reveal_at,null,'Backup restore cannot forge a server timestamp.');
-  assert.equal(imported.imported_unverified,true);
-  assert.equal((await call('data',{action:'update',table:'decision_reviews',id:imported.id,
-    filters:{updated_at:imported.updated_at},payload:{imported_unverified:false}})).status,403,
+  const importedReview=(await importedResponse.json()).data[0];
+  assert.equal(importedReview.pre_reveal_verdict,null,'Backup restore cannot forge an original judgement.');
+  assert.equal(importedReview.pre_reveal_at,null,'Backup restore cannot forge a server timestamp.');
+  assert.equal(importedReview.imported_unverified,true);
+  assert.equal((await call('data',{action:'update',table:'decision_reviews',id:importedReview.id,
+    filters:{updated_at:importedReview.updated_at},payload:{imported_unverified:false}})).status,403,
     'A historical imported assessment cannot be relabeled as verified.');
 
   // Improvement Laboratory: owner-scoped experiments, durable draft-to-active locks.
