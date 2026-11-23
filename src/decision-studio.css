@@ -267,3 +267,13 @@
   .ym-replay-progress li {font-size:9px;}
   .ym-replay-compare {grid-template-columns:1fr;gap:5px;padding:13px;}
 }
+
+.ym-replay-lab-link {display:flex;align-items:center;justify-content:space-between;gap:15px;
+  padding:15px 17px;border:1px solid color-mix(in srgb,var(--brand) 23%,var(--border));
+  border-radius:10px;background:color-mix(in srgb,var(--brand) 5%,var(--bg-card));}
+.ym-replay-lab-link strong {font-size:13px;letter-spacing:-.015em;}
+.ym-replay-lab-link p {margin-top:4px;color:var(--text-secondary);font-size:11px;line-height:1.6;}
+.ym-replay-lab-link button {display:inline-flex;align-items:center;gap:8px;flex:none;font-size:12px;}
+@media (max-width:600px) {
+  .ym-replay-lab-link {align-items:start;flex-direction:column;}
+}
