@@ -52,9 +52,9 @@ dashboard=(root/"src/components/Mt5Connections.tsx").read_text(encoding="utf-8")
 assert 'href="/connector-download.html"' in dashboard, "Release details and checksum must be accessible."
 # Until the new executable has actually passed the release jobs, the direct
 # download remains the last published artifact; never link an unbuilt binary.
-published='https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.6-rc1/YoungMoney3.Connector.exe'
+published='https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.7-rc1/YoungMoney3.Connector.exe'
 assert dashboard.count('href="'+published+'"') >= 2
-assert "Download Connector v0.5.6-rc1" in dashboard
+assert "Download Connector v0.5.7-rc1" in dashboard
 downloads=(root/"public/connector-download.html").read_text(encoding="utf-8")
 assert "api.github.com/repos/cash-factory/YoungMoney3/releases" in downloads
 assert "YoungMoney3.Connector.exe" in downloads
