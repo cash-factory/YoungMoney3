@@ -44,7 +44,7 @@ class RiskTests(unittest.TestCase):
             calculate(self.mt5,SimpleNamespace(equity=2000,currency='EUR'),
                       'EURUSD',sizing_mode='equity_ratio',sizing_value=1,**self.common)
     def test_broker_volume_step_is_not_rounded_up(self):
-        self.assertEqual(floor_volume('0.213',0.1,4,0.05,1),0.20)
+        self.assertEqual(float(floor_volume('0.213',0.1,4,0.05,1)),0.20)
         with self.assertRaisesRegex(CopyRiskError,'risk_budget_below_broker_minimum'):
             floor_volume(0.04,0.1,4,0.05,1)
     def test_reject_no_stop_wrong_side_bad_broker_loss(self):
