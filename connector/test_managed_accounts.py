@@ -16,6 +16,7 @@ from concurrent_capture import run_supervisor
 from presence import DevicePresence
 from sessions import SessionStore
 from terminal_factory import TerminalCopyError
+from version import VERSION
 
 
 class ManagedSetupTests(unittest.TestCase):
@@ -191,7 +192,7 @@ class PresenceTests(unittest.TestCase):
         self.assertTrue(device.check())
         self.assertEqual(request.call_args.args[0]["installationId"],uuid)
         self.assertEqual([e.get("name") for e in events],["Trading Laptop","Office Laptop"])
-        self.assertEqual(request.call_args.args[0]["version"],"0.5.4-rc1")
+        self.assertEqual(request.call_args.args[0]["version"],VERSION)
 
     def test_duplicate_installation_conflict_halts_capture_without_erasing_pairing(self):
         error=HTTPError("https://example.test",409,"Conflict",{},
