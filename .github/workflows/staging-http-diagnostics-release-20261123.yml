@@ -34,7 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
-          latest="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          latest="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/fix/mt5-http-capture-diagnostics-20261123" --jq '.object.sha')"
           if [[ "$latest" != "$SOURCE_SHA" ]]; then
             echo 'ready=false' >> "$GITHUB_OUTPUT"
             echo 'A newer commit superseded this release candidate.'
@@ -222,7 +222,7 @@ jobs:
           $tags = gh api --paginate "repos/$env:GH_REPO/git/matching-refs/tags/staging-connector-v" --jq '.[].ref'
           if ($LASTEXITCODE -ne 0) { throw 'Cannot verify existing tags' }
           if ($tags -contains "refs/tags/$tag") { throw "Tag $tag already exists; refusing reuse" }
-          $latest = gh api "repos/$env:GH_REPO/git/ref/heads/main" --jq '.object.sha'
+          $latest = gh api "repos/$env:GH_REPO/git/ref/heads/fix/mt5-http-capture-diagnostics-20261123" --jq '.object.sha'
           if ($LASTEXITCODE -ne 0 -or $latest -ne $env:SOURCE_SHA) { throw 'Diagnostic branch moved during build; refusing stale release' }
           $manifest = Get-Content staging-release/build-manifest.json -Raw | ConvertFrom-Json
           $digest = (Get-FileHash 'staging-release/YoungMoney3.Connector.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
