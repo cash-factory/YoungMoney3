@@ -8,6 +8,19 @@ const hash = async (value: string) => [...new Uint8Array(await crypto.subtle.dig
 const limited = (value: unknown, max: number): value is string => typeof value === 'string' && value.length > 0 && value.length <= max;
 const isObject = (v: unknown): v is Fields => v !== null && typeof v === 'object' && !Array.isArray(v);
 const timestamp = (v: unknown): v is string => limited(v, 40) && Number.isFinite(Date.parse(v));
+const sortedEvidenceJson = (value: unknown): string => {
+  // Preserve array ordering, values and number/string types; sort only object keys.
+  const sorted = (entry: unknown): unknown => Array.isArray(entry) ? entry.map(sorted)
+    : isObject(entry) ? Object.fromEntries(Object.keys(entry).sort().map(key => [key,sorted(entry[key])])) : entry;
+  return JSON.stringify(sorted(value));
+};
+const changedEvidenceFields = (oldFields: unknown, nextFields: Fields) => {
+  if (!isObject(oldFields)) return ['record_shape'];
+  return [...new Set([...Object.keys(oldFields),...Object.keys(nextFields)])]
+    .filter(key=>sortedEvidenceJson(oldFields[key])!==sortedEvidenceJson(nextFields[key]))
+    .sort().slice(0,100);
+};
+
 const installationId = (v: unknown): v is string =>
   typeof v === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(v);
 const pcLabel = (v: unknown): string | null => {
@@ -60,8 +73,28 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       const devices = await q('SELECT id,pc_name,public_key,last_seen,setup_state,connector_version FROM mt5_devices WHERE owner=? AND revoked=0 AND public_key IS NOT NULL', owner).all();
       const links = await q('SELECT l.device,l.monitoring_paused,l.retry_requested_at,l.capture_health,l.id,l.account_id,l.status,l.company,l.server,l.login,l.access_level,l.trade_mode,l.history_id,l.history_status,l.history_since,l.history_authorized_since,l.history_mode,l.history_anchor_at,l.history_anchor_ticket,l.history_anchor_amount,l.history_scanned_until,l.cash_history_cursor,l.cash_history_completed_at,l.last_sync,l.broker_balance,l.broker_equity,l.currency,l.gap,l.last_error,l.expires,l.broker_timezone,l.timezone_confirmed_at,l.timezone_source,l.utc_conversion_status FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE d.owner=? AND d.revoked=0', owner).all();
       const accounts=await q("SELECT id,json_extract(payload,'$.name') AS name FROM workspace_records WHERE user_id=? AND table_name='trading_accounts' ORDER BY created_at",owner).all();
-      const states=await Promise.all(links.results.map(async link=>({...link,pending_reviews:(await remainingReviews(String(link.id)))?.n??0})));
+      const states=await Promise.all(links.results.map(async link=>({
+        ...link,
+        pending_reviews:(await remainingReviews(String(link.id)))?.n??0,
+        evidence_conflicts_pending:(await q("SELECT COUNT(*) AS n FROM mt5_evidence_conflicts WHERE link=? AND owner=? AND review_status='needs_review'",link.id,owner).first<{n:number}>())?.n??0
+      })));
       return json({ accounts:accounts.results, devices: devices.results, links: states, demoOnly: env.MT5_ALLOW_LIVE !== 'true', capturePaused: await capturePaused() });
+    }
+    if (action === 'evidence-conflicts') {
+      if (!limited(input.link,64)) return fail('Select a connected MT5 account.');
+      const account=await q("SELECT l.id FROM mt5_links l JOIN mt5_devices d ON d.id=l.device WHERE l.id=? AND l.owner=? AND d.owner=? AND d.revoked=0 AND l.status='connected'",
+        input.link,owner,owner).first();
+      if(!account) return fail('Broker account unavailable.',404);
+      const items=await q(`SELECT event_key,evidence_kind,changed_fields,original_sha256,candidate_sha256,recorded_at,review_status
+        FROM mt5_evidence_conflicts WHERE link=? AND owner=? ORDER BY recorded_at DESC,event_key LIMIT 101`,input.link,owner)
+        .all<{event_key:string;evidence_kind:string;changed_fields:string;original_sha256:string;candidate_sha256:string;recorded_at:string;review_status:string}>();
+      return json({rows:items.results.slice(0,100).map(item=>({
+        event_key:item.event_key,evidence_kind:item.evidence_kind,
+        changed_fields:JSON.parse(item.changed_fields),recorded_at:item.recorded_at,
+        review_status:item.review_status,
+        original_fingerprint:item.original_sha256.slice(0,12),
+        candidate_fingerprint:item.candidate_sha256.slice(0,12),
+      })),has_more:items.results.length>100});
     }
     if (action === 'cash-review') {
       if(!limited(input.link,64) || !limited(input.ticket,24) || !/^\d+$/.test(String(input.ticket)))
@@ -575,6 +608,8 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if(link.trade_mode===2 && env.MT5_ALLOW_LIVE!=='true') return fail('Real-account capture is paused by the release gate.',403);
   if (!Array.isArray(input.events)||input.events.length>40) return fail('Invalid capture batch.');
   const statements:D1PreparedStatement[]=[];
+   const rawSeen = new Map<string,{sha256:string;payload:string}>();
+   let quarantinedInBatch = 0;
   for(const event of input.events) {
     if(!isObject(event)||!limited(event.key,120)||!isObject(event.fields)) return fail('Invalid capture event.');
     const f=event.fields, time=now();
@@ -587,9 +622,24 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         :String(event.key).startsWith('spec-')?'specification':'position';
       const payload=JSON.stringify(f);
       const sha=await hash(payload);
-      const prior=await q('SELECT sha256 FROM mt5_raw_evidence WHERE link=? AND event_key=?',link.id,event.key).first<{sha256:string}>();
-      if(prior && prior.sha256!==sha)
-        return fail('Broker evidence changed for an existing ticket. Import halted; an audited correction is required.',409);
+      const staged=rawSeen.get(String(event.key));
+      const prior=staged ?? await q('SELECT sha256,payload FROM mt5_raw_evidence WHERE link=? AND event_key=?',
+        link.id,event.key).first<{sha256:string;payload:string}>();
+      if(prior && prior.sha256!==sha) {
+        // JSON key reordering is semantically identical and not a broker revision.
+        if(sortedEvidenceJson(JSON.parse(prior.payload))!==sortedEvidenceJson(f)) {
+          const changed=changedEvidenceFields(JSON.parse(prior.payload),f);
+          // A genuine conflict is retained separately for review, not treated as a
+          // broker-authorized correction. The existing immutable evidence stays.
+          statements.push(q(`INSERT OR IGNORE INTO mt5_evidence_conflicts
+            (link,owner,account_id,event_key,evidence_kind,original_sha256,candidate_sha256,candidate_payload,changed_fields,review_status,recorded_at)
+            VALUES(?,?,?,?,?,?,?,?,?,'needs_review',?)`,
+            link.id,device.owner,link.account_id,event.key,evidenceKind,prior.sha256,sha,payload,JSON.stringify(changed),time));
+          quarantinedInBatch++;
+          continue;
+        }
+      }
+      if(!prior) rawSeen.set(String(event.key),{sha256:sha,payload});
       statements.push(q('INSERT OR IGNORE INTO mt5_raw_evidence(link,owner,account_id,event_key,evidence_kind,payload,sha256,recorded_at) VALUES(?,?,?,?,?,?,?,?)',
         link.id,device.owner,link.account_id,event.key,evidenceKind,payload,sha,time));
       if(evidenceKind==='deal' && Number(f.type)===2 && /^deal-\d+$/.test(event.key)) {
@@ -666,7 +716,10 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   const equity = typeof input.equity === 'number' && Number.isFinite(input.equity) ? input.equity : null;
   const syncedAt=now();
   statements.push(q('UPDATE mt5_devices SET last_seen=? WHERE id=?',unix,device.id));
-  statements.push(q("UPDATE mt5_links SET retry_requested_at=NULL,capture_health='synced' WHERE id=?",link.id));
+  statements.push(q(`UPDATE mt5_links SET retry_requested_at=NULL,
+     capture_health=CASE WHEN EXISTS(SELECT 1 FROM mt5_evidence_conflicts
+       WHERE link=? AND review_status='needs_review') THEN 'needs_attention' ELSE 'synced' END
+     WHERE id=?`,link.id,link.id));
   statements.push(q(`UPDATE mt5_links SET last_sync=?,gap=MAX(gap,?),
     broker_balance=COALESCE(?,broker_balance),broker_equity=COALESCE(?,broker_equity),
     performance_baseline_balance=CASE WHEN performance_baseline_at IS NULL THEN ? ELSE performance_baseline_balance END,
@@ -698,5 +751,8 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   await db.batch(statements);
   const history=await q('SELECT history_id AS id,history_since AS since,history_status AS status,history_mode AS mode,history_anchor_at AS anchor_at,history_anchor_ticket AS anchor_ticket,history_scanned_until AS scanned_until FROM mt5_links WHERE id=?',link.id).first();
   const preferences=await q('SELECT broker_timezone,timezone_confirmed_at,utc_conversion_status FROM mt5_links WHERE id=?',link.id).first();
-  return json({ok:true,history,preferences,synced_at:syncedAt,pending_reviews:(await remainingReviews(link.id))?.n??0});
+  const unresolved=(await q("SELECT COUNT(*) AS n FROM mt5_evidence_conflicts WHERE link=? AND review_status='needs_review'",link.id).first<{n:number}>())?.n??0;
+   return json({ok:true,history,preferences,synced_at:syncedAt,pending_reviews:(await remainingReviews(link.id))?.n??0,
+     evidence_conflicts_pending:unresolved,evidence_quarantined_in_batch:quarantinedInBatch,
+     evidence_integrity_status:unresolved?'needs_review':'verified_no_conflict'});
 }
