@@ -32,7 +32,11 @@ const stage={
   // Cloudflare Free Worker 1102 errors without weakening stored verifiers.
   durable_objects:{bindings:[{name:'AUTH_KDF',class_name:'AuthKdf'}]},
   exports:{AuthKdf:{type:'durable-object',storage:'sqlite'}},
-  vars:{MT5_ALLOW_LIVE:'false',DEMO_SHOWCASE_ENABLED:'true'},
+  // Permit read-only linking and reconciliation of REAL MT5 accounts for the
+  // invite-only pilot. This NEVER authorizes orders; live copy execution
+  // remains independently disabled until broker acceptance.
+  vars:{MT5_ALLOW_LIVE:'false',MT5_ALLOW_LIVE_COPY:'true',
+    MT5_LIVE_COPY_EXECUTION:'false',DEMO_SHOWCASE_ENABLED:'true'},
 };
 const output=resolve('wrangler.staging.jsonc');
 writeFileSync(output,JSON.stringify(stage,null,2)+'\n',{flag:'w',mode:0o600});
