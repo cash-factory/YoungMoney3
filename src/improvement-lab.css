@@ -158,3 +158,25 @@
 .ym-lab-linked-actions button {display:inline-flex;align-items:center;gap:7px;
   color:var(--brand-text);font-weight:750;font-size:11px;}
 .ym-lab-linked-actions button:hover,.ym-lab-linked-actions a:hover {text-decoration:underline;}
+
+
+/* Replay → Laboratory provenance: a readable chain of evidence, not a separate analytics card. */
+.ym-lab-source {
+  display:flex;justify-content:space-between;align-items:center;gap:16px;
+  min-width:0;padding:15px 18px;border:1px solid color-mix(in srgb,var(--brand) 21%,var(--border));
+  border-radius:11px;background:color-mix(in srgb,var(--brand) 5%,var(--bg-card));
+}
+.ym-lab-source>div {min-width:0;display:grid;gap:5px;}
+.ym-lab-source-kicker {display:inline-flex;align-items:center;gap:7px;
+  color:var(--brand-text);font-size:10px;letter-spacing:.1em;font-weight:800;}
+.ym-lab-source strong {font-size:13px;letter-spacing:-.02em;font-weight:750;overflow-wrap:anywhere;}
+.ym-lab-source p {font-size:11px;line-height:1.55;color:var(--text-secondary);overflow-wrap:anywhere;}
+.ym-lab-source blockquote {margin-top:3px;max-width:570px;white-space:pre-wrap;
+  font-size:12px;line-height:1.6;color:var(--text-primary);overflow-wrap:anywhere;}
+.ym-lab-source button {display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  flex:none;font-size:11px;min-height:36px;}
+.ym-lab-source button:focus-visible {outline:2px solid var(--brand);outline-offset:2px;}
+@media (max-width:640px){
+ .ym-lab-source {align-items:flex-start;flex-direction:column;padding:14px;gap:12px;}
+ .ym-lab-source button {align-self:stretch;}
+}
