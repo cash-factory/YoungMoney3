@@ -793,6 +793,19 @@ async function adminRoute(request: Request, env: Env, user: Record<string, unkno
     await audit(env.DB,String(user.id),String(user.id),'revoke-own-other-sessions','success',{count:result.meta.changes});
     return response({ok:true,revoked:result.meta.changes});
   }
+  if (input.action === 'connector-directory') {
+    // Administrative device ownership inventory only. No broker login,
+    // account credentials, capture evidence or private trade details.
+    const devices=await env.DB.prepare(`
+      SELECT d.id,d.owner AS user_id,d.pc_name,d.setup_state,d.connector_version,
+        d.last_seen,d.revoked,u.username,u.display_name,u.email,u.account_status,
+        (SELECT COUNT(*) FROM mt5_links l WHERE l.device=d.id AND l.status='connected') AS linked_accounts
+      FROM mt5_devices d JOIN users u ON u.id=d.owner
+      WHERE d.public_key IS NOT NULL
+      ORDER BY d.revoked ASC,d.last_seen DESC LIMIT 500
+    `).all();
+    return response({devices:devices.results});
+  }
   if (input.action === 'list') {
     const result = await env.DB.prepare(`
       SELECT u.id,u.email,u.username,u.display_name,u.role,u.account_status,u.created_at,u.suspended_at,u.suspension_expires_at,

@@ -4,7 +4,7 @@ import unittest
 import uuid
 from pathlib import Path
 
-from pc_identity import identity_file, installation_id
+from pc_identity import identity_file, installation_id, pairing_request
 
 
 class InstallationIdentityTests(unittest.TestCase):
@@ -16,6 +16,16 @@ class InstallationIdentityTests(unittest.TestCase):
             self.assertEqual(uuid.UUID(a).version,4)
             self.assertNotEqual(a,installation_id("https://production.example",appdata=root))
             self.assertEqual(json.loads(identity_file("https://staging.example",appdata=root).read_text())["installation_id"],a)
+
+    def test_pairing_claim_binds_to_saved_installation(self):
+        with tempfile.TemporaryDirectory() as root:
+            first = pairing_request("https://staging.example", "one-time-code", "public-key", appdata=root)
+            second = pairing_request("https://staging.example/", "another-code", "another-key", appdata=root)
+            self.assertEqual(first["installationId"], second["installationId"])
+            self.assertEqual(first["installationId"], installation_id("https://staging.example", appdata=root))
+            self.assertEqual(first["code"], "one-time-code")
+            self.assertEqual(first["publicKey"], "public-key")
+            self.assertEqual(set(first), {"code", "publicKey", "installationId"})
 
     def test_corrupted_identity_never_silently_creates_second_pc(self):
         with tempfile.TemporaryDirectory() as root:

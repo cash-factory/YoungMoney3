@@ -145,6 +145,22 @@ try {
   const firstCheckin=await presence('install');
   assert.equal(firstCheckin.device,devices[0].id);
   assert.equal(firstCheckin.name,'Trading Laptop - Main');
+  assert.equal(firstCheckin.pairedAs,'member@example.test','A paired PC can identify its authenticated YoungMoney3 owner.');
+  // Cross-member device ownership is visible only through authenticated admin oversight.
+  assert.equal((await call('admin',{action:'connector-directory'})).status,403,
+    'Ordinary members must not enumerate the platform device inventory.');
+  await db.prepare("UPDATE users SET role='admin' WHERE id=?").bind(subject).run();
+  const inventoryResponse=await call('admin',{action:'connector-directory'});
+  assert.equal(inventoryResponse.status,200);
+  const inventory=(await inventoryResponse.json()).devices;
+  assert.equal(inventory.length,1);
+  assert.equal(inventory[0].user_id,subject);
+  assert.equal(inventory[0].email,'member@example.test');
+  assert.equal(inventory[0].id,devices[0].id);
+  assert.equal(inventory[0].linked_accounts,0);
+  for(const forbidden of ['token_hash','public_key','pair_hash','envelope','password'])
+    assert.equal(Object.hasOwn(inventory[0],forbidden),false,'No secrets in admin device inventory.');
+  await db.prepare("UPDATE users SET role='member' WHERE id=?").bind(subject).run();
   const loginRequest={device:devices[0].id,server:'Demo',envelope:{wrapped:'a',iv:'b',data:'c'}};
   assert.equal((await call('mt5/connect',loginRequest)).status,409);
   assert.equal((await presence()).pending,null);

@@ -415,7 +415,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   }
   const token=request.headers.get('authorization')?.match(/^Bearer (.{72})$/)?.[1];
   if (!token) return fail('Device authentication required.',401);
-  const device=await q("SELECT d.id,d.owner,d.pc_name,d.installation_hash FROM mt5_devices d JOIN users u ON u.id=d.owner WHERE token_hash=? AND revoked=0 AND u.account_status='active'",await hash(token)).first<{id:string;owner:string;pc_name:string|null;installation_hash:string|null}>();
+  const device=await q("SELECT d.id,d.owner,d.pc_name,d.installation_hash,u.email AS owner_email FROM mt5_devices d JOIN users u ON u.id=d.owner WHERE token_hash=? AND revoked=0 AND u.account_status='active'",await hash(token)).first<{id:string;owner:string;pc_name:string|null;installation_hash:string|null;owner_email:string}>();
   if (!device) return json({error:'Device access revoked.',code:'device_revoked'},403);
   if (action === 'device/set-monitoring') return setMonitoring(device.owner, device.id);
   if (action === 'device/rename') {
@@ -446,7 +446,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       q("SELECT id,retry_requested_at FROM mt5_links WHERE device=? AND status='connected' AND monitoring_paused=0 AND retry_requested_at IS NOT NULL",device.id),
       q("SELECT id,server FROM mt5_links WHERE device=? AND status='pending' AND expires>? ORDER BY expires,id LIMIT 1",device.id,unix),
     ]);
-    return json({device:device.id,name:device.pc_name||'PC '+device.id.slice(0,8),capturePaused:halted,paused:paused.results.map(r=>r.id),
+    return json({device:device.id,name:device.pc_name||'PC '+device.id.slice(0,8),pairedAs:device.owner_email,capturePaused:halted,paused:paused.results.map(r=>r.id),
       retries:halted?[]:retries.results,pending:halted?null:pending.results[0]??null});
   }
   if(action==='device/retries'){

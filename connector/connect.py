@@ -20,6 +20,7 @@ from keyring.backends.Windows import WinVaultKeyring
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from pc_identity import pairing_request
 from ledger import closed_legs, iso
 from lifecycle import reconstruct
 
@@ -536,7 +537,7 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
         if len(code)!=32 or any(c not in "0123456789abcdef" for c in code):
             sys.exit("Copy the full 32-character code from Account settings > Pair a PC.")
         try:
-            result=post("claim",{"code":code,"publicKey":base64.b64encode(pub).decode()})
+            result=post("claim",pairing_request(origin, code, base64.b64encode(pub).decode()))
         except urllib.error.HTTPError as error:
             message=error.read(1024)
             if b"1010" in message:
