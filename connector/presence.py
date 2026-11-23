@@ -53,7 +53,14 @@ class DevicePresence:
                 except (ValueError, OSError):
                     identity = False
                 if identity:
+                    # A stale token or cloned installation must never keep
+                    # capturing under a previously accepted device policy.
+                    # Preserve credentials and queued SQLite evidence, but
+                    # stop all capture until a person resolves this identity.
+                    with self._lock:
+                        self._latest = None
                     self.emit("pc-identity-conflict")
+                    self.stop.set()
                     return False
             if error.code in (401, 403):
                 try:
@@ -61,6 +68,8 @@ class DevicePresence:
                 except (ValueError, OSError):
                     revoked = False
                 if revoked:
+                    with self._lock:
+                        self._latest = None
                     self.emit("pc-revoked")
                     self.stop.set()
                     return False
