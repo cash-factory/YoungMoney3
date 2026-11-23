@@ -1,0 +1,123 @@
+name: Staging-only MT5 offline recovery and specification identity repair
+on:
+  push:
+    branches: [fix/mt5-reconnect-recovery-20261123]
+    paths: [.github/workflows/staging-mt5-recovery-20261123.yml]
+permissions:
+  contents: read
+concurrency:
+  group: youngmoney3-staging-release
+  cancel-in-progress: false
+
+jobs:
+  windows-connector:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Test real Windows multiprocessing and seven-position recovery
+        run: |
+          python -m pip install -r connector/requirements.txt
+          python -m unittest discover -s connector -p 'test_*.py'
+
+  staging:
+    needs: windows-connector
+    if: github.repository == 'cash-factory/YoungMoney3'
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 45
+    env:
+      YM3_STAGING_D1_ID: ${{ vars.YM3_STAGING_D1_ID }}
+      YM3_STAGING_D1_NAME: ${{ vars.YM3_STAGING_D1_NAME }}
+      YM3_STAGING_WORKER_NAME: ${{ vars.YM3_STAGING_WORKER_NAME }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reject unexpected changes and protect production
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/fix/mt5-reconnect-recovery-20261123'
+          test "${YM3_STAGING_WORKER_NAME:-}" = 'ym-fx-staging'
+          test -n "${CLOUDFLARE_API_TOKEN:-}" && test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test "$(git ls-remote https://github.com/${GITHUB_REPOSITORY}.git refs/heads/main | cut -f1)" = '17bdb47afb76db41c1166d064b517cff2a812019'
+          test "$(git merge-base origin/fix/mt5-evidence-conflict-quarantine-20261123 HEAD)" = 'c1ee283388fbd69c706453c3686b8061964842f4'
+          while IFS= read -r path; do
+            case "$path" in
+              .github/workflows/staging-mt5-recovery-20261123.yml|.github/workflows/connector-prerelease.yml|connector/connect.py|connector/recovery.py|connector/spec_evidence.py|connector/test_history_scan.py|connector/test_recovery.py|connector/version.py|migrations/0019_mt5_recovery_and_spec_classification.sql|scripts/inspect-mt5-conflicts-summary.mjs|scripts/probe-staging-mt5-conflict.mjs|scripts/test-worker.mjs|scripts/verify-mt5-recovery-schema.mjs|src/components/Mt5Connections.tsx|src/lib/mt5Monitor.ts|worker/mt5.ts) ;;
+              *) echo "Unexpected staging recovery change: $path"; exit 1;;
+            esac
+          done < <(git diff --name-only origin/fix/mt5-evidence-conflict-quarantine-20261123...HEAD)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Validate complete Worker, journal, recovery, UI and release contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run typecheck
+          npm run lint
+          npm test
+          npm run test:staging
+          node --test scripts/test-owner-recovery.mjs
+          npm run test:ui
+          npm run test:worker
+          python scripts/test-connector-release-contract.py
+          npm run build
+      - name: Verify exact isolated staging schema and audit baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run cf:staging:prepare
+          npm run cf:staging:verify
+          node scripts/verify-rich-staging-schema.mjs
+          node scripts/verify-copy-staging-schema.mjs
+          node scripts/verify-mt5-conflict-schema.mjs
+          npx wrangler d1 migrations list DB --remote --config wrangler.staging.jsonc
+      - name: Apply audit-only classification and recovery status migration to staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run cf:staging:migrate
+          node scripts/verify-mt5-recovery-schema.mjs
+          node scripts/verify-mt5-conflict-schema.mjs
+          node scripts/verify-rich-staging-schema.mjs
+      - name: Deploy isolated staging Worker, never main or production
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote https://github.com/${GITHUB_REPOSITORY}.git refs/heads/main | cut -f1)" = '17bdb47afb76db41c1166d064b517cff2a812019'
+          npx wrangler deploy --config wrangler.staging.jsonc --dry-run
+          npx wrangler deploy --config wrangler.staging.jsonc | tee "$RUNNER_TEMP/mt5-recovery.log"
+          grep -F 'https://ym-fx-staging.ethical-hacker263.workers.dev' "$RUNNER_TEMP/mt5-recovery.log"
+      - name: Verify deployed logins, true conflict vs spec alias, and browser recovery states
+        shell: bash
+        env:
+          YM3_STAGING_URL: https://ym-fx-staging.ethical-hacker263.workers.dev
+        run: |
+          set -euo pipefail
+          node scripts/check-staging-health.mjs
+          node scripts/probe-staging-login.mjs
+          YM3_PROBE_LEGACY=1 node scripts/probe-staging-login.mjs
+          npx playwright install --with-deps chromium
+          YM3_PROBE_BROWSER=1 node scripts/probe-staging-mt5-conflict.mjs
+          node scripts/verify-mt5-recovery-schema.mjs
+      - name: Record exact operational boundary
+        if: always()
+        shell: bash
+        run: |
+          echo "Staging MT5 recovery source: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Only ym-fx-staging and its additive D1 migration 0019 were targeted; no production changes." >> "$GITHUB_STEP_SUMMARY"
+          echo "Original broker evidence and historic conflicting candidates are retained; known specification alias defects classified with immutable audit records." >> "$GITHUB_STEP_SUMMARY"
+          echo "Real broker recovery of the seven user trades remains an acceptance gate for the corrected Windows v0.5.7-rc1 connector." >> "$GITHUB_STEP_SUMMARY"
