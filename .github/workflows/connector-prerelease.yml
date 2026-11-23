@@ -152,7 +152,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $dir = Join-Path $env:RUNNER_TEMP 'connector-clean'
-          $exe = Join-Path $dir 'YoungMoney3 Connector.exe'
+          $exe = Join-Path $dir 'YoungMoney3.Connector.exe'
           $expected = ((Get-Content (Join-Path $dir 'YoungMoney3.Connector.exe.sha256') -Raw) -split ' ')[0]
           if ((Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'Checksum mismatch' }
           $profile = Join-Path $dir 'clean-profile'
