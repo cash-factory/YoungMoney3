@@ -41,7 +41,7 @@ export function AdaptiveTradingDesk({
   mode, preferred, suggested, suggestionReason, onSelect, onStart, onPin, onCapture,
   onOpenGuide, onOpenWeekly, onOpenRisk, pendingReviews, accountName, tradesRecorded,
 }: Props) {
-  const headlineId = useId();
+  const descriptionRoot = useId();
   const modeInfo: Record<DeskMode, { headline: string; detail: string; supporting: string }> = {
     prepare: {
       headline: 'Start with your rules.',
@@ -83,10 +83,11 @@ export function AdaptiveTradingDesk({
         const selected = mode === item.id;
         return <button type="button" key={item.id} className="ym-adaptive-mode"
           aria-pressed={selected} data-selected={selected}
-          onClick={() => onSelect(item.id)} aria-describedby={headlineId}>
+          aria-label={item.title + ' trading desk mode'}
+          onClick={() => onSelect(item.id)} aria-describedby={descriptionRoot + '-' + item.id}>
           <span className="ym-adaptive-mode-icon"><Icon size={19} aria-hidden="true"/></span>
           <span className="ym-adaptive-mode-label"><small>{item.eyebrow} / INTENT</small><strong>{item.title}</strong>
-            <span>{item.short}</span></span>
+            <span id={descriptionRoot + '-' + item.id}>{item.short}</span></span>
           {selected && <span className="ym-adaptive-active-marker" aria-hidden="true"/>}
         </button>;
       })}
@@ -94,7 +95,7 @@ export function AdaptiveTradingDesk({
     <div className="ym-adaptive-focus" data-mode={mode}>
       <div className="ym-adaptive-focus-copy">
         <span className="ym-adaptive-focus-eyebrow"><Flame size={14}/> YOUR CURRENT FOCUS</span>
-        <h3 id={headlineId}>{modeInfo[mode].headline}</h3>
+        <h3>{modeInfo[mode].headline}</h3>
         <p>{modeInfo[mode].detail}</p>
         <small>{modeInfo[mode].supporting}</small>
       </div>
