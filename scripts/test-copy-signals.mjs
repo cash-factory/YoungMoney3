@@ -45,6 +45,9 @@ assert.equal(reduction.length,1);
 assert.equal(reduction[0].action,'reduce_position');
 assert.ok(Math.abs(reduction[0].source_volume-0.2)<1e-9);
 
+const activated={...position,key:'position:999',time_ms:now};
+assert.equal(deriveCopySignals([pending],[activated],[],now).length,0,
+  'Pending order fill must not also spawn a new market copy on the same symbol.');
 assert.equal(deriveCopySignals([pending],[],[],now).length,0,
   'Pending disappearance could be fill, cancellation or expiry; never blindly cancel.');
 const cancelProof={key:pending.key,kind:'cancelled',ticket:'222',time_ms:now-100};
