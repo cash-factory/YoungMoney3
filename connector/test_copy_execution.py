@@ -46,6 +46,7 @@ class FakeMT5:
         self.positions=[]
         self.pending=[]
         self.deal_receipts={}
+        self.daily_deals=[]
         self.rejected=False
         self.profit=-100
         self.terminal=SimpleNamespace(connected=True,trade_allowed=True)
@@ -68,7 +69,7 @@ class FakeMT5:
     def history_deals_get(self,*args,**kwargs):
         if 'ticket' in kwargs:
             return [self.deal_receipts[kwargs['ticket']]] if kwargs['ticket'] in self.deal_receipts else []
-        return []
+        return self.daily_deals
 
     def positions_get(self,*args,**kwargs):
         if 'ticket' in kwargs:
@@ -201,6 +202,17 @@ class LocalExecutionTests(unittest.TestCase):
         set_consent(self.db,self.link,False)
         revoked=execute(self.mt5,self.db,self.link,self.task(),self.account,now_ms=self.mt5.now)
         self.assertEqual(revoked['code'],'local_demo_execution_not_consented')
+        self.assertEqual(self.mt5.sent,[])
+
+    def test_daily_loss_budget_rejects_new_risk_that_would_exceed_cap(self):
+        set_consent(self.db,self.link,True)
+        self.mt5.daily_deals=[SimpleNamespace(type=0,profit=-35,commission=0,fee=0,swap=0)]
+        # The follower has $2000 equity. Max 2% loss => $40. A new order
+        # risking $20 would exceed the $5 remaining budget.
+        blocked=execute(self.mt5,self.db,self.link,self.task(),
+                        self.account,now_ms=self.mt5.now)
+        self.assertEqual(blocked['status'],'rejected',blocked)
+        self.assertEqual(blocked['code'],'new_order_risk_exceeds_remaining_daily_limit')
         self.assertEqual(self.mt5.sent,[])
 
     def test_verified_ticket_mapping_controls_sltp_and_close(self):
