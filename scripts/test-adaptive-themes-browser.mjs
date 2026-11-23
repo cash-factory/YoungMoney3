@@ -32,7 +32,7 @@ try {
       assert.equal(await taskModes.getByRole('button').count(),4);
       await taskModes.getByRole('button',{name:/Understand/}).click();
       await page.locator('#ym-personal-patterns').waitFor();
-      await page.locator('.ym-pattern-metric').first().waitFor();
+      await page.locator('.ym-pattern-onboarding--empty, .ym-pattern-metric').first().waitFor();
       const snapshot=await page.evaluate(()=>{
         const containers=[...document.querySelectorAll('.ym-adaptive-mode-icon')];
         const iconRects=containers.map(node=>node.getBoundingClientRect());
@@ -43,6 +43,7 @@ try {
           viewport:innerWidth,
           iconRects:iconRects.map(r=>({width:r.width,height:r.height})),
           patternRects:patternRects.map(r=>({width:r.width,left:r.left,right:r.right})),
+          emptyVisible:Boolean(pattern.querySelector('.ym-pattern-onboarding--empty')),
           modeSelected:document.querySelectorAll('.ym-adaptive-mode[aria-pressed="true"]').length,
           heading:pattern.querySelector('h2')?.textContent,
         };
@@ -53,11 +54,12 @@ try {
       assert.ok(snapshot.iconRects.length===4 &&
         snapshot.iconRects.every(icon=>icon.width>=32 && icon.width<=45 && icon.height>=32 && icon.height<=45),
         'Four consistently sized icon containers: '+JSON.stringify(snapshot.iconRects));
-      assert.ok(snapshot.patternRects.length===3 &&
-        snapshot.patternRects.every(rect=>rect.width>100 && rect.left>=-2 && rect.right<=width+2),
-        'Pattern cards must be legible and inside the viewport: '+JSON.stringify(snapshot.patternRects));
+      assert.ok((snapshot.emptyVisible && snapshot.patternRects.length===0) ||
+        (snapshot.patternRects.length===3 &&
+         snapshot.patternRects.every(rect=>rect.width>100 && rect.left>=-2 && rect.right<=width+2)),
+        'Patterns need either a compact first-use state or legible cards: '+JSON.stringify(snapshot));
       if(['craftylabs-studio','obsidian','true-pink'].includes(palette)) {
-        await page.locator('#ym-personal-patterns').scrollIntoViewIfNeeded();
+        await page.locator('#ym-personal-patterns').evaluate(element=>element.scrollIntoView({block:'start',behavior:'instant'}));
         await page.screenshot({path:'artifacts/adaptive/'+palette+'-'+appearance+'-'+width+'.png',fullPage:false});
       }
       count++;
