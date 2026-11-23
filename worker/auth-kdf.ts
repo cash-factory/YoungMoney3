@@ -1,10 +1,11 @@
+import { DurableObject } from 'cloudflare:workers';
 import { hashPassword, verifyPassword } from './passwords';
 
 // Staging-only private authentication compute. A Durable Object has a
 // separate 30s CPU budget on Workers Free; the incoming Worker has 10ms.
 // No credentials or verifier state are persisted in this object.
 // Only the Worker holding the private AUTH_KDF binding can invoke fetch().
-export class AuthKdf {
+export class AuthKdf extends DurableObject {
   async fetch(request: Request): Promise<Response> {
     if (request.method !== 'POST') return Response.json({error:'Not found'}, {status:404});
     let fields: unknown;
