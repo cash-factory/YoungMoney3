@@ -40,6 +40,8 @@ jobs:
             sleep 1
           done
           YM3_PREVIEW_URL=http://127.0.0.1:4173/ node scripts/test-command-palette-browser.mjs
+          YM3_PREVIEW_URL=http://127.0.0.1:4173/ node scripts/test-decisions-browser.mjs
+          YM3_PREVIEW_URL=http://127.0.0.1:4173/ node scripts/test-improvement-lab-browser.mjs
 
   mt5-terminal:
     runs-on: windows-latest
