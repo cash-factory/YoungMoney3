@@ -10,6 +10,8 @@ import {
   Play,
   RotateCcw,
   Save,
+  FlaskConical,
+  ArrowRight,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -348,6 +350,23 @@ function ReplayForm({
       setError(cause instanceof Error ? cause.message : 'Could not record the pre-reveal judgement.');
     } finally { setBusy(false); }
   };
+  const continueInLab = async () => {
+    if (!show) return;
+    setBusy(true);
+    setError('');
+    try {
+      await persist(false);
+      sessionStorage.setItem('ymfx:lab-intent:v1:' + owner, JSON.stringify({
+        strategy_id: strategy || null,
+        account_id: facts.account,
+        symbol: facts.symbol,
+      }));
+      onClose();
+      window.location.hash = 'strategy-testing';
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not save this review before opening the laboratory.');
+    } finally { setBusy(false); }
+  };
   const save = async () => {
     setBusy(true);
     setError('');
@@ -558,6 +577,13 @@ function ReplayForm({
         <VoiceRecorder onUpload={setVoice} existingUrl={voice} />
       </details>
       {error && <p role="alert">{error}</p>}
+      {show && <div className="ym-replay-lab-link">
+        <div><strong>Turn this review into a testable improvement.</strong>
+          <p>Carry the selected strategy and account into a new experiment. Define one behavior to test next.</p></div>
+        <button type="button" className="btn-secondary" onClick={() => { void continueInLab(); }} disabled={busy}>
+          <FlaskConical size={16}/> Take this into the Lab <ArrowRight size={15}/>
+        </button>
+      </div>}
       <button
         className="btn-primary"
         disabled={
