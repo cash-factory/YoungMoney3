@@ -11,8 +11,9 @@ const study: ImprovementExperiment = {
   start_date:'2026-11-01',end_date:'2026-11-30',baseline_days:30,
   minimum_samples:5,status:'active',conclusion:'',created_at:'',updated_at:'',
 };
+let reviewSequence=0;
 const review=(day:string, verdict:DecisionReview['verdict'],extra:Partial<DecisionReview>={}):DecisionReview=>({
-  id:'r'+day+'-'+Math.random(),reference:'trade/example',entry_time:day+'T12:30:00Z',
+  id:'r'+day+'-'+(++reviewSequence),reference:'trade/example-'+reviewSequence,entry_time:day+'T12:30:00Z',
   account_id:'account-a',strategy_id:'strategy-a',entry_model_id:null,
   strategy_name:'',model_name:'',symbol:'EURUSD',
   verdict,trigger:'',note:'',screenshot_url:null,voice_note_url:null,
