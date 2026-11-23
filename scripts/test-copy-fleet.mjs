@@ -78,7 +78,7 @@ try{
     [foreign,stranger.id,device2,0,'USD',10000],
   ]){
     await db.prepare("INSERT INTO mt5_links(id,device,owner,account_id,status,server,login,company,currency,trade_mode,access_level,last_sync,broker_balance,broker_equity,expires,monitoring_paused) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)")
-      .bind(l,d,user,accountIds[i++],'connected','DemoServer','1234','Demo broker',
+      .bind(l,d,user,accountIds[i++],'connected','DemoServer',String(5000+i),'Demo broker',
         currency,mode,'trading-enabled',new Date().toISOString(),equity,equity,now+86400000).run();
   }
   const targets=[
