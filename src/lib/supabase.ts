@@ -33,13 +33,13 @@ async function api(path: string, body?: unknown, method = 'POST'): Promise<Resul
   const ray = reply.headers.get('cf-ray');
   const requestId = ray ? ' Cloudflare request ID: ' + ray + '.' : '';
   let payload: Row;
-  let raw: string;
+  let raw = '';
   try {
     raw = await reply.text();
     payload = JSON.parse(raw) as Row;
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw Error('Invalid API payload');
   } catch {
-    const resourceLimit = typeof raw! === 'undefined' && /Error 1102|Worker exceeded resource limits/i.test(raw!);
+    const resourceLimit = /Error 1102|Worker exceeded resource limits/i.test(raw);
     return { data: null, error: {
       message: resourceLimit
         ? 'Cloudflare terminated the workspace request because it exceeded its execution limit (1102).' + requestId
