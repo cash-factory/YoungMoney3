@@ -25,6 +25,7 @@ export interface Env {
   PILOT_INVITE_CODE?: string;
   MT5_ALLOW_LIVE?: string;
   MT5_ALLOW_LIVE_COPY?: string;
+  MT5_LIVE_COPY_EXECUTION?: string;
   DEMO_SHOWCASE_ENABLED?: string;
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
