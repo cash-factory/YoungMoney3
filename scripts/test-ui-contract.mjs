@@ -352,16 +352,16 @@ test('failed MT5 login attempts are removable without affecting connected accoun
 test('staging MT5 Connections downloads the latest published Windows installer directly',()=>{
   const mt5=read('src/components/Mt5Connections.tsx');
   const page=read('public/connector-download.html');
-  const tag='staging-connector-v0.5.4-rc1';
+  const tag='staging-connector-v0.5.5-rc1';
   const executable='https://github.com/cash-factory/YoungMoney3/releases/download/'+tag+'/YoungMoney3.Connector.exe';
   const checksum=executable+'.sha256';
   assert.ok(mt5.includes('href="'+executable+'"'),'Download Connector must go directly to latest official executable');
-  assert.ok(mt5.includes('Download Connector v0.5.4-rc1'),'Users must know the version they are getting');
+  assert.ok(mt5.includes('Download Connector v0.5.5-rc1'),'Users must know the version they are getting');
   assert.ok(mt5.includes('href="/connector-download.html"'),'Release details must be accessible next to the main download');
   assert.ok(page.includes('href="'+executable+'"'),'Release page must provide a working link without GitHub API');
   assert.ok(page.includes('href="'+checksum+'"'),'Show the published checksum next to the executable');
   assert.ok(page.includes('id="digest"'),'The download page must show checksum verification instructions');
-  assert.ok(page.includes('1057f2c94777f3a99c31647a16f119012406e0009247602e28705a0a944ea7b1'),'Published Windows executable checksum must match the designated release');
+  assert.ok(page.includes('32f3b075a1f6e912d7d9191e573beead895bb1f0052478b2314691713dd84c37'),'Published Windows executable checksum must match the designated release');
   assert.ok(!page.includes('92716f36a60318d37646e419f8e7f9fbdf554d0e5817445f47796673ea37fd46'),'Never reuse the old connector checksum for a new release');
   assert.ok(page.includes('fetch(\'https://api.github.com/repos/cash-factory/YoungMoney3/releases?per_page=30\''),'Keep newer release discovery available');
 });
