@@ -440,11 +440,17 @@ try {
     hypothesis:'Waiting for the confirmation candle should improve plan adherence.',
     single_change:'Do not place an entry until the confirmation candle has closed.',
     strategy_id:'as-of-strategy',account_id:null,metric:'plan_adherence',
-    start_date:'2026-11-01',end_date:null,baseline_days:30,minimum_samples:5,
+    start_date:new Date().toISOString().slice(0,10),end_date:null,baseline_days:30,minimum_samples:5,
     status:'draft',conclusion:'',
   };
   assert.equal((await call('data',{action:'insert',table:'improvement_experiments',
     payload:{...draft,strategy_id:'not-owned'}})).status,400);
+  assert.equal((await call('data',{action:'insert',table:'improvement_experiments',
+    payload:{...draft,status:'active',start_date:'2000-01-01'}})).status,409,
+    'Backdated studies cannot claim prospective activation.');
+  assert.equal((await call('data',{action:'insert',table:'improvement_experiments',
+    payload:{...draft,activated_at:'2000-01-01T00:00:00Z'}})).status,403,
+    'Client cannot forge preregistration evidence.');
   const draftResponse=await call('data',{action:'insert',table:'improvement_experiments',payload:draft});
   assert.equal(draftResponse.status,200);
   let experiment=(await draftResponse.json()).data[0];
@@ -454,6 +460,12 @@ try {
   assert.equal(activate.status,200);
   experiment=(await activate.json()).data;
   assert.equal(experiment.status,'active');
+  assert.ok(Number.isFinite(Date.parse(experiment.activated_at)),'Server seals the study start timestamp.');
+  assert.equal((await call('data',{action:'update',table:'improvement_experiments',id:experiment.id,
+    filters:{updated_at:experiment.updated_at},payload:{activated_at:'1999-01-01T00:00:00Z'}})).status,403);
+  assert.equal((await call('data',{action:'delete',table:'improvement_experiments',id:experiment.id,
+    filters:{updated_at:experiment.updated_at}})).status,403,
+    'Activated study evidence must be retained.');
   assert.equal((await call('data',{action:'update',table:'improvement_experiments',id:experiment.id,
     filters:{updated_at:experiment.updated_at},payload:{single_change:'Changed the rule after starting.'}})).status,409);
   const complete=await call('data',{action:'update',table:'improvement_experiments',id:experiment.id,
