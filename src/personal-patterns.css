@@ -141,3 +141,19 @@
 @media (prefers-reduced-motion:reduce) {
   .ym-pattern-week-track span,.ym-pattern-rank-track span,.ym-pattern-refresh {transition:none;}
 }
+
+/* Empty evidence is one intentional starting point, not twelve empty visualizations. */
+.ym-personal-patterns {scroll-margin-top:84px;}
+.ym-pattern-onboarding--empty {
+  min-height:144px;padding:clamp(23px,3vw,33px);
+  border:1px solid color-mix(in srgb,var(--brand) 20%,var(--border));
+  background:linear-gradient(113deg,color-mix(in srgb,var(--brand) 5%,var(--bg-card)),var(--bg-card));
+}
+.ym-pattern-onboarding--empty>svg {
+  width:42px;height:42px;padding:10px;border-radius:12px;
+  border:1px solid color-mix(in srgb,var(--brand) 22%,var(--border));
+  background:color-mix(in srgb,var(--brand) 8%,var(--bg-card));
+}
+@media (max-width:640px) {
+  .ym-pattern-onboarding--empty {min-height:0;padding:22px 20px;gap:12px;}
+}
