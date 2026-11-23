@@ -47,6 +47,20 @@ const modeLabel:Record<RiskMode,string>={
   risk_pct_equity:'Risk % of follower equity',fixed_risk:'Fixed money at risk',
   equity_ratio:'Equity-proportional lots',lot_multiplier:'Source lot multiplier',
 };
+const symbolMapText=(map:Record<string,string>)=>
+  Object.entries(map).map(([from,to])=>from+'='+to).join(', ');
+const parseSymbolMapText=(text:string):Record<string,string>|null=>{
+  if(!text.trim())return {};
+  const entries=text.split(/[,\n]/).map(x=>x.trim()).filter(Boolean);
+  if(entries.length>40)return null;
+  const map:Record<string,string>={};
+  for(const text of entries){
+    const match=/^([A-Za-z0-9._#-]{1,40})\s*=\s*([A-Za-z0-9._#-]{1,40})$/.exec(text);
+    if(!match||Object.prototype.hasOwnProperty.call(map,match[1]))return null;
+    map[match[1]]=match[2];
+  }
+  return map;
+};
 const permission=(a:Account)=>a.trade_mode===0&&a.access_level==='trading-enabled'&&
   a.monitoring_paused===0&&Number(a.last_seen)>Date.now()-45000;
 export function CopyFleetConsole(){
@@ -61,6 +75,7 @@ export function CopyFleetConsole(){
   const [stop,setStop]=useState('1.09500');
   const [side,setSide]=useState<'buy'|'sell'>('buy');
   const [preview,setPreview]=useState<PreviewRow[]|null>(null);
+  const [mappingInputs,setMappingInputs]=useState<Record<string,string>>({});
   const load=useCallback(async()=>setStatus(await copyAction<Status>('fleet-status')),[]);
   useEffect(()=>{let active=true;copyAction<Status>('fleet-status')
     .then(x=>{if(active)setStatus(x);}).catch(x=>{if(active)setAlert(err(x));});
@@ -77,7 +92,8 @@ export function CopyFleetConsole(){
     (t.mode!=='equity_ratio'||t.value<=3)&&
     (t.mode!=='lot_multiplier'||t.value<=5)),[draft.targets]);
   const canSave=draft.name.trim().length>=2&&Boolean(source)&&draft.targets.length>0&&riskPass&&
-    draft.targets.every(t=>t.link!==draft.sourceLink);
+    draft.targets.every(t=>t.link!==draft.sourceLink &&
+      parseSymbolMapText(mappingInputs[t.link]??symbolMapText(t.symbolMap))!==null);
   const edit=(item:Fleet)=>{
     setSelected(item.id);
     setDraft({name:item.name,sourceLink:item.source_link,targets:item.targets.map(t=>({
@@ -85,9 +101,10 @@ export function CopyFleetConsole(){
       maxDailyLossPct:t.max_daily_loss_pct,enabled:!!t.enabled,symbolMap:t.symbol_map,
       mirrorPending:!!t.mirror_pending,mirrorProtection:!!t.mirror_protection,
     }))});
+    setMappingInputs(Object.fromEntries(item.targets.map(t=>[t.follower_link,symbolMapText(t.symbol_map)])));
     setAlert('');setNotice('');setPreview(null);
   };
-  const clear=()=>{setSelected(null);setDraft(newDraft());setAlert('');setNotice('');setPreview(null);};
+  const clear=()=>{setSelected(null);setDraft(newDraft());setMappingInputs({});setAlert('');setNotice('');setPreview(null);};
   const mutate=(link:string,change:Partial<TargetRow>)=>{
     setDraft(d=>({...d,targets:d.targets.map(t=>t.link===link?{...t,...change}:t)}));
     setPreview(null);setNotice('');
@@ -189,6 +206,23 @@ export function CopyFleetConsole(){
               <label>Lot ceiling<input className="input-field" type="number" min="0.01" max="100" step="0.01" value={target.maxLots} disabled={!!busy||picked?.state==='demo_armed'} onChange={e=>mutate(target.link,{maxLots:Number(e.target.value)})}/></label>
               <label>Daily loss cap %<input className="input-field" type="number" min="0.1" max="10" step="0.1" value={target.maxDailyLossPct} disabled={!!busy||picked?.state==='demo_armed'} onChange={e=>mutate(target.link,{maxDailyLossPct:Number(e.target.value)})}/></label>
             </div>
+            <details className="ym-cf-symbol-mapping"><summary>Broker instrument mapping · optional</summary>
+              <label htmlFor={'ym-cf-symbol-'+target.link}>Map source symbols to follower broker symbols</label>
+              <input id={'ym-cf-symbol-'+target.link} className="input-field"
+                placeholder="EURUSD=EURUSD.a, XAUUSD=GOLD"
+                value={mappingInputs[target.link]??symbolMapText(target.symbolMap)}
+                disabled={!!busy||picked?.state==='demo_armed'}
+                aria-invalid={parseSymbolMapText(mappingInputs[target.link]??symbolMapText(target.symbolMap))===null}
+                onChange={e=>{
+                  const value=e.target.value;
+                  setMappingInputs(prev=>({...prev,[target.link]:value}));
+                  const parsed=parseSymbolMapText(value);
+                  if(parsed!==null)mutate(target.link,{symbolMap:parsed});
+                }}/>
+              {parseSymbolMapText(mappingInputs[target.link]??symbolMapText(target.symbolMap))===null?
+                <small role="alert">Use comma-separated SOURCE=FOLLOWER pairs with unique symbols.</small>:
+                <small>Empty uses the same symbol. The connector never guesses broker suffixes.</small>}
+            </details>
             <div className="ym-cf-target-footer"><label><input type="checkbox" checked={target.enabled} disabled={!!busy||picked?.state==='demo_armed'} onChange={e=>mutate(target.link,{enabled:e.target.checked})}/> Include follower</label>
               <label><input type="checkbox" checked={target.mirrorPending} disabled={!!busy||picked?.state==='demo_armed'} onChange={e=>mutate(target.link,{mirrorPending:e.target.checked})}/> Pending orders</label>
               <label><input type="checkbox" checked={target.mirrorProtection} disabled={!!busy||picked?.state==='demo_armed'} onChange={e=>mutate(target.link,{mirrorProtection:e.target.checked})}/> Mirror SL/TP</label>
