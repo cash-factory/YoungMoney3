@@ -90,3 +90,46 @@
 @media(max-width:1000px){.ym-cs-workspace{grid-template-columns:1fr}.ym-cs-profile-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.ym-cs-identity{flex-wrap:wrap;align-items:flex-start}.ym-cs-lock-status{margin-left:58px}.ym-cs-metrics{grid-template-columns:1fr 1fr}.ym-cs-metrics>div:last-child{grid-column:1/-1}.ym-cs-profile-list,.ym-cs-account-grid,.ym-cs-controls,.ym-cs-result,.ym-cs-disclosure-grid{grid-template-columns:1fr}.ym-cs-result>div{border-right:0;border-bottom:1px solid var(--cs-line)}.ym-cs-result>div:last-of-type{border-bottom:0}.ym-cs-preview-header{flex-wrap:wrap}.ym-cs-saved,.ym-cs-editor,.ym-cs-preview{padding:17px}.ym-cs-simulator .ym-cs-field{max-width:none;width:100%}.ym-cs-simulator .btn-primary{width:100%}}
 @media(prefers-reduced-motion:reduce){.ym-cs-profile{transition:none}}
+
+
+/* One-to-many copy network: dense trading-desk structure, not a decorative wizard. */
+.ym-cs-groups{padding:clamp(18px,2.2vw,27px);display:grid;gap:14px}
+.ym-cs-groups>.ym-cs-section-title{margin-bottom:0}
+.ym-cs-group-toolbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.ym-cs-group-toolbar>.input-field{width:min(390px,100%);flex:1;min-width:220px}
+.ym-cs-group-form{border-top:1px solid var(--cs-line);padding-top:18px;display:grid;gap:16px}
+.ym-cs-group-form>.ym-cs-section-title{margin:3px 0}
+.ym-cs-group-form .ym-cs-section-title h3 small{font:600 11px/1.4 'JetBrains Mono',ui-monospace,monospace;color:var(--cs-muted)}
+.ym-cs-follower-select{display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:9px}
+.ym-cs-route-choice{min-width:0;display:flex;gap:11px;align-items:center;cursor:pointer;padding:13px;border:1px solid var(--cs-line);border-radius:9px;background:var(--bg-secondary)}
+.ym-cs-route-choice[data-selected=true]{border-color:var(--brand-text);background:var(--bg-card)}
+.ym-cs-route-choice:focus-within{outline:2px solid var(--brand-text);outline-offset:2px}
+.ym-cs-route-choice input{accent-color:var(--brand-text);width:16px;height:16px;flex:none}
+.ym-cs-route-choice span{display:grid;gap:4px;min-width:0}
+.ym-cs-route-choice strong{font-size:12px;line-height:1.3;overflow-wrap:anywhere}
+.ym-cs-route-choice small{font-size:10px;color:var(--cs-muted)}
+.ym-cs-follower-policy{display:grid;gap:13px;padding:17px;border:1px solid var(--cs-line);border-radius:10px;background:var(--bg-secondary)}
+.ym-cs-follower-policy-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.ym-cs-follower-policy-head>div{display:grid;gap:4px;min-width:0}
+.ym-cs-follower-policy-head strong{font-size:13px}
+.ym-cs-follower-policy-head small{font-size:11px;color:var(--cs-muted)}
+.ym-cs-policy-fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px}
+.ym-cs-network-preview{display:grid;gap:15px;border-top:1px solid var(--cs-line);padding-top:18px;margin-top:5px}
+.ym-cs-network-preview>.ym-cs-section-title{margin:0}
+.ym-cs-network-preview .ym-cs-policy-fields{grid-template-columns:minmax(140px,280px)}
+.ym-cs-network-preview>.btn-secondary{justify-self:start}
+.ym-cs-loss-fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:11px}
+.ym-cs-group-results{display:grid;gap:12px;border:1px solid var(--cs-line);border-radius:10px;padding:15px;background:var(--bg-secondary)}
+.ym-cs-group-results-header{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.ym-cs-group-results-header strong{font-size:13px}
+.ym-cs-group-results-header span{font-size:11px;color:var(--cs-muted)}
+.ym-cs-results-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(195px,1fr));gap:9px}
+.ym-cs-results-grid article{display:grid;gap:8px;padding:15px;background:var(--bg-card);border-radius:8px;border:1px solid var(--cs-line)}
+.ym-cs-results-grid article>strong{font-size:12px;overflow-wrap:anywhere}
+.ym-cs-results-grid article>small{display:flex;justify-content:space-between;gap:7px;color:var(--cs-muted);font-size:10px}
+.ym-cs-result-lots{font:700 20px/1.1 'JetBrains Mono',ui-monospace,monospace;color:var(--text-primary)}
+.ym-cs-group-results>p:last-child{display:flex;align-items:flex-start;gap:8px}
+.ym-cs-group-results>p:last-child svg{flex:none;margin-top:1px}
+@media(max-width:850px){.ym-cs-policy-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.ym-cs-group-toolbar>.input-field{width:100%;flex-basis:100%}.ym-cs-policy-fields{grid-template-columns:1fr}.ym-cs-follower-policy-head{align-items:flex-start}.ym-cs-group-results-header{align-items:flex-start;flex-direction:column}}
+@media(prefers-reduced-motion:reduce){.ym-cs-route-choice,.ym-cs-follower-policy{transition:none}}
