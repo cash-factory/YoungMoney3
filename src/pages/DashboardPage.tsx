@@ -29,6 +29,11 @@ import type { Trade, TradeInput, RiskSettingsInput } from '@/lib/types';
 import { subDays, format } from 'date-fns';
 
 import { DecisionDesk, PerformancePin, type FastCapture } from '@/components/DecisionDesk';
+import { AdaptiveTradingDesk, modeDestination, modeFromSection, type DeskMode } from '@/components/AdaptiveTradingDesk';
+import { PersonalTradingPatterns } from '@/components/PersonalTradingPatterns';
+import { readPreference, savePreference } from '@/lib/browserPreferences';
+import { useDecisionReviews } from '@/hooks/useDecisionReviews';
+import { replayTargets, referenceFor } from '@/lib/decisionReplay';
 interface DashboardProps {
   accountFilter: string;
   onAccountChange: (account: string) => void;
@@ -40,6 +45,7 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
   const { user } = useAuth();
   const { trades: liveTrades, loading, loadError, asOf, addTrade } = useTrades(user?.id);
   const { positions: lifecyclePositions } = useMt5Lifecycles(user?.id);
+  const { rows: decisionReviews } = useDecisionReviews(user?.id);
   const { accounts } = useTradingAccounts(user?.id);
   const { adjustments } = useTradingAccountAdjustments(user?.id);
   const { backtests } = useBacktests(user?.id);
@@ -55,8 +61,13 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
   const [tradeOrigin, setTradeOrigin] = useState('all');
   const [source, setSource] = useState<'live' | 'backtest' | 'forward'>('live');
   const pinKey='ymfx:opening-performance:'+user?.id;
-  const [pinned,setPinned]=useState(()=>{try{return localStorage.getItem(pinKey)==='1';}catch{return false;}});
-  const [selectedSection, setSelectedSection] = useState(pinned?'performance':'overview');
+  const deskKey='ymfx:desk-opening:'+user?.id;
+  const [pinned,setPinned]=useState(()=>readPreference(pinKey)==='1');
+  const [preferredDesk,setPreferredDesk]=useState<DeskMode|null>(()=>{
+    const stored=readPreference(deskKey);
+    return stored==='prepare'||stored==='capture'||stored==='review'||stored==='analyze' ? stored : null;
+  });
+  const [selectedSection, setSelectedSection] = useState(preferredDesk?modeDestination[preferredDesk]:pinned?'performance':'overview');
   const activeSection = source !== 'live' && selectedSection === 'risk' ? 'overview' : selectedSection;
   const sections = [
     { id: 'overview', label: 'Overview', description: 'Your account snapshot and the figures that matter today.' },
@@ -172,6 +183,32 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
   const recentTrades = useMemo(() => [...trades].sort((a,b) =>
     Date.parse(b.entry_time) - Date.parse(a.entry_time)).slice(0, 6), [trades]);
   const openInView = trades.filter(t=>t.status==='open').length;
+  const pendingReviewCount = useMemo(()=>{
+    const seen = new Set(decisionReviews.map(row=>row.reference));
+    return replayTargets(trades,filteredLifecyclePositions).filter(target=>!seen.has(referenceFor(target))).length;
+  },[decisionReviews,trades,filteredLifecyclePositions]);
+  const selectedMode = modeFromSection(activeSection);
+  const suggestedMode: DeskMode = !accounts.length || !plans.length ? 'prepare'
+    : pendingReviewCount ? 'review'
+    : liveTrades.length === 0 ? 'capture'
+    : decisionReviews.length >= 12 ? 'analyze' : 'capture';
+  const suggestionReason = suggestedMode==='prepare' ? 'Start with your setup and risk rules'
+    : suggestedMode==='review' ? pendingReviewCount+' entries await a documented review'
+    : suggestedMode==='analyze' ? 'You have a growing record of decision reviews'
+    : 'Document a trade, observation, or deliberate pass';
+  const chooseDesk = (mode: DeskMode) => setSelectedSection(modeDestination[mode]);
+  const pinDesk = (mode: DeskMode|null) => {
+    setPreferredDesk(mode);
+    savePreference(deskKey,mode||'');
+    if(mode) {setPinned(false);savePreference(pinKey,'0');}
+  };
+  const openLaboratory = () => {
+    if(user?.id) {
+      try {sessionStorage.setItem('ymfx:lab-view:v1:'+user.id,'1');}
+      catch { /* Navigation remains available without browser storage. */ }
+    }
+    window.location.hash='strategy-testing';
+  };
 
   const handleSubmit = async (data: TradeInput) => {
     await addTrade(data);
@@ -205,6 +242,22 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
           </button>
         </div>
       </div>
+
+      {source === 'live' && <AdaptiveTradingDesk
+        mode={selectedMode}
+        preferred={preferredDesk}
+        suggested={suggestedMode}
+        suggestionReason={suggestionReason}
+        onSelect={chooseDesk}
+        onPin={pinDesk}
+        onCapture={onCapture}
+        onOpenGuide={() => onOpenGuide?.()}
+        onOpenWeekly={openWeekly}
+        onOpenRisk={() => {chooseDesk('prepare');setShowRiskSettings(true);}}
+        pendingReviews={pendingReviewCount}
+        accountName={account?.name || 'All accounts'}
+        tradesRecorded={trades.length}
+      />}
 
       <div className="ym-dash-controls card" role="group" aria-label="Performance filters">
         <div className="ym-dash-filter">
@@ -274,7 +327,7 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
       <div key={activeSection} className="ym-dash-focus-panel" role="tabpanel" tabIndex={0}
         id={`dashboard-panel-${activeSection}`} aria-labelledby={`dashboard-tab-${activeSection}`}>
         <p className="ym-dash-focus-description">{sections.find(section => section.id === activeSection)?.description}</p>
-      {source==='live' && <PerformancePin pinned={pinned} onChange={()=>{try { localStorage.setItem(pinKey,pinned?'0':'1'); }catch{/* optional */}setPinned(!pinned);}}/>}
+      {source==='live' && <PerformancePin pinned={pinned} onChange={()=>{savePreference(pinKey,pinned?'0':'1');setPinned(!pinned);if(!pinned){setPreferredDesk(null);savePreference(deskKey,'');}}}/>}
       {activeSection === 'overview' && <>
       {source==='live' && <DecisionDesk trades={trades} positions={filteredLifecyclePositions} account={account} accounts={accounts} onCapture={onCapture} openWeekly={openWeekly}/>}
       <section className="ym-dash-balance" aria-label="Account and trading result">
@@ -472,6 +525,8 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
       }
 
       {activeSection === 'recent' && <section className="ym-dash-section" id="ym-recent">
+      {source==='live' && <DecisionDesk trades={trades} positions={filteredLifecyclePositions}
+        account={account} accounts={accounts} onCapture={onCapture} openWeekly={openWeekly}/>}
         <div className="ym-dash-section-title">
           <div><p className="ym-dash-kicker">THE LEDGER</p><h2>Recent trades</h2></div>
           <span>Open a trade to review its details</span>
@@ -550,6 +605,9 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
           <ChevronDown className="ym-dash-detail-chevron" size={20} aria-hidden="true" />
         </summary>
         <div className="ym-dash-details-body">
+          {source==='live' && <PersonalTradingPatterns owner={user?.id} trades={trades}
+            accountId={accountFilter} accountName={account?.name}
+            onReview={() => chooseDesk('review')} onOpenLab={openLaboratory}/>}
           <div className="ym-dash-section-title"><div><p className="ym-dash-kicker">DEEPER METRICS</p><h2>Consistency &amp; edge</h2></div></div>
           <div className="ym-dash-average-win">
             <StatCard label="Average winning trade" value={mixedCurrencyView ? 'By currency' : formatCurrency(stats.avgWin)}
