@@ -31,6 +31,7 @@ try {
       assert.equal(await taskModes.getByRole('button').count(),4);
       await taskModes.getByRole('button',{name:/Understand/}).click();
       await page.locator('#ym-personal-patterns').waitFor();
+      await page.locator('.ym-pattern-metric').first().waitFor();
       const snapshot=await page.evaluate(()=>{
         const containers=[...document.querySelectorAll('.ym-adaptive-mode-icon')];
         const iconRects=containers.map(node=>node.getBoundingClientRect());
