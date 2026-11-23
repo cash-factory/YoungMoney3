@@ -35,8 +35,15 @@ def post(action, data, token=None):
     if token:
         headers["Authorization"] = "Bearer " + token
     req = urllib.request.Request(origin+"/api/mt5/device/"+action, json.dumps(data).encode(), headers)
-    with opener.open(req, timeout=20) as reply:
-        return json.load(reply)
+    try:
+        with opener.open(req, timeout=20) as reply:
+            return json.load(reply)
+    except urllib.error.HTTPError as error:
+        # The caller sees only a trusted action identifier and HTTP status.
+        # Never log the response URL, request body, authorization header or
+        # arbitrary server response text (which may contain sensitive data).
+        error.capture_action = action
+        raise
 
 def rename_paired_pc(url, name):
     """Rename only the PC belonging to the existing Windows vault token.
