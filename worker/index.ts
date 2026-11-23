@@ -3,6 +3,7 @@ import {accountSummaries} from './accountSummaries';
 import {selectRecords} from './selectRecords';
 import { settleManualTrade } from '../src/lib/settleManualTrade';
 import { validateExperiment, type ImprovementExperimentInput } from '../src/lib/improvementLab';
+import { hashPassword, verifyPassword } from './passwords';
 import type { TradeInput } from '../src/lib/types';
 async function normalizeTrade(item: Record<string,unknown>, owner: unknown, db: D1Database) {
   await assertOwnedLinks('trades', item, owner, db);
@@ -34,11 +35,6 @@ function now() { return new Date().toISOString(); }
 function id() { return crypto.randomUUID(); }
 function b64(bytes: ArrayBuffer) { return btoa(String.fromCharCode(...new Uint8Array(bytes))); }
 function unb64(value: string) { return Uint8Array.from(atob(value), char => char.charCodeAt(0)); }
-async function hashPassword(password: string, salt = b64(crypto.getRandomValues(new Uint8Array(16)))) {
-  const key = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: unb64(salt), iterations: 100000, hash: 'SHA-256' }, key, 256);
-  return { salt, hash: b64(bits) };
-}
 async function sha(value: string) { return b64(await crypto.subtle.digest('SHA-256', encoder.encode(value))); }
 const sessionCookie = '__Host-ym_session';
 function cookieToken(request: Request) {
@@ -132,11 +128,33 @@ async function authRoute(request: Request, env: Env, path: string) {
     const accountCount = await env.DB.prepare('SELECT COUNT(*) AS total FROM users WHERE id<>?').bind(DEMO_MEMBER_ID).first<{ total: number }>();
     if ((accountCount?.total || 0) >= 10) return response({ error: 'This pilot has reached its 10-account limit.' }, 403);
     const email = input.email?.trim().toLowerCase(); const username = input.username?.trim().toLowerCase(); const password = input.password || ''; const displayName = input.display_name?.trim() || username;
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !username || !/^[a-z0-9_]{3,32}$/.test(username) || password.length < 8) return response({ error: 'Use a valid email, 3â€“32 character username, and password of at least 8 characters.' }, 400);
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !username || !/^[a-z0-9_]{3,32}$/.test(username) || password.length < 8 || password.length > 256) return response({ error: 'Use a valid email, 3â€“32 character username, and password of at least 8 characters.' }, 400);
     const existing = await env.DB.prepare('SELECT id FROM users WHERE email=? OR username=?').bind(email, username).first(); if (existing) return response({ error: 'Email or username is already in use.' }, 409);
     const secured = await hashPassword(password); const userId = id(); const timestamp = now(); const created = await env.DB.prepare('INSERT OR IGNORE INTO users (id,email,username,display_name,password_hash,password_salt,created_at,updated_at) SELECT ?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM users WHERE id<>?)<10').bind(userId, email, username, displayName, secured.hash, secured.salt, timestamp, timestamp,DEMO_MEMBER_ID).run(); if (!created.meta.changes) return response({ error: 'Account unavailable or pilot full.' }, 409); const user = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(userId).first<Record<string, unknown>>(); return issueSession(env.DB, user!);
   }
-  if (path === '/api/auth/signin') { const user = await env.DB.prepare('SELECT * FROM users WHERE email=?').bind(input.email?.trim().toLowerCase()).first<Record<string, string>>(); if (!user || user.id===DEMO_MEMBER_ID) return response({ error: 'Invalid email or password.' }, 401); const secured = await hashPassword(input.password || '', user.password_salt); if (secured.hash !== user.password_hash) return response({ error: 'Invalid email or password.' }, 401); if (user.account_status === 'suspended') return response({ error: 'This account is suspended.' }, 403); return issueSession(env.DB, user); }
+  if (path === '/api/auth/signin') {
+    const user = await env.DB.prepare('SELECT * FROM users WHERE email=?')
+      .bind(input.email?.trim().toLowerCase()).first<Record<string, string>>();
+    if (!user || user.id===DEMO_MEMBER_ID)
+      return response({ error: 'Invalid email or password.' }, 401);
+    const password = input.password || '';
+    const checked = await verifyPassword(password, user.password_salt, user.password_hash);
+    if (!checked.valid) return response({ error: 'Invalid email or password.' }, 401);
+    if (user.account_status === 'suspended')
+      return response({ error: 'This account is suspended.' }, 403);
+    if (checked.needsUpgrade) {
+      // Compare-and-swap prevents a concurrent reset/change from being
+      // overwritten by a sign-in that authenticated against older credentials.
+      const upgraded = await hashPassword(password);
+      const saved = await env.DB.prepare(
+        "UPDATE users SET password_hash=?,password_salt=?,updated_at=? WHERE id=? AND password_hash=? AND password_salt=? AND account_status='active'"
+      ).bind(upgraded.hash,upgraded.salt,now(),user.id,user.password_hash,user.password_salt).run();
+      if (!saved.meta.changes) return response({ error: 'Credentials changed. Sign in again.' }, 409);
+      user.password_hash = upgraded.hash;
+      user.password_salt = upgraded.salt;
+    }
+    return issueSession(env.DB, user);
+  }
   return response({ error: 'Unknown authentication action.' }, 404);
 }
 
@@ -151,14 +169,14 @@ async function sessionRoute(request: Request, env: Env, user: Record<string, unk
     const updated = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(user.id).first<Record<string, unknown>>(); return response({ user: profile(updated!) });
   }
   if (path === '/api/auth/password') {
-    if (!input.current_password || !input.password || input.password.length < 8) return response({ error: 'Enter your current password and a new password of at least 8 characters.' }, 400);
+    if (!input.current_password || !input.password || input.password.length < 8 || input.password.length > 256) return response({ error: 'Enter your current password and a new password of at least 8 characters.' }, 400);
     if (!await withinAuthBudget(env.DB, 'password:' + user.id, 15)) return throttled();
-    const previous = await hashPassword(input.current_password, String(user.password_salt));
-    if (previous.hash !== user.password_hash) return response({ error: 'Current password is incorrect.' }, 403);
+    const previous = await verifyPassword(input.current_password, user.password_salt, user.password_hash);
+    if (!previous.valid) return response({ error: 'Current password is incorrect.' }, 403);
     const secured = await hashPassword(input.password);
     const [changed] = await env.DB.batch([
       env.DB.prepare('UPDATE users SET password_hash=?,password_salt=?,updated_at=? WHERE id=? AND password_hash=?')
-        .bind(secured.hash, secured.salt, now(), user.id, previous.hash),
+        .bind(secured.hash, secured.salt, now(), user.id, user.password_hash),
       env.DB.prepare('DELETE FROM sessions WHERE user_id=? AND EXISTS(SELECT 1 FROM users WHERE id=? AND password_hash=?)')
         .bind(user.id, user.id, secured.hash),
     ]);
@@ -761,8 +779,8 @@ async function adminRoute(request: Request, env: Env, user: Record<string, unkno
     if(typeof input.paused!=='boolean') return response({error:'Supply a boolean pause setting.'},400);
     if(!input.currentPassword) return response({error:'Confirm your administrator password.'},400);
     if(!await withinAuthBudget(env.DB,'admin-mt5-capture:'+String(user.id),10)) return throttled();
-    const proof=await hashPassword(input.currentPassword,String(user.password_salt));
-    if(proof.hash!==user.password_hash) return response({error:'Administrator password verification failed.'},403);
+    const proof=await verifyPassword(input.currentPassword,user.password_salt,user.password_hash);
+    if(!proof.valid) return response({error:'Administrator password verification failed.'},403);
     await env.DB.prepare("INSERT INTO site_settings(key,value,updated_at) VALUES('mt5_capture_paused',?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at")
       .bind(input.paused?'true':'false',now()).run();
     await audit(env.DB,String(user.id),null,'mt5-capture-gate','success',{paused:input.paused});
@@ -800,8 +818,8 @@ async function adminRoute(request: Request, env: Env, user: Record<string, unkno
   if (input.action === 'issue-recovery') {
     if(target.account_status!=='active')return response({error:'Restore this member before issuing a recovery code.'},409);
     if(!input.currentPassword)return response({error:'Confirm your administrator password.'},400);
-    const proof=await hashPassword(input.currentPassword,String(user.password_salt));
-    if(proof.hash!==user.password_hash)return response({error:'Administrator password verification failed.'},403);
+    const proof=await verifyPassword(input.currentPassword,user.password_salt,user.password_hash);
+    if(!proof.valid)return response({error:'Administrator password verification failed.'},403);
     if(!await withinAuthBudget(env.DB,'admin-recovery:'+String(target.id),3))return throttled();
     const code=b64(crypto.getRandomValues(new Uint8Array(32))).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
     const issued=now(), expiry=new Date(Date.now()+15*60*1000).toISOString();
