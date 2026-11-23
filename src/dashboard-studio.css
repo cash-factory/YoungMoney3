@@ -176,3 +176,16 @@
  .ym-dash-data-quality {margin-bottom:20px;}
 }
 @media(prefers-reduced-motion:reduce) {.ym-dash-quality-notice > summary > svg:last-child {transition:none;}}
+
+
+/* Intent-first review: reveal financial outcomes only at the trader's request. */
+.ym-dash-recent-controls {display:flex;align-items:center;justify-content:flex-end;gap:11px;flex-wrap:wrap;}
+.ym-dash-recent-controls>span {max-width:230px;font-size:11px;color:var(--text-secondary);line-height:1.5;}
+.ym-dash-outcome-toggle {display:inline-flex;align-items:center;gap:7px;font-size:11px;}
+.ym-dash-outcome-toggle[aria-pressed="true"] {border-color:var(--brand);color:var(--brand-text);}
+.ym-dash-recent-card [data-result="concealed"] td {color:var(--text-secondary);}
+.ym-dash-recent-card [data-result="concealed"] td:nth-child(2) {color:var(--text-primary);}
+@media(max-width:640px){
+ .ym-dash-recent-controls{width:100%;justify-content:flex-start;}
+ .ym-dash-recent-controls>span{max-width:unset;}
+}
