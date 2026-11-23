@@ -1,3 +1,4 @@
+import { CopyFleetConsole } from '@/components/CopyFleetConsole';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { ArrowRightLeft, CheckCircle2, FlaskConical, LockKeyhole, PauseCircle, Plus, RefreshCw, Save, ShieldCheck, Trash2, AlertTriangle, CircleHelp } from 'lucide-react';
 import { SectionHeader } from '@/components/ui/SectionHeader';
@@ -109,10 +110,12 @@ export function CopyStudioPage() {
   }
 
   return <main className="ym-copy-studio space-y-5">
-    <SectionHeader title="Copy Studio" subtitle="Set up source-to-follower relationships and test position sizing — without executing a trade."
+    <SectionHeader title="Copy Studio" subtitle="Multi-account copy execution and broker-aware sizing, with independently controlled demo followers."
       action={<button type="button" className="btn-secondary inline-flex items-center gap-2" onClick={()=>void reload()} disabled={!!busy} aria-label="Refresh Copy Studio">
         <RefreshCw size={15} className={busy==='refresh'?'animate-spin':''}/> Refresh
       </button>}/>
+    <CopyFleetConsole/>
+    <div className="ym-cf-legacy-heading"><span>LEGACY / PAUSED SIMULATIONS</span><p>Your existing two-account sizing drafts remain available below. They cannot execute broker orders.</p></div>
     <section className="ym-cs-identity" aria-label="Execution protection">
       <span className="ym-cs-identity-icon"><LockKeyhole size={21}/></span>
       <div className="ym-cs-identity-text"><strong>Simulation-only workspace</strong><span>Execution is disabled at the API and database level. No copy agent, trading permissions or broker order routing are enabled here.</span></div>

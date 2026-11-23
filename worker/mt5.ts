@@ -1,3 +1,4 @@
+import {copyFleetDevice} from './copyFleetDevice';
 interface Bindings { DB: D1Database; MT5_ALLOW_LIVE?: string }
 type Fields = Record<string, unknown>;
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -456,6 +457,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if (!token) return fail('Device authentication required.',401);
   const device=await q("SELECT d.id,d.owner,d.pc_name,d.installation_hash FROM mt5_devices d JOIN users u ON u.id=d.owner WHERE token_hash=? AND revoked=0 AND u.account_status='active'",await hash(token)).first<{id:string;owner:string;pc_name:string|null;installation_hash:string|null}>();
   if (!device) return json({error:'Device access revoked.',code:'device_revoked'},403);
+  if (action.startsWith('device/copy-')) return copyFleetDevice(db,device,action,input);
   if (action === 'device/set-monitoring') return setMonitoring(device.owner, device.id);
   if (action === 'device/rename') {
     const name=pcLabel(input.name);
