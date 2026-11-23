@@ -92,3 +92,19 @@
 @media (prefers-reduced-motion:reduce) {
   .ym-adaptive-mode,.ym-adaptive-suggestion {transition:none;}
 }
+
+/* Explain recommendations on demand; keep the daily view visually quiet. */
+.ym-adaptive-recommendation {display:grid;gap:7px;flex:0 1 340px;max-width:100%;min-width:0;}
+.ym-adaptive-recommendation>.ym-adaptive-suggestion {max-width:none;width:100%;}
+.ym-adaptive-why {min-width:0;font-size:11px;color:var(--text-secondary);}
+.ym-adaptive-why summary {cursor:pointer;list-style:none;display:inline-flex;
+  align-items:center;gap:5px;min-height:26px;padding:2px 4px;font-size:11px;
+  font-weight:700;color:var(--brand-text);}
+.ym-adaptive-why summary::-webkit-details-marker {display:none;}
+.ym-adaptive-why summary:after {content:"+";margin-left:4px;}
+.ym-adaptive-why[open] summary:after {content:"−";}
+.ym-adaptive-why p {padding:8px 11px 12px;background:var(--bg-secondary);
+  border:1px solid var(--border);border-radius:8px;line-height:1.65;}
+@media(max-width:640px) {
+  .ym-adaptive-recommendation {flex-basis:100%;width:100%;}
+}
