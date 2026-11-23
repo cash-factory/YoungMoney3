@@ -409,6 +409,61 @@ try {
   assert.equal((await readRules()).earliest,'09:15');
   assert.equal((await call('data',{action:'update',table:'strategy_entry_models',id:'as-of-model',payload:{earliest_entry_utc:'11:45'}})).status,200);
   assert.equal((await readRules()).earliest,'09:15','Later playbook changes cannot rewrite the rule at entry.');
+
+  // Replay 2.0: only the first server-acknowledged assessment may seal the pre-reveal verdict.
+  const blindRef='trade/'+row.id;
+  const blindId='review/'+subject+'/'+blindRef;
+  const blindResponse=await call('data',{action:'insert',table:'decision_reviews',payload:{
+    id:blindId,reference:blindRef,verdict:'followed',pre_reveal_verdict:'followed',
+    pre_reveal_at:'1998-01-01T00:00:00Z',note:'Before outcome was revealed in the interface.',
+  }});
+  assert.equal(blindResponse.status,200);
+  const blindRecord=(await blindResponse.json()).data[0];
+  assert.equal(blindRecord.pre_reveal_verdict,'followed');
+  assert.notEqual(blindRecord.pre_reveal_at,'1998-01-01T00:00:00Z',
+    'Only the server may stamp the first revealed review.');
+  assert.ok(Number.isFinite(Date.parse(blindRecord.pre_reveal_at)));
+  assert.equal((await call('data',{action:'update',table:'decision_reviews',id:blindId,
+    filters:{updated_at:blindRecord.updated_at},
+    payload:{pre_reveal_verdict:'changed'}})).status,403);
+  const amended=await call('data',{action:'update',table:'decision_reviews',id:blindId,
+    filters:{updated_at:blindRecord.updated_at},
+    payload:{verdict:'changed',post_outcome_note:'The financial outcome did not validate the entry.'}});
+  assert.equal(amended.status,200);
+  const reviewed=(await amended.json()).data;
+  assert.equal(reviewed.pre_reveal_verdict,'followed','The sealed value survives post-outcome editing.');
+  assert.equal(reviewed.verdict,'changed');
+
+  // Improvement Laboratory: owner-scoped experiments, durable draft-to-active locks.
+  const draft={
+    title:'Entry confirmation discipline',
+    hypothesis:'Waiting for the confirmation candle should improve plan adherence.',
+    single_change:'Do not place an entry until the confirmation candle has closed.',
+    strategy_id:'as-of-strategy',account_id:null,metric:'plan_adherence',
+    start_date:'2026-11-01',end_date:null,baseline_days:30,minimum_samples:5,
+    status:'draft',conclusion:'',
+  };
+  assert.equal((await call('data',{action:'insert',table:'improvement_experiments',
+    payload:{...draft,strategy_id:'not-owned'}})).status,400);
+  const draftResponse=await call('data',{action:'insert',table:'improvement_experiments',payload:draft});
+  assert.equal(draftResponse.status,200);
+  let experiment=(await draftResponse.json()).data[0];
+  assert.equal(experiment.status,'draft');
+  const activate=await call('data',{action:'update',table:'improvement_experiments',id:experiment.id,
+    filters:{updated_at:experiment.updated_at},payload:{status:'active'}});
+  assert.equal(activate.status,200);
+  experiment=(await activate.json()).data;
+  assert.equal(experiment.status,'active');
+  assert.equal((await call('data',{action:'update',table:'improvement_experiments',id:experiment.id,
+    filters:{updated_at:experiment.updated_at},payload:{single_change:'Changed the rule after starting.'}})).status,409);
+  const complete=await call('data',{action:'update',table:'improvement_experiments',id:experiment.id,
+    filters:{updated_at:experiment.updated_at},payload:{status:'completed',
+      conclusion:'Observed journal consistency improved, but there were uncontrolled conditions.'}});
+  assert.equal(complete.status,200);
+  experiment=(await complete.json()).data;
+  assert.equal(experiment.status,'completed');
+  assert.equal((await call('data',{action:'update',table:'improvement_experiments',id:experiment.id,
+    filters:{updated_at:experiment.updated_at},payload:{status:'draft'}})).status,409);
   // Two independent demo/contest accounts can coexist for one journal owner.
   const secondLink=(await (await call('mt5/connect',{device:devices[0].id,envelope:{wrapped:'d',iv:'e',data:'f'}})).json()).id;
   assert.equal((await (await device('poll',{})).json()).job.id,secondLink);
@@ -502,6 +557,7 @@ try {
   assert.equal((await call('decision/context',contextInput)).status,404);
   assert.equal((await call('mt5/retry-session',{link})).status,404);
   assert.equal((await (await call('data',{action:'select',table:'decision_reviews'})).json()).count,0);
+  assert.equal((await (await call('data',{action:'select',table:'improvement_experiments'})).json()).count,0);
   assert.equal((await call('mt5/timezone-confirm',{link,timezone:'Etc/UTC',confirm:true})).status,404);
   assert.equal((await call('mt5/position-evidence',{link,lifecycle_id:'789:0'})).status,404);
   assert.equal((await (await call('data',{action:'select',table:'trades'})).json()).count,0);
