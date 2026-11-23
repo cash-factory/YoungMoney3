@@ -1,4 +1,4 @@
--- 0020: Owner-scoped, explicitly armed DEMO-only multi-follower copy fleets.
+-- 0020: Owner-scoped, explicit DEMO or LIVE multi-follower fleets (disabled by default).
 -- These tables do not modify or activate legacy paused Copy Studio drafts.
 -- A separately consented Windows follower process owns all broker execution.
 CREATE TABLE copy_fleets (
@@ -6,7 +6,8 @@ CREATE TABLE copy_fleets (
  owner TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  name TEXT NOT NULL CHECK(length(name) BETWEEN 2 AND 64),
  source_link TEXT NOT NULL REFERENCES mt5_links(id) ON DELETE CASCADE,
- state TEXT NOT NULL DEFAULT 'paused' CHECK(state IN ('paused','demo_armed')),
+ execution_mode TEXT NOT NULL DEFAULT 'demo' CHECK(execution_mode IN ('demo','live')),
+ state TEXT NOT NULL DEFAULT 'paused' CHECK(state IN ('paused','demo_armed','live_armed')),
  version INTEGER NOT NULL DEFAULT 1 CHECK(version>=1),
  max_age_ms INTEGER NOT NULL DEFAULT 12000 CHECK(max_age_ms BETWEEN 1000 AND 15000),
  created_at TEXT NOT NULL,
@@ -34,6 +35,9 @@ CREATE TABLE copy_device_consents (
  owner TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  device TEXT NOT NULL REFERENCES mt5_devices(id) ON DELETE CASCADE,
  demo_authorized INTEGER NOT NULL DEFAULT 0 CHECK(demo_authorized IN (0,1)),
+ authorization_mode TEXT NOT NULL DEFAULT 'none' CHECK(authorization_mode IN ('none','demo','live')),
+ broker_login TEXT,
+ broker_server TEXT,
  expires_at INTEGER NOT NULL DEFAULT 0,
  updated_at TEXT NOT NULL
 );
@@ -52,6 +56,7 @@ CREATE TABLE copy_execution_tasks (
  follower_link TEXT NOT NULL REFERENCES mt5_links(id) ON DELETE CASCADE,
  source_link TEXT NOT NULL REFERENCES mt5_links(id) ON DELETE CASCADE,
  source_key TEXT NOT NULL,
+ execution_mode TEXT NOT NULL DEFAULT 'demo' CHECK(execution_mode IN ('demo','live')),
  action TEXT NOT NULL CHECK(action IN (
   'open_market','place_pending','modify_sl_tp','modify_pending',
   'cancel_pending','reduce_position','close_position')),

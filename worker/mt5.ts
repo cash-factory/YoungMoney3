@@ -1,5 +1,5 @@
 import {copyFleetDevice} from './copyFleetDevice';
-interface Bindings { DB: D1Database; MT5_ALLOW_LIVE?: string }
+interface Bindings { DB: D1Database; MT5_ALLOW_LIVE?: string; MT5_ALLOW_LIVE_COPY?: string; MT5_LIVE_COPY_EXECUTION?:string }
 type Fields = Record<string, unknown>;
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 const fail = (message: string, status = 400) => json({ error: message }, status);
@@ -54,6 +54,9 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if (!parsed) return fail('Invalid connector request.');
   const input: Fields = parsed;
   const unix = Date.now();
+  // Live account capture is independently gated from explicit local order consent.
+  // The copy pilot flag does not, by itself, enable trading or arm any fleet.
+  const liveAccountCaptureAllowed = env.MT5_ALLOW_LIVE==='true'||env.MT5_ALLOW_LIVE_COPY==='true';
   const capturePaused = async () => {
     const setting=await q("SELECT value FROM site_settings WHERE key='mt5_capture_paused'").first<{value:string}>();
     return setting?.value==='true';
@@ -83,7 +86,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         connector_spec_artifacts:(await q("SELECT COUNT(*) AS n FROM mt5_conflict_classifications WHERE link=? AND owner=?",link.id,owner).first<{n:number}>())?.n??0,
         recovery:(await q("SELECT state,scanned_through,target_at,unresolved_positions,unobserved_stop_changes,updated_at FROM mt5_recovery_status WHERE link=? AND owner=?",link.id,owner).first())??null
       })));
-      return json({ accounts:accounts.results, devices: devices.results, links: states, demoOnly: env.MT5_ALLOW_LIVE !== 'true', capturePaused: await capturePaused() });
+      return json({ accounts:accounts.results, devices: devices.results, links: states, demoOnly: !liveAccountCaptureAllowed, capturePaused: await capturePaused() });
     }
     if (action === 'evidence-conflicts') {
       if (!limited(input.link,64)) return fail('Select a connected MT5 account.');
@@ -298,7 +301,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       if (action==='history-request' && link.monitoring_paused) return fail('Resume monitoring before requesting a scan.',409);
       if(['history-request','history-import'].includes(action) && await capturePaused())
         return fail('MT5 capture is paused by the administrator.',403);
-      if(link.trade_mode===2 && env.MT5_ALLOW_LIVE!=='true' && ['history-request','history-import'].includes(action))
+      if(link.trade_mode===2 && !liveAccountCaptureAllowed && ['history-request','history-import'].includes(action))
         return fail('Real-account capture is paused by the release gate.',403);
       if(action==='history-request') {
         if(link.history_status==='requested' || link.history_status==='resolving')
@@ -457,7 +460,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if (!token) return fail('Device authentication required.',401);
   const device=await q("SELECT d.id,d.owner,d.pc_name,d.installation_hash FROM mt5_devices d JOIN users u ON u.id=d.owner WHERE token_hash=? AND revoked=0 AND u.account_status='active'",await hash(token)).first<{id:string;owner:string;pc_name:string|null;installation_hash:string|null}>();
   if (!device) return json({error:'Device access revoked.',code:'device_revoked'},403);
-  if (action.startsWith('device/copy-')) return copyFleetDevice(db,device,action,input);
+  if (action.startsWith('device/copy-')) return copyFleetDevice(db,device,action,input,env.MT5_LIVE_COPY_EXECUTION==='true');
   if (action === 'device/set-monitoring') return setMonitoring(device.owner, device.id);
   if (action === 'device/rename') {
     const name=pcLabel(input.name);
@@ -573,7 +576,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     if (link.status!=='verifying' || link.expires<=unix) return fail('Login expired.',409);
     // Require an actual numeric MT5 mode before testing the real-account release gate.
     if(input.ok && (typeof input.mode!=='number' || ![0,1,2].includes(input.mode))) return fail('Invalid MT5 account mode.');
-    if (!input.ok || (env.MT5_ALLOW_LIVE!=='true' && input.mode===2)) {
+    if (!input.ok || (!liveAccountCaptureAllowed && input.mode===2)) {
       const reasons: Record<string,string> = {
         terminal_start:'MetaTrader could not start. Open the connector on your PC, finish any MetaTrader update, then choose Add account again.',
         terminal_ipc_timeout:'MetaTrader did not respond to the connector in time. Close any stalled MT5 update or login dialogs on the paired PC, then retry.',
@@ -613,7 +616,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   }
   if(action!=='device/sync'||link.status!=='connected') return fail('Link unavailable.',409);
   if(await capturePaused()) return fail('MT5 capture is paused by the administrator.',403);
-  if(link.trade_mode===2 && env.MT5_ALLOW_LIVE!=='true') return fail('Real-account capture is paused by the release gate.',403);
+  if(link.trade_mode===2 && !liveAccountCaptureAllowed) return fail('Real-account capture is paused by the release gate.',403);
   if (!Array.isArray(input.events)||input.events.length>40) return fail('Invalid capture batch.');
   const statements:D1PreparedStatement[]=[];
    const rawSeen = new Map<string,{sha256:string;payload:string}>();

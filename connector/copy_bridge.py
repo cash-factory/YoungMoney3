@@ -8,7 +8,7 @@ import time
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from copy_execution import execute, prepare_database, consent
+from copy_execution import execute, prepare_database, authorization_mode
 
 def _dict(row):
     return row._asdict() if hasattr(row,"_asdict") else dict(row)
@@ -118,8 +118,10 @@ def cycle(mt5,db,link,account,post,token,*,now_ms=None):
     pending=mt5.orders_get()
     if positions is None or pending is None:
         raise RuntimeError("Copy Fleet account telemetry unavailable")
-    current_consent=consent(db,link)
-    post("copy-consent",{"link":link,"allowed":current_consent},token)
+    current_mode=authorization_mode(db,link,account)
+    current_consent=current_mode!='none'
+    post("copy-consent",{"link":link,"allowed":current_consent,
+        "mode":current_mode,"login":str(account.login),"server":str(account.server)},token)
     response=post("copy-report",{
       "link":link,"balance":float(account.balance),"equity":float(account.equity),
       "freeMargin":float(account.margin_free),"currency":str(account.currency),

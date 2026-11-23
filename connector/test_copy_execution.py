@@ -50,7 +50,11 @@ class FakeMT5:
         self.rejected=False
         self.partial=False
         self.profit=-100
-        self.terminal=SimpleNamespace(connected=True,trade_allowed=True)
+        self.terminal=SimpleNamespace(connected=True,trade_allowed=True,tradeapi_disabled=False)
+        self.account=None
+
+    def account_info(self):
+        return self.account
 
     def terminal_info(self):
         return self.terminal
@@ -111,7 +115,9 @@ class LocalExecutionTests(unittest.TestCase):
         self.mt5=FakeMT5()
         self.link='00000000-0000-4000-8000-000000000001'
         self.account=SimpleNamespace(equity=2000,balance=2000,margin_free=1950,
-            currency='USD',trade_mode=0,trade_allowed=True)
+            currency='USD',trade_mode=0,trade_allowed=True,trade_expert=True,
+            login=123456,server='Example-MT5')
+        self.mt5.account=self.account
         self.source={
           'key':'position:888','kind':'position','symbol':'EURUSD','type':0,
           'volume':0.3,'price':1.1,'sl':1.09,'tp':1.2,
@@ -122,7 +128,7 @@ class LocalExecutionTests(unittest.TestCase):
 
     def task(self,action='open_market',source=None,confirmed=None):
         return {'id':str(uuid4()),'sourceKey':(source or self.source)['key'],
-          'action':action,'expiresAt':self.mt5.now+12000,
+          'action':action,'executionMode':'demo','expiresAt':self.mt5.now+12000,
           'payload':{'source':source or self.source,'sourceVolume':0.3,
                      'sourceEquity':1000,'sourceCurrency':'USD',
                      'risk':self.risk.copy(),'confirmedBy':confirmed}}
@@ -131,7 +137,7 @@ class LocalExecutionTests(unittest.TestCase):
         task=self.task()
         assert not self.mt5.sent
         refused=execute(self.mt5,self.db,self.link,task,self.account,now_ms=self.mt5.now)
-        self.assertEqual(refused['code'],'local_demo_execution_not_consented')
+        self.assertEqual(refused['code'],'account_bound_execution_permission_missing')
         self.assertEqual(self.mt5.sent,[])
         set_consent(self.db,self.link,True)
         result=execute(self.mt5,self.db,self.link,task,self.account,now_ms=self.mt5.now)
@@ -199,7 +205,7 @@ class LocalExecutionTests(unittest.TestCase):
         set_consent(self.db,self.link,True)
         live=SimpleNamespace(**{**vars(self.account),'trade_mode':2})
         denied=execute(self.mt5,self.db,self.link,task,live,now_ms=self.mt5.now)
-        self.assertEqual(denied['code'],'real_or_contest_account_execution_blocked')
+        self.assertEqual(denied['code'],'broker_account_mode_mismatch')
         self.assertEqual(self.mt5.sent,[])
         readonly=SimpleNamespace(**{**vars(self.account),'trade_allowed':False})
         denied2=execute(self.mt5,self.db,self.link,self.task(),readonly,now_ms=self.mt5.now)
@@ -216,7 +222,7 @@ class LocalExecutionTests(unittest.TestCase):
         self.assertEqual(self.mt5.sent,[])
         set_consent(self.db,self.link,False)
         revoked=execute(self.mt5,self.db,self.link,self.task(),self.account,now_ms=self.mt5.now)
-        self.assertEqual(revoked['code'],'local_demo_execution_not_consented')
+        self.assertEqual(revoked['code'],'account_bound_execution_permission_missing')
         self.assertEqual(self.mt5.sent,[])
 
     def test_daily_loss_budget_rejects_new_risk_that_would_exceed_cap(self):
@@ -251,5 +257,59 @@ class LocalExecutionTests(unittest.TestCase):
         self.assertEqual(self.mt5.sent[-1]['position'],9901)
         self.assertEqual(self.mt5.sent[-1]['type'],self.mt5.ORDER_TYPE_SELL)
         self.assertEqual(self.mt5.positions,[])
+
+
+    def test_real_account_requires_a_separate_exact_identity_grant(self):
+        real=SimpleNamespace(**{**vars(self.account),'trade_mode':2})
+        self.mt5.account=real
+        task={**self.task(), 'executionMode':'live'}
+        self.assertEqual(execute(self.mt5,self.db,self.link,task,real,now_ms=self.mt5.now)['code'],
+                         'account_bound_execution_permission_missing')
+        set_consent(self.db,self.link,True,mode='demo',login=real.login,server=real.server)
+        self.assertEqual(execute(self.mt5,self.db,self.link,{**self.task(),'executionMode':'live'},real,
+                                 now_ms=self.mt5.now)['code'],'account_bound_execution_permission_missing')
+        set_consent(self.db,self.link,True,mode='live',login=123456,server='WrongServer')
+        self.assertEqual(execute(self.mt5,self.db,self.link,{**self.task(),'executionMode':'live'},real,
+                                 now_ms=self.mt5.now)['code'],'account_bound_execution_permission_missing')
+        set_consent(self.db,self.link,True,mode='live',login=123456,server='Example-MT5')
+        confirmed=execute(self.mt5,self.db,self.link,{**self.task(),'executionMode':'live'},real,
+                          now_ms=self.mt5.now)
+        self.assertEqual(confirmed['status'],'applied',confirmed)
+        self.assertEqual(len(self.mt5.sent),1)
+        set_consent(self.db,self.link,False)
+        self.assertEqual(execute(self.mt5,self.db,self.link,{**self.task(),'executionMode':'live'},real,
+                                 now_ms=self.mt5.now)['code'],'account_bound_execution_permission_missing')
+
+    def test_live_risk_caps_fail_closed_before_order_send(self):
+        real=SimpleNamespace(**{**vars(self.account),'trade_mode':2})
+        self.mt5.account=real
+        set_consent(self.db,self.link,True,mode='live',login=real.login,server=real.server)
+        too_much={**self.task(),'executionMode':'live'}
+        too_much['payload']['risk']['value']=3
+        too_much['payload']['risk']['maxDailyLossPct']=5
+        denied=execute(self.mt5,self.db,self.link,too_much,real,now_ms=self.mt5.now)
+        self.assertEqual(denied['code'],'live_order_risk_exceeds_two_percent_equity')
+        daily={**self.task(),'executionMode':'live'}
+        daily['payload']['risk']['maxDailyLossPct']=6
+        denied=execute(self.mt5,self.db,self.link,daily,real,now_ms=self.mt5.now)
+        self.assertEqual(denied['code'],'live_daily_loss_policy_exceeds_five_percent')
+        self.assertEqual(self.mt5.sent,[])
+        real.trade_expert=False
+        denied=execute(self.mt5,self.db,self.link,{**self.task(),'executionMode':'live'},real,now_ms=self.mt5.now)
+        self.assertEqual(denied['code'],'broker_algorithmic_trading_not_authorized')
+        self.assertEqual(self.mt5.sent,[])
+
+    def test_missing_mode_and_broker_switch_cannot_trade(self):
+        real=SimpleNamespace(**{**vars(self.account),'trade_mode':2})
+        self.mt5.account=real
+        set_consent(self.db,self.link,True,mode='live',login=real.login,server=real.server)
+        without_mode=self.task()
+        without_mode.pop('executionMode')
+        self.assertEqual(execute(self.mt5,self.db,self.link,without_mode,real,now_ms=self.mt5.now)['code'],
+                         'copy_execution_mode_missing')
+        self.mt5.account=SimpleNamespace(**{**vars(real),'login':999999})
+        self.assertEqual(execute(self.mt5,self.db,self.link,{**self.task(),'executionMode':'live'},real,
+                                 now_ms=self.mt5.now)['code'],'terminal_account_identity_changed')
+        self.assertEqual(self.mt5.sent,[])
 
 if __name__=='__main__': unittest.main()
