@@ -119,6 +119,10 @@ export function PersonalTradingPatterns({ owner, trades, accountId, accountName,
           <div><small>Retrospective reviews</small><strong>{report.retrospective}</strong></div>
           <div><small>Uncertain assessments</small><strong>{report.unknown}</strong></div>
         </div>}
+        {report.importedUnverified>0 && <p className="ym-pattern-imported-note" role="status">
+          <LockKeyhole size={15} aria-hidden="true"/>
+          {report.importedUnverified} restored {report.importedUnverified===1?'review is':'reviews are'} historical self-reports, not server-verified pre-outcome evidence.
+        </p>}
         {!hasAnyEvidence && <div className="ym-pattern-onboarding ym-pattern-onboarding--empty" role="region" aria-label="Get started with personal patterns">
           <Compass size={25} aria-hidden="true"/>
           <div><h3>No review evidence for this selection</h3>
