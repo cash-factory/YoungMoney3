@@ -44,7 +44,7 @@ function RankedEvidence({ title, description, rows, empty }: {
       ? <p className="ym-pattern-ranked-empty">{empty}</p>
       : <ol>{rows.slice(0, 5).map(item => <li key={item.label}>
         <div className="ym-pattern-rank-label"><strong>{item.label}</strong><span>{item.count} {item.count === 1 ? 'record' : 'records'}</span></div>
-        <div className="ym-pattern-rank-track" aria-label={item.label + ', ' + item.count + ' records'}>
+        <div className="ym-pattern-rank-track" role="img" aria-label={item.label + ', ' + item.count + ' records'}>
           <span style={{ width: item.share + '%' }}/>
         </div>
       </li>)}</ol>
@@ -115,7 +115,7 @@ export function PersonalTradingPatterns({ owner, trades, accountId, accountName,
                 const amount = week.followed + week.changed;
                 return <div role="listitem" className="ym-pattern-week" key={week.start}>
                   <time dateTime={week.start}>{week.start}</time>
-                  <div className="ym-pattern-week-track" aria-label={week.rate === null
+                  <div className="ym-pattern-week-track" role="img" aria-label={week.rate === null
                     ? 'Not enough weekly decisions' : week.rate.toFixed(1) + ' percent reported adherence'}>
                     {week.rate !== null && <span style={{ width: week.rate + '%' }}/>}
                   </div>
@@ -136,7 +136,7 @@ export function PersonalTradingPatterns({ owner, trades, accountId, accountName,
         </div>
         <div className="ym-pattern-footer-panels">
           <RankedEvidence title="Self-reported emotional states"
-            description="Only labels explicitly recorded on manual trade entries; no feelings are inferred."
+            description="Only emotional labels voluntarily entered in manual trade records; their timing is not inferred."
             rows={report.emotions} empty="No voluntary emotion labels were recorded in this selection."/>
           <div className="ym-pattern-next">
             <p className="ym-pattern-kicker"><TrendingUp size={14}/> A NEXT STEP, NOT A DIAGNOSIS</p>
