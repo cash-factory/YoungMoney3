@@ -171,6 +171,7 @@ def capture_account(origin, database_path, slot, link, stop_event, event_queue, 
                 synced_at, awaiting = connect.sync_receipts.get(link, (None, None))
                 _put(event_queue, {
                     "synced_at": synced_at, "awaiting": awaiting,
+                    "account_insight": connect.account_snapshots.get(link),
                     "state": "session-synced", "slot": slot, "link": link,
                     "login": record[2], "server": record[3], "pending": pending,
                     "message": "Account capture completed; next scan scheduled.",

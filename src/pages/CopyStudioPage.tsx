@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { ArrowRightLeft, CheckCircle2, FlaskConical, LockKeyhole, PauseCircle, Plus, RefreshCw, Save, ShieldCheck, Trash2, AlertTriangle, CircleHelp } from 'lucide-react';
 import { SectionHeader } from '@/components/ui/SectionHeader';
+import { CopyGroupsPanel } from '@/components/CopyGroupsPanel';
 import { announceAction } from '@/lib/actionFeedback';
 import {
   copyAction, draftFromProfile, emptyCopyDraft,
@@ -127,6 +128,8 @@ export function CopyStudioPage() {
       <div><span>Saved plans</span><strong>{status?.profiles.length||0}</strong><small>Configurations only</small></div>
       <div><span>Execution</span><strong>Off</strong><small>Independent hard block</small></div>
     </section>
+
+    <CopyGroupsPanel accounts={accounts}/>
 
     <div className="ym-cs-workspace">
       <aside className="card ym-cs-saved" aria-label="Saved simulation drafts">

@@ -82,6 +82,7 @@ class ConnectorApp:
         self.restart_delay = 0
         self.status_by_slot = {}
         self.sync_by_slot = {}
+        self.insight_by_slot = {}
         self.retry_queue = queue.Queue()
         self.account_by_slot = {}
         self._links_initialized = False
@@ -733,6 +734,25 @@ class ConnectorApp:
         receipt = self.sync_by_slot.get(s["terminal"])
         if receipt:
             identity += "  •  Last sync " + receipt[0] + "  •  " + str(receipt[1]) + " decisions awaiting review"
+        insight=self.insight_by_slot.get(s["terminal"])
+        if insight:
+            ccy=str(insight.get("currency") or "")
+            identity += ("\n" + "ACCOUNT " + str(insight.get("login","—")) +
+                         "  ·  " + str(insight.get("company") or insight.get("server") or "Broker") +
+                         "  ·  " + ("DEMO" if insight.get("trade_mode")==0 else "OTHER ACCOUNT"))
+            identity += ("\n" + "Balance " + format(insight["balance"],",.2f") + " " + ccy +
+                         "  ·  Equity " + format(insight["equity"],",.2f") + " " + ccy +
+                         "  ·  Available margin " + format(insight["margin_free"],",.2f") + " " + ccy)
+            pending=insight.get("pending_orders")
+            identity += ("\n" + str(insight.get("open_positions",0)) + " open positions" +
+                         "  ·  " + (str(pending) if pending is not None else "Unknown") +
+                         " pending orders  ·  Floating P/L " +
+                         format(insight["floating_profit"],",.2f") + " " + ccy)
+            identity += ("\n" + "Broker trading permissions: " +
+                         ("Allowed" if insight.get("trade_allowed") else "Restricted") +
+                         "  ·  External execution: " +
+                         ("Allowed by account" if insight.get("trade_expert") else "Disabled") +
+                         "  ·  Connector monitoring remains READ-ONLY")
         self.selected_details_var.set(s["name"] + "  •  " + identity)
 
     def _session_state(self, s):
@@ -1165,6 +1185,7 @@ class ConnectorApp:
             for terminal, old in previous_accounts.items():
                 if old.get("link") != self.account_by_slot.get(terminal, {}).get("link"):
                     self.sync_by_slot.pop(terminal, None)
+                    self.insight_by_slot.pop(terminal, None)
             for removed in previous - set(self.account_by_slot):
                 self.status_by_slot.pop(removed, None)
             if self.store.armed_terminal() in self.account_by_slot:
@@ -1183,6 +1204,7 @@ class ConnectorApp:
             self.restart_due = None
             self.restart_delay = 0
             self.sync_by_slot.clear()
+            self.insight_by_slot.clear()
             self.connection_path.show(1)
             # A new device token has its own broker links and SQLite folder.
             # Do not show the old device's linked accounts after re-pairing.
@@ -1251,6 +1273,14 @@ class ConnectorApp:
             self.banner_var.set(message)
             self._log("MT5 broker link was not approved or was removed.")
         elif state == "session-synced":
+            if isinstance(item.get("account_insight"),dict) and slot in self.account_by_slot:
+                insight=item["account_insight"]
+                # Ignore unsolicited/mismatched worker events, even if the PC
+                # contains multiple simultaneous MT5 sessions.
+                link=self.account_by_slot[slot]
+                if (str(insight.get("login"))==str(link.get("login")) and
+                    str(insight.get("server","")).casefold()==str(link.get("server","")).casefold()):
+                    self.insight_by_slot[slot]=insight
             prior = self.status_by_slot.get(slot)
             if item.get("synced_at"):
                 self.sync_by_slot[slot] = (item["synced_at"], item.get("awaiting", 0))
