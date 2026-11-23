@@ -36,6 +36,32 @@ def _put(out, event):
         pass
 
 
+_CAPTURE_MODULES = frozenset({
+    "connect.py", "cash_history.py", "history_range.py",
+    "lifecycle.py", "ledger.py", "concurrent_capture.py",
+    "terminal_factory.py", "managed_accounts.py",
+})
+
+
+def safe_capture_error(error):
+    """Classify the failing module/line without exposing broker data or secrets.
+
+    Exception messages and filesystem paths may include account details or
+    encrypted request metadata. Only a trusted module basename and line are
+    reported to the GUI; raw tracebacks are intentionally not forwarded.
+    """
+    detail = None
+    frame = error.__traceback__
+    while frame is not None:
+        name = frame.tb_frame.f_code.co_filename.replace(chr(92), "/").rsplit("/", 1)[-1]
+        if name in _CAPTURE_MODULES:
+            detail = name + ":" + str(frame.tb_lineno)
+        frame = frame.tb_next
+    if detail:
+        return "Broker capture error (" + type(error).__name__ + " at " + detail + ")."
+    return "Broker capture error (" + type(error).__name__ + ")."
+
+
 def capture_account(origin, database_path, slot, link, stop_event, event_queue, wake_event=None):
     """Spawned process. MT5's native module is strictly process-local."""
     # Import inside child after multiprocessing.freeze_support dispatch.
@@ -94,8 +120,8 @@ def capture_account(origin, database_path, slot, link, stop_event, event_queue, 
                 failures = min(5, failures + 1)
                 _put(event_queue, {
                     "state": "session-error", "slot": slot, "link": link,
-                    "message": "Broker capture error (" + type(error).__name__ +
-                               "). Retrying without deleting evidence.",
+                    "message": safe_capture_error(error) +
+                               " Retrying without deleting evidence.",
                 })
             finally:
                 connect.mt5.shutdown()
