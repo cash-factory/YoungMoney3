@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, Copy, KeyRound, LockKeyhole, RefreshCw, ShieldCheck, UserRoundCheck, UserRoundX } from 'lucide-react';
+import { Activity, Copy, KeyRound, Laptop, LockKeyhole, RefreshCw, ShieldCheck, UserRoundCheck, UserRoundX } from 'lucide-react';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { useAuth } from '@/context/AuthContext';
 
@@ -7,6 +7,7 @@ type Member={id:string;email:string;username?:string;display_name?:string;role?:
 type Audit={id:string;action:string;outcome:string;target_user_id?:string;created_at:string;metadata?:Record<string,unknown>};
 type Overview={users?:{total:number;members:number;suspended:number};devices?:{total:number;active:number};links?:{total:number;connected:number;needs_attention?:number;retries_pending?:number};signupPaused:boolean;mt5CapturePaused:boolean;latestAdminActionAt?:string|null;database:string;backupAutomation:string};
 type Recovery={code:string;email:string;expires_at:string};
+type ConnectorPc={id:string;user_id:string;pc_name:string|null;setup_state:string|null;connector_version:string|null;last_seen:number|null;revoked:number;username:string|null;display_name:string|null;email:string;account_status:string;linked_accounts:number};
 async function adminCall(payload:Record<string,unknown>):Promise<Record<string,unknown>> {
   const response=await fetch('/api/admin',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
   const data=await response.json() as Record<string,unknown>;
@@ -17,6 +18,8 @@ export function AdminOperationsPage(){
   const {user,profile}=useAuth();
   const [members,setMembers]=useState<Member[]>([]);
   const [audit,setAudit]=useState<Audit[]>([]);
+  const [connectorPcs,setConnectorPcs]=useState<ConnectorPc[]>([]);
+  const [pcSearch,setPcSearch]=useState('');
   const [overview,setOverview]=useState<Overview|null>(null);
   const [query,setQuery]=useState('');
   const [password,setPassword]=useState('');
@@ -28,15 +31,17 @@ export function AdminOperationsPage(){
   const load=useCallback(async()=>{
     setLoading(true);
     try{
-      const [list,events,system]=await Promise.all([adminCall({action:'list'}),adminCall({action:'audit'}),adminCall({action:'overview'})]);
+      const [list,events,system,pcInventory]=await Promise.all([adminCall({action:'list'}),adminCall({action:'audit'}),adminCall({action:'overview'}),adminCall({action:'connector-directory'})]);
       setMembers(Array.isArray(list.members)?list.members as Member[]:[]);
       setAudit(Array.isArray(events.entries)?events.entries as Audit[]:[]);
+      setConnectorPcs(Array.isArray(pcInventory.devices)?pcInventory.devices as ConnectorPc[]:[]);
       setOverview(system as unknown as Overview);
     }catch(e){setFeedback({error:e instanceof Error?e.message:'Could not load administrative data.'});}
     finally{setLoading(false);}
   },[]);
   useEffect(()=>{void load();},[load]);
   const shown=useMemo(()=>members.filter(member=>[member.email,member.username,member.display_name].some(x=>x?.toLowerCase().includes(query.toLowerCase()))),[members,query]);
+  const visiblePcs=useMemo(()=>connectorPcs.filter(pc=>[pc.pc_name,pc.email,pc.display_name,pc.username,pc.id].some(value=>value?.toLowerCase().includes(pcSearch.trim().toLowerCase()))),[connectorPcs,pcSearch]);
   if(profile?.role!=='admin'||profile.account_status!=='active')return <p role="alert" className="card p-5">Administrator access required.</p>;
   const act=async(action:string,targetUserId?:string,extra:Record<string,unknown>={})=>{
     setBusy(targetUserId || action);setFeedback({});
@@ -120,6 +125,32 @@ export function AdminOperationsPage(){
         <p className="text-xs text-muted">Changing your own administrator password remains in Account Settings. If the owner is locked out, use the secured Cloudflare operator recovery process rather than granting account recovery to anonymous visitors.</p>
       </section>
     </div>
+    <section className="card p-5 space-y-4" aria-labelledby="connector-pc-inventory">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 id="connector-pc-inventory" className="font-semibold flex items-center gap-2"><Laptop size={18}/> Connector PCs &amp; owners</h2>
+          <p className="mt-1 text-xs text-secondary">Read-only pairing inventory. Every entry is bound to one YoungMoney3 user. Shared physical computers running separate Windows profiles can appear more than once.</p>
+        </div>
+        <span className="text-xs text-muted">{connectorPcs.length} claimed PCs</span>
+      </div>
+      <label className="block text-xs text-secondary">Find a PC or owner
+        <input className="input-field mt-1.5" value={pcSearch} onChange={event=>setPcSearch(event.target.value)} placeholder="PC name, member email or ID"/>
+      </label>
+      {loading?<p className="text-sm text-muted" role="status">Checking PC ownership…</p>:
+      visiblePcs.length?<div className="overflow-x-auto"><table className="min-w-full text-left text-sm">
+        <thead><tr className="border-b border-themed text-xs text-muted"><th scope="col" className="p-2">Paired computer</th><th scope="col" className="p-2">YoungMoney3 owner</th><th scope="col" className="p-2">Connection</th><th scope="col" className="p-2">Linked accounts</th></tr></thead>
+        <tbody>{visiblePcs.map(pc=>{
+          const online=pc.revoked===0&&pc.account_status==='active'&&pc.last_seen!==null&&Date.now()-pc.last_seen>=0&&Date.now()-pc.last_seen<90000;
+          return <tr key={pc.id} className="border-b border-themed align-top">
+            <td className="p-2"><strong>{pc.pc_name||'PC '+pc.id.slice(0,8)}</strong><p className="text-xs text-muted font-mono">{pc.id.slice(0,8)} · {pc.connector_version||'Version unknown'}</p></td>
+            <td className="p-2"><strong>{pc.display_name||pc.username||'Member'}</strong><p className="text-xs text-muted">{pc.email}</p></td>
+            <td className="p-2"><span className="text-xs">{pc.revoked?'Revoked':pc.account_status!=='active'?'Owner suspended':online?'Online':'Offline'}</span><p className="text-xs text-muted">{pc.last_seen?new Date(pc.last_seen).toLocaleString():'No check-in'}</p></td>
+            <td className="p-2">{pc.linked_accounts}</td>
+          </tr>;
+        })}</tbody>
+      </table></div>:<p className="text-sm text-muted">No matching claimed PCs.</p>}
+      <p className="text-xs text-muted">Device labels identify pairings, not physical hardware. This view does not grant access to a member's broker account or trading records.</p>
+    </section>
     <section className="card p-5 space-y-4">
       <h2 className="font-semibold flex items-center gap-2"><KeyRound size={18}/> Member access</h2>
       <label className="block text-xs text-secondary">Search members<input className="input-field mt-1.5" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Email, name, username"/></label>
