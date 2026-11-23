@@ -26,6 +26,7 @@ interface Props {
   preferred: DeskMode | null;
   suggested: DeskMode;
   suggestionReason: string;
+  suggestionBasis: string;
   onSelect: (mode: DeskMode) => void;
   onStart: (mode: DeskMode) => void;
   onPin: (mode: DeskMode | null) => void;
@@ -38,7 +39,7 @@ interface Props {
   tradesRecorded: number;
 }
 export function AdaptiveTradingDesk({
-  mode, preferred, suggested, suggestionReason, onSelect, onStart, onPin, onCapture,
+  mode, preferred, suggested, suggestionReason, suggestionBasis, onSelect, onStart, onPin, onCapture,
   onOpenGuide, onOpenWeekly, onOpenRisk, pendingReviews, accountName, tradesRecorded,
 }: Props) {
   const descriptionRoot = useId();
@@ -72,10 +73,16 @@ export function AdaptiveTradingDesk({
         <h2>What are you here to do?</h2>
         <p>Choose your intent. Your current dashboard reorganizes around the task—without changing or hiding your underlying records.</p>
       </div>
-      <button type="button" className="ym-adaptive-suggestion"
-        onClick={() => onSelect(suggested)} aria-label={'Use suggested focus: ' + modes.find(m => m.id === suggested)?.title}>
-        <Sparkles size={16}/><span><strong>Suggested focus</strong><small>{suggestionReason}</small></span><ArrowRight size={15}/>
-      </button>
+      <div className="ym-adaptive-recommendation">
+        <button type="button" className="ym-adaptive-suggestion"
+          onClick={() => onSelect(suggested)} aria-label={'Use suggested focus: ' + modes.find(m => m.id === suggested)?.title}>
+          <Sparkles size={16}/><span><strong>Suggested focus</strong><small>{suggestionReason}</small></span><ArrowRight size={15}/>
+        </button>
+        <details className="ym-adaptive-why">
+          <summary>Why this focus?</summary>
+          <p>{suggestionBasis}</p>
+        </details>
+      </div>
     </div>
     <div className="ym-adaptive-modes" role="group" aria-label="Trading desk modes">
       {modes.map(item => {
