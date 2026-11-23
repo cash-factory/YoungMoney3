@@ -45,8 +45,12 @@ for name,source in [("presence",presence),("GUI",gui)]:
 source_archive=(root/"scripts/build_connector_source_archive.py").read_text(encoding="utf-8")
 assert '"version.py": "connector/version.py"' in source_archive
 dashboard=(root/"src/components/Mt5Connections.tsx").read_text(encoding="utf-8")
-assert dashboard.count('href="/connector-download.html"')>=2, "Account downloads must use version-aware page."
-assert "staging-connector-v0.5.3-rc1/YoungMoney3.Connector.exe" not in dashboard
+assert 'href="/connector-download.html"' in dashboard, "Release details and checksum must be accessible."
+# Until the new executable has actually passed the release jobs, the direct
+# download remains the last published artifact; never link an unbuilt binary.
+published='https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.3-rc1/YoungMoney3.Connector.exe'
+assert dashboard.count('href="'+published+'"') >= 2
+assert "Download Connector v0.5.3-rc1" in dashboard
 downloads=(root/"public/connector-download.html").read_text(encoding="utf-8")
 assert "api.github.com/repos/cash-factory/YoungMoney3/releases" in downloads
 assert "YoungMoney3.Connector.exe" in downloads
