@@ -18,7 +18,7 @@ const safeCanonical=(v:unknown):string=>{
     .map(([key,value])=>JSON.stringify(key)+':'+safeCanonical(value)).join(',')+'}';
   return JSON.stringify(v);
 };
-export async function copyFleetDevice(db:D1Database,device:Device,action:string,input:Obj):Promise<Response>{
+export async function copyFleetDevice(db:D1Database,device:Device,action:string,input:Obj,liveExecutionEnabled=false):Promise<Response>{
   const q=(sql:string,...args:unknown[])=>db.prepare(sql).bind(...args),now=Date.now();
   if(!validId(input.link))return fail('Linked demo account required.');
   const link=await q("SELECT id,owner,device,status,trade_mode,access_level,monitoring_paused,currency,login,server FROM mt5_links WHERE id=? AND device=? AND owner=?",
@@ -71,6 +71,7 @@ export async function copyFleetDevice(db:D1Database,device:Device,action:string,
     const commands:D1PreparedStatement[]=[];
     let queued=0,skipped=0,baseline=0;
     for(const fleet of fleets.results){
+      if(fleet.execution_mode==='live' && !liveExecutionEnabled)continue;
       const isBaseline=!prior||prior.observed_at_ms<Date.parse(fleet.updated_at)||
         Number(input.observedAt)-prior.observed_at_ms>30000;
       if(isBaseline){baseline++;continue;}
@@ -116,6 +117,8 @@ export async function copyFleetDevice(db:D1Database,device:Device,action:string,
     return respond({ok:true,intents_queued:queued,intents_skipped_without_consent:skipped,baseline_fleets:baseline});
   }
   if(action==='device/copy-poll'){
+    if(accountMode==='live' && !liveExecutionEnabled)
+      return respond({task:null,liveExecutionDisabled:true});
     // One claim, one shot: no automatic retry after an unknown broker outcome.
     // If an HTTP reply is lost, the task remains dispatched for manual review.
     const permission=await q("SELECT demo_authorized,authorization_mode,broker_login,broker_server,expires_at FROM copy_device_consents WHERE follower_link=? AND device=? AND owner=?",
