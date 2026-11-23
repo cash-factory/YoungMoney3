@@ -2,8 +2,8 @@ import {deriveCopySignals,validCopyItem,validCopyProof,type SourceItem,type Sour
 
 type Obj=Record<string,unknown>;
 type Device={id:string;owner:string};
-type Link={id:string;owner:string;device:string;status:string;trade_mode:number|null;access_level:string;monitoring_paused:number;currency:string|null};
-type Fleet={id:string;source_link:string;state:string;updated_at:string;max_age_ms:number;owner:string};
+type Link={id:string;owner:string;device:string;status:string;trade_mode:number|null;access_level:string;monitoring_paused:number;currency:string|null;login:string|null;server:string|null};
+type Fleet={id:string;source_link:string;state:string;execution_mode:'demo'|'live';updated_at:string;max_age_ms:number;owner:string};
 type Target={fleet_id:string;owner:string;follower_link:string;sizing_mode:string;sizing_value:number;max_lots:number;max_daily_loss_pct:number;symbol_map:string;mirror_pending:number;mirror_protection:number;enabled:number};
 const respond=(obj:unknown,status=200)=>Response.json(obj,{status,headers:{'cache-control':'no-store','x-content-type-options':'nosniff'}});
 const fail=(s:string,status=400)=>respond({error:s},status);
@@ -21,20 +21,24 @@ const safeCanonical=(v:unknown):string=>{
 export async function copyFleetDevice(db:D1Database,device:Device,action:string,input:Obj):Promise<Response>{
   const q=(sql:string,...args:unknown[])=>db.prepare(sql).bind(...args),now=Date.now();
   if(!validId(input.link))return fail('Linked demo account required.');
-  const link=await q("SELECT id,owner,device,status,trade_mode,access_level,monitoring_paused,currency FROM mt5_links WHERE id=? AND device=? AND owner=?",
+  const link=await q("SELECT id,owner,device,status,trade_mode,access_level,monitoring_paused,currency,login,server FROM mt5_links WHERE id=? AND device=? AND owner=?",
     input.link,device.id,device.owner).first<Link>();
   if(!link||link.status!=='connected')return fail('Authorized linked account unavailable.',404);
-  if(link.trade_mode!==0)return fail('Copy execution is restricted to verified demo accounts.',403);
+  if(link.trade_mode!==0&&link.trade_mode!==2)return fail('Only verified demo or real MT5 accounts can participate.',403);
+  const accountMode=link.trade_mode===2?'live':'demo';
   if(link.monitoring_paused && action!=='device/copy-consent' && action!=='device/copy-report')
     return fail('Monitoring is paused. No broker copy actions may run.',423);
   if(action==='device/copy-consent'){
-    if(typeof input.allowed!=='boolean')return fail('Explicit local demo permission required.');
+    if(typeof input.allowed!=='boolean'||input.login!==link.login||input.server!==link.server)
+      return fail('Copy permission must match the actual broker account login and server.',403);
+    if(input.allowed&&input.mode!==accountMode)return fail('Local permission mode differs from broker trade mode.',403);
     if(input.allowed&&link.access_level!=='trading-enabled')
       return fail('This broker login is read-only and cannot execute copy orders.',403);
     const expiry=input.allowed?now+45000:0;
-    await q("INSERT INTO copy_device_consents(follower_link,owner,device,demo_authorized,expires_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(follower_link) DO UPDATE SET demo_authorized=excluded.demo_authorized,expires_at=excluded.expires_at,updated_at=excluded.updated_at WHERE copy_device_consents.owner=excluded.owner AND copy_device_consents.device=excluded.device",
-      link.id,device.owner,device.id,input.allowed?1:0,expiry,stamp()).run();
-    return respond({ok:true,authorized:input.allowed,expires_at:expiry});
+    const consentMode=input.allowed?accountMode:'none';
+    await q("INSERT INTO copy_device_consents(follower_link,owner,device,demo_authorized,authorization_mode,broker_login,broker_server,expires_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(follower_link) DO UPDATE SET demo_authorized=excluded.demo_authorized,authorization_mode=excluded.authorization_mode,broker_login=excluded.broker_login,broker_server=excluded.broker_server,expires_at=excluded.expires_at,updated_at=excluded.updated_at WHERE copy_device_consents.owner=excluded.owner AND copy_device_consents.device=excluded.device",
+      link.id,device.owner,device.id,input.allowed?1:0,consentMode,link.login,link.server,expiry,stamp()).run();
+    return respond({ok:true,authorized:input.allowed,mode:consentMode,expires_at:expiry});
   }
   if(action==='device/copy-report'){
     if(!number(input.balance,0,1e13)||!number(input.equity,0,1e13)||
@@ -46,7 +50,7 @@ export async function copyFleetDevice(db:D1Database,device:Device,action:string,
     await q("INSERT INTO copy_account_reports(link,owner,device,account_currency,account_balance,account_equity,margin_free,open_positions,pending_orders,broker_connected,demo_trading_enabled,observed_at_ms) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(link) DO UPDATE SET account_balance=excluded.account_balance,account_equity=excluded.account_equity,margin_free=excluded.margin_free,open_positions=excluded.open_positions,pending_orders=excluded.pending_orders,broker_connected=excluded.broker_connected,demo_trading_enabled=excluded.demo_trading_enabled,observed_at_ms=excluded.observed_at_ms WHERE copy_account_reports.owner=excluded.owner AND copy_account_reports.device=excluded.device",
       link.id,device.owner,device.id,link.currency,input.balance,input.equity,input.freeMargin,input.openPositions,input.pendingOrders,
       input.connected?1:0,input.tradeAllowed?1:0,now).run();
-    const source=await q("SELECT 1 FROM copy_fleets WHERE owner=? AND source_link=? AND state='demo_armed' LIMIT 1",
+    const source=await q("SELECT 1 FROM copy_fleets WHERE owner=? AND source_link=? AND state IN ('demo_armed','live_armed') LIMIT 1",
       device.owner,link.id).first();
     return respond({ok:true,sourceActive:!!source && !link.monitoring_paused});
   }
@@ -61,7 +65,7 @@ export async function copyFleetDevice(db:D1Database,device:Device,action:string,
     const prior=await q("SELECT snapshot,observed_at_ms,snapshot_sha256 FROM copy_source_states WHERE source_link=? AND owner=?",link.id,device.owner)
       .first<{snapshot:string;observed_at_ms:number;snapshot_sha256:string}>();
     if(prior&&Number(input.observedAt)<=prior.observed_at_ms)return respond({ok:true,ignored:'out_of_order'});
-    const fleets=await q("SELECT * FROM copy_fleets WHERE owner=? AND source_link=? AND state='demo_armed'",device.owner,link.id).all<Fleet>();
+    const fleets=await q("SELECT * FROM copy_fleets WHERE owner=? AND source_link=? AND state IN ('demo_armed','live_armed')",device.owner,link.id).all<Fleet>();
     const old:SourceItem[]=prior?JSON.parse(prior.snapshot):[];
     const snapshotsHash=await hash(safeCanonical(items));
     const commands:D1PreparedStatement[]=[];
@@ -74,9 +78,16 @@ export async function copyFleetDevice(db:D1Database,device:Device,action:string,
       if(!signals.length)continue;
       const targets=await q("SELECT * FROM copy_fleet_followers WHERE fleet_id=? AND owner=? AND enabled=1",fleet.id,device.owner).all<Target>();
       for(const target of targets.results){
-        const consent=await q("SELECT demo_authorized,expires_at FROM copy_device_consents WHERE follower_link=? AND owner=?",target.follower_link,device.owner)
-          .first<{demo_authorized:number;expires_at:number}>();
-        if(!consent?.demo_authorized||consent.expires_at<=now){skipped+=signals.length;continue;}
+        const follower=await q("SELECT trade_mode,access_level,monitoring_paused,status,login,server FROM mt5_links WHERE id=? AND owner=?",target.follower_link,device.owner)
+          .first<{trade_mode:number|null;access_level:string;monitoring_paused:number;status:string;login:string|null;server:string|null}>();
+        const consent=await q("SELECT demo_authorized,authorization_mode,broker_login,broker_server,expires_at FROM copy_device_consents WHERE follower_link=? AND owner=?",target.follower_link,device.owner)
+          .first<{demo_authorized:number;authorization_mode:string;broker_login:string|null;broker_server:string|null;expires_at:number}>();
+        if(!follower||follower.status!=='connected'||follower.monitoring_paused!==0||
+          follower.access_level!=='trading-enabled'||follower.trade_mode!==(fleet.execution_mode==='live'?2:0)||
+          !consent?.demo_authorized||consent.authorization_mode!==fleet.execution_mode||
+          consent.broker_login!==follower.login||consent.broker_server!==follower.server||consent.expires_at<=now){
+          skipped+=signals.length;continue;
+        }
         for(const signal of signals){
           if((signal.action==='place_pending'||signal.action==='modify_pending'||signal.action==='cancel_pending')&&!target.mirror_pending)continue;
           if(signal.action==='modify_sl_tp'&&!target.mirror_protection)continue;
@@ -90,8 +101,8 @@ export async function copyFleetDevice(db:D1Database,device:Device,action:string,
             confirmedBy:matchingProof?.ticket||null,
           };
           const revision=await hash(safeCanonical({action:signal.action,body}));
-          commands.push(q("INSERT OR IGNORE INTO copy_execution_tasks(id,owner,fleet_id,follower_link,source_link,source_key,action,source_revision,payload,status,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,'queued',?,?)",
-            crypto.randomUUID(),device.owner,fleet.id,target.follower_link,link.id,signal.source_key,signal.action,revision,JSON.stringify(body),now,now+Math.min(fleet.max_age_ms,12000)));
+          commands.push(q("INSERT OR IGNORE INTO copy_execution_tasks(id,owner,fleet_id,follower_link,source_link,source_key,execution_mode,action,source_revision,payload,status,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?,'queued',?,?)",
+            crypto.randomUUID(),device.owner,fleet.id,target.follower_link,link.id,signal.source_key,fleet.execution_mode,signal.action,revision,JSON.stringify(body),now,now+Math.min(fleet.max_age_ms,12000)));
           queued++;
         }
       }
@@ -107,14 +118,16 @@ export async function copyFleetDevice(db:D1Database,device:Device,action:string,
   if(action==='device/copy-poll'){
     // One claim, one shot: no automatic retry after an unknown broker outcome.
     // If an HTTP reply is lost, the task remains dispatched for manual review.
-    const permission=await q("SELECT demo_authorized,expires_at FROM copy_device_consents WHERE follower_link=? AND device=? AND owner=?",
-      link.id,device.id,device.owner).first<{demo_authorized:number;expires_at:number}>();
-    if(!permission?.demo_authorized||permission.expires_at<=now)return respond({task:null,consentRequired:true});
+    const permission=await q("SELECT demo_authorized,authorization_mode,broker_login,broker_server,expires_at FROM copy_device_consents WHERE follower_link=? AND device=? AND owner=?",
+      link.id,device.id,device.owner).first<{demo_authorized:number;authorization_mode:string;broker_login:string|null;broker_server:string|null;expires_at:number}>();
+    if(!permission?.demo_authorized||permission.authorization_mode!==accountMode||permission.expires_at<=now||
+       permission.broker_login!==link.login||permission.broker_server!==link.server)
+      return respond({task:null,consentRequired:true});
     await q("UPDATE copy_execution_tasks SET status='cancelled',finished_at=? WHERE follower_link=? AND owner=? AND status='queued' AND expires_at<=?",
       now,link.id,device.owner,now).run();
     const selected=await q(
-      "SELECT t.id FROM copy_execution_tasks t JOIN copy_fleets f ON f.id=t.fleet_id JOIN copy_fleet_followers target ON target.fleet_id=f.id AND target.follower_link=t.follower_link WHERE t.owner=? AND t.follower_link=? AND t.status='queued' AND t.expires_at>? AND f.state='demo_armed' AND target.enabled=1 AND f.owner=? ORDER BY t.created_at,t.id LIMIT 1",
-      device.owner,link.id,now,device.owner).first<{id:string}>();
+      "SELECT t.id FROM copy_execution_tasks t JOIN copy_fleets f ON f.id=t.fleet_id JOIN copy_fleet_followers target ON target.fleet_id=f.id AND target.follower_link=t.follower_link WHERE t.owner=? AND t.follower_link=? AND t.execution_mode=? AND f.execution_mode=? AND t.status='queued' AND t.expires_at>? AND f.state=? AND target.enabled=1 AND f.owner=? ORDER BY t.created_at,t.id LIMIT 1",
+      device.owner,link.id,accountMode,accountMode,now,accountMode==='live'?'live_armed':'demo_armed',device.owner).first<{id:string}>();
     if(!selected)return respond({task:null});
     // Recheck consent AND armed policy inside the atomic claim itself. A
     // concurrent Pause All or local revoke must never dispatch after it wins.
@@ -122,17 +135,17 @@ export async function copyFleetDevice(db:D1Database,device:Device,action:string,
       WHERE id=? AND owner=? AND follower_link=? AND status='queued' AND expires_at>?
       AND EXISTS(SELECT 1 FROM copy_fleets f JOIN copy_fleet_followers t
         ON t.fleet_id=f.id WHERE f.id=copy_execution_tasks.fleet_id
-        AND f.owner=copy_execution_tasks.owner AND f.state='demo_armed'
+        AND f.owner=copy_execution_tasks.owner AND f.state=? AND f.execution_mode=copy_execution_tasks.execution_mode
         AND t.follower_link=copy_execution_tasks.follower_link AND t.enabled=1)
       AND EXISTS(SELECT 1 FROM copy_device_consents c
         WHERE c.follower_link=copy_execution_tasks.follower_link
         AND c.device=? AND c.owner=copy_execution_tasks.owner
-        AND c.demo_authorized=1 AND c.expires_at>?)
-      RETURNING id,source_key,action,payload,expires_at`,
-      now,selected.id,device.owner,link.id,now,device.id,now)
-      .first<{id:string;source_key:string;action:string;payload:string;expires_at:number}>();
+        AND c.demo_authorized=1 AND c.authorization_mode=? AND c.broker_login=? AND c.broker_server=? AND c.expires_at>?)
+      RETURNING id,source_key,action,payload,expires_at,execution_mode`,
+      now,selected.id,device.owner,link.id,now,accountMode==='live'?'live_armed':'demo_armed',device.id,accountMode,link.login,link.server,now)
+      .first<{id:string;source_key:string;action:string;payload:string;expires_at:number;execution_mode:string}>();
     return respond({task:task?{id:task.id,sourceKey:task.source_key,action:task.action,
-      payload:JSON.parse(task.payload),expiresAt:task.expires_at}:null});
+      executionMode:task.execution_mode,payload:JSON.parse(task.payload),expiresAt:task.expires_at}:null});
   }
   if(action==='device/copy-ack'){
     if(!validId(input.task)||!['applied','rejected','unknown'].includes(String(input.status))||
