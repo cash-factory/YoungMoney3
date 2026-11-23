@@ -3,6 +3,7 @@ import { pnlTone, signedMoney } from '@/lib/tradingTone';
 import { Monitor, Link2, X, ChevronDown, CheckCircle2, AlertTriangle, CircleHelp, RefreshCw, Wallet, Clock3, History, Laptop, ArrowRight } from 'lucide-react';
 import { announceAction } from '@/lib/actionFeedback';
 import { CashFlowPanel } from '@/components/CashFlowPanel';
+import { EvidenceConflictPanel } from '@/components/EvidenceConflictPanel';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
@@ -128,7 +129,7 @@ export function Mt5Connections() {
   const historyAccount = links.find(link => link.id === historyScan?.link);
   const failedLinks = links.filter(link => ['failed','expired'].includes(link.status));
   const activeLinks = links.filter(link => !['failed','expired'].includes(link.status));
-  const outdatedCapturePc = activeLinks.some(link => link.status==='connected' && link.capture_health==='needs_attention' && devices.some(pc=>pc.id===link.device && pc.connector_version!=='0.5.5-rc1'));
+  const outdatedCapturePc = activeLinks.some(link => link.status==='connected' && link.capture_health==='needs_attention' && devices.some(pc=>pc.id===link.device && pc.connector_version!=='0.5.6-rc1'));
   const visibleLinks = selectedPcId ? activeLinks.filter(link=>link.device===selectedPcId):activeLinks;
   const selectedPc=devices.find(pc=>pc.id===selectedPcId);
   const selected = trades.find(t=>t.id===imported);
@@ -244,6 +245,7 @@ export function Mt5Connections() {
                   <div><small>Broker balance</small><strong>{l.broker_balance==null?'—':l.broker_balance.toLocaleString()} <span>{l.currency}</span></strong></div>
                   <div><small>Broker equity</small><strong>{l.broker_equity==null?'—':l.broker_equity.toLocaleString()} <span>{l.currency}</span></strong></div>
                   <div><small>Decisions for review</small><strong>{l.pending_reviews||0}</strong></div>
+                   {(l.evidence_conflicts_pending||0)>0&&<div><small>Evidence integrity reviews</small><strong>{l.evidence_conflicts_pending}</strong></div>}
                 </div>
                 <div className="ym-account-tabs" role="tablist" aria-label="Account management"
                   onKeyDown={event=>{
@@ -270,6 +272,7 @@ export function Mt5Connections() {
                     <div><span>Last sync</span><strong>{l.last_sync?new Date(l.last_sync).toLocaleString():'Awaiting first sync'}</strong></div>
                     <div><span>Account class</span><strong>{l.trade_mode===0?'Demo':l.trade_mode===1?'Contest':l.trade_mode===2?'Real':'Unknown'}</strong></div>
                   </div>
+                  {(l.evidence_conflicts_pending||0)>0&&<EvidenceConflictPanel link={l.id} count={l.evidence_conflicts_pending||0}/>}
                   {l.last_error && <div className="ym-action-feedback" data-kind="warning" role="alert"><AlertTriangle size={16}/><span>{l.last_error}</span></div>}
                   {Boolean(l.gap)&&<div className="ym-action-feedback" data-kind="warning">An offline interval may have left gaps in observed stop changes.</div>}
                   <div className="ym-connection-actions">
