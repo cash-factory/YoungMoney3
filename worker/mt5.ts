@@ -622,6 +622,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         :String(event.key).startsWith('spec-')?'specification':'position';
       const payload=JSON.stringify(f);
       const sha=await hash(payload);
+      let evidenceSha=sha;
       const staged=rawSeen.get(String(event.key));
       const prior=staged ?? await q('SELECT sha256,payload FROM mt5_raw_evidence WHERE link=? AND event_key=?',
         link.id,event.key).first<{sha256:string;payload:string}>();
@@ -639,6 +640,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
           continue;
         }
       }
+      if(prior) evidenceSha=prior.sha256; // Preserve original fingerprint for cash ledger provenance.
       if(!prior) rawSeen.set(String(event.key),{sha256:sha,payload});
       statements.push(q('INSERT OR IGNORE INTO mt5_raw_evidence(link,owner,account_id,event_key,evidence_kind,payload,sha256,recorded_at) VALUES(?,?,?,?,?,?,?,?)',
         link.id,device.owner,link.account_id,event.key,evidenceKind,payload,sha,time));
@@ -654,7 +656,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
           (link,owner,account_id,ticket,amount,currency,direction,broker_time_msc,raw_evidence_key,raw_sha256,recorded_at)
           VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
           link.id,device.owner,link.account_id,ticket,String(amount),link.currency,
-          amount>0?'in':'out',at,event.key,sha,time));
+          amount>0?'in':'out',at,event.key,evidenceSha,time));
       }
     }
     if(event.kind==='lifecycle') {
