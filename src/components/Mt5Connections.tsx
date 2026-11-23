@@ -282,7 +282,7 @@ export function Mt5Connections() {
                     <RefreshCw size={16} className="animate-spin"/><span>Rebuilding broker history through {new Date(l.recovery.scanned_through).toLocaleString()} toward {new Date(l.recovery.target_at).toLocaleString()}. Progress is checkpointed.</span>
                   </div>}
                   {(l.recovery?.unresolved_positions||0)>0&&<div className="ym-action-feedback" data-kind="warning" role="status">
-                    <AlertTriangle size={16}/><span>{l.recovery.unresolved_positions} previously observed {l.recovery.unresolved_positions===1?'position':'positions'} cannot yet be confirmed closed from broker deals and orders. Their status remains unresolved.</span>
+                    <AlertTriangle size={16}/><span>{(l.recovery?.unresolved_positions||0)} previously observed {(l.recovery?.unresolved_positions||0)===1?'position':'positions'} cannot yet be confirmed closed from broker deals and orders. Their status remains unresolved.</span>
                   </div>}
                   {Boolean(l.recovery?.unobserved_stop_changes)&&<div className="ym-action-feedback" data-kind="info" role="status">
                     <CircleHelp size={16}/><span>An offline observation gap was detected. Executions can be recovered from history; SL/TP modifications made entirely offline may not be reconstructable.</span>
