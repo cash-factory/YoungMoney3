@@ -1297,7 +1297,7 @@ class ConnectorApp:
                     self._log("Capture coordinator stopped unexpectedly; a bounded automatic retry is scheduled.")
                 else:
                     self.restart_due = None
-                    if self.pc_state != "pc-revoked":
+                    if self.pc_state not in ("pc-revoked", "pc-identity-conflict"):
                         self.pc_state = "stopped"
                         self.status_var.set("Connector stopped")
                     self._log("Monitoring stopped. Pairing and saved accounts retained.")
