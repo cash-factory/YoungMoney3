@@ -1,5 +1,3 @@
-import type { DecisionReview } from './decisionReplay.ts';
-
 /** No prices or P&L are used as evidence of behavioural change. */
 export type ExperimentStatus = 'draft' | 'active' | 'completed';
 export type ExperimentMetric = 'plan_adherence';
@@ -23,8 +21,16 @@ export interface ImprovementExperiment {
 }
 export type ImprovementExperimentInput = Omit<ImprovementExperiment,
   'id' | 'user_id' | 'created_at' | 'updated_at'>;
-type Review = Pick<DecisionReview, 'id' | 'entry_time' | 'strategy_id' | 'account_id' |
-  'verdict' | 'pre_reveal_verdict' | 'pre_reveal_at'>;
+/** Standalone evidence shape so financial calculations stay usable in Workers and the browser. */
+type Review = {
+  id: string;
+  entry_time: string;
+  strategy_id: string | null;
+  account_id: string | null;
+  verdict: 'followed' | 'changed' | 'unsure' | null;
+  pre_reveal_verdict?: 'followed' | 'changed' | 'unsure' | null;
+  pre_reveal_at?: string | null;
+};
 export interface ExperimentPeriod {
   eligible: number;
   followed: number;
