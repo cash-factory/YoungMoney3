@@ -14,6 +14,7 @@ export interface TradingPatternReport {
   assessable: number;
   preReveal: number;
   retrospective: number;
+  importedUnverified: number;
   unknown: number;
   plan: PatternMetric;
   checklist: PatternMetric;
@@ -68,7 +69,7 @@ function mondayUTC(value: number) {
   return day.toISOString().slice(0, 10);
 }
 function evidenceVerdict(row: DecisionReview): PatternVerdict | null {
-  return row.pre_reveal_at && row.pre_reveal_verdict
+  return !row.imported_unverified && row.pre_reveal_at && row.pre_reveal_verdict
     ? row.pre_reveal_verdict : row.verdict;
 }
 
@@ -103,7 +104,8 @@ export function buildTradingPatterns(
   const assessable = rows.filter(row => ['followed', 'changed'].includes(evidenceVerdict(row) || ''));
   const adhered = assessable.filter(row => evidenceVerdict(row) === 'followed').length;
   const unknown = rows.length - assessable.length;
-  const preReveal = rows.filter(row => Boolean(row.pre_reveal_at && row.pre_reveal_verdict)).length;
+  const preReveal = rows.filter(row => Boolean(!row.imported_unverified && row.pre_reveal_at && row.pre_reveal_verdict)).length;
+  const importedUnverified=rows.filter(row=>row.imported_unverified).length;
 
   const bySetup = new Map<string, number>();
   const bySetupAdherence = new Map<string, { followed: number; changed: number; sealed: number; retrospective: number }>();
@@ -118,7 +120,7 @@ export function buildTradingPatterns(
       const verdict=evidenceVerdict(review);
       if(verdict==='followed'||verdict==='changed') {
         previous[verdict]++;
-        if(review.pre_reveal_verdict && review.pre_reveal_at) previous.sealed++;
+        if(!review.imported_unverified && review.pre_reveal_verdict && review.pre_reveal_at) previous.sealed++;
         else previous.retrospective++;
       }
       bySetupAdherence.set(label,previous);
@@ -202,6 +204,8 @@ export function buildTradingPatterns(
   ];
   if (preReveal < rows.length)
     limitations.push('Some reviews were entered or changed retrospectively; their judgement may reflect knowledge of the outcome.');
+  if (importedUnverified)
+    limitations.push(importedUnverified+' restored reviews are historical self-reports; their pre-reveal timestamps are not server-verified.');
   if (rows.length - assessable.length)
     limitations.push('Unknown assessments are excluded from adherence percentages, but remain in the displayed counts.');
   if (recordedChecklist === 0)
@@ -210,7 +214,7 @@ export function buildTradingPatterns(
     limitations.push('There are too few documented loss-following decisions to describe a reliable pattern.');
   return {
     reviewed: rows.length, assessable: assessable.length, preReveal,
-    retrospective: rows.length - preReveal, unknown,
+    retrospective: rows.length - preReveal, importedUnverified, unknown,
     plan: metric(adhered, assessable.length, minimum),
     checklist: metric(checked, recordedChecklist, minimum),
     afterLoss: { ...metric(afterLossFollowed, afterLossSeen, minimum), examined: afterLossSeen },
