@@ -66,6 +66,18 @@ def records(result):
     return [v._asdict() for v in result]
 
 def raw(row):
+    """Preserve MT5's original fields from either API named tuples or dicts.
+
+    MetaTrader5.history_deals_get() returns TradeDeal named tuples in real
+    installations. The cash-history backfill passes them directly here.
+    Requiring .items() caused a repeating AttributeError that blocked the
+    entire broker scan while PC presence stayed online.
+    """
+    if not isinstance(row, dict):
+        convert = getattr(row, "_asdict", None)
+        if not callable(convert):
+            raise TypeError("Unsupported MT5 record; expected a dict or named tuple.")
+        row = convert()
     # Preserve unsigned 64-bit ticket numbers through JavaScript JSON.
     # The original MT5 numeric/time fields are never normalized in evidence.
     return {k: str(v) if k in ("order","ticket","identifier","position_id","position_by_id","magic") else v for k,v in row.items()}
