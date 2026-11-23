@@ -184,7 +184,7 @@ export async function copyFleetOwner(request:Request,env:Env,owner:string,action
     return fail('Live execution requires the fleet-specific confirmation phrase.',409);
   const [owned,targets,consentRows]=await Promise.all([links(db,owner),
     q("SELECT * FROM copy_fleet_followers WHERE fleet_id=? AND owner=? AND enabled=1",fleet.id,owner).all<Target>(),
-    q("SELECT * FROM copy_device_consents WHERE owner=? AND demo_authorized=1 AND authorization_mode=? AND expires_at>?",owner,fleet.execution_mode,Date.now()).all<{follower_link:string;expires_at:number}>()]);
+    q("SELECT follower_link,broker_login,broker_server,expires_at FROM copy_device_consents WHERE owner=? AND demo_authorized=1 AND authorization_mode=? AND expires_at>?",owner,fleet.execution_mode,Date.now()).all<{follower_link:string;broker_login:string|null;broker_server:string|null;expires_at:number}>()]);
   const src=owned.find(x=>x.id===fleet.source_link);
   if(!src||(fleet.execution_mode==='live'&&src.trade_mode!==0&&src.trade_mode!==2)||
      (fleet.execution_mode==='demo'&&src.trade_mode!==0)||src.monitoring_paused!==0||
@@ -194,7 +194,8 @@ export async function copyFleetOwner(request:Request,env:Env,owner:string,action
   const blocked=targets.results.find(t=>{
     const a=owned.find(x=>x.id===t.follower_link);
     return !eligible(a,fleet.execution_mode)||a?.access_level!=='trading-enabled'||
-      !consentRows.results.some(c=>c.follower_link===t.follower_link);
+      !consentRows.results.some(c=>c.follower_link===t.follower_link&&
+        c.broker_login===a?.login&&c.broker_server===a?.server);
   });
   if(blocked)return fail('All enabled followers must be online, trading-enabled, mode-matched and locally authorized in their Windows connector.',409);
   const routing=await q("SELECT f.source_link,t.follower_link FROM copy_fleets f JOIN copy_fleet_followers t ON t.fleet_id=f.id WHERE f.owner=? AND f.state IN ('demo_armed','live_armed') AND t.enabled=1",owner)
