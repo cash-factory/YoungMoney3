@@ -310,7 +310,7 @@ try {
   // A genuine changed value must be quarantined, NOT used to overwrite the
   // original immutable evidence, and NOT block unrelated valid live fills.
   const conflictingEvidence={...evidenceEvent,fields:{...fill,price:1.2}};
-  const unrelated={kind:'raw',key:'deal-782',fields:{...fill,ticket:'782',price:1.4}};
+  const unrelated={kind:'raw',key:'deal-782',fields:{...fill,ticket:'782',position_id:'9901',price:1.4}};
   const replay=await device('sync',{link,events:[conflictingEvidence,unrelated]});
   assert.equal(replay.status,200,'Conflicting raw evidence cannot starve valid following events.');
   const result=await replay.json();
