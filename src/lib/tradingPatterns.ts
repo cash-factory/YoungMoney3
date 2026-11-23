@@ -6,7 +6,9 @@ export type PatternAssessment = 'pre-reveal' | 'retrospective';
 export type PatternVerdict = 'followed' | 'changed' | 'unsure';
 export type PatternCategory = { label: string; count: number; share: number };
 export type PatternWeek = { start: string; followed: number; changed: number; unknown: number; rate: number | null };
-export type PatternMetric = { numerator: number; denominator: number; rate: number | null; sufficient: boolean };
+export type PatternMetric = { numerator: number; denominator: number; rate: number | null; sufficient: boolean; interval: [number,number] | null };
+export interface SetupAdherence { label: string; reviewed: number; followed: number; changed: number;
+  sealed: number; retrospective: number; rate: number | null; sufficient: boolean; }
 export interface TradingPatternReport {
   reviewed: number;
   assessable: number;
@@ -17,6 +19,7 @@ export interface TradingPatternReport {
   checklist: PatternMetric;
   afterLoss: PatternMetric & { examined: number };
   setups: PatternCategory[];
+  setupAdherence: SetupAdherence[];
   emotions: PatternCategory[];
   triggers: PatternCategory[];
   weeks: PatternWeek[];
@@ -35,9 +38,18 @@ function safeTime(value: string | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 function metric(numerator: number, denominator: number, minimum: number): PatternMetric {
+  // Approximate Wilson 95% score interval for a Bernoulli proportion.
+  // Interpretation depends on independent observations, which successive trades may violate.
+  let interval: [number,number] | null = null;
+  if (denominator >= minimum) {
+    const p = numerator / denominator, z=1.96, z2=z*z;
+    const center = (p+z2/(2*denominator))/(1+z2/denominator);
+    const margin = z*Math.sqrt((p*(1-p)+z2/(4*denominator))/denominator)/(1+z2/denominator);
+    interval=[100*Math.max(0,center-margin),100*Math.min(1,center+margin)];
+  }
   return {
     numerator, denominator, rate: denominator ? 100 * numerator / denominator : null,
-    sufficient: denominator >= minimum,
+    sufficient: denominator >= minimum, interval,
   };
 }
 function percentages(data: Map<string, number>): PatternCategory[] {
@@ -94,11 +106,23 @@ export function buildTradingPatterns(
   const preReveal = rows.filter(row => Boolean(row.pre_reveal_at && row.pre_reveal_verdict)).length;
 
   const bySetup = new Map<string, number>();
+  const bySetupAdherence = new Map<string, { followed: number; changed: number; sealed: number; retrospective: number }>();
   const byTrigger = new Map<string, number>();
   const byEmotion = new Map<string, number>();
   for (const review of rows) {
     const name = (review.model_name || review.strategy_name || '').trim();
-    if (name) add(bySetup, name.slice(0, 80));
+    if (name) {
+      const label=name.slice(0,80);
+      add(bySetup,label);
+      const previous=bySetupAdherence.get(label)||{followed:0,changed:0,sealed:0,retrospective:0};
+      const verdict=evidenceVerdict(review);
+      if(verdict==='followed'||verdict==='changed') {
+        previous[verdict]++;
+        if(review.pre_reveal_verdict && review.pre_reveal_at) previous.sealed++;
+        else previous.retrospective++;
+      }
+      bySetupAdherence.set(label,previous);
+    }
     if (review.trigger?.trim()) add(byTrigger, review.trigger.trim().slice(0, 80));
   }
 
@@ -180,6 +204,12 @@ export function buildTradingPatterns(
     checklist: metric(checked, recordedChecklist, minimum),
     afterLoss: { ...metric(afterLossFollowed, afterLossSeen, minimum), examined: afterLossSeen },
     setups: percentages(bySetup),
+    setupAdherence:[...bySetupAdherence].map(([label,row]):SetupAdherence=>{
+      const reviewed=row.followed+row.changed;
+      return {label,reviewed,followed:row.followed,changed:row.changed,
+        sealed:row.sealed,retrospective:row.retrospective,rate:reviewed?100*row.followed/reviewed:null,
+        sufficient:reviewed>=Math.max(5,Math.min(minimum,12))};
+    }).sort((a,b)=>b.reviewed-a.reviewed||a.label.localeCompare(b.label)),
     emotions: percentages(byEmotion),
     triggers: percentages(byTrigger),
     weeks,
