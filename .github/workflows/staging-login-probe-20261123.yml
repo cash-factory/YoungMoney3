@@ -39,5 +39,9 @@ jobs:
           npm ci
           npm run cf:staging:prepare
           npm run cf:staging:verify
-      - name: Probe real staging login using disposable isolated 600k fixture and clean up
-        run: node scripts/probe-staging-login.mjs
+      - name: Verify existing 600k and legacy 100k-to-600k staging password sign-ins
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/probe-staging-login.mjs
+          YM3_PROBE_LEGACY=1 node scripts/probe-staging-login.mjs
