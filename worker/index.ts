@@ -34,7 +34,6 @@ function response(body: unknown, status = 200) { return new Response(JSON.string
 function now() { return new Date().toISOString(); }
 function id() { return crypto.randomUUID(); }
 function b64(bytes: ArrayBuffer) { return btoa(String.fromCharCode(...new Uint8Array(bytes))); }
-function unb64(value: string) { return Uint8Array.from(atob(value), char => char.charCodeAt(0)); }
 async function sha(value: string) { return b64(await crypto.subtle.digest('SHA-256', encoder.encode(value))); }
 const sessionCookie = '__Host-ym_session';
 function cookieToken(request: Request) {
