@@ -16,6 +16,12 @@ import { Modal } from './ui/Modal';
 import '@/improvement-lab.css';
 
 const todayUTC = () => new Date().toISOString().slice(0, 10);
+const toInput = (item: ImprovementExperiment): ImprovementExperimentInput => ({
+  title: item.title, hypothesis: item.hypothesis, single_change: item.single_change,
+  strategy_id: item.strategy_id, account_id: item.account_id, metric: item.metric,
+  start_date: item.start_date, end_date: item.end_date, baseline_days: item.baseline_days,
+  minimum_samples: item.minimum_samples, status: item.status, conclusion: item.conclusion,
+});
 const draftExperiment = (): ImprovementExperimentInput => ({
   title: '',
   hypothesis: '',
@@ -51,9 +57,10 @@ function EvidenceMeter({ label, period, required }: { label: string; period: Exp
 }
 
 function StudyForm({
-  initial, onCancel, onSubmit, busy, error,
+  initial, owner, onCancel, onSubmit, busy, error,
 }: {
   initial: ImprovementExperimentInput;
+  owner: string;
   onCancel: () => void;
   onSubmit: (record: ImprovementExperimentInput) => Promise<void>;
   busy: boolean;
@@ -61,14 +68,13 @@ function StudyForm({
 }) {
   const [form, setForm] = useState<ImprovementExperimentInput>(initial);
   const [validation, setValidation] = useState('');
-  const { strategies } = useStrategies();
-  const { accounts } = useTradingAccounts();
+  const { strategies } = useStrategies(owner);
+  const { accounts } = useTradingAccounts(owner);
 
   const update = <K extends keyof ImprovementExperimentInput>(key: K, value: ImprovementExperimentInput[K]) =>
     setForm(previous => ({ ...previous, [key]: value }));
 
-  async function submit(event: FormEvent<HTMLFormElement>, status: 'draft' | 'active') {
-    event.preventDefault();
+  async function submit(status: 'draft' | 'active') {
     const record = { ...form, title: form.title.trim(), hypothesis: form.hypothesis.trim(),
       single_change: form.single_change.trim(), status };
     const message = validateExperiment(record);
@@ -77,7 +83,7 @@ function StudyForm({
   }
 
   return (
-    <form className="ym-lab-form" onSubmit={event => { void submit(event, 'draft'); }}>
+    <form className="ym-lab-form" onSubmit={(event: FormEvent<HTMLFormElement>) => { event.preventDefault(); void submit('draft'); }}>
       <div className="ym-lab-form-intro">
         <span className="ym-lab-kicker">PREREGISTRATION / STEP 01</span>
         <h3>Change one thing. Observe what follows.</h3>
@@ -139,7 +145,7 @@ function StudyForm({
         <button type="button" className="btn-ghost" onClick={onCancel} disabled={busy}>Cancel</button>
         <button className="btn-secondary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save draft'}</button>
         <button className="btn-primary" type="button" disabled={busy}
-          onClick={() => { const formNode = document.querySelector<HTMLFormElement>('#ym-lab-form-root'); if (formNode) void submit({ preventDefault: () => {} } as FormEvent<HTMLFormElement>, 'active'); }}>
+          onClick={() => { void submit('active'); }}>
           <LockKeyhole size={16} /> Start & lock design
         </button>
       </div>
@@ -288,7 +294,7 @@ export function ImprovementLab() {
                 <div className="ym-lab-study-actions">
                   {study.status==='draft' && !demo && <>
                     <button className="btn-secondary" type="button" disabled={busy} onClick={()=>{setEdit(study);setOpen(true);}}>Edit design</button>
-                    <button className="btn-primary" type="button" disabled={busy} onClick={()=>{void mutate(()=>save({...study,status:'active'},study));}}>
+                    <button className="btn-primary" type="button" disabled={busy} onClick={()=>{void mutate(()=>save({...toInput(study),status:'active'},study));}}>
                       <LockKeyhole size={15}/> Start & lock study
                     </button>
                     <button className="btn-ghost" type="button" disabled={busy} onClick={()=>{
@@ -297,7 +303,7 @@ export function ImprovementLab() {
                   </>}
                   {study.status==='active' && !demo && <button className="btn-primary" type="button" disabled={busy ||
                       (reflections[study.id] ?? study.conclusion).trim().length<20}
-                    onClick={()=>{void mutate(()=>save({...study,status:'completed',conclusion:(reflections[study.id]??study.conclusion).trim()},study));}}>
+                    onClick={()=>{void mutate(()=>save({...toInput(study),status:'completed',conclusion:(reflections[study.id]??study.conclusion).trim()},study));}}>
                     <Check size={16}/> Complete with conclusion
                   </button>}
                   {study.status==='completed' && <span className="ym-lab-complete"><BookOpenCheck size={16}/> Study recorded</span>}
@@ -312,7 +318,7 @@ export function ImprovementLab() {
       </div>
       <Modal open={open} title={edit ? 'Edit experiment draft' : 'Register an improvement experiment'}
         onClose={()=>{ if(!busy){setOpen(false);setEdit(null);} }} size="lg">
-        <StudyForm key={edit?.id || 'new-study'} initial={edit ? { ...edit } : draftExperiment()}
+        <StudyForm key={edit?.id || 'new-study'} initial={edit ? toInput(edit) : draftExperiment()} owner={user?.id || ''}
           busy={busy} error={operationError} onSubmit={saveStudy}
           onCancel={()=>{setOpen(false);setEdit(null);}}/>
       </Modal>
