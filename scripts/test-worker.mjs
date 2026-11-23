@@ -300,10 +300,54 @@ try {
   const evidenceEvent={kind:'raw',key:'deal-781',fields:fill};
   assert.equal((await device('sync',{link,events:[evidenceEvent]})).status,200);
   assert.equal((await device('sync',{link,events:[evidenceEvent]})).status,200);
-  assert.equal((await device('sync',{link,events:[{...evidenceEvent,fields:{...fill,price:1.2}}]})).status,409,
-    'An immutable broker ticket must not silently mutate on replay');
+  // The same record can be serialized with different property order, which
+  // must not be mistaken for a changed broker fact or silently rewrite the SHA.
+  const reordered=Object.fromEntries(Object.entries(fill).reverse());
+  const equivalent=await device('sync',{link,events:[{...evidenceEvent,fields:reordered}]});
+  assert.equal(equivalent.status,200);
+  assert.equal((await (await equivalent.json()).evidence_conflicts_pending),0);
+  const beforeEvidence=await db.prepare("SELECT payload,sha256 FROM mt5_raw_evidence WHERE link=? AND event_key='deal-781'").bind(link).first();
+  // A genuine changed value must be quarantined, NOT used to overwrite the
+  // original immutable evidence, and NOT block unrelated valid live fills.
+  const amended={...evidenceEvent,fields:{...fill,price:1.2}};
+  const unrelated={kind:'raw',key:'deal-782',fields:{...fill,ticket:'782',price:1.4}};
+  const replay=await device('sync',{link,events:[amended,unrelated]});
+  assert.equal(replay.status,200,'Conflicting raw evidence cannot starve valid following events.');
+  const result=await replay.json();
+  assert.equal(result.evidence_conflicts_pending,1);
+  assert.equal(result.evidence_quarantined_in_batch,1);
+  assert.equal(result.evidence_integrity_status,'needs_review');
+  assert.equal((await db.prepare("SELECT payload,sha256 FROM mt5_raw_evidence WHERE link=? AND event_key='deal-781'").bind(link).first()).payload,beforeEvidence.payload);
+  assert.equal((await db.prepare("SELECT sha256 FROM mt5_raw_evidence WHERE link=? AND event_key='deal-781'").bind(link).first()).sha256,beforeEvidence.sha256);
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM mt5_raw_evidence WHERE link=? AND event_key='deal-782'").bind(link).first()).n,1);
+  const discrepancy=await db.prepare("SELECT candidate_payload,changed_fields,review_status FROM mt5_evidence_conflicts WHERE link=? AND event_key='deal-781'").bind(link).first();
+  assert.equal(JSON.parse(discrepancy.candidate_payload).price,1.2);
+  assert.deepEqual(JSON.parse(discrepancy.changed_fields),['price']);
+  assert.equal(discrepancy.review_status,'needs_review');
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM mt5_evidence_conflicts WHERE link=?").bind(link).first()).n,1);
+  const replayAgain=await device('sync',{link,events:[amended]});
+  assert.equal(replayAgain.status,200);
+  assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM mt5_evidence_conflicts WHERE link=?").bind(link).first()).n,1,'Repeats are deduplicated by candidate hash.');
+  const confidential=await call('mt5/evidence-conflicts',{link});
+  assert.equal(confidential.status,200);
+  const safeList=await confidential.json();
+  assert.equal(safeList.rows.length,1);
+  assert.equal(safeList.rows[0].evidence_kind,'deal');
+  assert.deepEqual(safeList.rows[0].changed_fields,['price']);
+  assert.equal(safeList.rows[0].review_status,'needs_review');
+  assert.equal('candidate_payload' in safeList.rows[0],false,'The summary API must not return full broker payload.');
+  assert.equal((await call('mt5/evidence-conflicts',{link:'nonexistent'})).status,404);
+  assert.equal((await call('mt5/evidence-conflicts',{link},{})).status,200);
+  const linkStatus=(await (await call('mt5/status',{})).json()).links.find(item=>item.id===link);
+  assert.equal(linkStatus.capture_health,'needs_attention');
+  assert.equal(linkStatus.evidence_conflicts_pending,1);
+  assert.ok(linkStatus.last_sync,'Regular capture timestamp must advance despite an audited conflict.');
+  await assert.rejects(
+    db.prepare("UPDATE mt5_evidence_conflicts SET review_status='needs_review' WHERE link=?").bind(link).run(),
+    /immutable|not authorized|constraint|error/i,
+    'A conflicting candidate cannot be modified after receipt.');
   const rawCount=await db.prepare('SELECT COUNT(*) AS count FROM mt5_raw_evidence WHERE link=?').bind(link).first();
-  assert.equal(rawCount.count,1);
+  assert.equal(rawCount.count,2);
   // Cash transfers are detected from raw immutable MT5 DEAL_TYPE_BALANCE
   // history, including deals predating the pairing. They are NOT trade P&L.
   const cashTime=Date.now()-12*86400000;
