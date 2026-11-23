@@ -35,6 +35,7 @@ type Review = {
   verdict: 'followed' | 'changed' | 'unsure' | null;
   pre_reveal_verdict?: 'followed' | 'changed' | 'unsure' | null;
   pre_reveal_at?: string | null;
+  imported_unverified?: boolean;
 };
 export interface ExperimentPeriod {
   eligible: number;
@@ -115,13 +116,14 @@ export function evaluateExperiment(study: ImprovementExperiment, reviews: Review
       const preRevealTime = Date.parse(review.pre_reveal_at || '');
       // Prospective claims require BOTH the original entry and the sealed assessment
       // to occur after the intervention was activated on the server.
-      if (at < activation || !Number.isFinite(preRevealTime) || preRevealTime < activation) {
+      if (at < activation || review.imported_unverified ||
+          !Number.isFinite(preRevealTime) || preRevealTime < activation) {
         excluded_intervention++;
         continue;
       }
     }
     const target = before ? baseline : intervention;
-    const sealed = Boolean(review.pre_reveal_verdict && review.pre_reveal_at);
+    const sealed = Boolean(!review.imported_unverified && review.pre_reveal_verdict && review.pre_reveal_at);
     const verdict = sealed ? review.pre_reveal_verdict : review.verdict;
     if (verdict === 'followed') target.followed++;
     else if (verdict === 'changed') target.changed++;
@@ -145,6 +147,8 @@ export function evaluateExperiment(study: ImprovementExperiment, reviews: Review
     limitations.push(excluded_intervention + ' intervention reviews were excluded because they were retrospective or predated study activation.');
   if (baseline.retrospective + intervention.retrospective)
     limitations.push('Some decisions were reviewed retrospectively; their original pre-outcome judgement is unavailable.');
+  if (reviews.some(review=>review.imported_unverified))
+    limitations.push('Restored reviews are user-provided historical reports. Imported timestamps do not verify a pre-outcome assessment.');
   if (baseline.uncertain + intervention.uncertain)
     limitations.push('Uncertain or unreviewed decisions are excluded from the adherence percentage.');
   if (!enough_evidence)
