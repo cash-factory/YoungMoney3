@@ -84,7 +84,7 @@ export function PersonalTradingPatterns({ owner, trades, accountId, accountName,
     </header>
     {error && <div className="ym-pattern-error" role="alert">Decision review evidence is temporarily unavailable. <span>{error}</span>
       <button type="button" className="btn-secondary" onClick={refresh}>Retry</button></div>}
-    {loading ? <div className="ym-pattern-loading" role="status">Reading your documented decision history…</div> : (
+    {loading ? <div className="ym-pattern-loading" role="status">Reading your documented decision history…</div> : error ? null : (
       <>
         {hasAnyEvidence && <div className="ym-pattern-summary">
           <div><small>Reviewed decisions</small><strong>{report.reviewed}</strong></div>
@@ -92,7 +92,7 @@ export function PersonalTradingPatterns({ owner, trades, accountId, accountName,
           <div><small>Retrospective reviews</small><strong>{report.retrospective}</strong></div>
           <div><small>Uncertain assessments</small><strong>{report.unknown}</strong></div>
         </div>}
-        {!hasAnyEvidence && <div className="ym-pattern-onboarding ym-pattern-onboarding--empty" role="status">
+        {!hasAnyEvidence && <div className="ym-pattern-onboarding ym-pattern-onboarding--empty" role="region" aria-label="Get started with personal patterns">
           <Compass size={25} aria-hidden="true"/>
           <div><h3>No review evidence for this selection</h3>
             <p>Complete a Decision Replay to begin seeing documented patterns. The dashboard won't invent a profile from account P&amp;L alone.</p></div>
