@@ -1,0 +1,95 @@
+name: One-off staged authenticated KDF resource fix
+on:
+  push:
+    branches: [fix/cloudflare-password-hash-compat-20261123]
+    paths: [.github/workflows/staging-auth-kdf-deploy-20261123.yml]
+permissions:
+  contents: read
+concurrency:
+  group: youngmoney3-staging-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.repository == 'cash-factory/YoungMoney3'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: staging
+    env:
+      YM3_STAGING_D1_ID: ${{ vars.YM3_STAGING_D1_ID }}
+      YM3_STAGING_D1_NAME: ${{ vars.YM3_STAGING_D1_NAME }}
+      YM3_STAGING_WORKER_NAME: ${{ vars.YM3_STAGING_WORKER_NAME }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Refuse production and unrelated source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/fix/cloudflare-password-hash-compat-20261123'
+          test "${YM3_STAGING_WORKER_NAME:-}" = 'ym-fx-staging'
+          test "$(git ls-remote https://github.com/${GITHUB_REPOSITORY}.git refs/heads/main | cut -f1)" = '17bdb47afb76db41c1166d064b517cff2a812019'
+          test "$(git merge-base origin/main HEAD)" = '17bdb47afb76db41c1166d064b517cff2a812019'
+          while IFS= read -r path; do
+            case "$path" in
+              .github/workflows/staging-auth-kdf-deploy-20261123.yml|.github/workflows/staging-login-probe-20261123.yml|package.json|package-lock.json|worker/passwords.ts|worker/auth-kdf.ts|worker/password-service.ts|worker/index.ts|scripts/test-passwords.mjs|scripts/test-worker.mjs|scripts/prepare-staging.mjs|scripts/prepare-staging.test.mjs|scripts/probe-staging-login.mjs|src/lib/supabase.ts) ;;
+              *) echo "Unapproved hotfix path: $path"; exit 1;;
+            esac
+          done < <(git diff --name-only origin/main...HEAD)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Run full source and authentication tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run typecheck
+          npm run lint
+          npm test
+          npm run test:staging
+          node --test scripts/test-owner-recovery.mjs
+          npm run test:ui
+          npm run test:worker
+          npm run build
+      - name: Validate stage resources and dry-run new Durable Object binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          npm run cf:staging:prepare
+          npm run cf:staging:verify
+          node scripts/verify-rich-staging-schema.mjs
+          npx wrangler deploy --config wrangler.staging.jsonc --dry-run
+      - name: Deploy only ym-fx-staging with private AuthKdf Durable Object
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote https://github.com/${GITHUB_REPOSITORY}.git refs/heads/main | cut -f1)" = '17bdb47afb76db41c1166d064b517cff2a812019'
+          npx wrangler deploy --config wrangler.staging.jsonc | tee "$RUNNER_TEMP/ym3-auth-kdf-deploy.log"
+      - name: Verify live stage health and repeated actual authenticated password checks
+        shell: bash
+        env:
+          YM3_STAGING_URL: https://ym-fx-staging.ethical-hacker263.workers.dev
+        run: |
+          set -euo pipefail
+          grep -F "$YM3_STAGING_URL" "$RUNNER_TEMP/ym3-auth-kdf-deploy.log"
+          node scripts/check-staging-health.mjs
+          node scripts/probe-staging-login.mjs
+          YM3_PROBE_LEGACY=1 node scripts/probe-staging-login.mjs
+          node scripts/probe-staging-login.mjs
+          YM3_PROBE_LEGACY=1 node scripts/probe-staging-login.mjs
+      - name: Publish release evidence and boundaries
+        if: always()
+        shell: bash
+        run: |
+          echo "Staging-only authenticated KDF change SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Production Worker and D1 are untouched; no user password reset or D1 migration." >> "$GITHUB_STEP_SUMMARY"
+          echo "Staging now has a private SQLite Durable Object for CPU-intensive password checks, if deployment succeeded." >> "$GITHUB_STEP_SUMMARY"
+          echo "No new paid Cloudflare subscription is created." >> "$GITHUB_STEP_SUMMARY"
+          echo "Member sign-in from user's browser remains an additional acceptance test." >> "$GITHUB_STEP_SUMMARY"
