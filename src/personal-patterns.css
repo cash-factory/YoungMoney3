@@ -169,3 +169,10 @@
 .ym-pattern-setup-value>span {font-weight:720;color:var(--text-primary);}
 .ym-pattern-setup-value>small {font-size:10px;color:var(--text-secondary);}
 .ym-pattern-setup-row .ym-pattern-rank-track {height:5px;}
+
+
+.ym-pattern-imported-note {display:flex;align-items:flex-start;gap:9px;
+  padding:11px 13px;border:1px solid var(--border);border-radius:9px;
+  background:var(--bg-secondary);color:var(--text-secondary);
+  font-size:11px;line-height:1.6;}
+.ym-pattern-imported-note svg {flex:none;margin-top:2px;color:var(--brand-text);}
