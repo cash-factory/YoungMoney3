@@ -153,7 +153,7 @@ function StudyForm({
   );
 }
 
-export function ImprovementLab() {
+export function ImprovementLab({ onShowSessions }: { onShowSessions: () => void }) {
   const { user } = useAuth();
   const { studies, loading, error, refresh, save, remove } = useImprovementExperiments(user?.id);
   const { rows: decisions, error: decisionsError, loading: reviewsLoading, refresh: refreshReviews } = useDecisionReviews(user?.id);
@@ -263,7 +263,7 @@ export function ImprovementLab() {
             const isOpen = expanded === study.id;
             const strategy = strategies.find(s=>s.id===study.strategy_id)?.name;
             const account = accounts.find(a=>a.id===study.account_id)?.name;
-            const linkedSessions = sessions.filter(s=>!study.strategy_id || s.strategy_id===study.strategy_id);
+            const linkedSessions = study.strategy_id ? sessions.filter(s=>s.strategy_id===study.strategy_id && (!study.account_id || s.account_id===study.account_id)) : [];
             return <article key={study.id} className="ym-lab-study" data-lab-study={study.id} data-study-status={study.status}>
               <button type="button" className="ym-lab-study-trigger" aria-expanded={isOpen}
                 aria-controls={'ym-lab-detail-'+study.id} onClick={() => setExpanded(isOpen ? null : study.id)}>
@@ -304,7 +304,7 @@ export function ImprovementLab() {
                 </details>
                 <div className="ym-lab-linked">
                   <span><ClipboardCheck size={17}/> {linkedSessions.length} related testing {linkedSessions.length===1?'session':'sessions'} (separate evidence)</span>
-                  <a href="/#dashboard">Review more decisions <ArrowUpRight size={15}/></a>
+                  <div className="ym-lab-linked-actions"><button type="button" onClick={onShowSessions}>Open test sessions <ArrowUpRight size={15}/></button><a href="/#dashboard">Review more decisions <ArrowUpRight size={15}/></a></div>
                 </div>
                 {study.status==='completed' && <blockquote className="ym-lab-conclusion">{study.conclusion || 'Completed without a written conclusion.'}</blockquote>}
                 {study.status==='active' && !demo && <label className="ym-lab-conclude">Your conclusion, including limitations
