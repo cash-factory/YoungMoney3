@@ -58,6 +58,7 @@ export function PersonalTradingPatterns({ owner, trades, accountId, accountName,
   const report = useMemo(() => buildTradingPatterns(trades, rows, {
     accountId, window, minimum: 12,
   }), [trades, rows, accountId, window]);
+  const hasAnyEvidence = report.reviewed > 0 || report.sources.originalChecklists > 0 || report.sources.journalEmotions > 0;
 
   return <section className="ym-personal-patterns" id="ym-personal-patterns" aria-label="Personal trading patterns" tabIndex={-1}>
     <header className="ym-pattern-heading">
@@ -85,18 +86,19 @@ export function PersonalTradingPatterns({ owner, trades, accountId, accountName,
       <button type="button" className="btn-secondary" onClick={refresh}>Retry</button></div>}
     {loading ? <div className="ym-pattern-loading" role="status">Reading your documented decision history…</div> : (
       <>
-        <div className="ym-pattern-summary">
+        {hasAnyEvidence && <div className="ym-pattern-summary">
           <div><small>Reviewed decisions</small><strong>{report.reviewed}</strong></div>
           <div><small>Pre-reveal judgements</small><strong>{report.preReveal}</strong></div>
           <div><small>Retrospective reviews</small><strong>{report.retrospective}</strong></div>
           <div><small>Uncertain assessments</small><strong>{report.unknown}</strong></div>
-        </div>
-        {report.reviewed === 0 && <div className="ym-pattern-onboarding" role="status">
+        </div>}
+        {!hasAnyEvidence && <div className="ym-pattern-onboarding ym-pattern-onboarding--empty" role="status">
           <Compass size={25} aria-hidden="true"/>
           <div><h3>No review evidence for this selection</h3>
             <p>Complete a Decision Replay to begin seeing documented patterns. The dashboard won't invent a profile from account P&amp;L alone.</p></div>
           <button type="button" className="btn-secondary" onClick={onReview}>Review a decision <ArrowUpRight size={15}/></button>
         </div>}
+        {hasAnyEvidence && <>
         <div className="ym-pattern-metrics" aria-label="Documented behavioral measures">
           <MetricCard label="Reported plan adherence" icon={<BookOpenCheck size={18}/>}
             measure={report.plan} note="From recorded replay judgements, not automated strategy verification."/>
@@ -146,6 +148,7 @@ export function PersonalTradingPatterns({ owner, trades, accountId, accountName,
               <button type="button" className="btn-ghost" onClick={onReview}>Review decisions</button></div>
           </div>
         </div>
+        </>}
         <details className="ym-pattern-method">
           <summary><CircleHelp size={16}/> Evidence quality &amp; methodology</summary>
           <ul>{report.limitations.map(line => <li key={line}>{line}</li>)}</ul>
