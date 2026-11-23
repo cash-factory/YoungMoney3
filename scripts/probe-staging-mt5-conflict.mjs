@@ -80,6 +80,32 @@ try{
   assert.equal(status.capture_health,'needs_attention');
   assert.ok(status.last_sync);
   console.log('Verified deployed staging: original immutable, changed candidate audited, other events accepted, retries deduplicated, sync advanced, review remains visible.');
+  if(process.env.YM3_PROBE_BROWSER==='1'){
+    const { chromium }=await import('playwright');
+    const browser=await chromium.launch({headless:true});
+    try{
+      const page=await browser.newPage({viewport:{width:1320,height:860}});
+      await page.goto(base,{waitUntil:'domcontentloaded',timeout:25000});
+      await page.getByRole('button',{name:'Get Started',exact:true}).first().click();
+      await page.locator('input[type=email]').fill(email);
+      await page.locator('input[type=password]').fill(secret);
+      const [auth]=await Promise.all([
+        page.waitForResponse(response=>response.url()===base+'/api/auth/signin' && response.request().method()==='POST',{timeout:30000}),
+        page.locator('button[type=submit]').click(),
+      ]);
+      assert.equal(auth.status(),200,'Synthetic browser account must authenticate to staging.');
+      await page.goto(base+'/#mt5',{waitUntil:'domcontentloaded',timeout:25000});
+      const accountCard=page.locator('#ym-linked-accounts .ym-selectable-card').first();
+      await accountCard.getByText('Evidence review required',{exact:true}).waitFor({timeout:20000});
+      await accountCard.locator('.ym-selectable-trigger').click();
+      await accountCard.getByText('1 broker evidence discrepancy preserved for review.').waitFor({timeout:20000});
+      await accountCard.getByRole('button',{name:'Inspect conflicting evidence'}).click();
+      await accountCard.getByText('Changed: price').waitFor({timeout:20000});
+      const status=await accountCard.getByText(/Last sync/).count();
+      assert.equal(status>0,true,'Browser should show a real sync timestamp.');
+      console.log('Verified staging Chromium: evidence-review badge, original-protection notice, account expansion and safe changed-field inspection.');
+    }finally{await browser.close();}
+  }
 }finally{
   if(inserted){
     sql("DELETE FROM mt5_evidence_conflicts WHERE owner='"+id+"'");
