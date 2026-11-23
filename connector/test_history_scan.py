@@ -21,6 +21,8 @@ class HistoryResumptionTests(unittest.TestCase):
             CREATE TABLE broker_clock(link TEXT PRIMARY KEY,offset INTEGER);
             CREATE TABLE capital_snapshots(link TEXT,at_ms INTEGER,equity TEXT,balance TEXT,PRIMARY KEY(link,at_ms));
             CREATE TABLE position_observations(link TEXT,position_id TEXT,at_ms INTEGER,sl TEXT,tp TEXT,PRIMARY KEY(link,position_id,at_ms));
+            CREATE TABLE position_specs(link TEXT,position_id TEXT,payload TEXT,observed_at_ms INTEGER,PRIMARY KEY(link,position_id));
+            CREATE TABLE position_recovery(link TEXT,position_id TEXT,status TEXT NOT NULL,checked_ms INTEGER NOT NULL,PRIMARY KEY(link,position_id));
             CREATE TABLE history_progress(link TEXT PRIMARY KEY,request TEXT,cursor INTEGER);
             CREATE TABLE cash_history_scan(link TEXT PRIMARY KEY,cursor INTEGER,complete INTEGER NOT NULL DEFAULT 0);
             CREATE TABLE history_anchor_scan(link TEXT PRIMARY KEY,request TEXT,cursor INTEGER,candidate_at INTEGER,candidate_ticket TEXT,candidate_amount REAL);
