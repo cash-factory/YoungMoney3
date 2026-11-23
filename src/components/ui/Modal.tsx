@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import './modal-system.css';
 
 const openDialogs: HTMLDivElement[] = [];
 let previousOverflow = '';
@@ -69,12 +70,12 @@ export function Modal({ open, onClose, title, children, size = 'md' }: ModalProp
     <div onClick={event => event.stopPropagation()} className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-2 [padding-bottom:env(safe-area-inset-bottom)] sm:p-6">
       <div className="fixed inset-0 bg-black/70 backdrop-blur-md animate-fade-in" onClick={onClose} />
       <div className={`relative w-full ${sizeClass} my-1 sm:my-8`}>
-        <div className="absolute -inset-2 rounded-3xl bg-gradient-to-br from-orange-500/15 via-amber-500/10 to-orange-500/15 blur-2xl animate-fade-in pointer-events-none" />
-        <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="relative card card-glass animate-modal-enter shadow-2xl ring-1 ring-orange-500/5 max-h-[calc(100dvh-0.5rem)] sm:max-h-[85dvh] flex flex-col rounded-xl sm:rounded-2xl">
-          <div className="absolute inset-x-0 top-0 h-0.5 rounded-t-2xl bg-gradient-to-r from-orange-400 via-orange-500 to-amber-500" />
+        <div className="ym-modal-aura absolute -inset-2 rounded-3xl blur-2xl pointer-events-none" />
+        <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="ym-modal-panel relative card card-glass shadow-2xl max-h-[calc(100dvh-0.5rem)] sm:max-h-[85dvh] flex flex-col rounded-xl sm:rounded-2xl">
+          <div className="ym-modal-accent absolute inset-x-0 top-0 h-0.5 rounded-t-2xl" />
           <div className="flex items-center justify-between border-b border-themed px-4 py-3 sm:px-6 sm:py-4 shrink-0">
             <h2 id={titleId} className="text-lg font-bold tracking-tight">{title}</h2>
-            <button type="button" aria-label="Close dialog" onClick={onClose} className="btn-ghost p-1.5 rounded-lg transition-transform duration-300 hover:rotate-90">
+            <button type="button" aria-label="Close dialog" onClick={onClose} className="ym-modal-close btn-ghost p-1.5 rounded-lg">
               <X size={20} />
             </button>
           </div>
