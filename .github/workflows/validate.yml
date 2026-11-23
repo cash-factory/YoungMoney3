@@ -50,6 +50,7 @@ jobs:
           YM3_PREVIEW_URL=http://127.0.0.1:4173/ node scripts/test-adaptive-patterns-browser.mjs
           YM3_PREVIEW_URL=http://127.0.0.1:4173/ node scripts/test-adaptive-themes-browser.mjs
           YM3_PREVIEW_URL=http://127.0.0.1:4173/ node scripts/test-shared-ui-browser.mjs
+          YM3_PREVIEW_URL=http://127.0.0.1:4173/ node scripts/test-connector-download-browser.mjs
       - name: Attach screenshots for interface review
         if: always()
         uses: actions/upload-artifact@v4
