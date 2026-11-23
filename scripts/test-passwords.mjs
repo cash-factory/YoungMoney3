@@ -23,6 +23,82 @@ test('existing unversioned 100k hashes remain verifiable until they are transpar
     { valid: false, needsUpgrade: false });
 });
 
+test('Cloudflare-compatible derivation retains byte-for-byte existing 600k hashes', async () => {
+  const salt = Buffer.from('sixteen-byte-key').toString('base64');
+  const phrase = 'preserve the already stored D1 verifier';
+  const expected = pbkdf2Sync(phrase, Buffer.from(salt, 'base64'), 600000, 32, 'sha256').toString('base64');
+  assert.deepEqual(await verifyPassword(phrase, salt, 'pbkdf2-sha256$600000
+  const salt = Buffer.from('this-is-16-bytes').toString('base64');
+  for (const hash of [
+    '', 'not a hash', 'pbkdf2-sha256$9000000$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+    'pbkdf2-sha256$999$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+    'pbkdf2-sha512$600000$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+    'pbkdf2-sha256$600000$broken',
+    'AAAA',
+  ]) {
+    assert.deepEqual(await verifyPassword('secret', salt, hash),
+      { valid: false, needsUpgrade: false }, 'unexpectedly accepted ' + hash);
+  }
+  assert.deepEqual(await verifyPassword('secret', 'invalid', 'AAAA'),
+    { valid: false, needsUpgrade: false });
+});
++expected),
+    { valid: true, needsUpgrade: false });
+  assert.deepEqual(await verifyPassword('incorrect', salt, 'pbkdf2-sha256$600000
+  const salt = Buffer.from('this-is-16-bytes').toString('base64');
+  for (const hash of [
+    '', 'not a hash', 'pbkdf2-sha256$9000000$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+    'pbkdf2-sha256$999$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+    'pbkdf2-sha512$600000$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+    'pbkdf2-sha256$600000$broken',
+    'AAAA',
+  ]) {
+    assert.deepEqual(await verifyPassword('secret', salt, hash),
+      { valid: false, needsUpgrade: false }, 'unexpectedly accepted ' + hash);
+  }
+  assert.deepEqual(await verifyPassword('secret', 'invalid', 'AAAA'),
+    { valid: false, needsUpgrade: false });
+});
++expected),
+    { valid: false, needsUpgrade: false });
+  // Newly generated password verifiers must remain interoperable with
+  // standard PBKDF2, not a custom six-call composition.
+  const created = await hashPassword('standards-interoperable-password');
+  const saltBytes = Buffer.from(created.salt, 'base64');
+  const canonical = pbkdf2Sync('standards-interoperable-password',saltBytes,PASSWORD_ITERATIONS,32,'sha256').toString('base64');
+  assert.equal(created.hash,'pbkdf2-sha256
+  const salt = Buffer.from('this-is-16-bytes').toString('base64');
+  for (const hash of [
+    '', 'not a hash', 'pbkdf2-sha256$9000000$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+    'pbkdf2-sha256$999$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+    'pbkdf2-sha512$600000$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+    'pbkdf2-sha256$600000$broken',
+    'AAAA',
+  ]) {
+    assert.deepEqual(await verifyPassword('secret', salt, hash),
+      { valid: false, needsUpgrade: false }, 'unexpectedly accepted ' + hash);
+  }
+  assert.deepEqual(await verifyPassword('secret', 'invalid', 'AAAA'),
+    { valid: false, needsUpgrade: false });
+});
++PASSWORD_ITERATIONS+'
+  const salt = Buffer.from('this-is-16-bytes').toString('base64');
+  for (const hash of [
+    '', 'not a hash', 'pbkdf2-sha256$9000000$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+    'pbkdf2-sha256$999$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+    'pbkdf2-sha512$600000$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+    'pbkdf2-sha256$600000$broken',
+    'AAAA',
+  ]) {
+    assert.deepEqual(await verifyPassword('secret', salt, hash),
+      { valid: false, needsUpgrade: false }, 'unexpectedly accepted ' + hash);
+  }
+  assert.deepEqual(await verifyPassword('secret', 'invalid', 'AAAA'),
+    { valid: false, needsUpgrade: false });
+});
++canonical);
+});
+
 test('unknown formats, truncated hashes and pathological work factors fail closed', async () => {
   const salt = Buffer.from('this-is-16-bytes').toString('base64');
   for (const hash of [
