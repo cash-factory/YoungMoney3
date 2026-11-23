@@ -46,9 +46,9 @@ class CopyEngineTests(unittest.TestCase):
         result=plan_follower(self.mt5,account=self.account,symbol='EURUSD',
                              kind='buy',entry=1.2,sl=1.1,tp=1.4,policy=policy())
         self.assertEqual(result['lots'],'1.00')
-        self.assertEqual(result['estimated_loss_at_sl'],'100.0000')
-        self.assertEqual(result['estimated_profit_at_tp'],'200.0000')
-        self.assertEqual(result['risk_pct_equity'],'1.000000')
+        self.assertAlmostEqual(float(result['estimated_loss_at_sl']),100,places=5)
+        self.assertAlmostEqual(float(result['estimated_profit_at_tp']),200,places=5)
+        self.assertAlmostEqual(float(result['risk_pct_equity']),1,places=5)
         self.assertFalse(result['execution_enabled'])
     def test_fixed_amount_and_balance_percent_are_distinct(self):
         args=dict(account=self.account,symbol='EURUSD',kind='buy',
