@@ -84,3 +84,22 @@ CREATE INDEX copy_execution_audit_owner ON copy_execution_audit(owner,created_at
 CREATE TRIGGER copy_execution_audit_no_update BEFORE UPDATE ON copy_execution_audit BEGIN
  SELECT RAISE(ABORT,'Copy execution audit is immutable');
 END;
+
+-- Each report is scoped to the verified linked MT5 account and signed device.
+-- Only non-sensitive operating metrics; no passwords, symbol/account tickets,
+-- or private strategy parameters are saved in this heartbeat table.
+CREATE TABLE copy_account_reports (
+ link TEXT PRIMARY KEY REFERENCES mt5_links(id) ON DELETE CASCADE,
+ owner TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ device TEXT NOT NULL REFERENCES mt5_devices(id) ON DELETE CASCADE,
+ account_currency TEXT NOT NULL,
+ account_balance REAL NOT NULL,
+ account_equity REAL NOT NULL,
+ margin_free REAL NOT NULL,
+ open_positions INTEGER NOT NULL CHECK(open_positions BETWEEN 0 AND 100000),
+ pending_orders INTEGER NOT NULL CHECK(pending_orders BETWEEN 0 AND 100000),
+ broker_connected INTEGER NOT NULL CHECK(broker_connected IN (0,1)),
+ demo_trading_enabled INTEGER NOT NULL CHECK(demo_trading_enabled IN (0,1)),
+ observed_at_ms INTEGER NOT NULL
+);
+CREATE INDEX copy_reports_owner ON copy_account_reports(owner,observed_at_ms DESC);
