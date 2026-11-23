@@ -19,6 +19,10 @@ test('staging refuses production DB and Worker identity',()=>{
     const config=JSON.parse(readFileSync(join(folder,'wrangler.staging.jsonc'),'utf8'));
     assert.equal(config.d1_databases[0].database_name,'stage-db');
     assert.equal(config.vars.MT5_ALLOW_LIVE,'false');
+    assert.equal(config.vars.MT5_ALLOW_LIVE_COPY,'true',
+      'Pilot may monitor real accounts without any execution permission.');
+    assert.equal(config.vars.MT5_LIVE_COPY_EXECUTION,'false',
+      'Real orders remain disabled until separate broker acceptance.');
     assert.deepEqual(config.assets.run_worker_first,['/api/*']);
     assert.equal(config.name,'ym-fx-staging');
     assert.equal(config.durable_objects.bindings[0].name,'AUTH_KDF');
