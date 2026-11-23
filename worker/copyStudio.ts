@@ -62,10 +62,122 @@ async function validatedPair(db: D1Database, owner: string, source: string, foll
 export async function copyStudioRoute(request: Request, env: CopyEnv, owner: string): Promise<Response> {
   if (request.method !== 'POST') return fail('POST required.', 405);
   const action = new URL(request.url).pathname.slice('/api/copy/'.length);
-  if (!['status','save','simulate','delete'].includes(action)) return fail('Not found.', 404);
+  if (!['status','save','simulate','delete','group-status','group-save','group-preview','group-delete'].includes(action)) return fail('Not found.', 404);
   const input = await payload(request);
   if (!input) return fail('Invalid or oversized request.');
   const db = env.DB;
+
+  // One-to-many copy policy control plane. Every group is kept paused by
+  // schema and API; no pending device command or execution endpoint exists.
+  if (action==='group-status') {
+    const [accounts,groups,events]=await Promise.all([
+      availableAccounts(db,owner),
+      db.prepare('SELECT * FROM copy_groups WHERE owner=? ORDER BY updated_at DESC LIMIT 30')
+        .bind(owner).all<{id:string;owner:string;name:string;source_link:string;followers:string;state:'paused';version:number;created_at:string;updated_at:string}>(),
+      db.prepare('SELECT group_id,event,detail,recorded_at FROM copy_group_events WHERE owner=? ORDER BY recorded_at DESC LIMIT 15')
+        .bind(owner).all(),
+    ]);
+    return json({executionEnabled:false,mode:'planning-only',maximumFollowers:20,accounts,
+      groups:groups.results.map(row=>({...row,followers:JSON.parse(row.followers)})),
+      events:events.results});
+  }
+  if(action==='group-save') {
+    const name=typeof input.name==='string'?input.name.trim():'';
+    if(name.length<2||name.length>64||/\p{C}/u.test(name))return fail('Use a group name between 2 and 64 characters.');
+    if(!uuidLike(input.sourceLink)||!Array.isArray(input.followers)||input.followers.length<1||input.followers.length>20)
+      return fail('Choose a verified source and 1 to 20 followers.');
+    const all=await availableAccounts(db,owner);
+    const source=all.find(a=>a.id===input.sourceLink);
+    if(!source) return fail('Source must be a connected MT5 demo owned by this member.',403);
+    const parsed=[] as {link:string;mode:string;value:number;maxLots:number;maxRiskPct:number}[];
+    const ids=new Set<string>();
+    for(const raw of input.followers){
+      if(!isObject(raw)||!uuidLike(raw.link)||raw.link===input.sourceLink||ids.has(raw.link))
+        return fail('Follower identities must be distinct and cannot include the source.');
+      ids.add(raw.link);
+      const account=all.find(a=>a.id===raw.link);
+      if(!account)return fail('Each follower must be an owned, verified MT5 demo.',403);
+      const mode=String(raw.mode||'');
+      if(!['equity_percentage','balance_percentage','fixed_amount','balance_ratio','lot_multiplier'].includes(mode))
+        return fail('Choose a supported sizing method for each follower.');
+      if(!finite(raw.value,0.000001,1000000)||!finite(raw.maxLots,0.01,50)||
+         !finite(raw.maxRiskPct,0.1,10)||!decimalStep(raw.maxLots))
+        return fail('Invalid follower risk or maximum lot policy.');
+      if((mode==='equity_percentage'||mode==='balance_percentage')&&raw.value>10)
+        return fail('Risk percentage cannot exceed 10% of the follower capital.');
+      if((mode==='balance_ratio'||mode==='lot_multiplier')&&raw.value>5)
+        return fail('Scaling multiplier cannot exceed 5.');
+      parsed.push({link:raw.link,mode,value:raw.value,maxLots:raw.maxLots,maxRiskPct:raw.maxRiskPct});
+    }
+    const ts=now();
+    if(input.id!==undefined){
+      if(!uuidLike(input.id)||!Number.isSafeInteger(input.version)||Number(input.version)<1)
+        return fail('Editing a copy group requires a valid revision.');
+      const changed=await db.prepare(`UPDATE copy_groups SET name=?,source_link=?,followers=?,version=version+1,updated_at=?
+        WHERE id=? AND owner=? AND state='paused' AND version=?`).bind(name,input.sourceLink,JSON.stringify(parsed),ts,input.id,owner,input.version).run();
+      if(!changed.meta.changes)return fail('Copy group changed in another session. Refresh.',409);
+      return json({ok:true,id:input.id,version:Number(input.version)+1,state:'paused',executionEnabled:false});
+    }
+    const total=await db.prepare('SELECT COUNT(*) AS n FROM copy_groups WHERE owner=?').bind(owner).first<{n:number}>();
+    if((total?.n??0)>=30)return fail('Maximum 30 paused groups.',409);
+    const id=uuid();
+    await db.prepare(`INSERT INTO copy_groups(id,owner,name,source_link,followers,state,version,created_at,updated_at)
+      VALUES(?,?,?,?,?,'paused',1,?,?)`).bind(id,owner,name,input.sourceLink,JSON.stringify(parsed),ts,ts).run();
+    return json({ok:true,id,version:1,state:'paused',executionEnabled:false});
+  }
+  if(action==='group-delete'||action==='group-preview'){
+    if(!uuidLike(input.id))return fail('Select a saved multi-follower group.');
+    const group=await db.prepare('SELECT * FROM copy_groups WHERE id=? AND owner=?')
+      .bind(input.id,owner).first<{id:string;owner:string;source_link:string;followers:string;state:'paused';version:number}>();
+    if(!group)return fail('Copy group not found in your account.',404);
+    if(action==='group-delete'){
+      if(!Number.isSafeInteger(input.version)||input.version!==group.version)return fail('Group revision changed.',409);
+      const result=await db.prepare("DELETE FROM copy_groups WHERE id=? AND owner=? AND version=? AND state='paused'")
+        .bind(group.id,owner,group.version).run();
+      return result.meta.changes?json({ok:true,deleted:group.id}):fail('Group revision changed.',409);
+    }
+    const sources=await availableAccounts(db,owner);
+    const source=sources.find(x=>x.id===group.source_link);
+    const targets=JSON.parse(group.followers) as {link:string;mode:string;value:number;maxLots:number;maxRiskPct:number}[];
+    if(!source||targets.some(t=>!sources.some(x=>x.id===t.link)))
+      return fail('A source or follower demo disconnected. Revalidate before simulation.',409);
+    if(!finite(input.sourceLots,0.01,100)||!decimalStep(input.sourceLots)||
+       !isObject(input.lossPerLot))
+      return fail('Supply a hypothetical source volume and follower loss per lot in each account currency.');
+    const results=[];
+    for(const t of targets){
+      const follower=sources.find(x=>x.id===t.link)!;
+      const perLot=input.lossPerLot[t.link];
+      if(!finite(perLot,0.000001,100000000))
+        return fail('Each follower needs a positive hypothetical currency loss per lot.');
+      const equity=follower.broker_equity,balance=follower.broker_balance;
+      if(!finite(equity,0.01,1e15)||!finite(balance,0.01,1e15))
+        return fail('Follower broker balance and equity must be fresh, positive figures.',409);
+      let unconstrained=0;
+      if(t.mode==='equity_percentage')unconstrained=(equity*t.value/100)/perLot;
+      if(t.mode==='balance_percentage')unconstrained=(balance*t.value/100)/perLot;
+      if(t.mode==='fixed_amount')unconstrained=t.value/perLot;
+      if(t.mode==='balance_ratio'){
+        if(!finite(source.broker_balance,0.01,1e15))return fail('Source broker balance unavailable.',409);
+        unconstrained=input.sourceLots*(balance/source.broker_balance)*t.value;
+      }
+      if(t.mode==='lot_multiplier')unconstrained=input.sourceLots*t.value;
+      const byRisk=equity*t.maxRiskPct/100/perLot;
+      const capped=Math.min(unconstrained,t.maxLots,byRisk);
+      const lots=Math.floor((capped+1e-10)*100)/100;
+      results.push({link:t.link,currency:follower.currency,mode:t.mode,
+        indicativeLots:lots,requestedLots:Number(unconstrained.toFixed(6)),
+        estimatedLoss:Number((lots*perLot).toFixed(2)),estimatedRiskPct:Number((lots*perLot/equity*100).toFixed(4)),
+        capped:lots<unconstrained,unavailable:lots<0.01,
+        volumeStepAssumed:0.01,lossPerLotAssumed:perLot});
+    }
+    return json({simulation:true,brokerValidated:false,executionEnabled:false,state:'paused',
+      accountCount:results.length,results,warnings:[
+        'All per-lot losses are hypothetical values supplied by the user, NOT broker quotes.',
+        'Broker symbol mapping, stop distances, minimum lots, margin, FX conversion and filling are not checked.',
+        'Do not treat this preview as permission to trade: only the local MT5 execution agent can validate live broker inputs.'
+      ]});
+  }
 
   if (action === 'status') {
     const [accounts, profiles, events] = await Promise.all([
