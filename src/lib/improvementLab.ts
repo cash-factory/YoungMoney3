@@ -53,9 +53,9 @@ export function validStudyDate(value: string) {
     new Date(value + 'T00:00:00Z').toISOString().startsWith(value);
 }
 export function validateExperiment(input: ImprovementExperimentInput): string | null {
-  if (input.title.trim().length < 3 || input.title.length > 100) return 'Give the experiment a title (3–100 characters).';
-  if (input.hypothesis.trim().length < 12 || input.hypothesis.length > 600) return 'Write a testable hypothesis (12–600 characters).';
-  if (input.single_change.trim().length < 8 || input.single_change.length > 500) return 'Define the single behavior or rule to change.';
+  if (typeof input.title !== 'string' || input.title.trim().length < 3 || input.title.length > 100) return 'Give the experiment a title (3–100 characters).';
+  if (typeof input.hypothesis !== 'string' || input.hypothesis.trim().length < 12 || input.hypothesis.length > 600) return 'Write a testable hypothesis (12–600 characters).';
+  if (typeof input.single_change !== 'string' || input.single_change.trim().length < 8 || input.single_change.length > 500) return 'Define the single behavior or rule to change.';
   if (input.metric !== 'plan_adherence') return 'Choose a supported outcome measure.';
   if (!validStudyDate(input.start_date) || (input.end_date && (!validStudyDate(input.end_date) || input.end_date < input.start_date)))
     return 'Choose valid study dates; the end cannot precede the start.';
@@ -64,7 +64,8 @@ export function validateExperiment(input: ImprovementExperimentInput): string | 
   if (!Number.isInteger(input.minimum_samples) || input.minimum_samples < 5 || input.minimum_samples > 500)
     return 'Minimum evidence must be 5–500 decisions per period.';
   if (!['draft','active','completed'].includes(input.status)) return 'Invalid experiment status.';
-  if (input.conclusion.length > 3000) return 'Keep conclusions under 3,000 characters.';
+  if (typeof input.conclusion !== 'string' || input.conclusion.length > 3000) return 'Keep conclusions under 3,000 characters.';
+  if (input.status === 'completed' && input.conclusion.trim().length < 20) return 'Complete the study with a considered conclusion of at least 20 characters.';
   return null;
 }
 const empty = (): ExperimentPeriod => ({
@@ -77,7 +78,7 @@ export function evaluateExperiment(study: ImprovementExperiment, reviews: Review
   const start = Date.parse(study.start_date + 'T00:00:00Z');
   const baselineStart = start - study.baseline_days * 86400000;
   // Inclusive through the last UTC day, so a chosen end date is not cut short.
-  const end = study.end_date ? Date.parse(study.end_date + 'T00:00:00Z') + 86400000 : Infinity;
+  const end = Math.min(Date.now() + 1, study.end_date ? Date.parse(study.end_date + 'T00:00:00Z') + 86400000 : Infinity);
   // Reviews may update, but one trade reference is one decision. Latest review wins.
   const seen = new Set<string>();
   for (const review of reviews) {
