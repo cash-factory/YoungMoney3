@@ -2,6 +2,7 @@ import {decisionSource, freezeDecisionEntry, historicalRules} from './decisions'
 import {accountSummaries} from './accountSummaries';
 import {selectRecords} from './selectRecords';
 import { settleManualTrade } from '../src/lib/settleManualTrade';
+import { validateExperiment, type ImprovementExperimentInput } from '../src/lib/improvementLab';
 import type { TradeInput } from '../src/lib/types';
 async function normalizeTrade(item: Record<string,unknown>, owner: unknown, db: D1Database) {
   await assertOwnedLinks('trades', item, owner, db);
@@ -216,6 +217,7 @@ const workspaceLinks: Record<string, Record<string, string>> = {
     entry_model_id: 'strategy_entry_models', setup_id: 'trading_setups',
     account_id: 'trading_accounts',
   },
+  improvement_experiments: { strategy_id: 'trader_strategies', account_id: 'trading_accounts' },
 };
 async function assertOwnedLinks(table: string, record: Record<string, unknown>, owner: unknown, db: D1Database) {
   for (const [field, linkedTable] of Object.entries(workspaceLinks[table] || {})) {
@@ -307,7 +309,19 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
       const normalized = table==='trades' && input.action==='insert' ? await normalizeTrade(item,user.id,env.DB) : item;
       const cleanRecord: Record<string, unknown> = { ...normalized };
       if(table==='trades' && input.action==='insert') cleanRecord.decision_entry=freezeDecisionEntry(cleanRecord);
-      if(table==='decision_reviews') await validateReview(cleanRecord,recordId,String(user.id),env.DB,input.action==='upsert');
+      if(table==='decision_reviews') {
+        await validateReview(cleanRecord,recordId,String(user.id),env.DB,input.action==='upsert');
+        if(input.action==='insert') {
+          const blind=cleanRecord.pre_reveal_verdict;
+          if(blind!=null && !['followed','changed','unsure'].includes(String(blind)))
+            throw new RequestError(400,'Invalid pre-reveal judgement.');
+          cleanRecord.pre_reveal_at=blind ? now() : null;
+        }
+      }
+      if(table==='improvement_experiments') {
+        const message=validateExperiment(cleanRecord as unknown as ImprovementExperimentInput);
+        if(message) throw new RequestError(400,message);
+      }
       if (table === 'trading_accounts') {
         // A user-provided backup must never impersonate an authenticated MT5 snapshot.
         for (const key of ['broker_balance','broker_balance_at','broker_equity','broker_equity_at']) delete cleanRecord[key];
@@ -348,6 +362,15 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
     if (input.action === 'delete' && isFill) return response({ error: 'Broker fills cannot be deleted from the journal.' }, 403);
     if (input.action === 'update') {
       if(table==='decision_reviews' && !filters.updated_at) return response({error:'Refresh the review before editing.'},428);
+      if(table==='decision_reviews' && ('pre_reveal_verdict' in patch || 'pre_reveal_at' in patch))
+        return response({error:'The recorded pre-reveal judgement cannot be changed.'},403);
+      if(table==='improvement_experiments') {
+        const locked=['title','hypothesis','single_change','metric','start_date','end_date','baseline_days','minimum_samples','strategy_id','account_id'];
+        if(old.status!=='draft' && locked.some(key=>key in patch && JSON.stringify(patch[key])!==JSON.stringify(old[key])))
+          return response({error:'An active study design is locked. Create a new study for a different hypothesis.'},409);
+        if((old.status==='active' && patch.status==='draft') || (old.status==='completed' && patch.status && patch.status!=='completed'))
+          return response({error:'An activated experiment cannot return to an earlier status.'},409);
+      }
       if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return response({ error: 'Supply a record patch.' }, 400);
       if (table === 'trades' && (
         (!isFill && 'trade_source' in patch && patch.trade_source !== (old.trade_source ?? 'manual'))
@@ -369,7 +392,15 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
     }
     const merged = { ...old, ...patch, user_id: user.id, id: input.id };
     if(table==='trades') { if(old.decision_entry) merged.decision_entry=old.decision_entry; else delete merged.decision_entry; }
-    if(table==='decision_reviews') await validateReview(merged,input.id,String(user.id),env.DB,false);
+    if(table==='decision_reviews') {
+      merged.pre_reveal_verdict=old.pre_reveal_verdict ?? null;
+      merged.pre_reveal_at=old.pre_reveal_at ?? null;
+      await validateReview(merged,input.id,String(user.id),env.DB,false);
+    }
+    if(table==='improvement_experiments') {
+      const message=validateExperiment(merged as ImprovementExperimentInput);
+      if(message) return response({error:message},400);
+    }
     if (table === 'trading_accounts') {
       for (const key of ['broker_balance','broker_balance_at','broker_equity','broker_equity_at']) {
         if (key in old) merged[key] = old[key];
