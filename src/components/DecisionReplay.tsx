@@ -139,11 +139,13 @@ export function SampleReplay({ onClose }: { onClose: () => void }) {
           type="button"
           className="btn-primary"
           aria-expanded={show}
+          disabled={!verdict && !show}
           onClick={() => setShow(!show)}
         >
           <Eye size={16} />
           {show ? 'Hide outcome' : 'Reveal outcome'}
         </button>
+        {!verdict && !show && <p className="ym-replay-guidance">Choose your judgement before seeing the example outcome.</p>}
         {show && (
           <div aria-live="polite">
             <Findings
@@ -232,6 +234,8 @@ function ReplayForm({
   const [voice, setVoice] = useState<string | null>(draft?.voice ?? previous?.voice_note_url ?? null);
   const [image, setImage] = useState<string | null>(draft?.image ?? previous?.screenshot_url ?? null);
   const [show, setShow] = useState(false),
+    [savedReview, setSavedReview] = useState<DecisionReview | undefined>(previous),
+    [postOutcomeNote, setPostOutcomeNote] = useState<string>(draft?.postOutcomeNote ?? previous?.post_outcome_note ?? ''),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   const [rules, setRules] = useState<HistoricalRules>(EMPTY_RULES),
@@ -258,6 +262,7 @@ function ReplayForm({
           voice,
           image,
           commitment,
+          postOutcomeNote,
         })
       );
     } catch {
@@ -274,6 +279,7 @@ function ReplayForm({
     voice,
     image,
     commitment,
+    postOutcomeNote,
   ]);
   useEffect(() => {
     const controller = new AbortController();
@@ -301,54 +307,68 @@ function ReplayForm({
   const result = outcomeFacts(target, accounts),
     selected = strategies.find((s) => s.id === strategy),
     selectedModel = models.find((m) => m.id === model && m.strategy_id === strategy);
+  const reviewRecord = (lockBeforeReveal: boolean): Omit<DecisionReview, 'id' | 'updated_at'> => ({
+    reference,
+    symbol: facts.symbol,
+    account_id: facts.account,
+    entry_time: facts.time,
+    strategy_id: strategy || null,
+    entry_model_id: model || null,
+    strategy_name: selected?.name || rules.strategy ||
+      (previous?.strategy_id === strategy ? previous.strategy_name : '') || '',
+    model_name: selectedModel?.name || rules.model ||
+      (previous?.entry_model_id === model ? previous.model_name : '') || '',
+    verdict,
+    trigger,
+    note: note.trim(),
+    voice_note_url: voice,
+    screenshot_url: image,
+    commitment_id: savedReview?.commitment_id || focus?.id || null,
+    commitment_text: focusText,
+    commitment_result: focusText ? commitment : null,
+    post_outcome_note: show ? postOutcomeNote.trim() : savedReview?.post_outcome_note ?? null,
+    ...(lockBeforeReveal && !savedReview && verdict ? { pre_reveal_verdict: verdict } : {}),
+  });
+  const persist = async (lockBeforeReveal: boolean) => {
+    const saved = await saveDecision(owner, reviewRecord(lockBeforeReveal), savedReview);
+    setSavedReview(saved);
+    return saved;
+  };
+  const reveal = async () => {
+    if (show) { setShow(false); return; }
+    if (savedReview) { setShow(true); return; }
+    if (!verdict) { setError('Choose your judgement before revealing the result.'); return; }
+    setBusy(true);
+    setError('');
+    try {
+      // The first pre-reveal judgement is written before outcomes or broker history are shown.
+      await persist(true);
+      setShow(true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not record the pre-reveal judgement.');
+    } finally { setBusy(false); }
+  };
   const save = async () => {
     setBusy(true);
     setError('');
     try {
-      await saveDecision(
-        owner,
-        {
-          reference,
-          symbol: facts.symbol,
-          account_id: facts.account,
-          entry_time: facts.time,
-          strategy_id: strategy || null,
-          entry_model_id: model || null,
-          strategy_name:
-            selected?.name ||
-            rules.strategy ||
-            (previous?.strategy_id === strategy ? previous.strategy_name : '') ||
-            '',
-          model_name:
-            selectedModel?.name ||
-            rules.model ||
-            (previous?.entry_model_id === model ? previous.model_name : '') ||
-            '',
-          verdict,
-          trigger,
-          note: note.trim(),
-          voice_note_url: voice,
-          screenshot_url: image,
-          commitment_id: previous?.commitment_id || focus?.id || null,
-          commitment_text: focusText,
-          commitment_result: focusText ? commitment : null,
-        },
-        previous
-      );
-      try {
-        sessionStorage.removeItem(draftKey);
-      } catch {
-        /* optional */
-      }
+      await persist(!savedReview && !show && Boolean(verdict));
+      try { sessionStorage.removeItem(draftKey); } catch { /* optional storage */ }
       onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save review.');
-    } finally {
-      setBusy(false);
-    }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not save review.');
+    } finally { setBusy(false); }
   };
   return (
-    <div className="ym-replay-body">
+    <div className="ym-replay-body ym-replay-v2" data-stage={show ? 'debrief' : 'assessment'}>
+      <ol className="ym-replay-progress" aria-label="Decision review stages">
+        <li data-current={!show}>01 / Examine entry</li>
+        <li data-current={!show}>02 / Record judgement</li>
+        <li data-current={show}>03 / Compare outcome</li>
+      </ol>
+      <div className="ym-replay-guidance" role="note">
+        `${show ? 'Outcome revealed · compare your original judgement with the evidence.' : 'Outcome hidden · examine the original information before judging your decision.'}`
+      </div>
       <header>
         <small>
           {facts.source} · {account?.name || 'Journal'} ·{' '}
@@ -441,12 +461,28 @@ function ReplayForm({
         </div>
       </fieldset>
       <Choices value={verdict} onChange={setVerdict} label="Your view of the entry" />
-      <button className="btn-secondary" aria-expanded={show} onClick={() => setShow(!show)}>
-        {show ? <RotateCcw size={16} /> : <Eye size={16} />}{' '}
-        {show ? 'Hide outcome' : 'Reveal outcome and evidence'}
-      </button>
+      <div className="ym-replay-reveal">
+        {savedReview?.pre_reveal_verdict && savedReview.pre_reveal_at
+          ? <p className="ym-replay-lock" role="status"><BookOpenCheck size={15} />
+              Pre-reveal judgement recorded: <strong>{savedReview.pre_reveal_verdict === 'followed' ? 'Followed my plan' : savedReview.pre_reveal_verdict === 'changed' ? 'Changed course' : 'Unsure'}</strong>
+              <span>· {new Date(savedReview.pre_reveal_at).toLocaleString()}</span>
+            </p>
+          : savedReview
+            ? <p className="ym-replay-guidance">Earlier review: the original judgement was not recorded before the outcome was shown.</p>
+            : <p className="ym-replay-guidance">Select a judgement to save it before the outcome becomes visible here. This does not prove you never saw the outcome elsewhere.</p>}
+        <button type="button" className="btn-secondary" aria-expanded={show} disabled={busy || (!savedReview && !verdict)} onClick={() => { void reveal(); }}>
+          {show ? <RotateCcw size={16} /> : <Eye size={16} />}{' '}
+          {busy ? 'Recording…' : show ? 'Hide outcome' : savedReview ? 'Reveal outcome and evidence' : 'Record judgement & reveal outcome'}
+        </button>
+      </div>
       {show && (
         <div className="ym-replay-result">
+          <div className="ym-replay-compare">
+            <span>Judgement before outcome</span>
+            <strong>{savedReview?.pre_reveal_verdict === 'followed' ? 'Followed the plan' : savedReview?.pre_reveal_verdict === 'changed' ? 'Changed course' : savedReview?.pre_reveal_verdict === 'unsure' ? 'Unsure' : 'Not independently captured'}</strong>
+            <span>Your current assessment</span>
+            <strong>{verdict === 'followed' ? 'Followed the plan' : verdict === 'changed' ? 'Changed course' : 'Unsure'}</strong>
+          </div>
           <h4>
             <BookOpenCheck size={18} /> Decision debrief
           </h4>
@@ -489,7 +525,15 @@ function ReplayForm({
           )}
         </div>
       )}
-      {focusText && (
+      {show && (
+        <label className="ym-replay-post-note">
+          What do you understand differently after seeing the outcome?
+          <textarea className="input-field" rows={3} maxLength={3000}
+            placeholder="Separate your next action from the P&L result."
+            value={postOutcomeNote} onChange={event => setPostOutcomeNote(event.target.value)} />
+        </label>
+      )}
+      {show && focusText && (
         <div>
           <blockquote>{focusText}</blockquote>
           <Choices
