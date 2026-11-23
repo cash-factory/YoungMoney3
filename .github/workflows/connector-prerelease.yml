@@ -1,30 +1,23 @@
 name: Build YoungMoney3 Connector (staging prerelease)
 on:
+  workflow_run:
+    workflows: [Validate]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version suffix, e.g. 0.5.3-rc1'
-        type: string
-        required: true
       confirmation:
-        description: 'Type RELEASE-STAGING-CONNECTOR'
+        description: 'Type RELEASE-STAGING-CONNECTOR to publish from main'
         type: string
         required: true
-  pull_request:
-    types: [labeled]
-    branches: [main]
-
 permissions:
   contents: read
-
 defaults:
   run:
     shell: pwsh
-
 env:
-  VERSION: ${{ inputs.version || '0.5.3-rc1' }}
-  SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-
+  VERSION: '0.5.4-rc1'
+  SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 concurrency:
   group: youngmoney3-staging-connector-release
   cancel-in-progress: false
@@ -32,14 +25,14 @@ concurrency:
 jobs:
   connector:
     if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository) ||
       (github.event_name == 'workflow_dispatch' &&
-       github.ref == 'refs/heads/feat/rich-capture-staging-20261110' &&
-       inputs.confirmation == 'RELEASE-STAGING-CONNECTOR') ||
-      (github.event_name == 'pull_request' &&
-       github.event.label.name == 'build-staging-connector-rc2' &&
-       github.event.pull_request.draft == false &&
-       github.event.pull_request.head.repo.full_name == github.repository &&
-       github.event.pull_request.head.ref == 'feat/rich-capture-staging-20261110')
+       github.ref == 'refs/heads/main' &&
+       inputs.confirmation == 'RELEASE-STAGING-CONNECTOR')
     runs-on: windows-2022
     environment: staging
     timeout-minutes: 35
@@ -49,12 +42,24 @@ jobs:
           if ($env:VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$') { throw 'Invalid staging prerelease version' }
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.SOURCE_SHA }}
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
           architecture: 'x64'
+      - name: Require latest validated main and matching version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:SOURCE_SHA -ne (git rev-parse HEAD)) { throw 'Source checkout differs from validated commit' }
+          $lines = git ls-remote "https://github.com/$env:GITHUB_REPOSITORY.git" 'refs/heads/main'
+          if ($LASTEXITCODE -ne 0 -or !$lines) { throw 'Unable to verify current main' }
+          $remote = ($lines[0] -split '\\s+')[0]
+          if ($remote -ne $env:SOURCE_SHA) { throw 'Main moved; refusing stale connector prerelease' }
+          $declared = (python -c "import sys;sys.path.insert(0,'connector');from version import VERSION;print(VERSION)").Trim()
+          if ($declared -ne $env:VERSION) { throw 'Desktop version differs from immutable release tag' }
+
       - name: Install dependencies
         shell: pwsh
         run: |
@@ -78,18 +83,18 @@ jobs:
       - name: Generate prerelease checksum
         shell: pwsh
         env:
-          VERSION: ${{ inputs.version || '0.5.3-rc1' }}
+          VERSION: ${{ env.VERSION }}
         run: |
-          if ($env:VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$') { throw 'Use 0.5.3-rc1 format' }
+          if ($env:VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$') { throw 'Use 0.5.4-rc1 format' }
           New-Item -ItemType Directory -Force staging-release | Out-Null
-          Copy-Item 'dist/YoungMoney3 Connector.exe' 'staging-release/YoungMoney3 Connector.exe'
-          $digest=(Get-FileHash 'staging-release/YoungMoney3 Connector.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$digest *YoungMoney3 Connector.exe" | Set-Content -Encoding ascii 'staging-release/YoungMoney3 Connector.exe.sha256'
+          Copy-Item 'dist/YoungMoney3 Connector.exe' 'staging-release/YoungMoney3.Connector.exe'
+          $digest=(Get-FileHash 'staging-release/YoungMoney3.Connector.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$digest *YoungMoney3.Connector.exe" | Set-Content -Encoding ascii 'staging-release/YoungMoney3.Connector.exe.sha256'
           Copy-Item connector-dependencies.txt staging-release/connector-dependencies.txt
-          '{"version":"' + $env:VERSION + '","commit":"' + '${{ github.event.pull_request.head.sha || github.sha }}' + '","sha256":"' + $digest + '","signed":false,"platform":"windows-x64","environment":"staging"}' | Set-Content -Encoding utf8 'staging-release/build-manifest.json'
+          '{"version":"' + $env:VERSION + '","commit":"' + '${{ env.SOURCE_SHA }}' + '","sha256":"' + $digest + '","signed":false,"platform":"windows-x64","environment":"staging"}' | Set-Content -Encoding utf8 'staging-release/build-manifest.json'
       - uses: actions/upload-artifact@v4
         with:
-          name: youngmoney3-connector-staging-${{ inputs.version || '0.5.3-rc1' }}
+          name: youngmoney3-connector-staging-${{ env.VERSION }}
           path: staging-release/*
           if-no-files-found: error
           retention-days: 30
@@ -102,14 +107,14 @@ jobs:
       # Separate VM: no checkout, setup-python or pip installation.
       - uses: actions/download-artifact@v4
         with:
-          name: youngmoney3-connector-staging-${{ inputs.version || '0.5.3-rc1' }}
+          name: youngmoney3-connector-staging-${{ env.VERSION }}
           path: ${{ runner.temp }}/connector-clean
       - name: Launch standalone executable in isolated profile
         run: |
           $ErrorActionPreference = 'Stop'
           $dir = Join-Path $env:RUNNER_TEMP 'connector-clean'
           $exe = Join-Path $dir 'YoungMoney3 Connector.exe'
-          $expected = ((Get-Content (Join-Path $dir 'YoungMoney3 Connector.exe.sha256') -Raw) -split ' ')[0]
+          $expected = ((Get-Content (Join-Path $dir 'YoungMoney3.Connector.exe.sha256') -Raw) -split ' ')[0]
           if ((Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'Checksum mismatch' }
           $profile = Join-Path $dir 'clean-profile'
           New-Item -ItemType Directory -Force $profile | Out-Null
@@ -155,7 +160,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: connector-startup-evidence-${{ inputs.version || '0.5.3-rc1' }}
+          name: connector-startup-evidence-${{ env.VERSION }}
           path: ${{ runner.temp }}/connector-clean/startup-*
           if-no-files-found: error
 
@@ -169,7 +174,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: youngmoney3-connector-staging-${{ inputs.version || '0.5.3-rc1' }}
+          name: youngmoney3-connector-staging-${{ env.VERSION }}
           path: staging-release
       - name: Publish new immutable staging prerelease
         env:
@@ -186,8 +191,10 @@ jobs:
           $tags = gh api --paginate "repos/$env:GH_REPO/git/matching-refs/tags/staging-connector-v" --jq '.[].ref'
           if ($LASTEXITCODE -ne 0) { throw 'Cannot verify existing tags' }
           if ($tags -contains "refs/tags/$tag") { throw "Tag $tag already exists; refusing reuse" }
+          $latest = gh api "repos/$env:GH_REPO/git/ref/heads/main" --jq '.object.sha'
+          if ($LASTEXITCODE -ne 0 -or $latest -ne $env:SOURCE_SHA) { throw 'Main moved during build; refusing stale release' }
           $manifest = Get-Content staging-release/build-manifest.json -Raw | ConvertFrom-Json
-          $digest = (Get-FileHash 'staging-release/YoungMoney3 Connector.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
+          $digest = (Get-FileHash 'staging-release/YoungMoney3.Connector.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($manifest.commit -ne $env:SOURCE_SHA -or $manifest.version -ne $env:VERSION -or $manifest.sha256 -ne $digest -or $manifest.environment -ne 'staging') { throw 'Release provenance mismatch' }
-          gh release create $tag 'staging-release/YoungMoney3 Connector.exe' 'staging-release/YoungMoney3 Connector.exe.sha256' 'staging-release/build-manifest.json' 'staging-release/connector-dependencies.txt' --target $env:SOURCE_SHA --title "YoungMoney3 Connector $env:VERSION (STAGING)" --notes "Refined static connector artwork, meaningful milestone animation, broker cash-flow history and stronger account feedback. Stable paired-PC identity and capture-only MT5 monitoring. Capture-only Windows x64 staging prerelease for demo and contest accounts. See the accompanying SHA-256 checksum." --prerelease --latest=false
+          gh release create $tag 'staging-release/YoungMoney3.Connector.exe' 'staging-release/YoungMoney3.Connector.exe.sha256' 'staging-release/build-manifest.json' 'staging-release/connector-dependencies.txt' --target $env:SOURCE_SHA --title "YoungMoney3 Connector $env:VERSION (STAGING)" --notes "YoungMoney3 v0.5.4-rc1 staging candidate from validated main. Read-only broker-account capture, independent worker processes, durable outbox, and safe stop on revoked/conflicting PC identity. Clean Windows frozen-app startup and two-process smoke tested; real broker acceptance not yet verified. Unsigned Windows x64; verify SHA-256 before opening. Demo/contest accounts only." --prerelease --latest=false
           if ($LASTEXITCODE -ne 0) { throw 'Prerelease publication failed' }
