@@ -127,6 +127,16 @@ def cycle(mt5,db,link,account,post,token,*,now_ms=None):
       "connected":bool(mt5.terminal_info().connected),
       "tradeAllowed":bool(getattr(account,"trade_allowed",False)),
     },token)
+    with db:
+        db.execute("""INSERT INTO copy_local_health(link,observed_at_ms,account_balance,account_equity,margin_free,
+            open_positions,pending_orders,source_active,last_execution_result)
+            VALUES(?,?,?,?,?,?,?,?,NULL) ON CONFLICT(link) DO UPDATE SET
+            observed_at_ms=excluded.observed_at_ms,
+            account_balance=excluded.account_balance,account_equity=excluded.account_equity,
+            margin_free=excluded.margin_free,open_positions=excluded.open_positions,
+            pending_orders=excluded.pending_orders,source_active=excluded.source_active""",
+            (link,now_ms,float(account.balance),float(account.equity),float(account.margin_free),
+             len(positions),len(pending),int(bool(response.get("sourceActive")))))
     _pending_acks(db,link,post,token)
     if response.get("sourceActive"):
         items,proofs=_source_frame(mt5,db,link,positions,pending,now_ms)
@@ -142,6 +152,9 @@ def cycle(mt5,db,link,account,post,token,*,now_ms=None):
     if not work:
         return {"executions":0,"local_consent":current_consent}
     result=execute(mt5,db,link,work,account,now_ms=now_ms)
+    with db:
+        db.execute("UPDATE copy_local_health SET last_execution_result=? WHERE link=?",
+                   (str(result["status"])+"/"+str(result["code"]),link))
     try:
         post("copy-ack",{"link":link,"task":work["id"],**result},token)
     except Exception:
