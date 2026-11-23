@@ -98,7 +98,7 @@ function StudyForm({
           <span className="ym-lab-source-kicker"><BookOpenCheck size={14}/> ORIGINATING DECISION</span>
           <strong>{sourceReview?.symbol || 'Decision Replay'}</strong>
           <p>{sourceReview
-            ? [sourceReview.entry_time?.slice(0,10),sourceReview.pre_reveal_at ? 'Pre-reveal assessment recorded' : 'Retrospective review',sourceReview.verdict ? 'Assessment: '+sourceReview.verdict : null].filter(Boolean).join(' · ')
+            ? [sourceReview.entry_time?.slice(0,10),sourceReview.imported_unverified ? 'Imported · unverified' : sourceReview.pre_reveal_at ? 'Pre-reveal assessment recorded' : 'Retrospective review',sourceReview.verdict ? 'Assessment: '+sourceReview.verdict : null].filter(Boolean).join(' · ')
             : 'The originating decision was not found in the currently loaded reviews.'}</p>
           {sourceReview?.note && <blockquote>{sourceReview.note.slice(0,220)}</blockquote>}
         </div>
@@ -305,7 +305,7 @@ export function ImprovementLab({ onShowSessions }: { onShowSessions: () => void 
                     <p>{(() => {
                       const origin=decisions.find(item=>item.reference===study.source_reference);
                       if(!origin) return 'The original review is unavailable. Its reference remains preserved.';
-                      return [origin.entry_time?.slice(0,10),origin.pre_reveal_at?'Pre-reveal assessment recorded':'Retrospective assessment',
+                      return [origin.entry_time?.slice(0,10),origin.imported_unverified?'Imported · unverified':origin.pre_reveal_at?'Pre-reveal assessment recorded':'Retrospective assessment',
                         origin.verdict?'Assessment: '+origin.verdict:null].filter(Boolean).join(' · ');
                     })()}</p>
                     {decisions.find(item=>item.reference===study.source_reference)?.note &&
