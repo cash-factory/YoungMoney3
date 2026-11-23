@@ -1,6 +1,8 @@
 """Concurrent MT5 capture control tests without broker accounts or credentials."""
 import sys
 import unittest
+import io
+import urllib.error
 
 from concurrent_capture import run_parallel_smoke, wanted_link_rows, safe_capture_error
 
@@ -34,6 +36,59 @@ class ParallelCaptureTests(unittest.TestCase):
         self.assertNotIn("12345", summary)
         self.assertNotIn("C:\\\\", summary)
         self.assertEqual(len(summary) < 120, True)
+
+    def test_http_evidence_conflict_reports_code_and_endpoint_without_secret_leak(self):
+        secret = "CLIENT-SECRET-EXPOSE-ME-NOT"
+        error = urllib.error.HTTPError(
+            "https://fake.invalid/api/mt5/device/sync?token=" + secret,
+            409, "reason includes " + secret, {},
+            io.BytesIO(b'{"error":"Broker evidence changed for an existing ticket. Import halted; an audited correction is required."}'))
+        error.capture_action = "sync"
+        summary = safe_capture_error(error)
+        self.assertEqual(
+            summary,
+            "Capture API sync returned HTTP 409 (immutable_broker_evidence_conflict).")
+        self.assertNotIn(secret, summary)
+        self.assertNotIn("https:", summary)
+        self.assertNotIn("reason includes", summary)
+
+    def test_http_pause_and_release_gate_receive_distinct_safe_categories(self):
+        for http, action, message, expected in (
+            (403, "sync", "Real-account capture is paused by the release gate.",
+             "real_account_release_gate"),
+            (403, "sync", "MT5 capture is paused by the administrator.",
+             "administrator_capture_pause"),
+            (423, "sync", "Monitoring is paused for this account.",
+             "monitoring_paused"),
+            (400, "sync", "Invalid broker cash scan checkpoint.",
+             "cash_checkpoint_rejected"),
+            (404, "sync", "Unknown link.", "link_not_found"),
+        ):
+            with self.subTest(http=http, category=expected):
+                import json
+                error = urllib.error.HTTPError(
+                    "https://fake.invalid", http, "private",
+                    {}, io.BytesIO(json.dumps({"error": message}).encode()))
+                error.capture_action = action
+                summary = safe_capture_error(error)
+                self.assertIn("HTTP " + str(http), summary)
+                self.assertIn(expected, summary)
+                self.assertNotIn(message, summary)
+
+    def test_non_json_and_unknown_http_response_do_not_leak_raw_text(self):
+        for body, status in ((b"<html>password and account 1234</html>", 502),
+                             (b'{"error":"Unknown secret broker trade 1234"}', 400)):
+            error = urllib.error.HTTPError(
+                "https://fake.invalid", status, "password 1234", {},
+                io.BytesIO(body))
+            error.capture_action = "untrusted/bad/path"
+            summary = safe_capture_error(error)
+            self.assertIn("unknown-action", summary)
+            self.assertIn("HTTP " + str(status), summary)
+            self.assertNotIn("password", summary)
+            self.assertNotIn("1234", summary)
+            self.assertNotIn("Unknown secret", summary)
+            self.assertLess(len(summary), 170)
 
     @unittest.skipUnless(sys.platform == "win32",
                          "Multiprocessing integration is tested on Windows CI")
