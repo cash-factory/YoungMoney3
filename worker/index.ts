@@ -241,6 +241,10 @@ async function assertOwnedExperimentSource(record:Record<string,unknown>,owner:s
     .bind(owner,id).first<{payload:string}>();
   if(!row) throw new RequestError(400,'The originating decision review must exist in your own journal.');
   const source=JSON.parse(row.payload);
+  const entry=await decisionSource(db,owner,reference);
+  if(!entry) throw new RequestError(400,'The originating trade or position cannot be verified in this journal.');
+  if(record.account_id && entry.account && record.account_id!==entry.account)
+    throw new RequestError(400,'Choose the originating trade account or all accounts for this study.');
   if(record.account_id && source.account_id && record.account_id!==source.account_id)
     throw new RequestError(400,'Choose the originating review account or all accounts for this study.');
 }
@@ -330,6 +334,13 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
           if(blind!=null && !['followed','changed','unsure'].includes(String(blind)))
             throw new RequestError(400,'Invalid pre-reveal judgement.');
           cleanRecord.pre_reveal_at=blind ? now() : null;
+          cleanRecord.imported_unverified=false;
+        } else {
+          // Backups are useful, but their timestamps cannot certify an original
+          // blind decision. An existing server row remains intact via OR IGNORE.
+          cleanRecord.pre_reveal_verdict=null;
+          cleanRecord.pre_reveal_at=null;
+          cleanRecord.imported_unverified=true;
         }
       }
       if(table==='improvement_experiments') {
@@ -392,7 +403,8 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
     if (input.action === 'delete' && isFill) return response({ error: 'Broker fills cannot be deleted from the journal.' }, 403);
     if (input.action === 'update') {
       if(table==='decision_reviews' && !filters.updated_at) return response({error:'Refresh the review before editing.'},428);
-      if(table==='decision_reviews' && ('pre_reveal_verdict' in (patch as Record<string, unknown>) || 'pre_reveal_at' in (patch as Record<string, unknown>)))
+      if(table==='decision_reviews' && ('pre_reveal_verdict' in (patch as Record<string, unknown>) ||
+        'pre_reveal_at' in (patch as Record<string, unknown>) || 'imported_unverified' in (patch as Record<string,unknown>)))
         return response({error:'The recorded pre-reveal judgement cannot be changed.'},403);
       if(table==='improvement_experiments') {
         if ('activated_at' in (patch as Record<string,unknown>))
@@ -427,6 +439,7 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
     if(table==='decision_reviews') {
       merged.pre_reveal_verdict=old.pre_reveal_verdict ?? null;
       merged.pre_reveal_at=old.pre_reveal_at ?? null;
+      merged.imported_unverified=old.imported_unverified??false;
       await validateReview(merged,input.id,String(user.id),env.DB,false);
     }
     if(table==='improvement_experiments') {
