@@ -196,6 +196,23 @@ try{
     id:liveFleet,version:1,confirm:true,liveConfirmation:confirmation},owner.cookie);
   assert.equal(armedLive.status,200,JSON.stringify(armedLive.result));
   assert.equal(armedLive.result.state,'live_armed');
+  const liveSourceReport=await call('mt5/device/copy-report',{link:source,balance:1000,
+    equity:1000,freeMargin:1000,currency:'USD',openPositions:0,pendingOrders:0,
+    connected:true,tradeAllowed:true},'',token);
+  assert.equal(liveSourceReport.result.sourceActive,true);
+  const later=Math.max(Date.now(),observedAt+100);
+  const liveFrame=(t,items)=>call('mt5/device/copy-source',{
+    link:source,sourceEquity:1000,sourceCurrency:'USD',items,proofs:[],observedAt:t},'',token);
+  assert.equal((await liveFrame(later,[])).status,200);
+  const newPosition={...item,key:'position:9991',time_ms:later+1};
+  const queuedLive=await liveFrame(later+1,[newPosition]);
+  assert.equal(queuedLive.status,200,JSON.stringify(queuedLive.result));
+  assert.equal(queuedLive.result.intents_queued,1);
+  const liveDispatch=await call('mt5/device/copy-poll',{link:live},'',token);
+  assert.equal(liveDispatch.status,200,JSON.stringify(liveDispatch.result));
+  assert.equal(liveDispatch.result.task.executionMode,'live');
+  assert.equal(liveDispatch.result.task.payload.risk.value,0.5);
+
   assert.equal((await call('copy/fleet-pause-all',{},owner.cookie)).status,200);
   assert.equal((await call('copy/fleet-status',{},owner.cookie)).result.fleets
     .find(x=>x.id===liveFleet).state,'paused');
