@@ -27,7 +27,7 @@ try{
     await page.route(api,route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(verified)}));
     const response=await page.goto(base+'/connector-download.html',{waitUntil:'domcontentloaded'});
     assert.equal(response?.status(),200,'The compiled site must serve its connector download page.');
-    await page.getByRole('status').getByText(/Staging prerelease is available/).waitFor();
+    await page.getByRole('status').filter({hasText:/Staging prerelease is available/}).waitFor();
     const button=page.getByRole('link',{name:'Download Connector v0.5.4-rc1'});
     assert.equal(await button.getAttribute('href'),exe,
       'One-click install must target the verified official release executable.');
@@ -43,7 +43,7 @@ try{
     await page.unroute(api);
     await page.route(api,route=>route.fulfill({status:429,contentType:'application/json',body:'{}'}));
     await page.reload({waitUntil:'domcontentloaded'});
-    await page.getByRole('status').getByText(/Automatic release check unavailable/).waitFor();
+    await page.getByRole('status').filter({hasText:/Automatic release check unavailable/}).waitFor();
     assert.equal(await page.getByRole('link',{name:'Download Connector v0.5.4-rc1'}).getAttribute('href'),exe);
     assert.equal((await page.locator('#digest').textContent()).trim(),digest);
 
@@ -54,7 +54,7 @@ try{
         {...verified[0],assets:[{...verified[0].assets[0],browser_download_url:'https://untrusted.invalid/connector.exe'},verified[0].assets[1]]},
       ])}));
     await page.reload({waitUntil:'domcontentloaded'});
-    await page.getByRole('status').getByText(/Latest release could not be verified automatically/).waitFor();
+    await page.getByRole('status').filter({hasText:/Latest release could not be verified automatically/}).waitFor();
     assert.equal(await page.getByRole('link',{name:'Download Connector v0.5.4-rc1'}).getAttribute('href'),exe);
     assert.deepEqual(exceptions,[]);
     await context.close();
