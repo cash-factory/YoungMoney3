@@ -69,7 +69,7 @@ export async function copyFleetOwner(request:Request,env:Env,owner:string,action
       tasks:taskRows.results.map(t=>({...t,result_payload:t.result_payload?JSON.parse(String(t.result_payload)):null}))});
   }
   if(action==='fleet-save'){
-    if(!str(input.name,64)||String(input.name).trim().length<2||/[\u0000-\u001f]/.test(String(input.name))||
+    if(!str(input.name,64)||String(input.name).trim().length<2||[...String(input.name)].some(char=>char.charCodeAt(0)<32)||
       !uuid(input.sourceLink)||!Array.isArray(input.targets)||input.targets.length<1||input.targets.length>maxTargets)
       return fail('Choose a source, a name and between 1 and 24 follower accounts.');
     const parsed=input.targets.map(parseTarget);
