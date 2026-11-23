@@ -439,12 +439,18 @@ try {
     title:'Entry confirmation discipline',
     hypothesis:'Waiting for the confirmation candle should improve plan adherence.',
     single_change:'Do not place an entry until the confirmation candle has closed.',
-    strategy_id:'as-of-strategy',account_id:null,metric:'plan_adherence',
+    strategy_id:'as-of-strategy',account_id:null,source_reference:blindRef,metric:'plan_adherence',
     start_date:new Date().toISOString().slice(0,10),end_date:null,baseline_days:30,minimum_samples:5,
     status:'draft',conclusion:'',
   };
   assert.equal((await call('data',{action:'insert',table:'improvement_experiments',
     payload:{...draft,strategy_id:'not-owned'}})).status,400);
+  assert.equal((await call('data',{action:'insert',table:'improvement_experiments',
+    payload:{...draft,source_reference:'trade/not-a-review'}})).status,400,
+    'Source decision must exist in the signed-in owner journal.');
+  assert.equal((await call('data',{action:'insert',table:'improvement_experiments',
+    payload:{...draft,source_reference:'review/foreign/trade/1'}})).status,400,
+    'Arbitrary source names are rejected.');
   assert.equal((await call('data',{action:'insert',table:'improvement_experiments',
     payload:{...draft,status:'active',start_date:'2000-01-01'}})).status,409,
     'Backdated studies cannot claim prospective activation.');
@@ -455,11 +461,16 @@ try {
   assert.equal(draftResponse.status,200);
   let experiment=(await draftResponse.json()).data[0];
   assert.equal(experiment.status,'draft');
+  assert.equal(experiment.source_reference,blindRef,
+    'The originating decision is attached to the stored study.');
   const activate=await call('data',{action:'update',table:'improvement_experiments',id:experiment.id,
     filters:{updated_at:experiment.updated_at},payload:{status:'active'}});
   assert.equal(activate.status,200);
   experiment=(await activate.json()).data;
   assert.equal(experiment.status,'active');
+  assert.equal((await call('data',{action:'update',table:'improvement_experiments',id:experiment.id,
+    filters:{updated_at:experiment.updated_at},payload:{source_reference:null}})).status,409,
+    'Activated studies cannot sever or rewrite their originating evidence.');
   assert.ok(Number.isFinite(Date.parse(experiment.activated_at)),'Server seals the study start timestamp.');
   assert.equal((await call('data',{action:'update',table:'improvement_experiments',id:experiment.id,
     filters:{updated_at:experiment.updated_at},payload:{activated_at:'1999-01-01T00:00:00Z'}})).status,403);
