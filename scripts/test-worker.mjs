@@ -368,7 +368,11 @@ try {
   assert.equal(cash.summary.overallProfitVerified,false);
   assert.equal(cash.summary.scanStatus,'not_started');
   const oldRaw=await device('sync',{link,events:[{kind:'raw',key:'deal-900001',fields:{...deposit,profit:2000}}]});
-  assert.equal(oldRaw.status,409,'Existing broker balance evidence cannot be changed');
+  assert.equal(oldRaw.status,200,'A broker correction candidate is audited separately rather than blocking the batch');
+  assert.equal((await oldRaw.json()).evidence_conflicts_pending,2);
+  assert.equal((await db.prepare("SELECT amount FROM mt5_cash_movements WHERE link=? AND ticket='900001'").bind(link).first()).amount,'1250',
+    'The original broker cash movement must NEVER be overwritten by a conflicting replay');
+  assert.equal((await db.prepare("SELECT JSON_EXTRACT(candidate_payload,'$.profit') AS candidate FROM mt5_evidence_conflicts WHERE link=? AND event_key='deal-900001'").bind(link).first()).candidate,2000);
   assert.equal((await device('sync',{link,events:[],cashScan:{cursor:-1,complete:false}})).status,400);
   assert.equal((await device('sync',{link,events:[],cashScan:{cursor:0,complete:false}})).status,200);
   cash=(await (await call('mt5/cash-movements',{link})).json());
