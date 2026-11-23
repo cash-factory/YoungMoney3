@@ -40,3 +40,13 @@ def installation_id(origin, *, appdata=None):
         # Another connector process just created the same identity.
         return installation_id(origin,appdata=appdata)
     return value
+
+
+def pairing_request(origin, code, public_key, *, appdata=None):
+    """Bind the first pairing claim to the same durable installation ID used by presence.
+
+    This is a deduplication hint, not an authentication credential. The server
+    still requires a one-time, owner-scoped code and a public key.
+    """
+    return {"code": code, "publicKey": public_key,
+            "installationId": installation_id(origin, appdata=appdata)}
