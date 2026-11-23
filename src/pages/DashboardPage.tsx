@@ -198,6 +198,18 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
     : suggestedMode==='analyze' ? 'You have a growing record of decision reviews'
     : 'Document a trade, observation, or deliberate pass';
   const chooseDesk = (mode: DeskMode) => setSelectedSection(modeDestination[mode]);
+  const startDeskTask = (mode: DeskMode) => {
+    chooseDesk(mode);
+    window.requestAnimationFrame(() => {
+      const section = document.getElementById(mode === 'review' ? 'ym-recent' : 'ym-personal-patterns');
+      if (!section) return;
+      section.focus({ preventScroll: true });
+      section.scrollIntoView({
+        block: 'start',
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      });
+    });
+  };
   const pinDesk = (mode: DeskMode|null) => {
     setPreferredDesk(mode);
     savePreference(deskKey,mode||'');
@@ -250,6 +262,7 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
         suggested={suggestedMode}
         suggestionReason={suggestionReason}
         onSelect={chooseDesk}
+        onStart={startDeskTask}
         onPin={pinDesk}
         onCapture={onCapture}
         onOpenGuide={() => onOpenGuide?.()}
@@ -525,7 +538,7 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
 
       }
 
-      {activeSection === 'recent' && <section className="ym-dash-section" id="ym-recent">
+      {activeSection === 'recent' && <section className="ym-dash-section" id="ym-recent" tabIndex={-1}>
       {source==='live' && <DecisionDesk trades={trades} positions={filteredLifecyclePositions}
         account={account} accounts={accounts} onCapture={onCapture} openWeekly={openWeekly}/>}
         <div className="ym-dash-section-title">
