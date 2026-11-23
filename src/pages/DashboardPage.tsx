@@ -33,7 +33,9 @@ import { AdaptiveTradingDesk, modeDestination, modeFromSection, type DeskMode } 
 import { PersonalTradingPatterns } from '@/components/PersonalTradingPatterns';
 import { readPreference, savePreference } from '@/lib/browserPreferences';
 import { useDecisionReviews } from '@/hooks/useDecisionReviews';
-import { replayTargets, referenceFor } from '@/lib/decisionReplay';
+import { replayTargets, referenceFor, entryFacts, type ReplayTarget } from '@/lib/decisionReplay';
+import { TradeReplay } from '@/components/DecisionReplay';
+import { announceAction } from '@/lib/actionFeedback';
 import { recommendDeskFocus } from '@/lib/adaptiveIntelligence';
 import { useImprovementExperiments } from '@/hooks/useImprovementExperiments';
 interface DashboardProps {
@@ -46,7 +48,7 @@ interface DashboardProps {
 export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onCapture, openWeekly }: DashboardProps) {
   const { user } = useAuth();
   const { trades: liveTrades, loading, loadError, asOf, addTrade } = useTrades(user?.id);
-  const { positions: lifecyclePositions } = useMt5Lifecycles(user?.id);
+  const { positions: lifecyclePositions, loading: lifecyclesLoading } = useMt5Lifecycles(user?.id);
   const { rows: decisionReviews, error: decisionError, loading: reviewsLoading } = useDecisionReviews(user?.id);
   const { studies: improvementStudies } = useImprovementExperiments(user?.id);
   const { accounts } = useTradingAccounts(user?.id);
@@ -60,6 +62,7 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
   const { checklist, addChecklistItem, deleteChecklistItem } = useChecklist(user?.id);
   const [showAdd, setShowAdd] = useState(false);
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
+  const [linkedReplay, setLinkedReplay] = useState<ReplayTarget | null>(null);
   const [showRiskSettings, setShowRiskSettings] = useState(false);
   const [showRecentOutcomes, setShowRecentOutcomes] = useState(false);
   const [tradeOrigin, setTradeOrigin] = useState('all');
@@ -73,6 +76,27 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
   });
   const [selectedSection, setSelectedSection] = useState(preferredDesk?modeDestination[preferredDesk]:pinned?'performance':'overview');
   const activeSection = source !== 'live' && selectedSection === 'risk' ? 'overview' : selectedSection;
+  useEffect(() => {
+    if(!user?.id || loading || lifecyclesLoading) return;
+    const handoffKey='ymfx:replay-open:v1:'+user.id;
+    let reference='';
+    try { reference=sessionStorage.getItem(handoffKey)||''; }
+    catch { return; }
+    if(!reference) return;
+    try { sessionStorage.removeItem(handoffKey); } catch { /* optional browser state */ }
+    const target=replayTargets(liveTrades,lifecyclePositions)
+      .find(item=>referenceFor(item)===reference);
+    if(!target) {
+      announceAction('warning','The original trade or position is not available in this journal. Its experiment link is retained.');
+      return;
+    }
+    const originAccount=entryFacts(target).account;
+    if(originAccount && accountFilter!=='all' && accountFilter!==originAccount)
+      onAccountChange(originAccount);
+    setSource('live');
+    setSelectedSection('recent');
+    setLinkedReplay(target);
+  },[user?.id,loading,lifecyclesLoading,liveTrades,lifecyclePositions,accountFilter,onAccountChange]);
   const sections = [
     { id: 'overview', label: 'Overview', description: 'Your account snapshot and the figures that matter today.' },
     ...(source === 'live' ? [{ id: 'risk', label: 'Risk & rules', description: 'Protect your capital. Review limits and the plan before your next trade.' }] : []),
@@ -818,6 +842,7 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
         )}
       </Modal>
 
+      {linkedReplay && <TradeReplay target={linkedReplay} onClose={() => setLinkedReplay(null)} />}
       <RiskSettingsModal
         open={showRiskSettings}
         onClose={() => setShowRiskSettings(false)}
