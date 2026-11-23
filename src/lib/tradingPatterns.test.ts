@@ -1,0 +1,104 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { buildTradingPatterns } from './tradingPatterns.ts';
+import type { Trade } from './types.ts';
+import type { DecisionReview } from './decisionReplay.ts';
+
+const now='2026-11-23T18:00:00.000Z';
+const trade=(id:string,opts:Partial<Trade>={}):Trade=>({
+  id,user_id:'owner',pair:'EUR/USD',direction:'long',entry_price:1.1,exit_price:1.2,
+  lot_size:1,take_profit:null,outcome:'win',status:'closed',pnl:50,pips:10,strategy:null,
+  session:'london',broker:null,account_type:'personal',
+  entry_time:'2026-11-20T10:00:00.000Z',exit_time:'2026-11-20T10:30:00.000Z',
+  risk_percent:1,risk_reward_ratio:2,emotional_state:null,setup_quality:null,
+  mistakes:[],lessons:null,notes:null,screenshot_url:null,voice_note_url:null,
+  entry_screenshot_url:null,entry_voice_note_url:null,closure_screenshot_url:null,
+  closure_voice_note_url:null,what_went_wrong:null,observations:null,strategy_id:null,
+  setup_id:null,account_id:'a',instrument_id:null,checklist_items:null,
+  checklist_override_reason:null,checklist_completed:false,created_at:now,updated_at:now,
+  ...opts,
+});
+const review=(reference:string,verdict:DecisionReview['verdict'],opts:Partial<DecisionReview>={}):DecisionReview=>({
+  id:'review-'+reference,reference,entry_time:'2026-11-21T09:00:00.000Z',
+  strategy_id:'strategy-a',entry_model_id:'setup',strategy_name:'Breakout',model_name:'Retest',
+  account_id:'a',symbol:'EURUSD',verdict,pre_reveal_at:null,pre_reveal_verdict:null,
+  note:'',trigger:'My trigger fired',voice_note_url:null,screenshot_url:null,
+  commitment_id:null,commitment_text:'',commitment_result:null,
+  updated_at:now,...opts,
+});
+
+test('review counts are distinct, account-scoped and prefer the sealed judgement',()=>{
+  const reviews=[
+    review('trade/one','changed',{pre_reveal_verdict:'followed',pre_reveal_at:'2026-11-21T09:10:00Z'}),
+    review('trade/one','changed',{updated_at:'2026-11-20T10:00:00Z'}),
+    review('trade/two','changed'),
+    review('trade/three','unsure'),
+    review('trade/other','followed',{account_id:'b'}),
+    review('trade/future','followed',{entry_time:'2026-12-02T00:00:00Z'}),
+  ];
+  const result=buildTradingPatterns([],reviews,{accountId:'a',now,minimum:3});
+  assert.equal(result.reviewed,3);
+  assert.equal(result.preReveal,1);
+  assert.equal(result.retrospective,2);
+  assert.equal(result.plan.numerator,1);
+  assert.equal(result.plan.denominator,2);
+  assert.equal(result.plan.rate,50);
+  assert.equal(result.plan.sufficient,false);
+  assert.equal(result.unknown,1);
+  assert.equal(result.setups[0].label,'Retest');
+  assert.ok(result.limitations.some(message=>message.includes('retrospectively')));
+});
+
+test('only original opening-time manual checklists count, not later labels or broker fills',()=>{
+  const original={entry_time:'2026-11-21T10:00:00Z',entry_price:1.1,stop_loss:1.08,
+    direction:'long',strategy_id:null,entry_model_id:null,plan_id:null,risk_percent:1,
+    checklist_items:[{label:'Confirmed',checked:true,is_required:true}],
+    entry_screenshot_url:null,entry_voice_note_url:null,capture_mode:'live',
+    originally_open:true,entry_note:null};
+  const trades=[
+    trade('one',{decision_entry:original,emotional_state:'focused'}),
+    trade('two',{decision_entry:{...original,checklist_items:[{label:'Confirmed',checked:false,is_required:true}]},emotional_state:'calm'}),
+    trade('three',{decision_entry:{...original,originally_open:false},checklist_completed:true}),
+    trade('four',{trade_source:'mt5',decision_entry:original,emotional_state:'anxious'}),
+  ];
+  const result=buildTradingPatterns(trades,[],{now,minimum:3});
+  assert.equal(result.sources.originalChecklists,2);
+  assert.equal(result.checklist.numerator,1);
+  assert.equal(result.checklist.denominator,2);
+  assert.equal(result.checklist.rate,50);
+  assert.equal(result.sources.journalEmotions,2);
+  assert.equal(result.emotions.some(item=>item.label==='anxious'),false);
+});
+
+test('after-loss indicator requires a documented same-account prior manual close within 24h',()=>{
+  const trades=[
+    trade('loss',{pnl:-25,outcome:'loss',entry_time:'2026-11-19T08:00:00Z',exit_time:'2026-11-19T09:00:00Z'}),
+    trade('after',{entry_time:'2026-11-19T10:00:00Z',exit_time:'2026-11-19T11:00:00Z'}),
+    trade('later',{entry_time:'2026-11-21T12:00:00Z'}),
+    trade('other',{account_id:'b',entry_time:'2026-11-19T11:00:00Z'}),
+  ];
+  const reviews=[
+    review('trade/after','followed',{entry_time:'2026-11-19T10:00:00Z'}),
+    review('trade/later','changed',{entry_time:'2026-11-21T12:00:00Z'}),
+    review('trade/other','changed',{account_id:'b',entry_time:'2026-11-19T11:00:00Z'}),
+  ];
+  const result=buildTradingPatterns(trades,reviews,{accountId:'a',now,minimum:3});
+  assert.equal(result.afterLoss.examined,1);
+  assert.equal(result.afterLoss.numerator,1);
+  assert.equal(result.afterLoss.rate,100);
+  assert.equal(result.afterLoss.sufficient,false);
+});
+
+test('90-day window and sparse weekly observations never imply a trend',()=>{
+  const reviews=[
+    review('trade/old','followed',{entry_time:'2026-01-02T09:00:00Z'}),
+    review('trade/one','changed',{entry_time:'2026-11-19T09:00:00Z'}),
+    review('trade/two','unsure',{entry_time:'2026-11-19T10:00:00Z'}),
+  ];
+  const report=buildTradingPatterns([],reviews,{now,window:'90d'});
+  assert.equal(report.reviewed,2);
+  assert.equal(report.weeks.length,1);
+  assert.equal(report.weeks[0].rate,null);
+  const lifetime=buildTradingPatterns([],reviews,{now,window:'all'});
+  assert.equal(lifetime.reviewed,3);
+});
