@@ -68,7 +68,7 @@ export function validateExperiment(input: ImprovementExperimentInput): string | 
   if (input.source_reference != null &&
       (typeof input.source_reference !== 'string' ||
       input.source_reference.length > 300 ||
-      !/^(?:trade\/[^/\s]{1,150}|position\/[^/\s]{1,150}\/\d+:\d+)$/.test(input.source_reference)))
+      !/^(?:trade\/[A-Za-z0-9._:-]{1,150}|position\/[A-Za-z0-9._:-]{1,150}\/\d+:\d+)$/.test(input.source_reference)))
     return 'Link a valid decision review or leave the originating observation empty.';
   if (!validStudyDate(input.start_date) || (input.end_date && (!validStudyDate(input.end_date) || input.end_date < input.start_date)))
     return 'Choose valid study dates; the end cannot precede the start.';
