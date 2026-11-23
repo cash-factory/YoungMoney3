@@ -235,3 +235,35 @@
     }
   }
 }
+
+
+/* Replay 2.0 — intentional separation between entry assessment and revealed outcome. */
+.ym-replay-v2 { gap:16px; }
+.ym-replay-progress { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:6px;margin:0;padding:0;list-style:none; }
+.ym-replay-progress li { border-top:3px solid var(--border-strong);
+  padding:10px 3px 0;font-size:10px;letter-spacing:.04em;font-weight:740;
+  color:var(--text-secondary); }
+.ym-replay-progress li[data-current="true"] { border-color:var(--brand);color:var(--brand-text); }
+.ym-replay-guidance { border:1px solid var(--border);background:var(--bg-secondary);
+  border-radius:8px;padding:10px 14px;color:var(--text-secondary);
+  font-size:12px;line-height:1.65; }
+.ym-replay-lock { display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+  font-size:12px;color:var(--text-secondary);}
+.ym-replay-lock svg {flex:none;color:var(--brand-text);}
+.ym-replay-lock strong {color:var(--text-primary);}
+.ym-replay-reveal {display:grid;gap:9px;justify-items:start;
+  border-top:1px solid var(--border);padding-top:14px;}
+.ym-replay-reveal .btn-secondary:disabled {cursor:not-allowed;opacity:.56;}
+.ym-replay-compare {display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;
+  border:1px solid var(--border);background:var(--bg-secondary);
+  border-radius:10px;padding:14px 16px;}
+.ym-replay-compare span {font-size:11px;color:var(--text-secondary);}
+.ym-replay-compare strong {font-size:13px;color:var(--text-primary);}
+.ym-replay-post-note {display:grid;gap:8px;font-size:12px;font-weight:650;}
+.ym-replay-post-note textarea {width:100%;min-height:84px;font-size:13px;}
+.ym-replay-v2[data-stage="debrief"] .ym-replay-progress li:last-child {border-color:var(--brand);}
+@media (max-width:520px) {
+  .ym-replay-progress li {font-size:9px;}
+  .ym-replay-compare {grid-template-columns:1fr;gap:5px;padding:13px;}
+}
