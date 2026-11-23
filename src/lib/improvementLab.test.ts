@@ -102,3 +102,24 @@ test('duplicate references are a single decision even if later revisions use dif
   const result=evaluateExperiment(study,rows);
   assert.equal(result.intervention.eligible,1);
 });
+
+test('restored annotations with forged timestamps cannot become prospective observations',()=>{
+  const registered: ImprovementExperiment={...study,activated_at:'2026-11-04T09:00:00Z'};
+  const result=evaluateExperiment(registered,[
+    review('2026-11-10','changed',{
+      imported_unverified:true,
+      pre_reveal_verdict:'followed',pre_reveal_at:'2026-11-10T13:00:00Z',
+    }),
+  ]);
+  assert.equal(result.prospective,true);
+  assert.equal(result.excluded_intervention,1);
+  assert.equal(result.intervention.eligible,0);
+  assert.equal(result.percentage_point_change,null);
+  assert.ok(result.limitations.some(x=>x.includes('Restored reviews')));
+});
+test('originating review references must match known trade or position syntax',()=>{
+  assert.equal(validateExperiment({...study,source_reference:'trade/fixture-trade-1'}),null);
+  assert.equal(validateExperiment({...study,source_reference:'position/link-id/123:0'}),null);
+  assert.match(validateExperiment({...study,source_reference:'review/other-user/not-owned'})||'',/valid decision review/);
+  assert.match(validateExperiment({...study,source_reference:'trade/fake\\path'})||'',/valid decision review/);
+});
