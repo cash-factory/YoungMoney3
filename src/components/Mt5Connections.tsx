@@ -246,6 +246,8 @@ export function Mt5Connections() {
                   <div><small>Broker equity</small><strong>{l.broker_equity==null?'—':l.broker_equity.toLocaleString()} <span>{l.currency}</span></strong></div>
                   <div><small>Decisions for review</small><strong>{l.pending_reviews||0}</strong></div>
                    {(l.evidence_conflicts_pending||0)>0&&<div><small>Evidence integrity reviews</small><strong>{l.evidence_conflicts_pending}</strong></div>}
+                   {l.recovery?.state==='catching_up'&&<div><small>History recovery</small><strong>Scanning</strong></div>}
+                   {(l.recovery?.unresolved_positions||0)>0&&<div><small>Waiting for broker records</small><strong>{l.recovery?.unresolved_positions}</strong></div>}
                 </div>
                 <div className="ym-account-tabs" role="tablist" aria-label="Account management"
                   onKeyDown={event=>{
@@ -273,6 +275,18 @@ export function Mt5Connections() {
                     <div><span>Account class</span><strong>{l.trade_mode===0?'Demo':l.trade_mode===1?'Contest':l.trade_mode===2?'Real':'Unknown'}</strong></div>
                   </div>
                   {(l.evidence_conflicts_pending||0)>0&&<EvidenceConflictPanel link={l.id} count={l.evidence_conflicts_pending||0}/>}
+                  {(l.connector_spec_artifacts||0)>0&&<div className="ym-action-feedback" data-kind="info" role="status">
+                    <CheckCircle2 size={17}/><span><strong>{l.connector_spec_artifacts} historical connector specification-key aliases identified.</strong> These are preserved in the audit but no longer counted as broker-trade discrepancies. The corrected connector prevents new ones.</span>
+                  </div>}
+                  {l.recovery?.state==='catching_up'&&<div className="ym-action-feedback" data-kind="info" role="status">
+                    <RefreshCw size={16} className="animate-spin"/><span>Rebuilding broker history through {new Date(l.recovery.scanned_through).toLocaleString()} toward {new Date(l.recovery.target_at).toLocaleString()}. Progress is checkpointed.</span>
+                  </div>}
+                  {l.recovery?.state==='awaiting_broker_history'&&<div className="ym-action-feedback" data-kind="warning" role="status">
+                    <AlertTriangle size={16}/><span>{l.recovery.unresolved_positions} previously observed {l.recovery.unresolved_positions===1?'position':'positions'} cannot yet be confirmed closed from broker deals and orders. Their status remains unresolved.</span>
+                  </div>}
+                  {Boolean(l.recovery?.unobserved_stop_changes)&&<div className="ym-action-feedback" data-kind="info" role="status">
+                    <CircleHelp size={16}/><span>An offline observation gap was detected. Executions can be recovered from history; SL/TP modifications made entirely offline may not be reconstructable.</span>
+                  </div>}
                   {l.last_error && <div className="ym-action-feedback" data-kind="warning" role="alert"><AlertTriangle size={16}/><span>{l.last_error}</span></div>}
                   {Boolean(l.gap)&&<div className="ym-action-feedback" data-kind="warning">An offline interval may have left gaps in observed stop changes.</div>}
                   <div className="ym-connection-actions">
