@@ -22,7 +22,7 @@ class DevicePresence:
             return self._latest
 
     def emit(self, state, **details):
-        signature = (state, details.get("setup"), details.get("device"), details.get("name"))
+        signature = (state, details.get("setup"), details.get("device"), details.get("name"), details.get("pairedAs"))
         if self.report and self._state != signature:
             self.report({"state": state, **details})
         self._state = signature
@@ -40,7 +40,7 @@ class DevicePresence:
                 return False
             with self._lock:
                 self._latest = reply
-            self.emit("pc-online", device=reply["device"], name=reply.get("name"), setup=setup)
+            self.emit("pc-online", device=reply["device"], name=reply.get("name"), pairedAs=reply.get("pairedAs"), setup=setup)
             return True
         except urllib.error.HTTPError as error:
             if error.code in (404, 405):
