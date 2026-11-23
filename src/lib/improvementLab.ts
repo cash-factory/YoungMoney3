@@ -18,12 +18,15 @@ export interface ImprovementExperiment {
   conclusion: string;
   created_at: string;
   updated_at: string;
+  /** Server-issued timestamp when the hypothesis was first locked. Older studies may lack this. */
+  activated_at?: string | null;
 }
 export type ImprovementExperimentInput = Omit<ImprovementExperiment,
-  'id' | 'user_id' | 'created_at' | 'updated_at'>;
+  'id' | 'user_id' | 'created_at' | 'updated_at' | 'activated_at'>;
 /** Standalone evidence shape so financial calculations stay usable in Workers and the browser. */
 type Review = {
   id: string;
+  reference?: string;
   entry_time: string;
   strategy_id: string | null;
   account_id: string | null;
@@ -45,6 +48,8 @@ export interface ExperimentEvidence {
   intervention: ExperimentPeriod;
   percentage_point_change: number | null;
   enough_evidence: boolean;
+  excluded_intervention: number;
+  prospective: boolean;
   limitations: string[];
 }
 export function validStudyDate(value: string) {
@@ -77,27 +82,46 @@ export function evaluateExperiment(study: ImprovementExperiment, reviews: Review
   const baseline = empty(), intervention = empty();
   const start = Date.parse(study.start_date + 'T00:00:00Z');
   const baselineStart = start - study.baseline_days * 86400000;
-  // Inclusive through the last UTC day, so a chosen end date is not cut short.
-  const end = Math.min(Date.now() + 1, study.end_date ? Date.parse(study.end_date + 'T00:00:00Z') + 86400000 : Infinity);
-  // Reviews may update, but one trade reference is one decision. Latest review wins.
-  const seen = new Set<string>();
+  const end = Math.min(Date.now() + 1,
+    study.end_date ? Date.parse(study.end_date + 'T00:00:00Z') + 86400000 : Infinity);
+  const activation = study.activated_at ? Date.parse(study.activated_at) : NaN;
+  const prospective = Number.isFinite(activation) && study.status !== 'draft';
+  let excluded_intervention = 0;
+  // A broker position lifecycle and manual trade reference each represent one decision.
+  // If the transport supplies multiple revisions, the latest version wins.
+  const unique = new Map<string, Review>();
   for (const review of reviews) {
-    if (seen.has(review.id)) continue;
-    seen.add(review.id);
+    const key = review.reference || review.id;
+    const current = unique.get(key);
+    if (!current || (Date.parse(review.pre_reveal_at || '') || 0) >=
+      (Date.parse(current.pre_reveal_at || '') || 0)) unique.set(key, review);
+  }
+  for (const review of unique.values()) {
     if (study.strategy_id && study.strategy_id !== review.strategy_id) continue;
     if (study.account_id && study.account_id !== review.account_id) continue;
     const at = Date.parse(review.entry_time);
     if (!Number.isFinite(at)) continue;
-    const target = at >= baselineStart && at < start ? baseline
-      : at >= start && at < end ? intervention : null;
-    if (!target) continue;
-    const verdict = review.pre_reveal_verdict || review.verdict;
+    const before = at >= baselineStart && at < start;
+    const after = at >= start && at < end;
+    if (!before && !after) continue;
+    if (after && prospective) {
+      const preRevealTime = Date.parse(review.pre_reveal_at || '');
+      // Prospective claims require BOTH the original entry and the sealed assessment
+      // to occur after the intervention was activated on the server.
+      if (at < activation || !Number.isFinite(preRevealTime) || preRevealTime < activation) {
+        excluded_intervention++;
+        continue;
+      }
+    }
+    const target = before ? baseline : intervention;
+    const sealed = Boolean(review.pre_reveal_verdict && review.pre_reveal_at);
+    const verdict = sealed ? review.pre_reveal_verdict : review.verdict;
     if (verdict === 'followed') target.followed++;
     else if (verdict === 'changed') target.changed++;
     else target.uncertain++;
     if (verdict === 'followed' || verdict === 'changed') {
       target.eligible++;
-      if (review.pre_reveal_verdict && review.pre_reveal_at) target.pre_reveal++;
+      if (sealed) target.pre_reveal++;
       else target.retrospective++;
     }
   }
@@ -109,9 +133,12 @@ export function evaluateExperiment(study: ImprovementExperiment, reviews: Review
     'Before-and-after observations do not establish causation. Market conditions and trader behavior may also change.',
     'The measure is trader-reported plan adherence, not verified strategy profitability.',
   ];
-  if (baseline.retrospective + intervention.retrospective > 0)
+  if (!prospective) limitations.push('No verifiable server activation time is available. This draft or legacy study is exploratory and cannot support prospective claims.');
+  if (excluded_intervention)
+    limitations.push(excluded_intervention + ' intervention reviews were excluded because they were retrospective or predated study activation.');
+  if (baseline.retrospective + intervention.retrospective)
     limitations.push('Some decisions were reviewed retrospectively; their original pre-outcome judgement is unavailable.');
-  if (baseline.uncertain + intervention.uncertain > 0)
+  if (baseline.uncertain + intervention.uncertain)
     limitations.push('Uncertain or unreviewed decisions are excluded from the adherence percentage.');
   if (!enough_evidence)
     limitations.push('The selected minimum sample count has not been met in both periods.');
@@ -119,6 +146,6 @@ export function evaluateExperiment(study: ImprovementExperiment, reviews: Review
     baseline, intervention,
     percentage_point_change: baseline.adherence == null || intervention.adherence == null
       ? null : intervention.adherence - baseline.adherence,
-    enough_evidence, limitations,
+    enough_evidence, excluded_intervention, prospective, limitations,
   };
 }
