@@ -1103,11 +1103,13 @@ class ConnectorApp:
             self.pc_state = state
             self.device_id = item["device"]
             self.pc_name = item.get("name") or ("PC "+self.device_id[:8])
+            self.paired_as = item.get("pairedAs")
             previous_setup = self.setup_state
             self.setup_state = item["setup"]
             self.status_var.set("PC online" if self.setup_state == "ready" else "MetaTrader installation needed")
-            self.device_var.set(self.pc_name+"  ·  PC "+self.device_id[:8]+
-                                "  ·  Paired with this dashboard. Keep this connector open.")
+            owner_label = ("  ·  YoungMoney3 user: "+self.paired_as) if self.paired_as else ""
+            self.device_var.set(self.pc_name+"  ·  PC "+self.device_id[:8]+owner_label+
+                                "  ·  Keep this connector open.")
             self.connection_path.show(3 if self.sync_by_slot else 2 if self.account_by_slot else 1)
             self.pair_stage_var.set("PC online. You can now add a broker account.")
             self.banner_var.set("Choose Add account to sign in to your broker." if self.setup_state == "ready"
@@ -1117,7 +1119,8 @@ class ConnectorApp:
         elif state == "pc-renamed":
             self.pc_name = item.get("name") or self.pc_name
             if self.pc_name and self.device_id:
-                self.device_var.set(self.pc_name+"  ·  PC "+self.device_id[:8]+"  ·  Paired with this dashboard.")
+                owner_label = ("  ·  YoungMoney3 user: "+self.paired_as) if getattr(self,"paired_as",None) else ""
+                self.device_var.set(self.pc_name+"  ·  PC "+self.device_id[:8]+owner_label+"  ·  Paired with this dashboard.")
             self.banner_var.set("PC name updated. The dashboard now shows the same name.")
         elif state == "pc-name-error":
             self.banner_var.set("Could not rename this PC. Check your connection, then retry.")
