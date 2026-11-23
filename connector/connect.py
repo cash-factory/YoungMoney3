@@ -30,6 +30,7 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 sync_receipts = {}
+account_snapshots = {}
 
 
 def post(action, data, token=None):
@@ -352,6 +353,10 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
     deals=normalize(raw_deals)
     orders=normalize(raw_orders)
     positions=records(mt5.positions_get())
+    # Separate order book from live positions: pending orders are a first-class
+    # component of copy planning, even when they have never filled.
+    pending_raw=mt5.orders_get()
+    pending_count=len(pending_raw) if pending_raw is not None else None
     gap=bool(gap_pending or (last and end-last>60000))
     with db:
         db.execute("INSERT OR REPLACE INTO capital_snapshots(link,at_ms,equity,balance) VALUES(?,?,?,?)",
@@ -466,6 +471,20 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
         gap=False
         if len(page)<24: break
 
+    # These non-secret, account-bound values are displayed in the selected
+    # connector session only after verified MT5 identity and successful sync.
+    account_snapshots[link]={
+        "login":str(account.login),"server":str(account.server),
+        "company":str(getattr(account,"company","")),
+        "currency":str(account.currency),"trade_mode":int(account.trade_mode),
+        "balance":float(account.balance),"equity":float(account.equity),
+        "margin_free":float(getattr(account,"margin_free",0) or 0),
+        "open_positions":len(positions),"pending_orders":pending_count,
+        "floating_profit":sum(float(p.get("profit") or 0) for p in positions),
+        "source":"verified_terminal_at_sync","synced_at":sync_receipts.get(link,(None,))[0],
+        "trade_allowed":bool(getattr(account,"trade_allowed",False)),
+        "trade_expert":bool(getattr(account,"trade_expert",False)),
+    }
     request=response.get("history") if "response" in locals() else None
     if request and request["status"]=="resolving":
         from history_range import discover_deposit, clear_discovery
