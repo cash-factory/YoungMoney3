@@ -80,3 +80,5 @@
 .ym-cf-legacy-heading{border-top:1px solid var(--border);margin:18px 0 20px;padding:21px 0 4px}
 .ym-cf-legacy-heading span{font:700 10px 'JetBrains Mono',monospace;letter-spacing:.09em;color:var(--text-secondary)}
 .ym-cf-legacy-heading p{font-size:11px;color:var(--text-secondary);margin-top:8px;line-height:1.6}
+
+.ym-cf-note{font-size:10px;color:var(--cf-muted);line-height:1.65;padding:9px 0 13px;max-width:890px}
