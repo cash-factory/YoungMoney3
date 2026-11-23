@@ -21,5 +21,8 @@ test('staging refuses production DB and Worker identity',()=>{
     assert.equal(config.vars.MT5_ALLOW_LIVE,'false');
     assert.deepEqual(config.assets.run_worker_first,['/api/*']);
     assert.equal(config.name,'ym-fx-staging');
+    assert.equal(config.durable_objects.bindings[0].name,'AUTH_KDF');
+    assert.equal(config.durable_objects.bindings[0].class_name,'AuthKdf');
+    assert.deepEqual(config.exports.AuthKdf,{type:'durable-object',storage:'sqlite'});
   }finally{rmSync(folder,{recursive:true,force:true})}
 });
