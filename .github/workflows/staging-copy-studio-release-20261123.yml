@@ -1,0 +1,104 @@
+name: One-off staging Copy Studio demo release
+on:
+  push:
+    branches: [feature/copy-studio-demo-control-plane-20261123]
+    paths: [.github/workflows/staging-copy-studio-release-20261123.yml]
+permissions:
+  contents: read
+concurrency:
+  group: youngmoney3-staging-release
+  cancel-in-progress: false
+jobs:
+  staging:
+    if: github.repository == 'cash-factory/YoungMoney3'
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 40
+    env:
+      YM3_STAGING_D1_ID: ${{ vars.YM3_STAGING_D1_ID }}
+      YM3_STAGING_D1_NAME: ${{ vars.YM3_STAGING_D1_NAME }}
+      YM3_STAGING_WORKER_NAME: ${{ vars.YM3_STAGING_WORKER_NAME }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Refuse unapproved branch, production resources and unrelated changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/feature/copy-studio-demo-control-plane-20261123'
+          test "${YM3_STAGING_WORKER_NAME:-}" = 'ym-fx-staging'
+          test "$(git ls-remote https://github.com/${GITHUB_REPOSITORY}.git refs/heads/main | cut -f1)" = '17bdb47afb76db41c1166d064b517cff2a812019'
+          test "$(git merge-base origin/fix/cloudflare-password-hash-compat-20261123 HEAD)" = 'd498f5d7d5b58ab491e9bcf2c1a4a0c98af55a93'
+          while IFS= read -r path; do
+            case "$path" in
+              .github/workflows/copy-studio-validate-20261123.yml|.github/workflows/staging-copy-studio-release-20261123.yml|migrations/0017_copy_studio_drafts.sql|worker/copyStudio.ts|worker/index.ts|src/lib/copyStudio.ts|src/pages/CopyStudioPage.tsx|src/copy-studio.css|src/App.tsx|src/components/Layout.tsx|src/components/PageExperience.tsx|src/components/CommandPalette.tsx|package.json|scripts/test-copy-studio.mjs|scripts/verify-copy-staging-schema.mjs|scripts/probe-staging-copy.mjs) ;;
+              *) echo "Unrelated path in Copy Studio staging release: $path"; exit 1;;
+            esac
+          done < <(git diff --name-only origin/fix/cloudflare-password-hash-compat-20261123...HEAD)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Full Worker, UI and security regression checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run typecheck
+          npm run lint
+          npm test
+          npm run test:staging
+          node --test scripts/test-owner-recovery.mjs
+          npm run test:ui
+          npm run test:worker
+          npm run build
+      - name: Check staging identity, migration list and existing schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          npm run cf:staging:prepare
+          npm run cf:staging:verify
+          node scripts/verify-rich-staging-schema.mjs
+          npx wrangler d1 migrations list DB --remote --config wrangler.staging.jsonc
+      - name: Apply only additive Copy Studio draft migration to staging D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run cf:staging:migrate
+          node scripts/verify-copy-staging-schema.mjs
+          npm run cf:staging:verify
+          node scripts/verify-rich-staging-schema.mjs
+      - name: Dry-run and deploy staging Worker only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote https://github.com/${GITHUB_REPOSITORY}.git refs/heads/main | cut -f1)" = '17bdb47afb76db41c1166d064b517cff2a812019'
+          npx wrangler deploy --config wrangler.staging.jsonc --dry-run
+          npx wrangler deploy --config wrangler.staging.jsonc | tee "$RUNNER_TEMP/copy-studio-stage.log"
+          grep -F 'https://ym-fx-staging.ethical-hacker263.workers.dev' "$RUNNER_TEMP/copy-studio-stage.log"
+      - name: Verify public site, authentication and simulation API
+        shell: bash
+        env:
+          YM3_STAGING_URL: https://ym-fx-staging.ethical-hacker263.workers.dev
+        run: |
+          set -euo pipefail
+          node scripts/check-staging-health.mjs
+          node scripts/probe-staging-login.mjs
+          YM3_PROBE_LEGACY=1 node scripts/probe-staging-login.mjs
+          npx playwright install --with-deps chromium
+          node scripts/probe-staging-copy.mjs
+      - name: Release boundary evidence
+        if: always()
+        shell: bash
+        run: |
+          echo "Staging release source SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "One additive migration 0017 is scoped to the separately named staging D1." >> "$GITHUB_STEP_SUMMARY"
+          echo "No MT5 order execution, broker authorizations, live copying, production Worker or production D1 are touched." >> "$GITHUB_STEP_SUMMARY"
+          echo "Disposable test users, devices, accounts and simulated plans are deleted in the browser-probe cleanup." >> "$GITHUB_STEP_SUMMARY"
+          echo "Copy Studio remains simulation-only and all saved plans remain paused." >> "$GITHUB_STEP_SUMMARY"
