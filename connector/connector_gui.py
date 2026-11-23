@@ -230,7 +230,7 @@ class ConnectorApp:
         short = self.root.winfo_height() < 660
         self.sidebar_footer.configure(pady=12 if short else 20)
         self.environment_label.configure(text="●  STAGING" if short else "●  STAGING ENVIRONMENT")
-        self.sidebar_mode_label.configure(text="Read-only · demo/contest" if short else "Read-only  /  demo + contest")
+        self.sidebar_mode_label.configure(text="Read-only capture · copier opt-in" if short else "Journal capture: read-only  /  Trade copier: account opt-in")
         if short:
             self.sidebar_version_label.pack_forget()
         elif not self.sidebar_version_label.winfo_manager():
@@ -343,7 +343,7 @@ class ConnectorApp:
         self.environment_label = self._label(foot, "●  STAGING ENVIRONMENT", size=9,
                                              color=ACCENT, wrap=155, bold=True)
         self.environment_label.pack(anchor="w")
-        self.sidebar_mode_label = self._label(foot, "Read-only  /  demo + contest", color=MUTED,
+        self.sidebar_mode_label = self._label(foot, "Journal: read-only  /  Copier: opt-in", color=MUTED,
                                               size=9, wrap=155)
         self.sidebar_mode_label.pack(anchor="w", pady=(6, 0))
         self.sidebar_version_label = self._label(foot, "v" + VERSION + "   •   Windows x64",
@@ -874,7 +874,7 @@ class ConnectorApp:
                     local = db.execute("""SELECT observed_at_ms,account_balance,account_equity,margin_free,
                         open_positions,pending_orders,source_active,last_execution_result
                         FROM copy_local_health WHERE link=?""",(link,)).fetchone()
-                    allowed = db.execute("SELECT approved FROM copy_local_permissions WHERE link=?",
+                    allowed = db.execute("SELECT approved,mode FROM copy_local_permissions WHERE link=?",
                         (link,)).fetchone()
                     queued = db.execute("SELECT COUNT(*) FROM outbox WHERE link=?",(link,)).fetchone()[0]
                     unresolved = db.execute("SELECT COUNT(*) FROM position_recovery WHERE link=? AND status!='broker_closure_verified'",
@@ -884,7 +884,7 @@ class ConnectorApp:
                 self.events.put({"state":"copy-account-details","slot":slot,
                     "name":session["name"],"broker":str(account.get("server","Unknown")),
                     "login":str(account.get("login","Unknown")),"local":local,
-                    "allowed":bool(allowed and allowed[0]),"queued":queued,
+                    "allowed":bool(allowed and allowed[0]),"copy_mode":allowed[1] if allowed and allowed[0] else "none","queued":queued,
                     "unresolved":unresolved,"unacknowledged":recent})
             except Exception:
                 self.events.put({"state":"copy-account-details-error"})
@@ -914,7 +914,7 @@ class ConnectorApp:
             ("Open positions", str(health[4]) if health else "—"),
             ("Pending orders", str(health[5]) if health else "—"),
             ("Copy source", "Observed for an armed fleet" if health and health[6] else "Not acting as source"),
-            ("Local DEMO execution", "AUTHORIZED" if item.get("allowed") else "DISABLED"),
+            ("Local copy authorization", (str(item.get("copy_mode","none")).upper()+" · AUTHORIZED") if item.get("allowed") else "DISABLED"),
             ("Journal evidence awaiting sync", str(item.get("queued",0))),
             ("Positions awaiting broker closure", str(item.get("unresolved",0))),
             ("Ambiguous/unacknowledged copy tasks", str(item.get("unacknowledged",0))),
