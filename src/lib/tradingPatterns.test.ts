@@ -102,3 +102,33 @@ test('90-day window and sparse weekly observations never imply a trend',()=>{
   const lifetime=buildTradingPatterns([],reviews,{now,window:'all'});
   assert.equal(lifetime.reviewed,3);
 });
+
+test('setup-specific self-reported discipline is sampled separately and never inferred from P&L',()=>{
+  const reviews=Array.from({length:8},(_,i)=>review('trade/setup-'+i,i<5?'followed':'changed',{
+    model_name:i<6?'Retest':'Breakout',
+    pre_reveal_verdict:i<4?'followed':null,
+    pre_reveal_at:i<4?'2026-11-21T09:30:00Z':null,
+  }));
+  const result=buildTradingPatterns([],reviews,{now,minimum:5});
+  const retest=result.setupAdherence.find(row=>row.label==='Retest');
+  assert.ok(retest);
+  assert.equal(retest.reviewed,6);
+  assert.equal(retest.followed,5);
+  assert.equal(retest.sealed,4);
+  assert.equal(retest.retrospective,2);
+  assert.equal(retest.sufficient,true);
+  assert.equal(Number(retest.rate?.toFixed(2)),83.33);
+  const breakout=result.setupAdherence.find(row=>row.label==='Breakout');
+  assert.equal(breakout?.sufficient,false);
+});
+test('confidence ranges remain absent below minimum evidence and wide with small samples',()=>{
+  const rows=Array.from({length:12},(_,i)=>review('trade/wilson-'+i,i<9?'followed':'changed'));
+  const report=buildTradingPatterns([],rows,{now,minimum:12});
+  assert.equal(report.plan.rate,75);
+  assert.ok(report.plan.interval);
+  assert.ok(report.plan.interval[0]<75&&report.plan.interval[1]>75);
+  assert.ok(report.plan.interval[1]-report.plan.interval[0]>20);
+  const insufficient=buildTradingPatterns([],rows.slice(0,4),{now,minimum:12});
+  assert.equal(insufficient.plan.interval,null);
+  assert.equal(insufficient.plan.sufficient,false);
+});
