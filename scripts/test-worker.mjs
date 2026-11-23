@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { pbkdf2Sync } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { build } from 'esbuild';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
@@ -43,6 +44,23 @@ try {
   assert.match(signup.headers.get('set-cookie'),/SameSite=Strict/);
   // Consume the response while its Miniflare request context is still live.
   const subject=(await signup.json()).user.id;
+  const newCredential=await db.prepare('SELECT password_hash,password_salt FROM users WHERE id=?').bind(subject).first();
+  assert.match(newCredential.password_hash,/^pbkdf2-sha256\$600000\$/,'New signups use versioned password derivation.');
+  assert.equal((await call('auth/signin',{email:'member@example.test',password:'incorrect password'})).status,401);
+  const oldSalt=Buffer.from('legacy-salt-demo').toString('base64');
+  const oldDigest=pbkdf2Sync('local-test-pass',Buffer.from(oldSalt,'base64'),100000,32,'sha256').toString('base64');
+  await db.prepare('UPDATE users SET password_hash=?,password_salt=? WHERE id=?')
+    .bind(oldDigest,oldSalt,subject).run();
+  assert.equal((await call('auth/signin',{email:'member@example.test',password:'incorrect password'})).status,401);
+  assert.equal((await db.prepare('SELECT password_hash FROM users WHERE id=?').bind(subject).first()).password_hash,oldDigest,
+    'Failed login cannot silently alter the legacy verifier.');
+  const migrated=await call('auth/signin',{email:'member@example.test',password:'local-test-pass'});
+  assert.equal(migrated.status,200,'Existing users can still sign in using legacy password records.');
+  const upgraded=await db.prepare('SELECT password_hash,password_salt FROM users WHERE id=?').bind(subject).first();
+  assert.match(upgraded.password_hash,/^pbkdf2-sha256\$600000\$/);
+  assert.notEqual(upgraded.password_salt,oldSalt,'A successful migration gets a new random salt.');
+  assert.equal((await call('auth/signin',{email:'member@example.test',password:'local-test-pass'})).status,200,
+    'Rehashing must preserve subsequent login with the same password.');
   assert.equal((await call('data',{action:'select',table:'trades'}, {'Sec-Fetch-Site':'same-site'})).status,403);
   assert.equal((await call('data',{action:'select',table:'trades'}, {'Origin':'https://a.journal.example'})).status,403);
   const row={id:'demo-trade',pair:'TEST',settlement_currency:'USD',direction:'long',entry_price:100,exit_price:95,
@@ -660,6 +678,19 @@ try {
   objects.add(subject+'/voice.webm');
   assert.equal((await call('admin',{action:'delete',targetUserId:subject})).status,200);
   assert.equal(objects.size,0);
+  // Password rotation must remain functional on a versioned admin verifier and
+  // invalidate the old session; this happens after all privileged fixture actions.
+  const adminCookieBeforeRotation=cookie;
+  assert.equal((await call('auth/password',{current_password:'invalid',password:'new-admin-password-phrase'})).status,403);
+  assert.equal((await call('auth/password',{current_password:'local-test-pass',password:'new-admin-password-phrase'})).status,200);
+  assert.equal((await mf.dispatchFetch('https://journal.example/api/me',{headers:{cookie:adminCookieBeforeRotation}})).status,401,
+    'Changing a password must revoke all prior browser sessions.');
+  assert.equal((await call('auth/signin',{email:'other@example.test',password:'local-test-pass'})).status,401);
+  const adminRelogin=await call('auth/signin',{email:'other@example.test',password:'new-admin-password-phrase'});
+  assert.equal(adminRelogin.status,200);
+  cookie=adminRelogin.headers.get('set-cookie').split(';')[0];
+  assert.match((await db.prepare("SELECT password_hash FROM users WHERE email='other@example.test'").first()).password_hash,
+    /^pbkdf2-sha256\$600000\$/);
   // Preview is a real isolated account on staging, but cannot mutate state.
   const availability=await mf.dispatchFetch('https://journal.example/api/demo/available');
   assert.equal((await availability.json()).enabled,true);
