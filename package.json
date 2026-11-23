@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "python scripts/build_connector_source_archive.py && vite build",
     "test": "node --test src/lib/*.test.ts scripts/test-passwords.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
