@@ -33,3 +33,19 @@ CREATE INDEX copy_event_owner_recent ON copy_profile_events(owner,created_at DES
 CREATE TRIGGER copy_events_no_update BEFORE UPDATE ON copy_profile_events BEGIN
   SELECT RAISE(ABORT,'Copy Studio audit events are append-only');
 END;
+
+CREATE TRIGGER copy_profile_audit_create AFTER INSERT ON copy_profiles BEGIN
+  INSERT INTO copy_profile_events(id,owner,profile_id,event,details,created_at)
+  VALUES(lower(hex(randomblob(16))),NEW.owner,NEW.id,'created',
+    json_object('version',NEW.version,'state',NEW.state,'source',NEW.source_link,'follower',NEW.follower_link),NEW.created_at);
+END;
+CREATE TRIGGER copy_profile_audit_update AFTER UPDATE ON copy_profiles BEGIN
+  INSERT INTO copy_profile_events(id,owner,profile_id,event,details,created_at)
+  VALUES(lower(hex(randomblob(16))),NEW.owner,NEW.id,'updated',
+    json_object('from_version',OLD.version,'version',NEW.version,'state',NEW.state),NEW.updated_at);
+END;
+CREATE TRIGGER copy_profile_audit_delete AFTER DELETE ON copy_profiles BEGIN
+  INSERT INTO copy_profile_events(id,owner,profile_id,event,details,created_at)
+  VALUES(lower(hex(randomblob(16))),OLD.owner,OLD.id,'deleted',
+    json_object('version',OLD.version,'state',OLD.state),strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+END;
