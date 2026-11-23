@@ -62,3 +62,42 @@ test('pre-reveal recorded verdict takes priority over editable retrospective ver
   assert.equal(result.baseline.followed,1);
   assert.equal(result.intervention.changed,1);
 });
+
+test('newly activated studies exclude pre-activation and retrospective interventions',()=>{
+  const sealed = (day:string, when:string) => review(day,'followed',{
+    pre_reveal_verdict:'followed',pre_reveal_at:when
+  });
+  const registered: ImprovementExperiment = {
+    ...study, activated_at:'2026-11-04T09:00:00Z',
+  };
+  const outcome=evaluateExperiment(registered,[
+    ...['2026-10-06','2026-10-08','2026-10-10','2026-10-12','2026-10-14'].map(d=>review(d,'changed')),
+    sealed('2026-11-02','2026-11-02T13:00:00Z'),
+    sealed('2026-11-04','2026-11-04T08:00:00Z'),
+    review('2026-11-05','followed'),
+    ...['2026-11-06','2026-11-08','2026-11-10','2026-11-12','2026-11-14'].map(d=>sealed(d,d+'T13:00:00Z')),
+  ]);
+  assert.equal(outcome.prospective,true);
+  assert.equal(outcome.excluded_intervention,3,
+    'Pre-activation entries and unsealed retrospective verdicts must not count.');
+  assert.equal(outcome.intervention.eligible,5);
+  assert.equal(outcome.intervention.pre_reveal,5);
+  assert.equal(outcome.intervention.retrospective,0);
+  assert.equal(outcome.enough_evidence,true);
+  assert.equal(outcome.percentage_point_change,100);
+  assert.ok(outcome.limitations.some(x=>x.includes('excluded')));
+});
+test('legacy active and draft studies never claim verified prospective evidence',()=>{
+  const old=evaluateExperiment(study,[review('2026-11-10','followed')]);
+  assert.equal(old.prospective,false);
+  assert.equal(old.excluded_intervention,0);
+  assert.ok(old.limitations.some(x=>x.includes('No verifiable server activation')));
+});
+test('duplicate references are a single decision even if later revisions use different row ids',()=>{
+  const rows=[
+    review('2026-11-10','followed',{id:'version-1',reference:'trade/same'}),
+    review('2026-11-10','followed',{id:'version-2',reference:'trade/same'}),
+  ];
+  const result=evaluateExperiment(study,rows);
+  assert.equal(result.intervention.eligible,1);
+});
