@@ -1,3 +1,6 @@
+import { pbkdf2Async } from '@noble/hashes/pbkdf2.js';
+import { sha256 } from '@noble/hashes/sha2.js';
+
 /**
  * Versioned password-verifier format.
  *
@@ -29,8 +32,21 @@ function decode64(value: string): Uint8Array | null {
   }
 }
 
+// Cloudflare's deployed Workers runtime rejects >100,000 PBKDF2 iterations
+// in one WebCrypto call, even where local workerd and Node tests accept it.
+// Preserve EXACT standard PBKDF2-SHA256 600k verifiers already stored in D1;
+// splitting iterations into chained PBKDF2 calls would change their hashes.
+// noble-hashes is a reviewed, pure-JS RFC-compatible implementation used only
+// for the longer, versioned verifier. Do not downgrade a user's work factor.
+const nativeMaximumIterations = 100000;
 async function derive(password: string, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
-  const key = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const encodedPassword = encoder.encode(password);
+  if (iterations > nativeMaximumIterations) {
+    return await pbkdf2Async(sha256, encodedPassword, salt, {
+      c: iterations, dkLen: 32, asyncTick: 10,
+    });
+  }
+  const key = await crypto.subtle.importKey('raw', encodedPassword, 'PBKDF2', false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits(
     { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' }, key, 256
   );
