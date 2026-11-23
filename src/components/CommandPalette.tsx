@@ -35,6 +35,7 @@ const destinations: Destination[] = [
   { id: 'strategy-testing', label: 'Testing workspace', section: 'Playbook', keywords: 'backtest forwardtest study research' },
   { id: 'brokers-charting', label: 'Brokers & charting', section: 'Accounts', keywords: 'broker charts account management' },
   { id: 'mt5', label: 'MT5 connections', section: 'Accounts', keywords: 'metatrader connector pair pc devices sync login' },
+  { id: 'copy-studio', label: 'Copy Studio', section: 'Accounts', keywords: 'copy simulation demo source follower position size guardrails' },
   { id: 'analytics', label: 'Trading analytics', section: 'Review', keywords: 'reports pnl performance charts' },
   { id: 'ai', label: 'AI insights', section: 'Review', keywords: 'patterns intelligence analysis' },
   { id: 'resources', label: 'Resource library', section: 'Library', keywords: 'reference templates' },

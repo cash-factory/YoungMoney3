@@ -33,6 +33,7 @@ import { supabase } from '@/lib/supabase';
 import '@/decision-studio.css';
 import '@/trading-semantic.css';
 import '@/connection-hub.css';
+import '@/copy-studio.css';
 import '@/experience-refined.css';
 import type { FastCapture } from '@/components/DecisionDesk';
 import { SampleReplay } from '@/components/DecisionReplay';
@@ -40,6 +41,7 @@ import { QuickCaptureModal } from '@/components/QuickCaptureModal';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { reportDataError } from '@/lib/recovery';
 import { Mt5Connections } from '@/components/Mt5Connections';
+import { CopyStudioPage } from '@/pages/CopyStudioPage';
 import { ActionFeedbackHost } from '@/lib/actionFeedback';
 import { PlatformGuide } from '@/components/PlatformGuide';
 import { guideShouldWelcome, writeGuideState } from '@/lib/platformGuide';
@@ -48,7 +50,7 @@ const PAGE_IDS: PageId[] = [
   'media', 'dashboard', 'trades', 'calendar', 'analytics', 'journal', 'ai',
   'trading-plan', 'goals', 'risk-management', 'market-sessions', 'setups', 'strategy-testing',
   'strategies', 'resources', 'notes', 'study-material', 'brokers-charting', 'weekly-reviews',
-  'account-settings', 'admin-operations', 'mt5', 'workspace-setup',
+  'account-settings', 'admin-operations', 'mt5', 'copy-studio', 'workspace-setup',
 ];
 
 function pageFromLocation(): PageId {
@@ -178,6 +180,7 @@ function AppContent() {
         {page === 'brokers-charting' && <BrokersChartingPage />}
         {page === 'weekly-reviews' && <WeeklyReviewsPage />}
         {page === 'mt5' && <Mt5Connections />}
+        {page === 'copy-studio' && <CopyStudioPage />}
         {page === 'account-settings' && <AccountSettingsPage />}
         {page === 'admin-operations' && (profile?.role === 'admin' && profile.account_status === 'active' ? <AdminOperationsPage /> : <p role="alert" className="card p-4">This area is reserved for the workspace administrator.</p>)}
       </PageExperience>

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { LayoutDashboard, CandlestickChart, Calendar, BarChart3, BookOpen, Sparkles, Menu, X, Plus, LogOut, ChevronDown, ChevronRight, ClipboardList, Target, FlaskConical, Shield, CalendarClock, LayoutTemplate, BookMarked, StickyNote, GraduationCap, CreditCard, ClipboardCheck, MoreHorizontal, Archive, Settings, Search, Monitor, Images, Compass } from 'lucide-react';
+import { LayoutDashboard, CandlestickChart, Calendar, BarChart3, BookOpen, Sparkles, Menu, X, Plus, ArrowRightLeft, LogOut, ChevronDown, ChevronRight, ClipboardList, Target, FlaskConical, Shield, CalendarClock, LayoutTemplate, BookMarked, StickyNote, GraduationCap, CreditCard, ClipboardCheck, MoreHorizontal, Archive, Settings, Search, Monitor, Images, Compass } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 import { CommandPalette, rememberWorkspaceDestination } from '@/components/CommandPalette';
 import { ColorPaletteControl } from '@/components/ColorPaletteControl';
@@ -7,7 +7,7 @@ import { DataBackupModal } from '@/components/DataBackupModal';
 import { DataRecoveryNotice } from '@/components/ui/DataRecoveryNotice';
 import { useAuth } from '@/context/AuthContext';
 
-export type PageId = 'media' | 'dashboard' | 'trades' | 'calendar' | 'analytics' | 'journal' | 'ai' | 'trading-plan' | 'goals' | 'risk-management' | 'market-sessions' | 'setups' | 'strategy-testing' | 'strategies' | 'resources' | 'notes' | 'study-material' | 'brokers-charting' | 'weekly-reviews' | 'account-settings' | 'admin-operations' | 'mt5' | 'workspace-setup';
+export type PageId = 'media' | 'dashboard' | 'trades' | 'calendar' | 'analytics' | 'journal' | 'ai' | 'trading-plan' | 'goals' | 'risk-management' | 'market-sessions' | 'setups' | 'strategy-testing' | 'strategies' | 'resources' | 'notes' | 'study-material' | 'brokers-charting' | 'weekly-reviews' | 'account-settings' | 'admin-operations' | 'mt5' | 'copy-studio' | 'workspace-setup';
 
 interface LayoutProps {
   current: PageId;
@@ -39,6 +39,7 @@ const NAV_SECTIONS: { id: string; label: string; icon: typeof LayoutDashboard; i
   ] },
   { id: 'accounts', label: 'Accounts', icon: CreditCard, items: [
     { id: 'brokers-charting', label: 'Brokers & Charting', icon: CreditCard },
+    { id: 'copy-studio', label: 'Copy Studio', icon: ArrowRightLeft },
   ] },
   { id: 'insights', label: 'Review', icon: BarChart3, items: [
     { id: 'weekly-reviews', label: 'Weekly Reviews', icon: ClipboardCheck },
