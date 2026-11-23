@@ -34,6 +34,8 @@ import { PersonalTradingPatterns } from '@/components/PersonalTradingPatterns';
 import { readPreference, savePreference } from '@/lib/browserPreferences';
 import { useDecisionReviews } from '@/hooks/useDecisionReviews';
 import { replayTargets, referenceFor } from '@/lib/decisionReplay';
+import { recommendDeskFocus } from '@/lib/adaptiveIntelligence';
+import { useImprovementExperiments } from '@/hooks/useImprovementExperiments';
 interface DashboardProps {
   accountFilter: string;
   onAccountChange: (account: string) => void;
@@ -45,7 +47,8 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
   const { user } = useAuth();
   const { trades: liveTrades, loading, loadError, asOf, addTrade } = useTrades(user?.id);
   const { positions: lifecyclePositions } = useMt5Lifecycles(user?.id);
-  const { rows: decisionReviews } = useDecisionReviews(user?.id);
+  const { rows: decisionReviews, error: decisionError, loading: reviewsLoading } = useDecisionReviews(user?.id);
+  const { studies: improvementStudies } = useImprovementExperiments(user?.id);
   const { accounts } = useTradingAccounts(user?.id);
   const { adjustments } = useTradingAccountAdjustments(user?.id);
   const { backtests } = useBacktests(user?.id);
@@ -189,14 +192,27 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
     return replayTargets(trades,filteredLifecyclePositions).filter(target=>!seen.has(referenceFor(target))).length;
   },[decisionReviews,trades,filteredLifecyclePositions]);
   const selectedMode = modeFromSection(activeSection);
-  const suggestedMode: DeskMode = !accounts.length || !plans.length ? 'prepare'
-    : pendingReviewCount ? 'review'
-    : liveTrades.length === 0 ? 'capture'
-    : decisionReviews.length >= 12 ? 'analyze' : 'capture';
-  const suggestionReason = suggestedMode==='prepare' ? 'Start with your setup and risk rules'
-    : suggestedMode==='review' ? pendingReviewCount+' entries await a documented review'
-    : suggestedMode==='analyze' ? 'You have a growing record of decision reviews'
-    : 'Document a trade, observation, or deliberate pass';
+  const deskRecommendation = useMemo(() => {
+    const matchedReviews=decisionReviews.filter(row=>accountFilter==='all'||row.account_id===accountFilter);
+    const recent=matchedReviews.filter(row=>{
+      const when=Date.parse(row.entry_time);
+      return Number.isFinite(when) && when<=Date.now() && when>=Date.now()-30*86400000;
+    });
+    const assessed=recent.filter(row=>['followed','changed'].includes(row.pre_reveal_at && row.pre_reveal_verdict || row.verdict || ''));
+    return recommendDeskFocus({
+      hasAccounts: accountFilter==='all' ? accounts.length>0 : Boolean(account),
+      hasPlan: account ? Boolean(account.default_plan_id || plans.length) : plans.length>0,
+      hasRiskSettings: Boolean(settings),
+      pendingReviews:pendingReviewCount,
+      reviewed:matchedReviews.length,
+      sealedReviews:matchedReviews.filter(row=>row.pre_reveal_at && row.pre_reveal_verdict).length,
+      recentAssessed:assessed.length,
+      recentChanged:assessed.filter(row=>(row.pre_reveal_at && row.pre_reveal_verdict || row.verdict)==='changed').length,
+      activeExperiments:improvementStudies.filter(study=>study.status==='active'
+        && (accountFilter==='all'||!study.account_id||study.account_id===accountFilter)).length,
+      evidenceAvailable:!decisionError && !reviewsLoading,
+    });
+  },[accounts,account,accountFilter,plans,settings,pendingReviewCount,decisionReviews,improvementStudies,decisionError,reviewsLoading]);
   const chooseDesk = (mode: DeskMode) => setSelectedSection(modeDestination[mode]);
   const startDeskTask = (mode: DeskMode) => {
     chooseDesk(mode);
@@ -259,8 +275,9 @@ export function DashboardPage({ accountFilter, onAccountChange, onOpenGuide, onC
       {source === 'live' && <AdaptiveTradingDesk
         mode={selectedMode}
         preferred={preferredDesk}
-        suggested={suggestedMode}
-        suggestionReason={suggestionReason}
+        suggested={deskRecommendation.mode}
+        suggestionReason={deskRecommendation.reason}
+        suggestionBasis={deskRecommendation.basis}
         onSelect={chooseDesk}
         onStart={startDeskTask}
         onPin={pinDesk}
