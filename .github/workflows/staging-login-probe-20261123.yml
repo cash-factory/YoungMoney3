@@ -1,0 +1,43 @@
+name: Diagnose staging existing-format password login
+on:
+  push:
+    branches: [fix/cloudflare-password-hash-compat-20261123]
+    paths: [.github/workflows/staging-login-probe-20261123.yml]
+permissions:
+  contents: read
+concurrency:
+  group: youngmoney3-staging-login-probe
+  cancel-in-progress: false
+jobs:
+  probe:
+    if: github.repository == 'cash-factory/YoungMoney3'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: staging
+    env:
+      YM3_STAGING_D1_ID: ${{ vars.YM3_STAGING_D1_ID }}
+      YM3_STAGING_D1_NAME: ${{ vars.YM3_STAGING_D1_NAME }}
+      YM3_STAGING_WORKER_NAME: ${{ vars.YM3_STAGING_WORKER_NAME }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install Wrangler and verify staging identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/fix/cloudflare-password-hash-compat-20261123'
+          test "${YM3_STAGING_WORKER_NAME:-}" = 'ym-fx-staging'
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          npm ci
+          npm run cf:staging:prepare
+          npm run cf:staging:verify
+      - name: Probe real staging login using disposable isolated 600k fixture and clean up
+        run: node scripts/probe-staging-login.mjs
