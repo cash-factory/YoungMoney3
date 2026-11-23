@@ -14,11 +14,13 @@ import {
 import { SectionHeader } from './ui/SectionHeader';
 import { Modal } from './ui/Modal';
 import '@/improvement-lab.css';
+import type { DecisionReview } from '@/lib/decisionReplay';
 
 const todayUTC = () => new Date().toISOString().slice(0, 10);
 const toInput = (item: ImprovementExperiment): ImprovementExperimentInput => ({
   title: item.title, hypothesis: item.hypothesis, single_change: item.single_change,
-  strategy_id: item.strategy_id, account_id: item.account_id, metric: item.metric,
+  strategy_id: item.strategy_id, account_id: item.account_id,
+  source_reference: item.source_reference || null, metric: item.metric,
   start_date: item.start_date, end_date: item.end_date, baseline_days: item.baseline_days,
   minimum_samples: item.minimum_samples, status: item.status, conclusion: item.conclusion,
 });
@@ -28,6 +30,7 @@ const draftExperiment = (): ImprovementExperimentInput => ({
   single_change: '',
   strategy_id: null,
   account_id: null,
+  source_reference: null,
   metric: 'plan_adherence',
   start_date: todayUTC(),
   end_date: null,
@@ -57,10 +60,11 @@ function EvidenceMeter({ label, period, required }: { label: string; period: Exp
 }
 
 function StudyForm({
-  initial, owner, onCancel, onSubmit, busy, error,
+  initial, owner, sourceReview, onCancel, onSubmit, busy, error,
 }: {
   initial: ImprovementExperimentInput;
   owner: string;
+  sourceReview?: DecisionReview;
   onCancel: () => void;
   onSubmit: (record: ImprovementExperimentInput) => Promise<void>;
   busy: boolean;
@@ -89,6 +93,18 @@ function StudyForm({
         <h3>Change one thing. Observe what follows.</h3>
         <p>Define the rule before collecting the next set of reviews. Starting a new prospective study requires today or a future start date; the server records when it was activated. Old trades cannot count as new observations.</p>
       </div>
+      {form.source_reference && <div className="ym-lab-source" aria-label="Linked originating decision">
+        <div>
+          <span className="ym-lab-source-kicker"><BookOpenCheck size={14}/> ORIGINATING DECISION</span>
+          <strong>{sourceReview?.symbol || 'Decision Replay'}</strong>
+          <p>{sourceReview
+            ? [sourceReview.entry_time?.slice(0,10),sourceReview.pre_reveal_at ? 'Pre-reveal assessment recorded' : 'Retrospective review',sourceReview.verdict ? 'Assessment: '+sourceReview.verdict : null].filter(Boolean).join(' · ')
+            : 'The originating decision was not found in the currently loaded reviews.'}</p>
+          {sourceReview?.note && <blockquote>{sourceReview.note.slice(0,220)}</blockquote>}
+        </div>
+        <button type="button" className="btn-ghost" disabled={busy}
+          onClick={() => update('source_reference',null)}>Unlink</button>
+      </div>}
       <div className="ym-lab-form-fields">
         <label>Experiment name
           <input className="input-field" value={form.title} maxLength={100} required
@@ -184,6 +200,7 @@ export function ImprovementLab({ onShowSessions }: { onShowSessions: () => void 
         title: typeof source.symbol === 'string' ? (source.symbol + ' decision experiment').slice(0,100) : '',
         strategy_id: typeof source.strategy_id === 'string' ? source.strategy_id : null,
         account_id: typeof source.account_id === 'string' ? source.account_id : null,
+        source_reference: typeof source.source_reference === 'string' ? source.source_reference : null,
       });
       setEdit(null);
       setOpen(true);
@@ -281,6 +298,27 @@ export function ImprovementLab({ onShowSessions }: { onShowSessions: () => void 
                   <div><span>Hypothesis</span><p>{study.hypothesis}</p></div>
                   <div><span>One intentional change</span><p>{study.single_change}</p></div>
                 </div>
+                {study.source_reference && <div className="ym-lab-source" data-source-linked="true">
+                  <div>
+                    <span className="ym-lab-source-kicker"><BookOpenCheck size={14}/> ORIGINATING DECISION</span>
+                    <strong>{decisions.find(item=>item.reference===study.source_reference)?.symbol || 'Linked decision review'}</strong>
+                    <p>{(() => {
+                      const origin=decisions.find(item=>item.reference===study.source_reference);
+                      if(!origin) return 'The original review is unavailable. Its reference remains preserved.';
+                      return [origin.entry_time?.slice(0,10),origin.pre_reveal_at?'Pre-reveal assessment recorded':'Retrospective assessment',
+                        origin.verdict?'Assessment: '+origin.verdict:null].filter(Boolean).join(' · ');
+                    })()}</p>
+                    {decisions.find(item=>item.reference===study.source_reference)?.note &&
+                      <blockquote>{decisions.find(item=>item.reference===study.source_reference)!.note.slice(0,220)}</blockquote>}
+                  </div>
+                  <button type="button" className="btn-secondary"
+                    onClick={() => {
+                      if(!user?.id) return;
+                      try { sessionStorage.setItem('ymfx:replay-open:v1:'+user.id,study.source_reference!); }
+                      catch { /* Still navigate to the journal if session storage is blocked. */ }
+                      window.location.hash='dashboard';
+                    }}>Open original replay <ArrowUpRight size={15}/></button>
+                </div>}
                 <div className="ym-lab-study-method">
                   <span><LockKeyhole size={15}/> {study.status==='draft'?'Design editable until activated':'Study design locked'}</span>
                   <span>{evidence.prospective ? 'Server-sealed at '+new Date(study.activated_at!).toLocaleString() : 'Legacy/draft · no verified activation timestamp'}</span>
@@ -343,6 +381,7 @@ export function ImprovementLab({ onShowSessions }: { onShowSessions: () => void 
       <Modal open={open} title={edit ? 'Edit experiment draft' : 'Register an improvement experiment'}
         onClose={()=>{ if(!busy){setOpen(false);setEdit(null);} }} size="lg">
         <StudyForm key={edit?.id || 'new-study'} initial={edit ? toInput(edit) : seed || draftExperiment()} owner={user?.id || ''}
+          sourceReview={decisions.find(row=>row.reference===(edit?.source_reference||seed?.source_reference))}
           busy={busy} error={operationError} onSubmit={saveStudy}
           onCancel={()=>{setOpen(false);setEdit(null);}}/>
       </Modal>
