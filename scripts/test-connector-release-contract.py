@@ -27,6 +27,10 @@ for required in [
     "YoungMoney3.Connector.exe.sha256",
     "build-manifest.json",
     "staging-release/YoungMoney3.Connector.exe",
+    "Copy-Item 'dist/YoungMoney3 Connector.exe' 'staging-release/YoungMoney3.Connector.exe'",
+    "$exe = Join-Path $dir 'YoungMoney3.Connector.exe'",
+    "YoungMoney3.Connector.exe.sha256",
+    "Staging did not pass deployment checks for this exact source SHA",
     "Main moved during build; refusing stale release",
     "Desktop version differs from immutable release tag",
 ]:
