@@ -3,6 +3,8 @@ import json
 import threading
 import urllib.error
 
+from version import VERSION
+
 
 class DevicePresence:
     interval = 12
@@ -28,7 +30,7 @@ class DevicePresence:
     def check(self):
         try:
             setup = "ready" if self.setup.sources() else "install"
-            payload = {"setup": setup, "version": "0.5.3-rc1"}
+            payload = {"setup": setup, "version": VERSION}
             if self.installation:
                 payload["installationId"] = self.installation()
             reply = self.request(payload)
