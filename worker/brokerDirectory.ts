@@ -4,7 +4,14 @@
  */
 type ListedBroker={name:string;servers:{name:string;type:'demo'|'real'|'unknown'}[]};
 const DIRECTORY_URL='https://broker-servers.apis.tradevps.net/';
-const safe=(v:unknown,max=128):v is string=>typeof v==='string'&&v.length>0&&v.length<=max&&!/[\u0000-\u001f\u007f]/.test(v);
+function safe(v:unknown,max=128):v is string {
+  if(typeof v!=='string'||v.length===0||v.length>max)return false;
+  for(let i=0;i<v.length;i++){
+    const unit=v.charCodeAt(i);
+    if(unit<32||unit===127)return false;
+  }
+  return true;
+}
 export async function optionalBrokerDirectory(get:typeof fetch=fetch):Promise<{
   source:string;verified:false;updatedAt:string|null;brokers:ListedBroker[];
 }>{
