@@ -89,6 +89,7 @@ class HistoryResumptionTests(unittest.TestCase):
             low, high = [int(dt.timestamp()*1000) for dt in args]
             return [deposit] if low <= deposit.time_msc < high else []
         self.api.history_deals_get.side_effect = broker_history
+        self.api.DEAL_TYPE_BALANCE = 2  # Real MT5 constant; MagicMock defaults are not integers.
         self.status = "declined"
         self.scan()
         updates = [row for row in self.calls if row.get("events")]
