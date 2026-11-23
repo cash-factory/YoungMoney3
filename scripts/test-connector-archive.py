@@ -1,11 +1,30 @@
+"""Check the current source distribution, never a potentially stale committed binary."""
+import sys
+import tempfile
 from pathlib import Path
 from zipfile import ZipFile
 
-root=Path(__file__).resolve().parent.parent
-mapping={'README.md':'connector/README.md','connect.py':'connector/connect.py','ledger.py':'connector/ledger.py','history_range.py':'connector/history_range.py','cash_history.py':'connector/cash_history.py','lifecycle.py':'connector/lifecycle.py','connector_gui.py':'connector/connector_gui.py','studio_ui.py':'connector/studio_ui.py','managed_accounts.py':'connector/managed_accounts.py','presence.py':'connector/presence.py','pc_identity.py':'connector/pc_identity.py','sessions.py':'connector/sessions.py','terminal_factory.py':'connector/terminal_factory.py','concurrent_capture.py':'connector/concurrent_capture.py','requirements.txt':'connector/requirements.txt','assets/connector-scene.svg':'connector/assets/connector-scene.svg'}
-with ZipFile(root/'public/mt5-connector.zip') as archive:
-    assert archive.testzip() is None, 'Connector ZIP is corrupt'
-    assert set(archive.namelist()) == set(mapping), 'Connector ZIP contents differ from supported package'
-    for packaged,source in mapping.items():
-        assert archive.read(packaged)==(root/source).read_bytes().replace(b'\r\n',b'\n'), f'Stale connector ZIP: {packaged}'
-print('Distributed MT5 ZIP matches all checked-in connector sources.')
+from build_connector_source_archive import FILES, ROOT, generate_archive, normalized_files
+
+
+def verify(path):
+    expected = normalized_files()
+    with ZipFile(path) as archive:
+        assert archive.testzip() is None, "Connector ZIP is corrupt"
+        assert set(archive.namelist()) == set(FILES), "Unexpected file in connector source ZIP"
+        for packaged, source in FILES.items():
+            assert archive.read(packaged) == expected[packaged], (
+                "Stale connector source distribution: " + source
+            )
+
+
+if "--check-dist" in sys.argv:
+    built = ROOT / "dist" / "mt5-connector.zip"
+    assert built.is_file(), "Web build did not publish the connector source fallback"
+    verify(built)
+    print("Built web asset includes the exact current connector source ZIP.")
+else:
+    with tempfile.TemporaryDirectory() as temp:
+        generated = generate_archive(Path(temp) / "mt5-connector.zip")
+        verify(generated)
+    print("Connector source generator produces an exact, curated and validated ZIP.")
