@@ -123,18 +123,20 @@ def lifecycle_projection(link,pid,end,start,timezone_settings):
     capital=[{"at_ms":row[0],"equity":row[1],"balance":row[2]}
              for row in db.execute("SELECT at_ms,equity,balance FROM capital_snapshots WHERE link=? ORDER BY at_ms",(link,))]
     settings=timezone_settings or {}
-    for record in reconstruct(history,{o["ticket"]:o for o in orders},observed,spec,
+    projections=reconstruct(history,{o["ticket"]:o for o in orders},observed,spec,
                               capital_samples=capital,
                               broker_timezone=settings.get("broker_timezone"),
                               timezone_confirmed=bool(settings.get("timezone_confirmed_at")),
                               conversion_provenance=settings.get("utc_conversion_status"),
-                              observed_at_ms=end):
+                              observed_at_ms=end)
+    for record in projections:
         # A historical closed lifecycle is not implicitly imported by a live
         # scan. Preserve the existing history-review approval boundary.
         last=record.get("final_exit_at")
         if record["status"]=="closed" and last and int(datetime.fromisoformat(last).timestamp()*1000)<start:
             continue
         enqueue(link,"lifecycle","lifecycle:"+record["lifecycle_id"],record)
+    return bool(projections and projections[-1]["status"]=="closed")
 
 
 def enqueue(link, kind, key, fields):
@@ -579,6 +581,7 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
         CREATE TABLE IF NOT EXISTS broker_clock(link TEXT PRIMARY KEY,offset INTEGER);
         CREATE TABLE IF NOT EXISTS position_observations(link TEXT,position_id TEXT,at_ms INTEGER,sl TEXT,tp TEXT,PRIMARY KEY(link,position_id,at_ms));
         CREATE TABLE IF NOT EXISTS position_specs(link TEXT,position_id TEXT,payload TEXT,observed_at_ms INTEGER,PRIMARY KEY(link,position_id));
+        CREATE TABLE IF NOT EXISTS position_recovery(link TEXT,position_id TEXT,status TEXT NOT NULL,checked_ms INTEGER NOT NULL,PRIMARY KEY(link,position_id));
         CREATE TABLE IF NOT EXISTS capital_snapshots(link TEXT,at_ms INTEGER,equity TEXT,balance TEXT,PRIMARY KEY(link,at_ms));
         CREATE TABLE IF NOT EXISTS history_seed(link TEXT,request TEXT,PRIMARY KEY(link,request));
         CREATE TABLE IF NOT EXISTS history_progress(link TEXT PRIMARY KEY,request TEXT,cursor INTEGER);
