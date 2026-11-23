@@ -48,6 +48,7 @@ class FakeMT5:
         self.deal_receipts={}
         self.daily_deals=[]
         self.rejected=False
+        self.partial=False
         self.profit=-100
         self.terminal=SimpleNamespace(connected=True,trade_allowed=True)
 
@@ -92,7 +93,7 @@ class FakeMT5:
             self.positions.append(SimpleNamespace(ticket=ticket,identifier=pid,
                 symbol=request['symbol'],type=request['type'],volume=request['volume'],profit=0))
             self.deal_receipts[881]=SimpleNamespace(position_id=pid)
-            return SimpleNamespace(retcode=10009,order=880,deal=881)
+            return SimpleNamespace(retcode=10010 if self.partial else 10009,order=880,deal=881)
         if request['action']==self.TRADE_ACTION_PENDING:
             ticket=9902
             self.pending.append(SimpleNamespace(ticket=ticket,symbol=request['symbol']))
@@ -149,6 +150,20 @@ class LocalExecutionTests(unittest.TestCase):
         self.assertEqual(len(self.mt5.sent),1,'Same instruction must never submit twice')
         stored=self.db.execute('SELECT ticket,kind FROM copy_local_mappings').fetchone()
         self.assertEqual(stored,('9901','position'))
+
+    def test_partial_broker_fill_is_never_assumed_full_and_replayed(self):
+        set_consent(self.db,self.link,True)
+        self.mt5.partial=True
+        order=self.task()
+        response=execute(self.mt5,self.db,self.link,order,self.account,now_ms=self.mt5.now)
+        self.assertEqual(response['status'],'unknown')
+        self.assertEqual(response['code'],'partial_fill_requires_broker_reconciliation')
+        self.assertEqual(len(self.mt5.sent),1)
+        self.assertEqual(self.db.execute('SELECT COUNT(*) FROM copy_local_mappings').fetchone()[0],0,
+                         'The full source-to-follower lot ratio must not be guessed from a partial fill.')
+        again=execute(self.mt5,self.db,self.link,order,self.account,now_ms=self.mt5.now)
+        self.assertEqual(again,response)
+        self.assertEqual(len(self.mt5.sent),1,'No second order on ambiguous broker partial fill.')
 
     def test_pending_stop_limit_orders_preserve_broker_fields_and_map_order(self):
         set_consent(self.db,self.link,True)
