@@ -45,6 +45,13 @@ def prepare_database(db):
       CREATE TABLE IF NOT EXISTS copy_source_frames (
         link TEXT PRIMARY KEY, payload TEXT NOT NULL, observed_at_ms INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS copy_local_health (
+        link TEXT PRIMARY KEY, observed_at_ms INTEGER NOT NULL,
+        account_balance REAL NOT NULL, account_equity REAL NOT NULL,
+        margin_free REAL NOT NULL, open_positions INTEGER NOT NULL,
+        pending_orders INTEGER NOT NULL, source_active INTEGER NOT NULL,
+        last_execution_result TEXT
+      );
     """)
 
 def consent(db,link):
