@@ -115,6 +115,30 @@ class ConnectorPresentationTests(unittest.TestCase):
         self.assertIsNone(self.app.worker)
         self.assertFalse(self.settings.exists(), "Presentation inspection must not write preferences")
 
+    def test_first_time_trader_sees_real_actions_before_explanations(self):
+        self.app.show_page("overview")
+        self.assertEqual(self.app.hero_pc_button.cget("text"),"Connect this computer")
+        self.app.show_page("sessions")
+        self._settle()
+        self.assertTrue(self.app.empty_accounts.winfo_manager())
+        self.assertFalse(self.app.session_table.get_children())
+        self.app.show_page("copy")
+        self._settle()
+        self.assertFalse(self.app.copy_explanation.winfo_manager())
+        self.assertTrue(self.app.copy_add_account_button.winfo_manager())
+        canvas=self.app._page_canvases["copy"]
+        self.assertLessEqual(
+            self.app.copy_account_combo.winfo_rooty()+self.app.copy_account_combo.winfo_height(),
+            canvas.winfo_rooty()+canvas.winfo_height()+1,
+            "The account choice must be visible before the trader scrolls.")
+        self.app._toggle_copy_explanation()
+        self.assertTrue(self.app.copy_explanation.winfo_manager())
+        self.assertEqual(self.app.copy_explain_button.cget("text"),"Hide explanation")
+        self.app._toggle_copy_explanation()
+        self.assertFalse(self.app.copy_explanation.winfo_manager())
+        self.assertIsNone(self.app.worker)
+        self.assertFalse(self.settings.exists())
+
     def test_pair_confirmation_starts_pc_service_without_any_configured_terminals(self):
         self.assertEqual(self.app.store.all_terminals(), [])
         with patch.object(self.app, "_start_worker") as start:
