@@ -111,8 +111,8 @@ class ConnectorApp:
             self.paired = restore and bool(connect.keyring.get_password(service, "token"))
         except Exception:
             self.paired = False
-        self.root.title("YoungMoney3  /  MT5 Connector  /  Staging")
-        w = min(1240, max(720, self.root.winfo_screenwidth() - 60))
+        self.root.title("YoungMoney3  ·  MT5 Connector")
+        w = min(1280, max(720, self.root.winfo_screenwidth() - 60))
         h = min(850, max(560, self.root.winfo_screenheight() - 90))
         self.root.geometry(f"{w}x{h}")
         self.root.minsize(720, 560)
@@ -255,11 +255,13 @@ class ConnectorApp:
         short = self.root.winfo_height() < 660
         self.sidebar_footer.configure(pady=12 if short else 20)
         self.environment_label.configure(text="●  PREVIEW" if short else "●  PREVIEW WORKSPACE")
-        self.sidebar_mode_label.configure(text="Journal + optional copier" if short else "Trade journal + optional copying, with your permission")
+        self.sidebar_mode_label.configure(text="Your accounts, your control" if short else "Your accounts stay in your control.")
         if short:
             self.sidebar_version_label.pack_forget()
         elif not self.sidebar_version_label.winfo_manager():
             self.sidebar_version_label.pack(anchor="w", pady=(14, 0))
+        self._arrange_overview()
+        self._arrange_copy()
         for group in self.action_groups:
             group.reflow()
 
@@ -359,7 +361,7 @@ class ConnectorApp:
             row.pack(fill="x", pady=3)
             button = AnimatedButton(row, motion=self.motion_var.get,
                                text=title, command=lambda page=key: self.show_page(page),
-                               font=(FONT, 11), anchor="w", padx=14, pady=10,
+                               font=(FONT, 10, "bold"), anchor="w", padx=14, pady=11,
                                bg=SIDEBAR, fg=MUTED, relief="flat", borderwidth=0,
                                activebackground=PANEL_ALT, activeforeground=TEXT,
                                cursor="hand2", takefocus=True)
@@ -1149,7 +1151,7 @@ class ConnectorApp:
         try:
             s = self._selected()
         except (SessionError, StopIteration):
-            self.selected_details_var.set("Select a session to manage its account.")
+            self.selected_details_var.set("Choose an account to see its details.")
             return
         link = self.account_by_slot.get(s["terminal"])
         identity = (str(link.get("server") or "broker") + " / " +
@@ -1380,11 +1382,6 @@ class ConnectorApp:
                 mapping[label]=session["id"]
         self.copy_choice_map=mapping
         self.copy_account_combo.configure(values=list(mapping))
-        if entries:
-            self.empty_accounts.place_forget()
-        else:
-            self.empty_accounts.place(relx=.5,rely=.48,anchor="center")
-            self.empty_accounts.lift()
         if mapping:
             self.copy_add_account_button.pack_forget()
         elif not self.copy_add_account_button.winfo_manager():
@@ -1404,6 +1401,7 @@ class ConnectorApp:
                 "Needs reconnection","Needs re-link","Terminal missing","Paused on dashboard"))
         )))
         self._selected_session_details()
+        self._render_account_cards()
 
     def _safe_change(self, action):
         try:
