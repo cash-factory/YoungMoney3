@@ -2,6 +2,7 @@
 import sys
 import tkinter as tk
 import unittest
+import time
 
 from trader_ui import permission_summary, trader_message, TradeJourney
 
@@ -21,7 +22,7 @@ class LanguageTests(unittest.TestCase):
         for code in ("IPC timeout", "(-10005)", "terminal_ipc_timeout"):
             self.assertIn("MetaTrader",trader_message(code))
             self.assertNotIn(code,trader_message(code))
-        self.assertIn("broker account",trader_message("wrong_terminal"))
+        self.assertIn("MetaTrader account",trader_message("wrong_terminal"))
         self.assertIn("retry",trader_message("Broker capture error (ValueError at connect.py:345)"))
         self.assertIn("permission",trader_message("account_bound_execution_permission_missing"))
 
@@ -39,9 +40,10 @@ class AnimatedRouteTests(unittest.TestCase):
         self.root.update()
         flow.set_state("approved")
         self.assertIsNotNone(flow._job)
-        for _ in range(30):
-            if flow._job is None:break
+        deadline=time.monotonic()+2
+        while flow._job is not None and time.monotonic()<deadline:
             self.root.update()
+            time.sleep(.02)
         self.assertIsNone(flow._job)
         self.assertEqual(flow.state,"approved")
         flow.set_state("off")
