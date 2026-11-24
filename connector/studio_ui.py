@@ -130,6 +130,8 @@ class ResponsiveActions(tk.Frame):
     def _queue_layout(self, event=None):
         if event is not None and event.widget is not self:
             return
+        if not self.winfo_ismapped():
+            return
         if event is not None and event.width == self._last_width:
             return
         if event is not None:
@@ -140,7 +142,7 @@ class ResponsiveActions(tk.Frame):
 
     def reflow(self):
         self._job = None
-        if not self.winfo_exists() or not self.buttons:
+        if not self.winfo_exists() or not self.buttons or not self.winfo_ismapped():
             return
         # Buttons are children of this frame. Keep them in place and switch
         # only their grid slots; never rebuild containing row frames.
