@@ -219,11 +219,11 @@ test('every workspace page has its own text-free design image next to real headi
 test('connector visual refresh preserves brand and separate journal / copier safety',()=>{
   const connector=read('connector/connector_gui.py');
   const graphic=read('connector/assets/connector-scene.svg');
-  assert.ok(connector.includes('ACCENT = "#ff365c"'),'Connector should share studio-red accent');
-  assert.ok(connector.includes('BACKGROUND = "#0b1119"'),'Connector should use restrained graphite surfaces');
+  assert.ok(connector.includes('ACCENT = "#4357D6"'),'Connector should use a restrained UI accent');
+  assert.ok(connector.includes('BACKGROUND = "#F5F7FA"'),'Connector should use the lighter porcelain workspace');
   assert.ok(connector.includes('def _draw_header_art('),'Connector panels need native, dependency-free illustrations');
   assert.ok(connector.includes('def _stack_heading('),'Connector heading must remain real text');
-  assert.ok(connector.includes('Journal tracks trades · Copying needs your approval'),'Journal monitoring and separately authorized copying must be explained honestly');
+  assert.ok(connector.includes('MONITORING IS READ-ONLY  ·  COPYING REQUIRES APPROVAL'),'Journal monitoring and separately authorized copying must be explained honestly');
   assert.ok(graphic.startsWith('<svg ')&&!/<text(?:\s|>)/i.test(graphic),'Standalone connector artwork must be text-free');
 });
 

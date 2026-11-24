@@ -1,5 +1,8 @@
 """Presentation regressions: no MT5 calls, pairing request or account settings writes."""
 import importlib.util
+import os
+import faulthandler
+import _tkinter
 import sys
 import tempfile
 import time
@@ -10,6 +13,12 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from studio_ui import action_rows, blend, AnimatedButton, restart_wait_seconds
+
+# Give the Windows review an actionable Python stack instead of silently
+# running until the CI job timeout if a native layout event loop stalls.
+if os.environ.get("GITHUB_ACTIONS") == "true":
+    faulthandler.dump_traceback_later(35, repeat=True)
+
 
 
 class ActionLayoutTests(unittest.TestCase):
@@ -58,15 +67,24 @@ class ConnectorPresentationTests(unittest.TestCase):
         self.root.withdraw()
         self.root.attributes("-alpha", 0)
         self.addCleanup(self.root.destroy)
-        self.app = module.ConnectorApp(self.root)
+        # The optional bootstrap theme owns a global Tk style singleton.
+        # Repeated test-root destruction cannot exercise that singleton safely;
+        # the separate frozen-app and screenshot tests exercise the real theme.
+        with patch.dict(os.environ, {"YMFX_TK_UNIT_TEST": "1"}):
+            self.app = module.ConnectorApp(self.root)
         self.app.motion_var.set(False)
         self.root.deiconify()
         self._settle()
 
     def _settle(self):
-        for _ in range(5):
-            self.root.update_idletasks()
-            self.root.update()
+        # Tk.update() has no event budget: a newly introduced self-scheduling
+        # layout callback can keep it inside the native event loop forever.
+        # Drain real events until quiescent, but *fail* if the UI keeps
+        # generating work instead of silently passing a frozen desktop.
+        for _ in range(2000):
+            if not self.root.tk.dooneevent(_tkinter.DONT_WAIT):
+                return
+        self.fail("The desktop kept scheduling new UI events instead of settling.")
 
     def assert_actions_fit(self, group):
         left, right = group.winfo_rootx(), group.winfo_rootx() + group.winfo_width()
@@ -95,14 +113,14 @@ class ConnectorPresentationTests(unittest.TestCase):
                 # The transparent test window is deliberately excluded from
                 # Windows pointer hit-testing. Tk's actual child stacking order
                 # still proves the row windows cannot cover native buttons.
-                siblings = self.app.quick_setup_actions.winfo_children()
-                row = last.pack_info()["in"]
-                self.assertGreater(siblings.index(last), siblings.index(row),
-                                   "Quick setup action must remain above its row frame")
+                self.assertEqual(last.winfo_manager(),"grid")
+                self.assertIn("row",last.grid_info(),
+                              "Quick setup action must be directly clickable in its stable grid")
                 self.app.show_page("sessions")
                 self._settle()
                 self.assert_actions_fit(self.app.session_tools)
-                self.assert_actions_fit(self.app.session_actions)
+                self.assertFalse(self.app.account_detail.winfo_manager(),
+                                 "No account should show trade controls before selection")
                 self.app.show_page("copy")
                 self._settle()
                 self.assert_actions_fit(self.app.copy_action_buttons)
@@ -122,6 +140,7 @@ class ConnectorPresentationTests(unittest.TestCase):
         self._settle()
         self.assertTrue(self.app.empty_accounts.winfo_manager())
         self.assertFalse(self.app.session_table.get_children())
+        self.assertFalse(self.app.account_detail.winfo_manager())
         self.app.show_page("copy")
         self._settle()
         self.assertFalse(self.app.copy_explanation.winfo_manager())
@@ -138,6 +157,49 @@ class ConnectorPresentationTests(unittest.TestCase):
         self.assertFalse(self.app.copy_explanation.winfo_manager())
         self.assertIsNone(self.app.worker)
         self.assertFalse(self.settings.exists())
+
+    def test_account_card_expands_only_when_trader_selects_it(self):
+        terminal=Path(self.temp.name)/"terminal64.exe"
+        terminal.write_bytes(b"review fixture only")
+        record={"id":"demo-account-1","name":"Demo account", "terminal":str(terminal),
+                "enabled":True}
+        self.app.show_page("sessions")
+        with patch.object(self.app.store,"snapshot",return_value=[record]):
+            self.app.refresh_sessions()
+            self._settle()
+            self.assertFalse(self.app.empty_accounts.winfo_manager())
+            self.assertFalse(self.app.account_detail.winfo_manager())
+            self.assertTrue(self.app.session_table.exists(record["id"]))
+            self.app._select_account(record["id"])
+            self._settle()
+            self.assertTrue(self.app.account_detail.winfo_manager())
+            self.assertIn("Demo account",self.app.selected_details_var.get())
+            self.app.account_search_var.set("unrelated broker")
+            self._settle()
+            self.assertTrue(self.app.no_matching_accounts.winfo_manager())
+            self.assertFalse(self.app.account_detail.winfo_manager())
+            self.app.account_search_var.set("demo")
+            self._settle()
+            self.assertFalse(self.app.no_matching_accounts.winfo_manager())
+            self.assertTrue(self.app.account_detail.winfo_manager())
+            self.assert_actions_fit(self.app.session_actions)
+            self.assert_actions_fit(self.app.copy_controls)
+            self.app._hide_account_detail()
+            self._settle()
+            self.assertFalse(self.app.account_detail.winfo_manager())
+        self.assertFalse(self.settings.exists())
+
+    def test_help_answers_are_optional_instead_of_always_visible(self):
+        self.app.show_page("help")
+        self._settle()
+        header,answer=self.app.help_items[0]
+        self.assertFalse(answer.winfo_manager())
+        header.invoke()
+        self._settle()
+        self.assertTrue(answer.winfo_manager())
+        header.invoke()
+        self._settle()
+        self.assertFalse(answer.winfo_manager())
 
     def test_pair_confirmation_starts_pc_service_without_any_configured_terminals(self):
         self.assertEqual(self.app.store.all_terminals(), [])
