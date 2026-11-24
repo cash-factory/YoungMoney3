@@ -839,7 +839,9 @@ class ConnectorApp:
 
     def _arrange_copy(self):
         if not hasattr(self,"copy_columns"):return
-        compact=self.root.winfo_width()<920
+        # A two-column broker form needs more room than a simple overview.
+        # Keep fields stacked on regular laptops; split only on wide screens.
+        compact=self.root.winfo_width()<1180
         # Avoid perpetual geometry churn when Tk relays resize events from
         # a nested widget. Re-grid only when crossing the compact breakpoint.
         if getattr(self,"_copy_layout_compact",None)==compact:
@@ -1000,7 +1002,9 @@ class ConnectorApp:
 
     def _arrange_pair(self):
         if not hasattr(self,"pair_columns"):return
-        compact=self.root.winfo_width()<920
+        # A two-column broker form needs more room than a simple overview.
+        # Keep fields stacked on regular laptops; split only on wide screens.
+        compact=self.root.winfo_width()<1180
         # Avoid perpetual geometry churn when Tk relays resize events from
         # a nested widget. Re-grid only when crossing the compact breakpoint.
         if getattr(self,"_pair_layout_compact",None)==compact:
