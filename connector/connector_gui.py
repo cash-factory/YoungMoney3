@@ -1136,6 +1136,17 @@ class ConnectorApp:
         self.banner_var.set("Guide closed. You can open it again from Help.")
 
     def show_page(self, key):
+        # Detach heavyweight responsive form columns when leaving the page.
+        # This prevents inactive broker setup forms from fighting the active
+        # screen for geometry during resize and DPI changes.
+        if self.current_page == "copy" and key != "copy":
+            self.copy_left.grid_forget()
+            self.copy_right.grid_forget()
+            self._copy_layout_compact = None
+        elif self.current_page == "pair" and key != "pair":
+            self.pair_left.grid_forget()
+            self.pair_right.grid_forget()
+            self._pair_layout_compact = None
         self.current_page = key
         for other,page in self.pages.items():
             if other != key and page.winfo_manager():
