@@ -102,7 +102,8 @@ class ConnectorPresentationTests(unittest.TestCase):
                 self.app.show_page("sessions")
                 self._settle()
                 self.assert_actions_fit(self.app.session_tools)
-                self.assert_actions_fit(self.app.session_actions)
+                self.assertFalse(self.app.account_detail.winfo_manager(),
+                                 "No account should show trade controls before selection")
                 self.app.show_page("copy")
                 self._settle()
                 self.assert_actions_fit(self.app.copy_action_buttons)
@@ -122,6 +123,7 @@ class ConnectorPresentationTests(unittest.TestCase):
         self._settle()
         self.assertTrue(self.app.empty_accounts.winfo_manager())
         self.assertFalse(self.app.session_table.get_children())
+        self.assertFalse(self.app.account_detail.winfo_manager())
         self.app.show_page("copy")
         self._settle()
         self.assertFalse(self.app.copy_explanation.winfo_manager())
