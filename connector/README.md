@@ -2,7 +2,7 @@
 
 ## Windows app
 
-**Latest published staging Windows build:** [v0.6.0-rc1](https://github.com/cash-factory/YoungMoney3/releases/tag/staging-connector-v0.6.0-rc1). The trader-first connector design is being developed as **v0.6.1-rc1** and is NOT yet published. Keep your existing Windows pairing, installed terminals, and saved trading history. Use the current official release and its provided checksum until the new release is verified.
+**Latest published staging Windows build:** [v0.6.0-rc1](https://github.com/cash-factory/YoungMoney3/releases/tag/staging-connector-v0.6.0-rc1). The redesigned soft studio connector is being reviewed as **v0.6.2-rc1** and is NOT yet published. Keep your existing Windows pairing, installed terminals, and saved trading history. Use the current official release and its provided checksum until the new release is verified.
 
 **This build corrects an MT5 specification-evidence identity defect**: older connectors reused a symbol-specification key across multiple position IDs, generating thousands of false integrity conflicts. v0.5.7 uses position-scoped, first-observed snapshots and reconstructs previously observed positions from broker deals/orders after an offline interval. Unobserved interim SL/TP changes are flagged as such, not invented. **Do not delete local capture.db or unpair the PC**; close the old app and open v0.5.7 in the same Windows user. Real MT5 broker recovery remains an acceptance check.
 
@@ -191,3 +191,9 @@ The interface uses ttkbootstrap for consistent native Windows controls, with a f
 A permission can be renewed after a long broker scan: the server now permits up to three minutes between permission refreshes but **still requires an online paired computer within 45 seconds** before any fleet can be switched on. Connected broker logins and trading-enabled access must continue to match the exact receiving account. The account cannot be activated remotely without an approval on the Windows connector.
 
 This candidate is under automated and Windows UI testing; do not treat it as an officially distributed executable or a verified real-broker trading release until those checks and release approval are complete.
+
+## Soft Studio desktop redesign (0.6.2-rc1 candidate)
+
+The rejected dark utility-style screen has been replaced with an optional, progressive soft-light workspace: Home has adjacent connection and next-action panels; My accounts uses selectable broker cards instead of a filesystem-style table; Trade copying separates receiving-account permissions and website activation; pairing is a single focused form; recent activity is a readable event feed; and Help opens answers only when requested. The existing monitoring, reconnection, local-account permissions, account separation, emergency pause and broker evidence remain governed by the same services. Account details are not displayed until chosen. Accessibility is supported by real native labels, buttons and keyboard-visible focus. Motion only reports state changes and can be disabled.
+
+This is a candidate build only. Windows native UI tests and source/binary packaging must pass for the exact commit before release; live money execution remains disabled and broker acceptance is separate.
