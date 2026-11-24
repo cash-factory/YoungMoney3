@@ -36,16 +36,19 @@ from trader_ui import TradeJourney, permission_summary, trader_message
 STAGING_URL = "https://ym-fx-staging.ethical-hacker263.workers.dev"
 ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "YMFX" / "staging-gui"
 SETTINGS = ROOT / "preferences.json"
-BACKGROUND = "#0b1119"
-SIDEBAR = "#101924"
-PANEL = "#16212c"
-PANEL_ALT = "#21313d"
-BORDER = "#30424c"
-TEXT = "#f5f8fa"
-MUTED = "#aabcc8"
-ACCENT = "#ff365c"
-WARM = "#ffd294"
-DANGER = "#ff8f99"
+# Porcelain / ink: contemporary trading workspace with cool, quiet contrast.
+# Brand red is retained in the original identity mark, not painted on every button.
+BACKGROUND = "#F5F7FA"
+SIDEBAR = "#FFFFFF"
+PANEL = "#FFFFFF"
+PANEL_ALT = "#EEF2F8"
+BORDER = "#DEE5EE"
+TEXT = "#17283E"
+MUTED = "#607187"
+ACCENT = "#4357D6"
+WARM = "#926327"
+DANGER = "#B5485E"
+SUCCESS = "#157A65"
 FONT = "Segoe UI"
 
 
@@ -155,28 +158,28 @@ class ConnectorApp:
         # fallback for source-only installations without the optional theme.
         try:
             import ttkbootstrap
-            style = ttkbootstrap.Style(theme="tokyo-night-dark")
+            style = ttkbootstrap.Style(theme="litera")
         except ImportError:
             style = ttk.Style(self.root)
             style.theme_use("clam")
         style.configure("YM.Treeview", background=PANEL, fieldbackground=PANEL,
-                        foreground=TEXT, rowheight=42, font=(FONT, 10),
+                        foreground=TEXT, rowheight=52, font=(FONT, 10),
                         relief="flat", borderwidth=0)
         style.configure("YM.Treeview.Heading", background=PANEL_ALT,
                         foreground=MUTED, font=(FONT, 9, "bold"),
                         padding=(12, 12), relief="flat")
-        style.map("YM.Treeview", background=[("selected", "#662336")],
+        style.map("YM.Treeview", background=[("selected", "#E5EAFD")],
                   foreground=[("selected", TEXT)])
         style.configure("YM.Vertical.TScrollbar", background=PANEL_ALT,
                         troughcolor=BACKGROUND, borderwidth=0, bordercolor=BACKGROUND,
                         lightcolor=PANEL_ALT, darkcolor=PANEL_ALT,
                         arrowcolor=MUTED, width=11, arrowsize=11)
-        style.map("YM.Vertical.TScrollbar", background=[("active", "#663347")])
+        style.map("YM.Vertical.TScrollbar", background=[("active", "#CBD5E4")])
         style.configure("YM.Horizontal.TScrollbar", background=PANEL_ALT,
                         troughcolor=BACKGROUND, borderwidth=0, bordercolor=BACKGROUND,
                         lightcolor=PANEL_ALT, darkcolor=PANEL_ALT,
                         arrowcolor=MUTED, width=11, arrowsize=11)
-        style.map("YM.Horizontal.TScrollbar", background=[("active", "#663347")])
+        style.map("YM.Horizontal.TScrollbar", background=[("active", "#CBD5E4")])
         style.configure("YM.TCombobox", fieldbackground=PANEL_ALT, background=PANEL_ALT,
                         foreground=TEXT, arrowcolor=TEXT, selectbackground=PANEL_ALT,
                         selectforeground=TEXT, padding=(12, 9))
@@ -207,18 +210,18 @@ class ConnectorApp:
         return label
 
     def _button(self, parent, text, command, *, primary=False, quiet=False, width=None):
-        background = ACCENT if primary else (PANEL_ALT if quiet else "#3a2130")
-        foreground = BACKGROUND if primary else TEXT
+        background = ACCENT if primary else (PANEL_ALT if quiet else "#E6EAF9")
+        foreground = "#FFFFFF" if primary else TEXT
         opts = {"text": text, "command": command, "bg": background, "fg": foreground,
-                "activebackground": "#ff7590" if primary else "#552d3d",
-                "activeforeground": BACKGROUND if primary else TEXT,
+                "activebackground": "#586BE5" if primary else "#E0E8F5",
+                "activeforeground": "#FFFFFF" if primary else TEXT,
                 "font": (FONT, 10, "bold"), "relief": "flat", "bd": 0,
                 "cursor": "hand2", "padx": 15, "pady": 10,
                 "highlightthickness": 2, "highlightbackground": background,
                 "highlightcolor": ACCENT, "takefocus": True}
         if width:
             opts["width"] = width
-        opts["disabledforeground"] = "#948590"
+        opts["disabledforeground"] = "#8994A4"
         return AnimatedButton(parent, motion=self.motion_var.get, **opts)
 
     def _actions(self, parent, specifications, *, minimum=132):
@@ -247,11 +250,11 @@ class ConnectorApp:
     def _responsive_layout(self):
         self._layout_job = None
         compact = self.root.winfo_width() < 1060
-        self.sidebar.configure(width=174 if compact else 210)
-        self.workspace.configure(padx=20 if compact else 30, pady=20)
+        self.sidebar.configure(width=162 if compact else 202)
+        self.workspace.configure(padx=17 if compact else 29, pady=16 if compact else 21)
         short = self.root.winfo_height() < 660
         self.sidebar_footer.configure(pady=12 if short else 20)
-        self.environment_label.configure(text="●  STAGING" if short else "●  STAGING ENVIRONMENT")
+        self.environment_label.configure(text="●  PREVIEW" if short else "●  PREVIEW WORKSPACE")
         self.sidebar_mode_label.configure(text="Journal + optional copier" if short else "Trade journal + optional copying, with your permission")
         if short:
             self.sidebar_version_label.pack_forget()
@@ -321,9 +324,9 @@ class ConnectorApp:
         header.pack(fill="x", pady=(0, 17))
         copy = tk.Frame(header, bg=BACKGROUND)
         copy.pack(side="left", fill="both", expand=True)
-        self._label(copy, "YOUR TRADING CONNECTION  /  TEST SPACE", size=8, bold=True,
-                    color=ACCENT).pack(anchor="w", pady=(0, 6))
-        self._label(copy, title, size=22, bold=True).pack(anchor="w", pady=(0, 7))
+        self._label(copy, "YOUNGMONEY  /  ACCOUNT CONNECTIONS", size=8, bold=True,
+                    color=ACCENT).pack(anchor="w", pady=(0, 7))
+        self._label(copy, title, size=25, bold=True).pack(anchor="w", pady=(0, 7))
         self._label(copy, description, size=10, color=MUTED,
                     wrap=470).pack(anchor="w")
         art = self._draw_header_art(header, title)
@@ -348,7 +351,7 @@ class ConnectorApp:
         wordmark.pack(side="left", fill="x", expand=True)
         self._label(wordmark, "YOUNGMONEY3", size=8, bold=True, color=ACCENT).pack(anchor="w")
         self._label(wordmark, "CONNECTOR", size=12, bold=True).pack(anchor="w", pady=(2, 0))
-        self._label(brand, "Your accounts, one place.", size=9, color=MUTED, wrap=150).pack(anchor="w")
+        self._label(brand, "Your trading companion.", size=9, color=MUTED, wrap=160).pack(anchor="w")
         tk.Frame(self.sidebar, bg=BORDER, height=1).pack(fill="x", padx=18, pady=(0, 18))
         self.nav_buttons = {}
         for key, title in self.NAV:
@@ -365,10 +368,10 @@ class ConnectorApp:
         tk.Frame(self.sidebar, bg=SIDEBAR).pack(fill="both", expand=True)
         foot = self.sidebar_footer = tk.Frame(self.sidebar, bg=SIDEBAR, padx=18, pady=20)
         foot.pack(fill="x")
-        self.environment_label = self._label(foot, "●  STAGING ENVIRONMENT", size=9,
+        self.environment_label = self._label(foot, "●  PREVIEW WORKSPACE", size=9,
                                              color=ACCENT, wrap=155, bold=True)
         self.environment_label.pack(anchor="w")
-        self.sidebar_mode_label = self._label(foot, "Journal records trades; copying is optional", color=MUTED,
+        self.sidebar_mode_label = self._label(foot, "Your accounts stay in your control.", color=MUTED,
                                               size=9, wrap=155)
         self.sidebar_mode_label.pack(anchor="w", pady=(6, 0))
         self.sidebar_version_label = self._label(foot, "v" + VERSION + "   •   Windows x64",
@@ -379,10 +382,10 @@ class ConnectorApp:
         right.pack(side="left", fill="both", expand=True)
         header = tk.Frame(right, bg=BACKGROUND)
         header.pack(fill="x", pady=(0, 16))
-        bridge_label = self._label(header, "YOUR ACCOUNTS  /  CONNECTED WITH MT5", size=10, bold=True,
+        bridge_label = self._label(header, "MT5 CONNECTIONS", size=10, bold=True,
                                    color=ACCENT)
         bridge_label.pack(side="left")
-        safety_label = self._label(header, "Journal tracks trades · Copying needs your approval", size=9,
+        safety_label = self._label(header, "MONITORING IS READ-ONLY  ·  COPYING REQUIRES APPROVAL", size=8,
                                    color=MUTED)
         safety_label.pack(side="right")
         def fit_topbar(event):
@@ -393,7 +396,7 @@ class ConnectorApp:
         header.bind("<Configure>", fit_topbar, add="+")
         tk.Frame(right, bg=BORDER, height=1).pack(fill="x")
         self.page_host = tk.Frame(right, bg=BACKGROUND)
-        self.page_host.pack(fill="both", expand=True, pady=(22, 12))
+        self.page_host.pack(fill="both", expand=True, pady=(16, 4))
         self.pages = {}
         for key, _ in self.NAV:
             page = tk.Frame(self.page_host, bg=BACKGROUND)
@@ -408,7 +411,7 @@ class ConnectorApp:
         footer = tk.Frame(right, bg=BACKGROUND)
         footer.pack(fill="x", pady=(2, 0))
         self._label(footer, textvar=self.banner_var, size=9,
-                    color=WARM, wrap=1000).pack(fill="x", pady=(0, 10))
+                    color=MUTED, wrap=1000).pack(fill="x", pady=(0, 4))
         self.tour_strip = tk.Frame(footer, bg=PANEL_ALT,
                                    highlightbackground=BORDER, highlightthickness=1,
                                    padx=12, pady=10)
@@ -425,7 +428,7 @@ class ConnectorApp:
                        activebackground=BACKGROUND, activeforeground=TEXT,
                        font=(FONT, 9), cursor="hand2", highlightthickness=0,
                        takefocus=True).pack(side="left")
-        self._label(footer_actions, "YOUR TRADES STAY YOURS", color=MUTED, size=8).pack(side="left", padx=12)
+        self._label(footer_actions, "Private connection  ·  No orders without your permission", color=MUTED, size=8).pack(side="left", padx=12)
         self._button(footer_actions, "Open dashboard  ↗", lambda: webbrowser.open(STAGING_URL),
                      quiet=True).pack(side="right")
         self.show_page("overview")
@@ -840,7 +843,7 @@ class ConnectorApp:
         self.pages[key].tkraise()
         for item, button in self.nav_buttons.items():
             selected = item == key
-            button.set_tones(PANEL_ALT if selected else SIDEBAR, "#31212d")
+            button.set_tones("#E8ECFC" if selected else SIDEBAR, "#EEF1FA")
             button.configure(fg=ACCENT if selected else MUTED)
         if key in ("sessions", "copy"):
             self.refresh_sessions()
@@ -858,7 +861,7 @@ class ConnectorApp:
 
     def _attach_context_menu(self):
         menu = tk.Menu(self.code_input, tearoff=0, bg=PANEL_ALT, fg=TEXT,
-                       activebackground="#552d3d", activeforeground=TEXT)
+                       activebackground="#E8ECFC", activeforeground=TEXT)
         menu.add_command(label="Cut", command=lambda: self.code_input.event_generate("<<Cut>>"))
         menu.add_command(label="Copy", command=lambda: self.code_input.event_generate("<<Copy>>"))
         menu.add_command(label="Paste", command=self.paste_code)
