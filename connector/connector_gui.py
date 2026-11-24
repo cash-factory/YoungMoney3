@@ -1187,7 +1187,7 @@ class ConnectorApp:
     def _selected(self):
         selected = self.session_table.selection()
         if not selected:
-            raise SessionError("Select a session from the table first.")
+            raise SessionError("Choose an account first.")
         sid = selected[0]
         return next(s for s in self.store.snapshot() if s["id"] == sid)
 
@@ -1223,7 +1223,7 @@ class ConnectorApp:
         session = self._selected()
         linked = self.account_by_slot.get(session["terminal"])
         if not linked or not linked.get("link"):
-            raise SessionError("Select a linked broker session before changing copy permissions.")
+            raise SessionError("Choose a connected receiving account first.")
         return session["terminal"], str(linked["link"])
 
     def _copy_account_identity(self, link):
@@ -1258,22 +1258,21 @@ class ConnectorApp:
         try:
             slot, link = self._selected_copy_target()
         except (SessionError, StopIteration) as error:
-            messagebox.showwarning("Copy permissions", str(error), parent=self.root)
+            messagebox.showwarning("Copying permission", trader_message(error), parent=self.root)
             return
-        if not messagebox.askyesno("Authorize DEMO execution on selected account",
-            "This grants real MT5 order placement on this selected DEMO follower "
-            "when you separately arm its Copy Fleet on the website. "
-            "The broker can still reject orders, prices may slip, and you may "
-            "incur simulated losses. This permission DOES NOT apply to real accounts. "
-            "All other broker accounts remain unauthorized. Continue?", parent=self.root):
+        if not messagebox.askyesno("Allow this account to copy demo trades?",
+            "This lets the selected demo account receive copied orders after you "
+            "separately switch on its fleet on the website. Demo money is simulated. "
+            "Orders can still fail or fill at a different price. "
+            "Your other accounts remain unaffected. Continue?", parent=self.root):
             return
-        answer = simpledialog.askstring("Confirm demo execution",
-            "To confirm local permission for this one selected broker account, type DEMO:",
+        answer = simpledialog.askstring("Confirm demo copying",
+            "To approve this demo account on your computer, type DEMO:",
             parent=self.root)
         if answer != "DEMO":
-            self.banner_var.set("No demo execution permission was granted.")
+            self.banner_var.set("Demo copying remains off for this account.")
             return
-        self.banner_var.set("Authorizing this DEMO follower locally…")
+        self.banner_var.set("Saving demo copying permission for this account…")
         threading.Thread(target=self._copy_consent_worker,args=(slot,link,True,"demo"),
                          daemon=True,name="YMFX-demo-consent").start()
 
@@ -1282,7 +1281,7 @@ class ConnectorApp:
             slot, link = self._selected_copy_target()
             login, server = self._copy_account_identity(link)
         except (SessionError, StopIteration) as error:
-            messagebox.showwarning("Live copy authorization", str(error), parent=self.root)
+            messagebox.showwarning("Live copying", trader_message(error), parent=self.root)
             return
         if not messagebox.askyesno("REAL MONEY — authorize selected MT5 account",
             "You are granting permission for this exact MT5 account to receive REAL broker "
@@ -1299,9 +1298,9 @@ class ConnectorApp:
             "Type "+phrase+" to authorize this specific account for live trade copying:",
             parent=self.root)
         if answer!=phrase:
-            self.banner_var.set("No live broker execution permission was granted.")
+            self.banner_var.set("Live copying remains off for this account.")
             return
-        self.banner_var.set("Saving account-bound LIVE copying permission locally…")
+        self.banner_var.set("Saving your live copying permission for this account…")
         threading.Thread(target=self._copy_consent_worker,args=(slot,link,True,"live"),
                          daemon=True,name="YMFX-live-consent").start()
 
@@ -1309,10 +1308,10 @@ class ConnectorApp:
         try:
             slot, link = self._selected_copy_target()
         except (SessionError, StopIteration) as error:
-            messagebox.showwarning("Copy permissions", str(error), parent=self.root)
+            messagebox.showwarning("Copying permission", trader_message(error), parent=self.root)
             return
         # Revocation is always available; no confirmation needed to halt new work.
-        self.banner_var.set("Revoking local trade-copy execution permission…")
+        self.banner_var.set("Turning off trade copying for this account…")
         threading.Thread(target=self._copy_consent_worker,args=(slot,link,False),
                          daemon=True,name="YMFX-demo-disable").start()
 
@@ -1321,7 +1320,7 @@ class ConnectorApp:
             slot, link = self._selected_copy_target()
             session = self._selected()
         except (SessionError, StopIteration) as error:
-            messagebox.showwarning("Account insights", str(error), parent=self.root)
+            messagebox.showwarning("Account details", trader_message(error), parent=self.root)
             return
         account = self.account_by_slot.get(slot,{})
         def read():
@@ -1453,7 +1452,7 @@ class ConnectorApp:
             self.refresh_sessions()
         except (SessionError, OSError, ValueError, StopIteration) as error:
             self._log("This account needs attention: " + str(error))
-            messagebox.showwarning("Session manager", str(error))
+            messagebox.showwarning("Account needs attention", trader_message(error))
 
     def _copy_named_terminal(self, source, name):
         if self.copy_worker and self.copy_worker.is_alive():
