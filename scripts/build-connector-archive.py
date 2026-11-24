@@ -16,6 +16,7 @@ FILES = {
     "lifecycle.py": "connector/lifecycle.py",
     "connector_gui.py": "connector/connector_gui.py",
     "studio_ui.py": "connector/studio_ui.py",
+    "trader_ui.py": "connector/trader_ui.py",
     "managed_accounts.py": "connector/managed_accounts.py",
     "terminal_launch.py": "connector/terminal_launch.py",
     "managed_mcp.py": "connector/managed_mcp.py",
