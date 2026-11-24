@@ -466,7 +466,7 @@ class ConnectorApp:
         next_card = self.overview_next = self._card(self.overview_columns,22)
         self._label(next_card,"WHAT WOULD YOU LIKE TO DO?",size=9,bold=True,
                     color=MUTED).pack(anchor="w",pady=(0,10))
-        self._label(next_card,"Get trading",size=20,bold=True).pack(anchor="w")
+        self._label(next_card,"Next steps",size=20,bold=True).pack(anchor="w")
         self._label(next_card,textvar=self.queue_var,color=MUTED,size=10,
                     wrap=400).pack(anchor="w",pady=(7,14))
         self.quick_setup_actions = self._actions(next_card,[
@@ -653,7 +653,7 @@ class ConnectorApp:
                 right=tk.Frame(row,bg=PANEL)
                 right.pack(side="right")
                 status=self._session_state(record)
-                positive=status in ("Synced","Capturing","Ready")
+                positive=status in ("Synced","Capturing")
                 chip=tk.Label(right,text=("●  "+status),
                               font=(FONT,9,"bold"),
                               fg=SUCCESS if positive else (DANGER if "issue" in status.lower()
@@ -1425,6 +1425,15 @@ class ConnectorApp:
                 mapping[label]=session["id"]
         self.copy_choice_map=mapping
         self.copy_account_combo.configure(values=list(mapping))
+        for button in self.copy_action_buttons.buttons:
+            button.configure(state="normal" if mapping else "disabled")
+        self.copy_web_actions.buttons[1].configure(
+            state="normal" if mapping else "disabled")
+        if not mapping:
+            self.copy_permission_var.set("No receiving account connected")
+            self.copy_help_var.set(
+                "Add an account in My accounts first. Permissions are given per receiving account.")
+            self.copy_route.set_state("off")
         if mapping:
             self.copy_add_account_button.pack_forget()
         elif not self.copy_add_account_button.winfo_manager():
