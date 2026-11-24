@@ -140,6 +140,7 @@ class ConnectorApp:
         self.account_attention_var = tk.StringVar(value="0")
         self.connection_badge_var = tk.StringVar(
             value="● SAVED PAIRING" if self.paired else "● SETUP NEEDED")
+        self.account_search_var = tk.StringVar()
         self._configure_ttk()
         self._build()
         self.root.bind("<Configure>", self._queue_responsive_layout, add="+")
@@ -523,6 +524,18 @@ class ConnectorApp:
             ("Open dashboard",self.open_dashboard,{"quiet":True}),
             ("More options",self.toggle_advanced,{"quiet":True})],minimum=150)
         self.session_tools.pack_configure(pady=(0,14))
+        find=tk.Frame(page,bg=BACKGROUND)
+        find.pack(fill="x",pady=(0,11))
+        self._label(find,"Find an account",size=10,bold=True).pack(side="left")
+        self.account_search_entry=tk.Entry(
+            find,textvariable=self.account_search_var,
+            font=(FONT,10),bg=PANEL,fg=TEXT,insertbackground=TEXT,
+            relief="flat",highlightthickness=1,
+            highlightbackground=BORDER,highlightcolor=ACCENT)
+        self.account_search_entry.pack(side="right",ipady=7,fill="x",expand=True,
+                                       padx=(16,0))
+        self.account_search_var.trace_add(
+            "write",lambda *_:self._render_account_cards(force=True))
 
         # Keep Treeview as the proven keyboard-addressable selection model.
         # The trader sees account cards instead of a filesystem-style table.
@@ -541,6 +554,15 @@ class ConnectorApp:
         self.account_rows_host.pack(fill="x",pady=(0,12))
         self._account_signature=None
         self.empty_accounts=self._card(self.account_rows_host,24)
+        self.no_matching_accounts=self._card(self.account_rows_host,18)
+        self._label(self.no_matching_accounts,"No accounts match your search",
+                    size=12,bold=True).pack(anchor="w")
+        self._label(self.no_matching_accounts,
+                    "Try a different broker name, nickname or account number.",
+                    size=10,color=MUTED).pack(anchor="w",pady=(5,11))
+        self._button(self.no_matching_accounts,"Clear search",
+                     lambda:self.account_search_var.set(""),
+                     quiet=True).pack(anchor="w")
         empty=tk.Frame(self.empty_accounts,bg=PANEL)
         empty.pack(fill="x")
         symbol=tk.Canvas(empty,width=58,height=60,bg=PANEL,highlightthickness=0)
@@ -615,9 +637,15 @@ class ConnectorApp:
 
     def _render_account_cards(self,force=False):
         entries=self.store.snapshot()
+        query=self.account_search_var.get().strip().lower()
+        visible=[s for s in entries if not query or query in (
+            str(s["name"])+" "+
+            str(self.account_by_slot.get(s["terminal"],{}).get("server") or "")+" "+
+            str(self.account_by_slot.get(s["terminal"],{}).get("login") or "")
+        ).lower()]
         selected=self.session_table.selection()
         active=selected[0] if selected else None
-        signature=tuple((s["id"],s["name"],s["enabled"],
+        signature=tuple((s["id"],s["name"],s["enabled"],query,
                          self._session_state(s),
                          str(self.account_by_slot.get(s["terminal"],{}).get("login") or ""),
                          s["id"]==active) for s in entries)
@@ -625,11 +653,12 @@ class ConnectorApp:
             return
         self._account_signature=signature
         for widget in list(self.account_rows_host.winfo_children()):
-            if widget is not self.empty_accounts:
+            if widget is not self.empty_accounts and widget is not self.no_matching_accounts:
                 widget.destroy()
-        if entries:
-            self.empty_accounts.pack_forget()
-            for record in entries:
+        self.empty_accounts.pack_forget()
+        self.no_matching_accounts.pack_forget()
+        if entries and visible:
+            for record in visible:
                 info=self.account_by_slot.get(record["terminal"],{})
                 selected_now=record["id"]==active
                 row=tk.Frame(self.account_rows_host,bg=PANEL,
@@ -663,7 +692,7 @@ class ConnectorApp:
                 chip.pack(anchor="e",pady=(0,7))
                 self._button(right,"Manage account",lambda sid=record["id"]:
                              self._select_account(sid),quiet=True).pack(anchor="e")
-            if active and self.session_table.exists(active):
+            if active and active in {s["id"] for s in visible}:
                 if not self.account_detail.winfo_manager():
                     self.account_detail.pack(fill="x",pady=(3,13),
                                               after=self.account_rows_host)
@@ -671,7 +700,10 @@ class ConnectorApp:
                 self.account_detail.pack_forget()
         else:
             self.account_detail.pack_forget()
-            self.empty_accounts.pack(fill="x",pady=(0,8))
+            if entries:
+                self.no_matching_accounts.pack(fill="x",pady=(0,8))
+            else:
+                self.empty_accounts.pack(fill="x",pady=(0,8))
 
     def _build_copy(self):
         page=self._scrollable_page("copy")
