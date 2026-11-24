@@ -31,20 +31,21 @@ from managed_accounts import ManagedAccounts, discover_installations, INSTALL_PA
 from studio_ui import AnimatedButton, ResponsiveActions, ConnectionPath, StudioArt, brand_mark, windows_motion_enabled, restart_wait_seconds
 from version import VERSION
 from copy_execution import prepare_database as prepare_copy_database, set_consent as update_copy_consent
+from trader_ui import TradeJourney, permission_summary, trader_message
 
 STAGING_URL = "https://ym-fx-staging.ethical-hacker263.workers.dev"
 ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "YMFX" / "staging-gui"
 SETTINGS = ROOT / "preferences.json"
-BACKGROUND = "#09090d"
-SIDEBAR = "#111014"
-PANEL = "#18151b"
-PANEL_ALT = "#241c25"
-BORDER = "#473341"
-TEXT = "#f8f3f5"
-MUTED = "#bcb1b9"
-ACCENT = "#ff365c"
-WARM = "#f9c9ab"
-DANGER = "#ff8da7"
+BACKGROUND = "#0b1119"
+SIDEBAR = "#101924"
+PANEL = "#16212c"
+PANEL_ALT = "#21313d"
+BORDER = "#30424c"
+TEXT = "#f5f8fa"
+MUTED = "#aabcc8"
+ACCENT = "#ff5770"
+WARM = "#ffd294"
+DANGER = "#ff8f99"
 FONT = "Segoe UI"
 
 
@@ -53,9 +54,9 @@ def terminal_candidates():
 
 
 class ConnectorApp:
-    NAV = (("overview", "Overview"), ("sessions", "Accounts"),
-           ("pair", "Pair this PC"), ("activity", "Activity"),
-           ("help", "Setup & help"))
+    NAV = (("overview", "Home"), ("sessions", "My accounts"),
+           ("copy", "Trade copying"), ("pair", "Connect this PC"),
+           ("activity", "Recent activity"), ("help", "Help"))
 
     def __init__(self, root, *, restore=True):
         self.root = root
@@ -124,7 +125,14 @@ class ConnectorApp:
         self.code_var = tk.StringVar()
         self.code_error_var = tk.StringVar(value="32-character code • only used once, never stored in this app")
         self.pair_elapsed_var = tk.StringVar(value="")
-        self.selected_details_var = tk.StringVar(value="Select a session to manage its account.")
+        self.selected_details_var = tk.StringVar(value="Select an account to see its details.")
+        self.copy_account_choice = tk.StringVar(value="")
+        self.copy_choice_map = {}
+        self.copy_permission_var = tk.StringVar(value="Choose a receiving account")
+        self.copy_help_var = tk.StringVar(value="Select the account that should receive copied trades.")
+        self.account_total_var = tk.StringVar(value="0")
+        self.account_active_var = tk.StringVar(value="0")
+        self.account_attention_var = tk.StringVar(value="0")
         self._configure_ttk()
         self._build()
         self.root.bind("<Configure>", self._queue_responsive_layout, add="+")
@@ -140,8 +148,15 @@ class ConnectorApp:
         self._poll_job = self.root.after(160, self.poll)
 
     def _configure_ttk(self):
-        style = ttk.Style(self.root)
-        style.theme_use("clam")
+        # ttkbootstrap gives native data controls a consistent contemporary
+        # appearance. The original high-contrast ttk styles remain a safe
+        # fallback for source-only installations without the optional theme.
+        try:
+            import ttkbootstrap
+            style = ttkbootstrap.Style(theme="darkly")
+        except ImportError:
+            style = ttk.Style(self.root)
+            style.theme_use("clam")
         style.configure("YM.Treeview", background=PANEL, fieldbackground=PANEL,
                         foreground=TEXT, rowheight=42, font=(FONT, 10),
                         relief="flat", borderwidth=0)
@@ -160,6 +175,11 @@ class ConnectorApp:
                         lightcolor=PANEL_ALT, darkcolor=PANEL_ALT,
                         arrowcolor=MUTED, width=11, arrowsize=11)
         style.map("YM.Horizontal.TScrollbar", background=[("active", "#663347")])
+        style.configure("YM.TCombobox", fieldbackground=PANEL_ALT, background=PANEL_ALT,
+                        foreground=TEXT, arrowcolor=TEXT, selectbackground=PANEL_ALT,
+                        selectforeground=TEXT, padding=(12, 9))
+        style.map("YM.TCombobox", fieldbackground=[("readonly", PANEL_ALT)],
+                  foreground=[("readonly", TEXT)])
         style.configure("YM.Horizontal.TProgressbar", troughcolor=PANEL_ALT,
                         background=ACCENT, borderwidth=0, bordercolor=PANEL_ALT,
                         lightcolor=ACCENT, darkcolor=ACCENT, thickness=5)
@@ -296,7 +316,7 @@ class ConnectorApp:
         header.pack(fill="x", pady=(0, 17))
         copy = tk.Frame(header, bg=BACKGROUND)
         copy.pack(side="left", fill="both", expand=True)
-        self._label(copy, "THE DESK  /  STAGING", size=8, bold=True,
+        self._label(copy, "YOUR TRADING CONNECTION  /  TEST SPACE", size=8, bold=True,
                     color=ACCENT).pack(anchor="w", pady=(0, 6))
         self._label(copy, title, size=22, bold=True).pack(anchor="w", pady=(0, 7))
         self._label(copy, description, size=10, color=MUTED,
@@ -323,7 +343,7 @@ class ConnectorApp:
         wordmark.pack(side="left", fill="x", expand=True)
         self._label(wordmark, "YOUNGMONEY3", size=8, bold=True, color=ACCENT).pack(anchor="w")
         self._label(wordmark, "CONNECTOR", size=12, bold=True).pack(anchor="w", pady=(2, 0))
-        self._label(brand, "Trading evidence, in sync.", size=9, color=MUTED, wrap=150).pack(anchor="w")
+        self._label(brand, "Your accounts, one place.", size=9, color=MUTED, wrap=150).pack(anchor="w")
         tk.Frame(self.sidebar, bg=BORDER, height=1).pack(fill="x", padx=18, pady=(0, 18))
         self.nav_buttons = {}
         for key, title in self.NAV:
@@ -331,7 +351,7 @@ class ConnectorApp:
             row.pack(fill="x", pady=3)
             button = AnimatedButton(row, motion=self.motion_var.get,
                                text=title, command=lambda page=key: self.show_page(page),
-                               font=(FONT, 11), anchor="w", padx=14, pady=13,
+                               font=(FONT, 11), anchor="w", padx=14, pady=10,
                                bg=SIDEBAR, fg=MUTED, relief="flat", borderwidth=0,
                                activebackground=PANEL_ALT, activeforeground=TEXT,
                                cursor="hand2", takefocus=True)
@@ -354,10 +374,10 @@ class ConnectorApp:
         right.pack(side="left", fill="both", expand=True)
         header = tk.Frame(right, bg=BACKGROUND)
         header.pack(fill="x", pady=(0, 16))
-        bridge_label = self._label(header, "MT5  /  THE CONNECTION BRIDGE", size=10, bold=True,
+        bridge_label = self._label(header, "YOUR ACCOUNTS  /  CONNECTED WITH MT5", size=10, bold=True,
                                    color=ACCENT)
         bridge_label.pack(side="left")
-        safety_label = self._label(header, "READ-ONLY  •  NO TRADING COMMANDS", size=9,
+        safety_label = self._label(header, "Journal tracks trades · Copying needs your approval", size=9,
                                    color=MUTED)
         safety_label.pack(side="right")
         def fit_topbar(event):
@@ -366,7 +386,6 @@ class ConnectorApp:
                                          pady=(0, 5 if narrow else 0))
             safety_label.pack_configure(side="top" if narrow else "right", anchor="w")
         header.bind("<Configure>", fit_topbar, add="+")
-        tk.Frame(right, bg=ACCENT, height=3).pack(fill="x")
         tk.Frame(right, bg=BORDER, height=1).pack(fill="x")
         self.page_host = tk.Frame(right, bg=BACKGROUND)
         self.page_host.pack(fill="both", expand=True, pady=(22, 12))
@@ -377,6 +396,7 @@ class ConnectorApp:
             self.pages[key] = page
         self._build_overview()
         self._build_sessions()
+        self._build_copy()
         self._build_pairing()
         self._build_activity()
         self._build_help()
@@ -392,7 +412,7 @@ class ConnectorApp:
                        activebackground=BACKGROUND, activeforeground=TEXT,
                        font=(FONT, 9), cursor="hand2", highlightthickness=0,
                        takefocus=True).pack(side="left")
-        self._label(footer_actions, "CAPTURE ONLY", color=MUTED, size=8).pack(side="left", padx=12)
+        self._label(footer_actions, "YOUR TRADES STAY YOURS", color=MUTED, size=8).pack(side="left", padx=12)
         self._button(footer_actions, "Open dashboard  ↗", lambda: webbrowser.open(STAGING_URL),
                      quiet=True).pack(side="right")
         self.show_page("overview")
@@ -402,36 +422,50 @@ class ConnectorApp:
         self._stack_heading(page, "Account monitor", "A dedicated connection for every MT5 account.")
         hero = self._card(page, 24)
         hero.pack(fill="x", pady=(0, 16))
-        self._label(hero, "CONNECTION STATUS", size=9, bold=True, color=MUTED).pack(anchor="w")
+        self._label(hero, "HOW YOUR CONNECTION IS DOING", size=9, bold=True, color=MUTED).pack(anchor="w")
         self._label(hero, textvar=self.status_var, size=20, bold=True).pack(anchor="w", pady=(4, 8))
         self.connection_path = ConnectionPath(hero, background=PANEL, motion=self.motion_var.get)
         self.connection_path.pack(fill="x", pady=(4, 4))
         self._label(hero, textvar=self.device_var, size=10, color=MUTED, wrap=730).pack(anchor="w")
         self._button(hero, "Rename this PC", self.rename_this_pc, quiet=True).pack(anchor="w", pady=(10, 2))
         self.progress = ttk.Progressbar(hero, style="YM.Horizontal.TProgressbar")
+        numbers = tk.Frame(page, bg=BACKGROUND)
+        numbers.pack(fill="x", pady=(0, 16))
+        for key, label, variable, subtitle in (
+            ("all", "YOUR ACCOUNTS", self.account_total_var, "Connected to this computer"),
+            ("running", "MONITORING", self.account_active_var, "Currently following activity"),
+            ("care", "NEEDS A LOOK", self.account_attention_var, "Paused or needs reconnecting"),
+        ):
+            tile = self._card(numbers, 13)
+            tile.pack(side="left", fill="both", expand=True,
+                      padx=(0, 8) if key != "care" else (0, 0))
+            self._label(tile, label, size=8, color=MUTED, bold=True).pack(anchor="w")
+            self._label(tile, textvar=variable, size=23, bold=True).pack(anchor="w", pady=(5, 3))
+            self._label(tile, subtitle, size=9, color=MUTED, wrap=155).pack(anchor="w")
         next_card = self._card(page, 20)
         next_card.pack(fill="x")
-        self._label(next_card, "Broker accounts", size=15, bold=True).pack(anchor="w")
+        self._label(next_card, "Your next step", size=15, bold=True).pack(anchor="w")
         self._label(next_card, textvar=self.queue_var, color=MUTED, size=10).pack(anchor="w", pady=(6, 12))
         self.quick_setup_actions = self._actions(next_card, [
             ("Add account", self.add_account, {"primary": True}),
             ("Open dashboard", self.open_dashboard, {}),
-            ("View accounts", lambda: self.show_page("sessions"), {"quiet": True})], minimum=144)
+            ("See my accounts", lambda: self.show_page("sessions"), {"quiet": True}),
+            ("Set up copying", lambda: self.show_page("copy"), {"quiet": True})], minimum=144)
 
     def _build_sessions(self):
         page = self._scrollable_page("sessions")
-        self._stack_heading(page, "Account sessions", "Monitor each broker login and its latest journal sync.")
+        self._stack_heading(page, "Account sessions", "Every broker account in one place. Choose one to check or manage it.")
         self.session_tools = self._actions(page, [
             ("Add account", self.add_account, {"primary": True}),
             ("Open dashboard", self.open_dashboard, {}),
-            ("Advanced setup", self.toggle_advanced, {"quiet": True})])
+            ("Extra tools", self.toggle_advanced, {"quiet": True})])
         self.session_tools.pack_configure(pady=(0, 8))
         self.advanced = self._card(page, 14)
-        self._label(self.advanced, "Manual terminal tools", size=11, bold=True).pack(anchor="w")
+        self._label(self.advanced, "Advanced account setup · only when needed", size=11, bold=True).pack(anchor="w")
         advanced = self._actions(self.advanced, [
             ("Create terminal", self.create_named_terminal, {}), ("Duplicate selected", self.duplicate_selected, {}),
             ("Add existing", self.add_session, {}), ("Detect terminals", self.detect_sessions, {}),
-            ("Arm selected", self.arm_selected, {}), ("Open folder", self.open_selected_folder, {}),
+            ("Prepare for next login", self.arm_selected, {}), ("Open folder", self.open_selected_folder, {}),
             ("Open MT5", self.launch_selected, {}), ("Stop connector", self.stop, {})])
         self.create_button, self.duplicate_button = advanced.buttons[:2]
         table_area = self._card(page, 12)
@@ -466,11 +500,9 @@ class ConnectorApp:
             ("Pause", self.pause_selected, {}), ("Rename locally", self.rename_selected, {"quiet": True}),
             ("Remove local session", self.remove_selected, {"quiet": True})], minimum=126)
         self.copy_controls = self._actions(detail, [
-            ("Account insights", self.inspect_selected_account, {"quiet": True}),
-            ("Authorize DEMO copier", self.authorize_selected_demo_copy, {}),
-            ("Authorize LIVE copier", self.authorize_selected_live_copy, {}),
-            ("Disable copier on account", self.disable_selected_demo_copy, {"quiet": True}),
-            ("Open Copy Studio", lambda: webbrowser.open(STAGING_URL + "/#copy-studio"), {"quiet": True})],
+            ("Account details", self.inspect_selected_account, {"quiet": True}),
+            ("Copying permissions", lambda: self.show_page("copy"), {}),
+            ("Open Copy Fleet", lambda: webbrowser.open(STAGING_URL + "/#copy-studio"), {"quiet": True})],
             minimum=158)
         self.copy_controls.pack_configure(pady=(10, 0))
 
@@ -583,7 +615,7 @@ class ConnectorApp:
     def _build_help(self):
         page = self._scrollable_page("help")
         self._stack_heading(page, "Setup & troubleshooting",
-                            "Everything needed to prepare isolated broker terminals for capture.")
+                            "Plain-language answers for connecting and monitoring your accounts.")
         for title, desc in [
             ("Pair this PC once",
              "In the dashboard, choose MT5 Connections and Pair a PC. Paste the code in this app. "
@@ -616,8 +648,8 @@ class ConnectorApp:
         if key == "sessions":
             self.refresh_sessions()
         titles = {"overview": "Account monitor", "sessions": "Account sessions",
-                  "pair": "Connect this PC", "activity": "Activity & diagnostics",
-                  "help": "Setup & troubleshooting"}
+                  "copy": "Trade copying", "pair": "Connect this PC",
+                  "activity": "Activity & diagnostics", "help": "Setup & troubleshooting"}
         art = self.header_art.get(titles.get(key))
         if art:
             art.reveal()
