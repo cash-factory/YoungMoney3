@@ -107,6 +107,11 @@ class ResponsiveActions(tk.Frame):
         self._job = None
         self._signature = None
         self._last_width = None
+        # A toolbar must not resize its parent as it changes row count.
+        # The surrounding card sets the available width, and this toolbar
+        # explicitly reserves enough height for the selected number of rows.
+        self.grid_propagate(False)
+        self.configure(height=50)
         self.bind("<Configure>", self._queue_layout, add="+")
         self.bind("<Destroy>", self._cleanup, add="+")
 
@@ -148,6 +153,10 @@ class ResponsiveActions(tk.Frame):
         if signature == self._signature:
             return
         self._signature = signature
+        row_height=max(button.winfo_reqheight() for button in self.buttons)
+        target_height=len(rows)*(row_height+self.gap)
+        if self.winfo_height()!=target_height and int(self.cget("height"))!=target_height:
+            self.configure(height=target_height)
         for button in self.buttons:
             button.grid_forget()
         # Clear unused weights from any previous row layout.
