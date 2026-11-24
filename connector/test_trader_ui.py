@@ -24,7 +24,7 @@ class LanguageTests(unittest.TestCase):
             self.assertNotIn(code,trader_message(code))
         self.assertIn("MetaTrader account",trader_message("wrong_terminal"))
         self.assertIn("retry",trader_message("Broker capture error (ValueError at connect.py:345)"))
-        self.assertIn("permission",trader_message("account_bound_execution_permission_missing"))
+        self.assertIn("approved",trader_message("account_bound_execution_permission_missing"))
 
 
 @unittest.skipUnless(sys.platform=="win32", "Actual native visual geometry runs on Windows")
