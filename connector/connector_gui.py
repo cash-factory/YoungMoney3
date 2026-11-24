@@ -435,41 +435,72 @@ class ConnectorApp:
 
     def _build_overview(self):
         page = self._scrollable_page("overview")
-        self._stack_heading(page, "Your connection", "Keep every trading account connected, even when you use different brokers.")
-        hero = self._card(page, 24)
-        hero.pack(fill="x", pady=(0, 16))
-        self._label(hero, "HOW YOUR CONNECTION IS DOING", size=9, bold=True, color=MUTED).pack(anchor="w")
-        self._label(hero, textvar=self.status_var, size=20, bold=True).pack(anchor="w", pady=(4, 8))
-        self.connection_path = ConnectionPath(hero, background=PANEL, motion=self.motion_var.get)
-        self.connection_path.pack(fill="x", pady=(4, 4))
-        self._label(hero, textvar=self.device_var, size=10, color=MUTED, wrap=730).pack(anchor="w")
-        self.hero_pc_button=self._button(hero,
-            "Rename this computer" if self.paired else "Connect this computer",
+        self._stack_heading(page,"Your trading accounts",
+                            "One quiet place to check your accounts, track trades and manage copying.")
+        self.overview_columns = tk.Frame(page,bg=BACKGROUND)
+        self.overview_columns.pack(fill="x",pady=(0,14))
+        self.overview_columns.grid_columnconfigure(0,weight=2)
+        self.overview_columns.grid_columnconfigure(1,weight=1)
+
+        hero = self.overview_status = self._card(self.overview_columns,24)
+        top = tk.Frame(hero,bg=PANEL)
+        top.pack(fill="x",pady=(0,12))
+        self._label(top,"CONNECTION STATUS",size=9,bold=True,color=MUTED).pack(side="left")
+        self._label(top,"● SECURE LINK",size=8,bold=True,color=SUCCESS).pack(side="right")
+        self._label(hero,textvar=self.status_var,size=25,bold=True).pack(anchor="w",pady=(0,7))
+        self._label(hero,textvar=self.device_var,size=10,color=MUTED,wrap=550).pack(anchor="w")
+        self.connection_path = ConnectionPath(hero,background=PANEL,motion=self.motion_var.get)
+        self.connection_path.pack(fill="x",pady=(14,8))
+        self.hero_pc_button = self._button(
+            hero,"Rename this computer" if self.paired else "Connect this computer",
             self._hero_pc_action,primary=not self.paired,quiet=self.paired)
-        self.hero_pc_button.pack(anchor="w",pady=(10,2))
-        self.progress = ttk.Progressbar(hero, style="YM.Horizontal.TProgressbar")
-        numbers = tk.Frame(page, bg=BACKGROUND)
-        numbers.pack(fill="x", pady=(0, 16))
-        for key, label, variable, subtitle in (
-            ("all", "YOUR ACCOUNTS", self.account_total_var, "Connected to this computer"),
-            ("running", "MONITORING", self.account_active_var, "Currently following activity"),
-            ("care", "NEEDS A LOOK", self.account_attention_var, "Paused or needs reconnecting"),
-        ):
-            tile = self._card(numbers, 13)
-            tile.pack(side="left", fill="both", expand=True,
-                      padx=(0, 8) if key != "care" else (0, 0))
-            self._label(tile, label, size=8, color=MUTED, bold=True).pack(anchor="w")
-            self._label(tile, textvar=variable, size=23, bold=True).pack(anchor="w", pady=(5, 3))
-            self._label(tile, subtitle, size=9, color=MUTED, wrap=155).pack(anchor="w")
-        next_card = self._card(page, 20)
-        next_card.pack(fill="x")
-        self._label(next_card, "Your next step", size=15, bold=True).pack(anchor="w")
-        self._label(next_card, textvar=self.queue_var, color=MUTED, size=10).pack(anchor="w", pady=(6, 12))
-        self.quick_setup_actions = self._actions(next_card, [
-            ("Add account", self.add_account, {"primary": True}),
-            ("Open dashboard", self.open_dashboard, {}),
-            ("See my accounts", lambda: self.show_page("sessions"), {"quiet": True}),
-            ("Set up copying", lambda: self.show_page("copy"), {"quiet": True})], minimum=144)
+        self.hero_pc_button.pack(anchor="w")
+        self.progress = ttk.Progressbar(hero,style="YM.Horizontal.TProgressbar")
+
+        next_card = self.overview_next = self._card(self.overview_columns,22)
+        self._label(next_card,"WHAT WOULD YOU LIKE TO DO?",size=9,bold=True,
+                    color=MUTED).pack(anchor="w",pady=(0,10))
+        self._label(next_card,"Get trading",size=20,bold=True).pack(anchor="w")
+        self._label(next_card,textvar=self.queue_var,color=MUTED,size=10,
+                    wrap=400).pack(anchor="w",pady=(7,14))
+        self.quick_setup_actions = self._actions(next_card,[
+            ("Add an account",self.add_account,{"primary":True}),
+            ("Set up copying",lambda:self.show_page("copy"),{"quiet":True}),
+            ("Open dashboard",self.open_dashboard,{"quiet":True})],minimum=148)
+        self._label(next_card,"Your journal watches trades. Copying only runs when you approve it.",
+                    size=9,color=MUTED,wrap=400).pack(anchor="w",pady=(13,0))
+        numbers=tk.Frame(page,bg=BACKGROUND)
+        numbers.pack(fill="x",pady=(0,12))
+        self.overview_metrics=[]
+        for index,(label,variable,subtitle) in enumerate((
+            ("YOUR ACCOUNTS",self.account_total_var,"Linked to this computer"),
+            ("UPDATING",self.account_active_var,"Sending trade information"),
+            ("NEED ATTENTION",self.account_attention_var,"Paused or disconnected"),
+        )):
+            card=self._card(numbers,16)
+            card.pack(side="left",fill="both",expand=True,
+                      padx=(0,10) if index!=2 else 0)
+            self._label(card,label,size=9,color=MUTED,bold=True).pack(anchor="w")
+            self._label(card,textvar=variable,size=24,bold=True).pack(anchor="w",pady=(5,3))
+            self._label(card,subtitle,size=9,color=MUTED,wrap=200).pack(anchor="w")
+            self.overview_metrics.append(card)
+        self._arrange_overview()
+
+    def _arrange_overview(self):
+        if not hasattr(self,"overview_columns"):return
+        compact=self.root.winfo_width()<1080
+        for item in (self.overview_status,self.overview_next):
+            item.grid_forget()
+        if compact:
+            self.overview_columns.grid_columnconfigure(0,weight=1)
+            self.overview_columns.grid_columnconfigure(1,weight=0)
+            self.overview_status.grid(row=0,column=0,sticky="ew")
+            self.overview_next.grid(row=1,column=0,sticky="ew",pady=(12,0))
+        else:
+            self.overview_columns.grid_columnconfigure(0,weight=2)
+            self.overview_columns.grid_columnconfigure(1,weight=1)
+            self.overview_status.grid(row=0,column=0,sticky="nsew",padx=(0,12))
+            self.overview_next.grid(row=0,column=1,sticky="nsew")
 
     def _hero_pc_action(self):
         if self.paired:
