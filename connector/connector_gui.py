@@ -944,29 +944,34 @@ class ConnectorApp:
             self.pair_right.grid(row=0,column=1,sticky="nsew")
 
     def _build_activity(self):
-        page = self.pages["activity"]
-        self._stack_heading(page, "Recent activity",
-                            "See what changed, what succeeded, and anything that needs your attention.")
-        tools = tk.Frame(page, bg=BACKGROUND)
-        tools.pack(fill="x", pady=(0, 12))
-        self._button(tools, "Copy support details", self.copy_diagnostics,
-                     primary=True).pack(side="left", padx=(0, 9))
-        self._button(tools, "Clear display", self.clear_activity, quiet=True).pack(side="left")
-        panel = self._card(page, 14)
-        panel.pack(fill="both", expand=True)
-        self.activity_text = tk.Text(panel, wrap="word", bg=BACKGROUND, fg=TEXT,
-                                     selectbackground="#552d3d",
-                                     font=("Consolas", 10), relief="flat",
-                                     borderwidth=0, spacing2=5,
-                                     insertbackground=TEXT, state="disabled")
-        scroll = ttk.Scrollbar(panel, orient="vertical", command=self.activity_text.yview,
-                               style="YM.Vertical.TScrollbar")
+        page=self.pages["activity"]
+        self._stack_heading(page,"Recent activity",
+                            "See account updates and find out what needs attention.")
+        tools=tk.Frame(page,bg=BACKGROUND)
+        tools.pack(fill="x",pady=(0,12))
+        self._button(tools,"Copy support information",
+                     self.copy_diagnostics,quiet=True).pack(side="left",padx=(0,9))
+        self._button(tools,"Clear this list",
+                     self.clear_activity,quiet=True).pack(side="left")
+        panel=self._card(page,21)
+        panel.pack(fill="both",expand=True)
+        self._label(panel,"WHAT'S HAPPENING",size=9,color=MUTED,
+                    bold=True).pack(anchor="w",pady=(0,12))
+        timeline=tk.Frame(panel,bg=PANEL)
+        timeline.pack(fill="both",expand=True)
+        self.activity_text=tk.Text(timeline,wrap="word",
+                                   bg=PANEL,fg=TEXT,selectbackground="#DDE6FF",
+                                   font=(FONT,10),relief="flat",borderwidth=0,
+                                   spacing1=9,spacing2=5,spacing3=8,
+                                   insertbackground=TEXT,state="disabled")
+        scroll=ttk.Scrollbar(timeline,orient="vertical",command=self.activity_text.yview,
+                              style="YM.Vertical.TScrollbar")
         self.activity_text.configure(yscrollcommand=scroll.set)
-        self.activity_text.pack(side="left", fill="both", expand=True)
-        scroll.pack(side="right", fill="y")
-        self._label(page, "No pairing codes, passwords or device tokens are included. "
-                    "Copy the diagnostics when reporting an error.", color=MUTED,
-                    size=9).pack(anchor="w", pady=(10, 0))
+        self.activity_text.pack(side="left",fill="both",expand=True)
+        scroll.pack(side="right",fill="y")
+        self._label(page,
+                    "Only connection updates appear here. Support information does not include passwords or pairing codes.",
+                    color=MUTED,size=9,wrap=840).pack(anchor="w",pady=(11,0))
 
     def _build_help(self):
         page=self._scrollable_page("help")
@@ -1745,7 +1750,8 @@ class ConnectorApp:
         self.log_items = self.log_items[-250:]
         if hasattr(self, "activity_text"):
             self.activity_text.configure(state="normal")
-            self.activity_text.insert("end", value + "\n")
+            self.activity_text.insert("end",
+                timestamp+"   ·   "+trader_message(message)[:300]+"\n")
             lines = int(self.activity_text.index("end-1c").split(".")[0])
             if lines > 255:
                 self.activity_text.delete("1.0", f"{lines - 250}.0")
