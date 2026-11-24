@@ -2,6 +2,7 @@
 import importlib.util
 import os
 import faulthandler
+import _tkinter
 import sys
 import tempfile
 import time
@@ -88,9 +89,14 @@ class ConnectorPresentationTests(unittest.TestCase):
         self._settle()
 
     def _settle(self):
-        for _ in range(5):
-            self.root.update_idletasks()
-            self.root.update()
+        # Tk.update() has no event budget: a newly introduced self-scheduling
+        # layout callback can keep it inside the native event loop forever.
+        # Drain real events until quiescent, but *fail* if the UI keeps
+        # generating work instead of silently passing a frozen desktop.
+        for _ in range(2000):
+            if not self.root.tk.dooneevent(_tkinter.DONT_WAIT):
+                return
+        self.fail("The desktop kept scheduling new UI events instead of settling.")
 
     def assert_actions_fit(self, group):
         left, right = group.winfo_rootx(), group.winfo_rootx() + group.winfo_width()
