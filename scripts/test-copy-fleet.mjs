@@ -210,6 +210,11 @@ try{
   const consentLive=await call('mt5/device/copy-consent',deviceConsent(live,true,'live'),'',token);
   assert.equal(consentLive.status,200,JSON.stringify(consentLive.result));
   assert.equal(consentLive.result.mode,'live');
+  const actualLiveBroker=await call('mt5/device/copy-report',{
+    link:live,balance:1200,equity:1180,freeMargin:1100,currency:'USD',
+    openPositions:0,pendingOrders:0,connected:true,tradeAllowed:true
+  },'',token);
+  assert.equal(actualLiveBroker.status,200,JSON.stringify(actualLiveBroker.result));
   await db.prepare("UPDATE mt5_links SET login='999999' WHERE id=?").bind(live).run();
   assert.equal((await call('copy/fleet-arm',{id:liveFleet,version:1,confirm:true,
     liveConfirmation:confirmation},owner.cookie)).status,409,
