@@ -179,6 +179,7 @@ class ConnectorPresentationTests(unittest.TestCase):
         terminal.write_bytes(b"review fixture only")
         record={"id":"demo-account-1","name":"Demo account", "terminal":str(terminal),
                 "enabled":True}
+        self.app.show_page("sessions")
         with patch.object(self.app.store,"snapshot",return_value=[record]):
             self.app.refresh_sessions()
             self._settle()
