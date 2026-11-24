@@ -99,6 +99,7 @@ class ConnectorApp:
         self.header_art = {}
         self._page_canvases = {}
         self._layout_job = None
+        self._last_root_dimensions = None
         self._poll_job = None
         self.motion_var = tk.BooleanVar(value=windows_motion_enabled())
         self.store = SessionStore(SETTINGS)
@@ -240,6 +241,10 @@ class ConnectorApp:
     def _queue_responsive_layout(self, event=None):
         if event is not None and event.widget is not self.root:
             return
+        dimensions=(self.root.winfo_width(),self.root.winfo_height())
+        if dimensions==self._last_root_dimensions:
+            return
+        self._last_root_dimensions=dimensions
         if self._layout_job is not None:
             self.root.after_cancel(self._layout_job)
         self._layout_job = self.root.after_idle(self._responsive_layout)
