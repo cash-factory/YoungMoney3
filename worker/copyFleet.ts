@@ -10,6 +10,7 @@ type Obj=Record<string,unknown>;
 type Link={id:string;device:string;owner:string;company:string|null;server:string|null;login:string|null;currency:string|null;trade_mode:number|null;access_level:string;status:string;monitoring_paused:number;last_sync:string|null;broker_balance:number|null;broker_equity:number|null;last_seen:number|null};
 type Fleet={id:string;owner:string;name:string;source_link:string;execution_mode:'demo'|'live';state:'paused'|'demo_armed'|'live_armed';version:number;max_age_ms:number;created_at:string;updated_at:string};
 type Target={fleet_id:string;follower_link:string;sizing_mode:string;sizing_value:number;max_lots:number;max_daily_loss_pct:number;symbol_map:string;mirror_pending:number;mirror_protection:number;enabled:number;updated_at:string};
+type BrokerReport={link:string;broker_connected:number;demo_trading_enabled:number;observed_at_ms:number};
 const respond=(v:unknown,status=200)=>Response.json(v,{status,headers:{'cache-control':'no-store','x-content-type-options':'nosniff'}});
 const fail=(s:string,status=400)=>respond({error:s},status);
 const object=(v:unknown):v is Obj=>v!==null&&typeof v==='object'&&!Array.isArray(v);
@@ -43,7 +44,8 @@ async function links(db:D1Database,owner:string):Promise<Link[]>{
   return rows.results;
 }
 type CopierConsent={follower_link:string;broker_login:string|null;broker_server:string|null;expires_at:number};
-function followerIssue(a:Link|undefined,mode:'demo'|'live',consents:CopierConsent[],now=Date.now()):string|null {
+function followerIssue(a:Link|undefined,mode:'demo'|'live',consents:CopierConsent[],
+                       reports:BrokerReport[],now=Date.now()):string|null {
   if(!a)return 'This follower is no longer linked. Add the account again.';
   if(a.trade_mode!==(mode==='live'?2:0))
     return 'This follower is a different account type. Choose a matching demo or live account.';
@@ -55,6 +57,11 @@ function followerIssue(a:Link|undefined,mode:'demo'|'live',consents:CopierConsen
     return 'This account is connected for viewing only. Trade copying needs a trading-enabled broker login.';
   if(!Number.isFinite(Number(a.broker_equity))||Number(a.broker_equity)<=0)
     return 'Current broker equity is missing. Refresh the account connection.';
+  const report=reports.find(r=>r.link===a.id);
+  if(!report||report.broker_connected!==1||Number(report.observed_at_ms)<=now-120000)
+    return 'This broker account has not updated recently. Keep MetaTrader and its Windows connector open until a fresh update appears.';
+  if(report.demo_trading_enabled!==1)
+    return 'This broker login is not currently permitted to place trades. Check the account in MetaTrader.';
   const permission=consents.find(c=>c.follower_link===a.id);
   if(!permission||permission.expires_at<=now)
     return 'Copying permission is missing or needs renewing. Select this account in the Windows connector and choose Allow trade copying.';
@@ -200,19 +207,23 @@ export async function copyFleetOwner(request:Request,env:Env,owner:string,action
     return fail('Live-copy execution remains disabled until broker acceptance is approved.',423);
   if(fleet.execution_mode==='live' && input.liveConfirmation!=='ARM LIVE '+fleet.id.slice(0,8))
     return fail('Live execution requires the fleet-specific confirmation phrase.',409);
-  const [owned,targets,consentRows]=await Promise.all([links(db,owner),
+  const [owned,targets,consentRows,brokerReports]=await Promise.all([links(db,owner),
     q("SELECT * FROM copy_fleet_followers WHERE fleet_id=? AND owner=? AND enabled=1",fleet.id,owner).all<Target>(),
-    q("SELECT follower_link,broker_login,broker_server,expires_at FROM copy_device_consents WHERE owner=? AND demo_authorized=1 AND authorization_mode=? AND expires_at>?",owner,fleet.execution_mode,Date.now()).all<{follower_link:string;broker_login:string|null;broker_server:string|null;expires_at:number}>()]);
+    q("SELECT follower_link,broker_login,broker_server,expires_at FROM copy_device_consents WHERE owner=? AND demo_authorized=1 AND authorization_mode=? AND expires_at>?",owner,fleet.execution_mode,Date.now()).all<CopierConsent>(),
+    q("SELECT link,broker_connected,demo_trading_enabled,observed_at_ms FROM copy_account_reports WHERE owner=?",owner).all<BrokerReport>()]);
   const src=owned.find(x=>x.id===fleet.source_link);
   if(!src||(fleet.execution_mode==='live'&&src.trade_mode!==0&&src.trade_mode!==2)||
      (fleet.execution_mode==='demo'&&src.trade_mode!==0)||src.monitoring_paused!==0||
      Number(src.last_seen)<=Date.now()-45000||Number(src.broker_equity)<=0)
-    return fail('The source must be online, verified and have current broker equity.',409);
-  if(!targets.results.length)return fail('Enable at least one verified follower first.',409);
+    return fail('The main account must be connected and have a current balance. Open MetaTrader and try again.',409);
+  const sourceReport=brokerReports.results.find(r=>r.link===fleet.source_link);
+  if(!sourceReport||sourceReport.broker_connected!==1||Number(sourceReport.observed_at_ms)<=Date.now()-120000)
+    return fail('Your main trading account has not updated recently. Keep MetaTrader and the connector open, then refresh.',409);
+  if(!targets.results.length)return fail('Choose at least one receiving account first.',409);
   for(const target of targets.results) {
     const account=owned.find(x=>x.id===target.follower_link);
     const label=(account?.company||'Follower')+' · account ending '+String(account?.login||'').slice(-4);
-    const reason=followerIssue(account,fleet.execution_mode,consentRows.results);
+    const reason=followerIssue(account,fleet.execution_mode,consentRows.results,brokerReports.results);
     if(reason)return fail(label+': '+reason,409);
   }
   const routing=await q("SELECT f.source_link,t.follower_link FROM copy_fleets f JOIN copy_fleet_followers t ON t.fleet_id=f.id WHERE f.owner=? AND f.state IN ('demo_armed','live_armed') AND t.enabled=1",owner)
