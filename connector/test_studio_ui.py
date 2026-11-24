@@ -73,22 +73,6 @@ class ConnectorPresentationTests(unittest.TestCase):
         with patch.dict(os.environ, {"YMFX_TK_UNIT_TEST": "1"}):
             self.app = module.ConnectorApp(self.root)
         self.app.motion_var.set(False)
-        if os.environ.get("GITHUB_ACTIONS") == "true":
-            from collections import Counter
-            counts=Counter()
-            names=Counter()
-            def count_layout_event(event):
-                counts[str(event.widget.winfo_class())]+=1
-                names[str(event.widget)]+=1
-                total=sum(counts.values())
-                if total in (250,1000,5000,15000):
-                    print("Tk layout activity",total,counts.most_common(8),flush=True)
-                    if total>=1000:
-                        print("Tk hotspot widgets",names.most_common(15),flush=True)
-            self.root.bind_all("<Configure>",count_layout_event,add="+")
-            self.root.after(7000,lambda:print(
-                "Tk layout snapshot",sum(counts.values()),counts.most_common(10),
-                flush=True))
         self.root.deiconify()
         self._settle()
 
