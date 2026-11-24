@@ -871,7 +871,7 @@ class ConnectorApp:
             identity += "  •  Last sync " + receipt[0] + "  •  " + str(receipt[1]) + " decisions awaiting review"
         copy_state = self.copy_authorization_by_slot.get(s["terminal"])
         if copy_state is not None:
-            identity += "  •  DEMO copier " + ("authorized" if copy_state else "disabled")
+            identity += "  •  copying " + ("allowed" if copy_state else "off")
         self.selected_details_var.set(s["name"] + "  •  " + identity)
 
     def _copy_database_path(self):
@@ -1083,6 +1083,29 @@ class ConnectorApp:
                         str(Path(slot).parent)))
         if selected and self.session_table.exists(selected[0]):
             self.session_table.selection_set(selected[0])
+        mapping={}
+        for session in entries:
+            info=self.account_by_slot.get(session["terminal"])
+            if info and info.get("link"):
+                label=(session["name"]+"  ·  "+str(info.get("server") or "Broker")+
+                       "  /  "+str(info.get("login") or "Account"))
+                mapping[label]=session["id"]
+        self.copy_choice_map=mapping
+        self.copy_account_combo.configure(values=list(mapping))
+        if self.copy_account_choice.get() not in mapping:
+            self.copy_account_choice.set(next(iter(mapping), ""))
+        self.account_total_var.set(str(len(mapping)))
+        self.account_active_var.set(str(sum(
+            1 for session in entries if
+            session["terminal"] in self.account_by_slot and session["enabled"] and
+            self.status_by_slot.get(session["terminal"]) in ("Synced","Capturing")
+        )))
+        self.account_attention_var.set(str(sum(
+            1 for session in entries if
+            session["terminal"] in self.account_by_slot and
+            (not session["enabled"] or self._session_state(session) in (
+                "Connection issue","Needs re-link","Terminal missing","Paused on dashboard"))
+        )))
         self._selected_session_details()
 
     def _safe_change(self, action):
@@ -1464,15 +1487,28 @@ class ConnectorApp:
         elif state in ("control-saved", "control-error"):
             self.banner_var.set(message)
             self._log(message)
+        elif state == "copy-permission-view":
+            try:
+                selected_slot,selected_link=self._selected_copy_target()
+            except (SessionError, StopIteration):
+                selected_slot,selected_link=None,None
+            if slot==selected_slot and item.get("link")==selected_link:
+                label,advice=permission_summary(bool(item.get("approved")),item.get("mode"),True)
+                self.copy_permission_var.set(label)
+                self.copy_help_var.set(advice)
+                self.copy_route.set_state("approved" if item.get("approved") else "off")
         elif state == "copy-consent-updated":
             self.copy_authorization_by_slot[slot] = bool(item.get("enabled"))
             mode=item.get("mode","demo").upper()
             self.banner_var.set((mode+" copy execution authorized for selected account only.") if item.get("enabled")
                                 else "Trade copy execution disabled for selected account.")
-            self._log("Local account-specific copy authorization updated. Other accounts remain independent.")
+            self._log("Copying permission changed for the selected account only.")
             self._selected_session_details()
+            self._load_copy_permission()
         elif state == "copy-consent-error":
-            self.banner_var.set("Local account execution permission could not be saved. Review the verified broker session.")
+            self.banner_var.set("We could not save this account's copying permission. Reconnect and try again.")
+            self.copy_permission_var.set("Permission could not be saved")
+            self.copy_help_var.set("Reconnect this account, then choose Allow trade copying again.")
         elif state == "copy-account-details":
             self._show_copy_account_details(item)
         elif state == "copy-account-details-error":
