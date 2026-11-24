@@ -969,47 +969,54 @@ class ConnectorApp:
                     size=9).pack(anchor="w", pady=(10, 0))
 
     def _build_help(self):
-        page = self._scrollable_page("help")
-        self._stack_heading(page, "Help & guidance",
-                            "Plain-language answers for connecting and monitoring your accounts.")
-        welcome = self._card(page, 18)
-        welcome.pack(fill="x", pady=(0, 14))
-        self._label(welcome, "New here? Take the quick tour", size=13,
-                    bold=True).pack(anchor="w", pady=(0, 6))
-        self._label(welcome, "Five short stops show where everything lives. You can skip, go back, "
-                    "or use the app normally while the guide is open.",
-                    size=10, color=MUTED, wrap=760).pack(anchor="w", pady=(0, 11))
-        self._button(welcome, "Show me around", self._tour_start, primary=True).pack(anchor="w")
-        for title, desc in [
-            ("Pair this PC once",
-             "In the dashboard, choose MT5 Connections and Pair a PC. Paste the code in this app. "
-             "The PC stays paired when you close and reopen the connector."),
-            ("Add a broker account",
-             "Choose Add account. Enter the broker server, account number and MT5 password in your dashboard. "
-             "The connector finds MetaTrader and prepares a separate workspace for each login."),
-            ("If MetaTrader is missing",
-             "Choose Add account to open the official installer. Finish installing and leave the connector open. "
-             "It checks again automatically."),
-            ("Understand the status",
-             "PC online confirms the connection to your dashboard. Broker verified confirms the login. "
-             "Journal synced means the dashboard received a capture from MT5."),
-            ("Manage accounts",
-             "Open your dashboard to see each login, pause or resume monitoring, retry a sync, or review earlier trades."),
-            ("Allow a receiving account to copy trades",
-             "Open Trade copying in this app. Choose the account that will receive trades, then choose Allow demo trade copying. "
-             "In Copy Fleet on the website, refresh and confirm it says Ready to copy. The permission belongs only to that account."),
-            ("Why can't I switch on copying?",
-             "Keep the Windows app and broker account open. Check that your account can place trades, monitoring is on, "
-             "and its permission matches demo or live mode. Choose Check permission, then refresh Copy Fleet on the website."),
-            ("Will switching on copy trading open my old trades?",
-             "No. The copier first sees which trades are already open, then follows eligible new changes. "
-             "Pausing stops new instructions but cannot undo an order already sent to MetaTrader.")
-        ]:
-            card = self._card(page, 14)
-            card.pack(fill="x", pady=(0, 8))
-            self._label(card, title, bold=True, size=11).pack(anchor="w")
-            self._label(card, desc, color=MUTED, size=9,
-                        wrap=790).pack(anchor="w", pady=(5, 0))
+        page=self._scrollable_page("help")
+        self._stack_heading(page,"Help when you need it",
+                            "Short answers, without technical instructions.")
+        welcome=self._card(page,21)
+        welcome.pack(fill="x",pady=(0,14))
+        self._label(welcome,"A quick guided tour",size=17,bold=True).pack(anchor="w")
+        self._label(welcome,
+                    "Explore the important screens at your own pace. Skip at any time.",
+                    size=10,color=MUTED,wrap=790).pack(anchor="w",pady=(6,13))
+        self._button(welcome,"Show me around",self._tour_start,
+                     primary=True).pack(anchor="w")
+        self._label(page,"COMMON QUESTIONS",size=9,color=MUTED,
+                    bold=True).pack(anchor="w",pady=(9,11))
+        answers=(
+            ("How do I connect this computer?",
+             "Open Connect this computer, get a pairing code from MT5 Connections on your dashboard, paste it and choose Connect. The link is kept for future launches."),
+            ("How do I add another broker account?",
+             "Choose Add account. Enter your MT5 broker, account number and password on the dashboard. The app prepares a separate MT5 workspace when needed."),
+            ("My account stopped updating. What now?",
+             "Check MetaTrader is running, then open My accounts, select the account and choose Try reconnecting. Missing trade history is checked again when the broker reconnects."),
+            ("Why can’t I start trade copying?",
+             "Each receiving account must be connected, trading-enabled, and specifically approved in Trade copying on this PC. Refresh the Copy Fleet website screen to see exactly which account needs attention."),
+            ("Can copying place real orders?",
+             "Demo copying can place demo broker orders only after you approve the account and start its fleet. Live-money copying remains unavailable in this test release."),
+            ("Do I lose my history when I disconnect?",
+             "No. The connector keeps already captured information and retries uploads after reconnecting. It retrieves broker deals that were available while disconnected; unobserved intermediate stop changes cannot be invented."),
+            ("How do I manage several accounts?",
+             "Each broker account has its own monitored MT5 session. Select an account under My accounts to pause, resume, rename, retry or view its details."),
+        )
+        self.help_items=[]
+        for title,description in answers:
+            card=self._card(page,12)
+            card.pack(fill="x",pady=(0,7))
+            title_button=self._button(card,title+"   +",
+                                      lambda:None,quiet=True)
+            title_button.configure(anchor="w",font=(FONT,10,"bold"),
+                                   padx=9,pady=8)
+            title_button.pack(fill="x")
+            answer=self._label(card,description,size=10,color=MUTED,wrap=810)
+            def toggle(button=title_button,copy=answer,name=title):
+                if copy.winfo_manager():
+                    copy.pack_forget()
+                    button.configure(text=name+"   +")
+                else:
+                    copy.pack(fill="x",padx=10,pady=(5,9))
+                    button.configure(text=name+"   −")
+            title_button.configure(command=toggle)
+            self.help_items.append((title_button,answer))
 
     TOUR_STEPS = (
         ("overview", "Your home: see whether the computer is connected and how many accounts are updating."),
