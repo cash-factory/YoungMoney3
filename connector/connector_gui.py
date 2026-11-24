@@ -496,6 +496,11 @@ class ConnectorApp:
     def _arrange_overview(self):
         if not hasattr(self,"overview_columns"):return
         compact=self.root.winfo_width()<920
+        # Avoid perpetual geometry churn when Tk relays resize events from
+        # a nested widget. Re-grid only when crossing the compact breakpoint.
+        if getattr(self,"_overview_layout_compact",None)==compact:
+            return
+        self._overview_layout_compact=compact
         for item in (self.overview_status,self.overview_next):
             item.grid_forget()
         if compact:
@@ -810,6 +815,11 @@ class ConnectorApp:
     def _arrange_copy(self):
         if not hasattr(self,"copy_columns"):return
         compact=self.root.winfo_width()<920
+        # Avoid perpetual geometry churn when Tk relays resize events from
+        # a nested widget. Re-grid only when crossing the compact breakpoint.
+        if getattr(self,"_copy_layout_compact",None)==compact:
+            return
+        self._copy_layout_compact=compact
         for panel in (self.copy_left,self.copy_right):
             panel.grid_forget()
         if compact:
@@ -966,6 +976,11 @@ class ConnectorApp:
     def _arrange_pair(self):
         if not hasattr(self,"pair_columns"):return
         compact=self.root.winfo_width()<920
+        # Avoid perpetual geometry churn when Tk relays resize events from
+        # a nested widget. Re-grid only when crossing the compact breakpoint.
+        if getattr(self,"_pair_layout_compact",None)==compact:
+            return
+        self._pair_layout_compact=compact
         for item in (self.pair_left,self.pair_right):
             item.grid_forget()
         if compact:
