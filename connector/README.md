@@ -2,7 +2,7 @@
 
 ## Windows app
 
-**Current staging Windows x64 build:** [v0.5.7-rc1](https://github.com/cash-factory/YoungMoney3/releases/tag/staging-connector-v0.5.7-rc1) — an unsigned, read-only MT5 recovery build from the reviewed staging branch and smoke-validated on a clean Windows CI machine. [Download the executable](https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.7-rc1/YoungMoney3.Connector.exe) and compare its SHA-256 with the official [checksum file](https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.7-rc1/YoungMoney3.Connector.exe.sha256): `4fe6ca4278f608ebb876d327f1672e694fe7b916e854a2b21a276bd2f0d4e4fb`.
+**Latest published staging Windows build:** [v0.6.0-rc1](https://github.com/cash-factory/YoungMoney3/releases/tag/staging-connector-v0.6.0-rc1). The trader-first connector design is being developed as **v0.6.1-rc1** and is NOT yet published. Keep your existing Windows pairing, installed terminals, and saved trading history. Use the current official release and its provided checksum until the new release is verified.
 
 **This build corrects an MT5 specification-evidence identity defect**: older connectors reused a symbol-specification key across multiple position IDs, generating thousands of false integrity conflicts. v0.5.7 uses position-scoped, first-observed snapshots and reconstructs previously observed positions from broker deals/orders after an offline interval. Unobserved interim SL/TP changes are flagged as such, not invented. **Do not delete local capture.db or unpair the PC**; close the old app and open v0.5.7 in the same Windows user. Real MT5 broker recovery remains an acceptance check.
 
@@ -18,7 +18,7 @@ The update reuses your existing Windows Credential Manager pairing and local dur
 4. Keep the connector open. **PC online** confirms the connection to the dashboard. **Broker verified** confirms the login. **Journal synced** follows an acknowledged account upload.
 5. Use **Broker accounts** on the trading dashboard to see each login, check its last sync, or pause and resume monitoring. **Manage accounts** opens retries, timezones and historical imports.
 
-## Identify a paired Windows PC (staging v0.5.7-rc1)
+## Identify a paired Windows PC
 
 Each connector installation has one random, persistent installation identifier in
 the current Windows user's LOCALAPPDATA/YMFX folder. It is not a hardware ID,
@@ -181,3 +181,13 @@ live evidence are never deleted by the failed-login cleanup controls.
 ## Automatic historical balance movements (v0.5.7-rc1)
 
 The connected demo/contest account is checked for past MT5 DEAL_TYPE_BALANCE transactions automatically, independently of the approved closed-trade history importer. Positive entries can be deposits **or** broker corrections; negative entries can be withdrawals **or** corrections. Raw broker deals are preserved, no claim of verified lifetime profit is made, and the staging account ledger labels credit/debit candidates as *unverified*. The connector scans older available records in bounded resumable windows without blocking normal trade capture. Broker retention remains a limitation; compare amounts with an original broker account statement before drawing lifetime P&L conclusions.
+
+## Trader-first connector redesign (0.6.1-rc1 candidate)
+
+The new Windows experience is organized around **Home**, **My accounts**, **Trade copying**, **Connect this PC**, **Recent activity** and **Help**. The Trade copying page lets a trader select the account that will receive trades, explicitly allow demo or live copying on that computer, verify the local permission, and open the website's Copy Fleet for the final activation step. This does not authorize a real-money release or submit trades by itself.
+
+The interface uses ttkbootstrap for consistent native Windows controls, with a fallback for source installations without the optional theme. Its own canvas-based illustrations show a trade's path and only animate when the state changes; a Windows reduced-motion preference or the Motion switch disables animation. All descriptions are plain-language labels; the underlying evidence capture and approvals remain intact.
+
+A permission can be renewed after a long broker scan: the server now permits up to three minutes between permission refreshes but **still requires an online paired computer within 45 seconds** before any fleet can be switched on. Connected broker logins and trading-enabled access must continue to match the exact receiving account. The account cannot be activated remotely without an approval on the Windows connector.
+
+This candidate is under automated and Windows UI testing; do not treat it as an officially distributed executable or a verified real-broker trading release until those checks and release approval are complete.
