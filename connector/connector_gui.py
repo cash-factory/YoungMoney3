@@ -426,7 +426,9 @@ class ConnectorApp:
         self.pages = {}
         for key, _ in self.NAV:
             page = tk.Frame(self.page_host, bg=BACKGROUND)
-            page.place(x=0, y=0, relwidth=1, relheight=1)
+            # Inactive screens are deliberately not geometry-managed.
+            # Stacking six placed screens makes hidden forms repeatedly
+            # resize behind the active one and can freeze Windows Tk.
             self.pages[key] = page
         self._build_overview()
         self._build_sessions()
@@ -1132,7 +1134,13 @@ class ConnectorApp:
 
     def show_page(self, key):
         self.current_page = key
-        self.pages[key].tkraise()
+        for other,page in self.pages.items():
+            if other != key and page.winfo_manager():
+                page.place_forget()
+        shown=self.pages[key]
+        if not shown.winfo_manager():
+            shown.place(x=0,y=0,relwidth=1,relheight=1)
+        shown.tkraise()
         for item, button in self.nav_buttons.items():
             selected = item == key
             button.set_tones("#E8ECFC" if selected else SIDEBAR, "#EEF1FA")
