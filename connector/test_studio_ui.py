@@ -103,12 +103,41 @@ class ConnectorPresentationTests(unittest.TestCase):
                 self._settle()
                 self.assert_actions_fit(self.app.session_tools)
                 self.assert_actions_fit(self.app.session_actions)
+                self.app.show_page("copy")
+                self._settle()
+                self.assert_actions_fit(self.app.copy_action_buttons)
+                self.assert_actions_fit(self.app.copy_web_actions)
+                self.assertIn("copy", self.app.pages)
                 self.app.show_page("pair")
                 self._settle()
                 self.assert_actions_fit(self.app.code_actions)
                 self.assertGreaterEqual(self.app.code_input.winfo_width(), 300)
         self.assertIsNone(self.app.worker)
         self.assertFalse(self.settings.exists(), "Presentation inspection must not write preferences")
+
+    def test_first_time_trader_sees_real_actions_before_explanations(self):
+        self.app.show_page("overview")
+        self.assertEqual(self.app.hero_pc_button.cget("text"),"Connect this computer")
+        self.app.show_page("sessions")
+        self._settle()
+        self.assertTrue(self.app.empty_accounts.winfo_manager())
+        self.assertFalse(self.app.session_table.get_children())
+        self.app.show_page("copy")
+        self._settle()
+        self.assertFalse(self.app.copy_explanation.winfo_manager())
+        self.assertTrue(self.app.copy_add_account_button.winfo_manager())
+        canvas=self.app._page_canvases["copy"]
+        self.assertLessEqual(
+            self.app.copy_account_combo.winfo_rooty()+self.app.copy_account_combo.winfo_height(),
+            canvas.winfo_rooty()+canvas.winfo_height()+1,
+            "The account choice must be visible before the trader scrolls.")
+        self.app._toggle_copy_explanation()
+        self.assertTrue(self.app.copy_explanation.winfo_manager())
+        self.assertEqual(self.app.copy_explain_button.cget("text"),"Hide explanation")
+        self.app._toggle_copy_explanation()
+        self.assertFalse(self.app.copy_explanation.winfo_manager())
+        self.assertIsNone(self.app.worker)
+        self.assertFalse(self.settings.exists())
 
     def test_pair_confirmation_starts_pc_service_without_any_configured_terminals(self):
         self.assertEqual(self.app.store.all_terminals(), [])
@@ -149,10 +178,36 @@ class ConnectorPresentationTests(unittest.TestCase):
                       "The identity-conflict explanation must survive a safe worker shutdown.")
         self.assertIsNone(self.app.restart_due)
 
+    def test_trader_guide_shows_real_pages_and_can_skip(self):
+        self.app.show_page("help")
+        self.app._tour_start()
+        self.assertEqual(self.app.current_page, "overview")
+        self.assertEqual(self.app.tour_index, 0)
+        self.assertTrue(self.app.tour_strip.winfo_manager())
+        self.app._tour_next()
+        self.assertEqual(self.app.current_page, "pair")
+        self.app._tour_next()
+        self.assertEqual(self.app.current_page, "sessions")
+        self.app._tour_next()
+        self.assertEqual(self.app.current_page, "copy")
+        self.app._tour_back()
+        self.assertEqual(self.app.current_page, "sessions")
+        self.app._tour_end()
+        self.assertEqual(self.app.tour_index, -1)
+        self.assertFalse(self.app.tour_strip.winfo_manager())
+        self.assertIsNone(self.app.worker)
+        self.assertFalse(self.settings.exists())
+
     def test_quick_setup_navigation_and_motion_toggle_do_not_start_capture(self):
         self.app.quick_setup_actions.buttons[0].invoke()
         self._settle()
         self.assertEqual(self.app.current_page, "pair")
+        self.app.show_page("copy")
+        self._settle()
+        self.assertEqual(self.app.current_page, "copy")
+        self.assertEqual(self.app.copy_account_choice.get(), "")
+        self.app._load_copy_permission()
+        self.assertIn("Choose",self.app.copy_permission_var.get())
         self.app.motion_var.set(False)
         self.app._refresh_motion()
         for art in self.app.header_art.values():

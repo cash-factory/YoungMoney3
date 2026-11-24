@@ -82,3 +82,7 @@
 .ym-cf-legacy-heading p{font-size:11px;color:var(--text-secondary);margin-top:8px;line-height:1.6}
 
 .ym-cf-note{font-size:10px;color:var(--cf-muted);line-height:1.65;padding:9px 0 13px;max-width:890px}
+
+.ym-cf-readiness{display:flex;align-items:flex-start;gap:8px;max-width:750px;margin:9px 0 15px;padding:10px 12px;border-radius:7px;border:1px solid var(--cf-line);background:var(--bg-secondary);color:var(--cf-muted);font-size:11px;line-height:1.65}
+.ym-cf-target:has(.ym-cf-tag[data-ready=true]) .ym-cf-readiness{border-color:rgba(128,193,162,.22);color:var(--cf-text)}
+.ym-cf-target:has(.ym-cf-tag[data-ready=false]) .ym-cf-readiness{border-left:3px solid #e3ab71}

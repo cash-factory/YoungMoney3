@@ -1,0 +1,119 @@
+name: Windows connector — trader experience preview
+
+on:
+  pull_request:
+    paths:
+      - 'connector/**'
+      - 'scripts/build-connector-archive.py'
+      - 'scripts/build_connector_source_archive.py'
+      - '.github/workflows/connector-trader-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: connector-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-preview:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install review dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r connector/requirements.txt pyinstaller==6.16.0
+      - name: Test account monitoring and trader interaction
+        run: |
+          python -m unittest discover -s connector -p 'test_*.py'
+      - name: Capture genuine Windows screen previews
+        run: |
+          python connector/render_preview.py "${{ runner.temp }}/connector-screens"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: connector-screen-review-${{ github.sha }}
+          path: ${{ runner.temp }}/connector-screens/*.png
+          retention-days: 7
+          if-no-files-found: error
+      - name: Build independently testable Windows connector
+        run: |
+          python connector/build_windows.py
+          $file = 'dist/YoungMoney3 Connector.exe'
+          $sha = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
+          $out = 'dist/YoungMoney3.Connector.exe'
+          Copy-Item $file $out
+          "$sha  YoungMoney3.Connector.exe" | Set-Content 'dist/YoungMoney3.Connector.exe.sha256'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: connector-trader-review-${{ github.sha }}
+          path: |
+            dist/YoungMoney3.Connector.exe
+            dist/YoungMoney3.Connector.exe.sha256
+          retention-days: 7
+          if-no-files-found: error
+
+  clean-windows-smoke:
+    needs: build-preview
+    runs-on: windows-2022
+    timeout-minutes: 8
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: connector-trader-review-${{ github.sha }}
+          path: ${{ runner.temp }}/connector-preview
+      - name: Check a fresh Windows profile without broker credentials
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:RUNNER_TEMP 'connector-preview'
+          $exe = Join-Path $dir 'YoungMoney3.Connector.exe'
+          $expected = ((Get-Content (Join-Path $dir 'YoungMoney3.Connector.exe.sha256') -Raw) -split ' ')[0]
+          if ((Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'Checksum mismatch' }
+          $profile = Join-Path $dir 'fresh-user'
+          New-Item -ItemType Directory -Force $profile | Out-Null
+          $env:LOCALAPPDATA = $profile
+          $env:APPDATA = $profile
+          $env:USERPROFILE = $profile
+          $env:HOME = $profile
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          'TCL_LIBRARY','TK_LIBRARY','TCLLIBPATH','PYTHONHOME','PYTHONPATH','VIRTUAL_ENV' | ForEach-Object { Remove-Item "Env:$_" -ErrorAction SilentlyContinue }
+          $report = Join-Path $dir 'startup-review.json'
+          $process = Start-Process -FilePath $exe -ArgumentList @('--startup-smoke', ('"' + $report + '"')) -WorkingDirectory $dir -WindowStyle Hidden -PassThru
+          if (!$process.WaitForExit(45000)) {
+            taskkill /PID $process.Id /T /F
+            throw 'Review executable did not start cleanly'
+          }
+          Get-Content "$report.log" -ErrorAction SilentlyContinue
+          if ($process.ExitCode -ne 0 -or !(Test-Path $report)) { throw 'Review executable startup failed' }
+          $test = Get-Content $report -Raw | ConvertFrom-Json
+          if ($test.startup -ne 'ok' -or !$test.frozen -or !$test.session_manager -or !$test.tcl_bundled -or !$test.tk_bundled -or !$test.responsive_layout -or $test.capture_started) {
+            throw 'Account screens, bundled themes or safe startup failed'
+          }
+          $parallel = Join-Path $dir 'parallel.json'
+          $child = Start-Process -FilePath $exe -ArgumentList @('--parallel-smoke', ('"' + $parallel + '"')) -WorkingDirectory $dir -WindowStyle Hidden -PassThru
+          if (!$child.WaitForExit(120000)) {
+            taskkill /PID $child.Id /T /F
+            throw 'Independent account process test timed out'
+          }
+          if ($child.ExitCode -ne 0 -or !(Test-Path $parallel)) { throw 'Independent account process test failed' }
+          $pairs = Get-Content $parallel -Raw | ConvertFrom-Json
+          if ($pairs.parallel_spawn -ne 'ok' -or $pairs.distinct_processes -ne 2 -or $pairs.broker_capture_started) {
+            throw 'Independent account process validation failed'
+          }
+          if (Test-Path (Join-Path $profile 'YMFX')) { throw 'Preview changed saved account data' }
+          Get-Content $report
+          Get-Content $parallel
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: connector-trader-smoke-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/connector-preview/startup-review.json
+            ${{ runner.temp }}/connector-preview/parallel.json
+          if-no-files-found: warn
+          retention-days: 7

@@ -31,20 +31,21 @@ from managed_accounts import ManagedAccounts, discover_installations, INSTALL_PA
 from studio_ui import AnimatedButton, ResponsiveActions, ConnectionPath, StudioArt, brand_mark, windows_motion_enabled, restart_wait_seconds
 from version import VERSION
 from copy_execution import prepare_database as prepare_copy_database, set_consent as update_copy_consent
+from trader_ui import TradeJourney, permission_summary, trader_message
 
 STAGING_URL = "https://ym-fx-staging.ethical-hacker263.workers.dev"
 ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "YMFX" / "staging-gui"
 SETTINGS = ROOT / "preferences.json"
-BACKGROUND = "#09090d"
-SIDEBAR = "#111014"
-PANEL = "#18151b"
-PANEL_ALT = "#241c25"
-BORDER = "#473341"
-TEXT = "#f8f3f5"
-MUTED = "#bcb1b9"
+BACKGROUND = "#0b1119"
+SIDEBAR = "#101924"
+PANEL = "#16212c"
+PANEL_ALT = "#21313d"
+BORDER = "#30424c"
+TEXT = "#f5f8fa"
+MUTED = "#aabcc8"
 ACCENT = "#ff365c"
-WARM = "#f9c9ab"
-DANGER = "#ff8da7"
+WARM = "#ffd294"
+DANGER = "#ff8f99"
 FONT = "Segoe UI"
 
 
@@ -53,9 +54,9 @@ def terminal_candidates():
 
 
 class ConnectorApp:
-    NAV = (("overview", "Overview"), ("sessions", "Accounts"),
-           ("pair", "Pair this PC"), ("activity", "Activity"),
-           ("help", "Setup & help"))
+    NAV = (("overview", "Home"), ("sessions", "My accounts"),
+           ("copy", "Trade copying"), ("pair", "Connect this PC"),
+           ("activity", "Recent activity"), ("help", "Help"))
 
     def __init__(self, root, *, restore=True):
         self.root = root
@@ -124,7 +125,16 @@ class ConnectorApp:
         self.code_var = tk.StringVar()
         self.code_error_var = tk.StringVar(value="32-character code • only used once, never stored in this app")
         self.pair_elapsed_var = tk.StringVar(value="")
-        self.selected_details_var = tk.StringVar(value="Select a session to manage its account.")
+        self.selected_details_var = tk.StringVar(value="Select an account to see its details.")
+        self.copy_account_choice = tk.StringVar(value="")
+        self.copy_choice_map = {}
+        self.copy_permission_var = tk.StringVar(value="Choose a receiving account")
+        self.copy_help_var = tk.StringVar(value="Select the account that should receive copied trades.")
+        self.tour_step_var = tk.StringVar(value="")
+        self.tour_index = -1
+        self.account_total_var = tk.StringVar(value="0")
+        self.account_active_var = tk.StringVar(value="0")
+        self.account_attention_var = tk.StringVar(value="0")
         self._configure_ttk()
         self._build()
         self.root.bind("<Configure>", self._queue_responsive_layout, add="+")
@@ -140,8 +150,15 @@ class ConnectorApp:
         self._poll_job = self.root.after(160, self.poll)
 
     def _configure_ttk(self):
-        style = ttk.Style(self.root)
-        style.theme_use("clam")
+        # ttkbootstrap gives native data controls a consistent contemporary
+        # appearance. The original high-contrast ttk styles remain a safe
+        # fallback for source-only installations without the optional theme.
+        try:
+            import ttkbootstrap
+            style = ttkbootstrap.Style(theme="tokyo-night-dark")
+        except ImportError:
+            style = ttk.Style(self.root)
+            style.theme_use("clam")
         style.configure("YM.Treeview", background=PANEL, fieldbackground=PANEL,
                         foreground=TEXT, rowheight=42, font=(FONT, 10),
                         relief="flat", borderwidth=0)
@@ -160,6 +177,11 @@ class ConnectorApp:
                         lightcolor=PANEL_ALT, darkcolor=PANEL_ALT,
                         arrowcolor=MUTED, width=11, arrowsize=11)
         style.map("YM.Horizontal.TScrollbar", background=[("active", "#663347")])
+        style.configure("YM.TCombobox", fieldbackground=PANEL_ALT, background=PANEL_ALT,
+                        foreground=TEXT, arrowcolor=TEXT, selectbackground=PANEL_ALT,
+                        selectforeground=TEXT, padding=(12, 9))
+        style.map("YM.TCombobox", fieldbackground=[("readonly", PANEL_ALT)],
+                  foreground=[("readonly", TEXT)])
         style.configure("YM.Horizontal.TProgressbar", troughcolor=PANEL_ALT,
                         background=ACCENT, borderwidth=0, bordercolor=PANEL_ALT,
                         lightcolor=ACCENT, darkcolor=ACCENT, thickness=5)
@@ -230,7 +252,7 @@ class ConnectorApp:
         short = self.root.winfo_height() < 660
         self.sidebar_footer.configure(pady=12 if short else 20)
         self.environment_label.configure(text="●  STAGING" if short else "●  STAGING ENVIRONMENT")
-        self.sidebar_mode_label.configure(text="Read-only capture · copier opt-in" if short else "Journal capture: read-only  /  Trade copier: account opt-in")
+        self.sidebar_mode_label.configure(text="Journal + optional copier" if short else "Trade journal + optional copying, with your permission")
         if short:
             self.sidebar_version_label.pack_forget()
         elif not self.sidebar_version_label.winfo_manager():
@@ -262,6 +284,9 @@ class ConnectorApp:
         for art in self.header_art.values():
             if not self.motion_var.get():
                 art.reveal()
+        if not self.motion_var.get():
+            self.copy_route._cancel()
+            self.copy_route.draw()
 
     def _card(self, parent, pad=20):
         return tk.Frame(parent, bg=PANEL, highlightbackground=BORDER,
@@ -296,7 +321,7 @@ class ConnectorApp:
         header.pack(fill="x", pady=(0, 17))
         copy = tk.Frame(header, bg=BACKGROUND)
         copy.pack(side="left", fill="both", expand=True)
-        self._label(copy, "THE DESK  /  STAGING", size=8, bold=True,
+        self._label(copy, "YOUR TRADING CONNECTION  /  TEST SPACE", size=8, bold=True,
                     color=ACCENT).pack(anchor="w", pady=(0, 6))
         self._label(copy, title, size=22, bold=True).pack(anchor="w", pady=(0, 7))
         self._label(copy, description, size=10, color=MUTED,
@@ -323,7 +348,7 @@ class ConnectorApp:
         wordmark.pack(side="left", fill="x", expand=True)
         self._label(wordmark, "YOUNGMONEY3", size=8, bold=True, color=ACCENT).pack(anchor="w")
         self._label(wordmark, "CONNECTOR", size=12, bold=True).pack(anchor="w", pady=(2, 0))
-        self._label(brand, "Trading evidence, in sync.", size=9, color=MUTED, wrap=150).pack(anchor="w")
+        self._label(brand, "Your accounts, one place.", size=9, color=MUTED, wrap=150).pack(anchor="w")
         tk.Frame(self.sidebar, bg=BORDER, height=1).pack(fill="x", padx=18, pady=(0, 18))
         self.nav_buttons = {}
         for key, title in self.NAV:
@@ -331,7 +356,7 @@ class ConnectorApp:
             row.pack(fill="x", pady=3)
             button = AnimatedButton(row, motion=self.motion_var.get,
                                text=title, command=lambda page=key: self.show_page(page),
-                               font=(FONT, 11), anchor="w", padx=14, pady=13,
+                               font=(FONT, 11), anchor="w", padx=14, pady=10,
                                bg=SIDEBAR, fg=MUTED, relief="flat", borderwidth=0,
                                activebackground=PANEL_ALT, activeforeground=TEXT,
                                cursor="hand2", takefocus=True)
@@ -343,7 +368,7 @@ class ConnectorApp:
         self.environment_label = self._label(foot, "●  STAGING ENVIRONMENT", size=9,
                                              color=ACCENT, wrap=155, bold=True)
         self.environment_label.pack(anchor="w")
-        self.sidebar_mode_label = self._label(foot, "Journal: read-only  /  Copier: opt-in", color=MUTED,
+        self.sidebar_mode_label = self._label(foot, "Journal records trades; copying is optional", color=MUTED,
                                               size=9, wrap=155)
         self.sidebar_mode_label.pack(anchor="w", pady=(6, 0))
         self.sidebar_version_label = self._label(foot, "v" + VERSION + "   •   Windows x64",
@@ -354,10 +379,10 @@ class ConnectorApp:
         right.pack(side="left", fill="both", expand=True)
         header = tk.Frame(right, bg=BACKGROUND)
         header.pack(fill="x", pady=(0, 16))
-        bridge_label = self._label(header, "MT5  /  THE CONNECTION BRIDGE", size=10, bold=True,
+        bridge_label = self._label(header, "YOUR ACCOUNTS  /  CONNECTED WITH MT5", size=10, bold=True,
                                    color=ACCENT)
         bridge_label.pack(side="left")
-        safety_label = self._label(header, "READ-ONLY  •  NO TRADING COMMANDS", size=9,
+        safety_label = self._label(header, "Journal tracks trades · Copying needs your approval", size=9,
                                    color=MUTED)
         safety_label.pack(side="right")
         def fit_topbar(event):
@@ -366,7 +391,6 @@ class ConnectorApp:
                                          pady=(0, 5 if narrow else 0))
             safety_label.pack_configure(side="top" if narrow else "right", anchor="w")
         header.bind("<Configure>", fit_topbar, add="+")
-        tk.Frame(right, bg=ACCENT, height=3).pack(fill="x")
         tk.Frame(right, bg=BORDER, height=1).pack(fill="x")
         self.page_host = tk.Frame(right, bg=BACKGROUND)
         self.page_host.pack(fill="both", expand=True, pady=(22, 12))
@@ -377,6 +401,7 @@ class ConnectorApp:
             self.pages[key] = page
         self._build_overview()
         self._build_sessions()
+        self._build_copy()
         self._build_pairing()
         self._build_activity()
         self._build_help()
@@ -384,6 +409,14 @@ class ConnectorApp:
         footer.pack(fill="x", pady=(2, 0))
         self._label(footer, textvar=self.banner_var, size=9,
                     color=WARM, wrap=1000).pack(fill="x", pady=(0, 10))
+        self.tour_strip = tk.Frame(footer, bg=PANEL_ALT,
+                                   highlightbackground=BORDER, highlightthickness=1,
+                                   padx=12, pady=10)
+        self._label(self.tour_strip, textvar=self.tour_step_var, color=TEXT, size=9,
+                    wrap=650).pack(side="left", fill="x", expand=True, padx=(0, 12))
+        self._button(self.tour_strip, "Back", self._tour_back, quiet=True).pack(side="left", padx=4)
+        self._button(self.tour_strip, "Next", self._tour_next, primary=True).pack(side="left", padx=4)
+        self._button(self.tour_strip, "Skip", self._tour_end, quiet=True).pack(side="left", padx=4)
         footer_actions = tk.Frame(footer, bg=BACKGROUND)
         footer_actions.pack(fill="x")
         tk.Checkbutton(footer_actions, text="Motion", variable=self.motion_var,
@@ -392,46 +425,69 @@ class ConnectorApp:
                        activebackground=BACKGROUND, activeforeground=TEXT,
                        font=(FONT, 9), cursor="hand2", highlightthickness=0,
                        takefocus=True).pack(side="left")
-        self._label(footer_actions, "CAPTURE ONLY", color=MUTED, size=8).pack(side="left", padx=12)
+        self._label(footer_actions, "YOUR TRADES STAY YOURS", color=MUTED, size=8).pack(side="left", padx=12)
         self._button(footer_actions, "Open dashboard  ↗", lambda: webbrowser.open(STAGING_URL),
                      quiet=True).pack(side="right")
         self.show_page("overview")
 
     def _build_overview(self):
         page = self._scrollable_page("overview")
-        self._stack_heading(page, "Account monitor", "A dedicated connection for every MT5 account.")
+        self._stack_heading(page, "Your connection", "Keep every trading account connected, even when you use different brokers.")
         hero = self._card(page, 24)
         hero.pack(fill="x", pady=(0, 16))
-        self._label(hero, "CONNECTION STATUS", size=9, bold=True, color=MUTED).pack(anchor="w")
+        self._label(hero, "HOW YOUR CONNECTION IS DOING", size=9, bold=True, color=MUTED).pack(anchor="w")
         self._label(hero, textvar=self.status_var, size=20, bold=True).pack(anchor="w", pady=(4, 8))
         self.connection_path = ConnectionPath(hero, background=PANEL, motion=self.motion_var.get)
         self.connection_path.pack(fill="x", pady=(4, 4))
         self._label(hero, textvar=self.device_var, size=10, color=MUTED, wrap=730).pack(anchor="w")
-        self._button(hero, "Rename this PC", self.rename_this_pc, quiet=True).pack(anchor="w", pady=(10, 2))
+        self.hero_pc_button=self._button(hero,
+            "Rename this computer" if self.paired else "Connect this computer",
+            self._hero_pc_action,primary=not self.paired,quiet=self.paired)
+        self.hero_pc_button.pack(anchor="w",pady=(10,2))
         self.progress = ttk.Progressbar(hero, style="YM.Horizontal.TProgressbar")
+        numbers = tk.Frame(page, bg=BACKGROUND)
+        numbers.pack(fill="x", pady=(0, 16))
+        for key, label, variable, subtitle in (
+            ("all", "YOUR ACCOUNTS", self.account_total_var, "Connected to this computer"),
+            ("running", "MONITORING", self.account_active_var, "Currently following activity"),
+            ("care", "NEEDS A LOOK", self.account_attention_var, "Paused or needs reconnecting"),
+        ):
+            tile = self._card(numbers, 13)
+            tile.pack(side="left", fill="both", expand=True,
+                      padx=(0, 8) if key != "care" else (0, 0))
+            self._label(tile, label, size=8, color=MUTED, bold=True).pack(anchor="w")
+            self._label(tile, textvar=variable, size=23, bold=True).pack(anchor="w", pady=(5, 3))
+            self._label(tile, subtitle, size=9, color=MUTED, wrap=155).pack(anchor="w")
         next_card = self._card(page, 20)
         next_card.pack(fill="x")
-        self._label(next_card, "Broker accounts", size=15, bold=True).pack(anchor="w")
+        self._label(next_card, "Your next step", size=15, bold=True).pack(anchor="w")
         self._label(next_card, textvar=self.queue_var, color=MUTED, size=10).pack(anchor="w", pady=(6, 12))
         self.quick_setup_actions = self._actions(next_card, [
             ("Add account", self.add_account, {"primary": True}),
             ("Open dashboard", self.open_dashboard, {}),
-            ("View accounts", lambda: self.show_page("sessions"), {"quiet": True})], minimum=144)
+            ("See my accounts", lambda: self.show_page("sessions"), {"quiet": True}),
+            ("Set up copying", lambda: self.show_page("copy"), {"quiet": True})], minimum=144)
+
+    def _hero_pc_action(self):
+        if self.paired:
+            self.rename_this_pc()
+        else:
+            self.show_page("pair")
 
     def _build_sessions(self):
         page = self._scrollable_page("sessions")
-        self._stack_heading(page, "Account sessions", "Monitor each broker login and its latest journal sync.")
+        self._stack_heading(page, "My accounts", "Every broker account in one place. Choose one to check or manage it.")
         self.session_tools = self._actions(page, [
             ("Add account", self.add_account, {"primary": True}),
             ("Open dashboard", self.open_dashboard, {}),
-            ("Advanced setup", self.toggle_advanced, {"quiet": True})])
+            ("Extra tools", self.toggle_advanced, {"quiet": True})])
         self.session_tools.pack_configure(pady=(0, 8))
         self.advanced = self._card(page, 14)
-        self._label(self.advanced, "Manual terminal tools", size=11, bold=True).pack(anchor="w")
+        self._label(self.advanced, "Advanced account setup · only when needed", size=11, bold=True).pack(anchor="w")
         advanced = self._actions(self.advanced, [
             ("Create terminal", self.create_named_terminal, {}), ("Duplicate selected", self.duplicate_selected, {}),
             ("Add existing", self.add_session, {}), ("Detect terminals", self.detect_sessions, {}),
-            ("Arm selected", self.arm_selected, {}), ("Open folder", self.open_selected_folder, {}),
+            ("Prepare for next login", self.arm_selected, {}), ("Open folder", self.open_selected_folder, {}),
             ("Open MT5", self.launch_selected, {}), ("Stop connector", self.stop, {})])
         self.create_button, self.duplicate_button = advanced.buttons[:2]
         table_area = self._card(page, 12)
@@ -457,6 +513,20 @@ class ConnectorApp:
         bar.grid(row=0, column=1, sticky="ns")
         horizontal.grid(row=1, column=0, sticky="ew", pady=(5, 0))
         self.session_table.bind("<<TreeviewSelect>>", lambda _event: self._selected_session_details())
+        self.empty_accounts=tk.Frame(table_area,bg=PANEL,padx=24,pady=22)
+        glyph=tk.Canvas(self.empty_accounts,width=56,height=56,bg=PANEL,
+                        highlightthickness=0)
+        glyph.pack()
+        glyph.create_oval(6,6,50,50,outline=BORDER,width=2)
+        glyph.create_line(17,28,39,28,fill=ACCENT,width=3)
+        glyph.create_line(28,17,28,39,fill=ACCENT,width=3)
+        self._label(self.empty_accounts,"No accounts connected yet",
+                    size=15,bold=True).pack(anchor="center",pady=(9,5))
+        self._label(self.empty_accounts,
+            "Add a broker account to start saving your trades here.",
+            size=10,color=MUTED,wrap=420).pack(anchor="center",pady=(0,14))
+        self._button(self.empty_accounts,"Add my first account",
+                     self.add_account,primary=True).pack(anchor="center")
         detail = self._card(page, 15)
         detail.pack(fill="x")
         self._label(detail, textvar=self.selected_details_var, size=10,
@@ -466,13 +536,119 @@ class ConnectorApp:
             ("Pause", self.pause_selected, {}), ("Rename locally", self.rename_selected, {"quiet": True}),
             ("Remove local session", self.remove_selected, {"quiet": True})], minimum=126)
         self.copy_controls = self._actions(detail, [
-            ("Account insights", self.inspect_selected_account, {"quiet": True}),
-            ("Authorize DEMO copier", self.authorize_selected_demo_copy, {}),
-            ("Authorize LIVE copier", self.authorize_selected_live_copy, {}),
-            ("Disable copier on account", self.disable_selected_demo_copy, {"quiet": True}),
-            ("Open Copy Studio", lambda: webbrowser.open(STAGING_URL + "/#copy-studio"), {"quiet": True})],
+            ("Account details", self.inspect_selected_account, {"quiet": True}),
+            ("Copying permissions", lambda: self.show_page("copy"), {}),
+            ("Open Copy Fleet", lambda: webbrowser.open(STAGING_URL + "/#copy-studio"), {"quiet": True})],
             minimum=158)
         self.copy_controls.pack_configure(pady=(10, 0))
+
+    def _build_copy(self):
+        """One place for the receiving account and its on-PC permission."""
+        page = self._scrollable_page("copy")
+        self._stack_heading(page, "Trade copying",
+                            "You choose the accounts. Nothing is copied until you allow it here and switch on your fleet on the website.")
+        flow = self._card(page, 18)
+        self.copy_explanation=flow
+        self._label(flow, "HOW COPY TRADING WORKS", size=9, bold=True,
+                    color=MUTED).pack(anchor="w", pady=(0, 5))
+        self.copy_route = TradeJourney(flow, background=PANEL,
+                                      accent=ACCENT, motion=self.motion_var.get)
+        self.copy_route.pack(fill="x")
+        self._label(flow, "A new trade on your chosen main account is checked before it reaches an approved receiving account. "
+                    "Each receiving account has its own risk and position-size settings.",
+                    color=MUTED, size=10, wrap=780).pack(anchor="w", pady=(4, 0))
+        account = self._card(page, 20)
+        account.pack(fill="x", pady=(0, 14))
+        self._label(account, "01  Choose the account that will RECEIVE trades",
+                    size=13, bold=True).pack(anchor="w", pady=(0, 10))
+        self.copy_account_combo = ttk.Combobox(account, textvariable=self.copy_account_choice,
+                                            state="readonly", style="YM.TCombobox", font=(FONT, 11))
+        self.copy_account_combo.pack(fill="x", pady=(0, 10))
+        self.copy_account_combo.bind("<<ComboboxSelected>>", self._choose_copy_account)
+        self._label(account, "Choose the account receiving trades. You choose the main account on the website.",
+                    size=9, color=MUTED, wrap=770).pack(anchor="w")
+        self.copy_add_account_button=self._button(account,"Add a receiving account",
+                                                   self.add_account,quiet=True)
+        self.copy_add_account_button.pack(anchor="w",pady=(13,0))
+        consent_card = self._card(page, 20)
+        consent_card.pack(fill="x", pady=(0, 14))
+        self._label(consent_card, "02  Allow copying on this computer", size=13,
+                    bold=True).pack(anchor="w", pady=(0, 7))
+        self._label(consent_card, textvar=self.copy_permission_var,
+                    size=14, bold=True).pack(anchor="w", pady=(2, 6))
+        self._label(consent_card, textvar=self.copy_help_var, color=MUTED,
+                    size=10, wrap=780).pack(anchor="w", pady=(0, 13))
+        self.copy_action_buttons = self._actions(consent_card, [
+            ("Allow demo trade copying", self.authorize_selected_demo_copy, {"primary":True}),
+            ("Allow live trade copying", self.authorize_selected_live_copy, {}),
+            ("Turn off copying", self.disable_selected_demo_copy, {"quiet":True}),
+            ("Check permission", self._load_copy_permission, {"quiet":True}),
+        ], minimum=176)
+        self._label(consent_card, "Live trade copying involves real money and is not active in this test release. "
+                    "Allowing it here does not switch it on at the website.",
+                    color=WARM, size=9, wrap=800).pack(anchor="w", pady=(13, 0))
+        activation = self._card(page, 20)
+        activation.pack(fill="x", pady=(0, 14))
+        self._label(activation, "03  Switch on your fleet on the website",
+                    size=13, bold=True).pack(anchor="w", pady=(0, 8))
+        self._label(activation, "After the connector confirms your permission, open Copy Fleet, refresh the page, "
+                    "and check that every receiving account says Ready to copy. Then use Switch on / Arm on the website.",
+                    color=MUTED, size=10, wrap=780).pack(anchor="w", pady=(0, 12))
+        self.copy_web_actions = self._actions(activation, [
+            ("Open Copy Fleet", lambda: webbrowser.open(STAGING_URL+"/#copy-studio"), {"primary":True}),
+            ("Account details", self.inspect_selected_account, {"quiet":True})
+        ], minimum=162)
+        self.copy_explain_button=self._button(
+            page,"How does copying work?",self._toggle_copy_explanation,quiet=True)
+        self.copy_explain_button.pack(anchor="w",pady=(0,13))
+
+    def _toggle_copy_explanation(self):
+        if self.copy_explanation.winfo_manager():
+            self.copy_explanation.pack_forget()
+            self.copy_explain_button.configure(text="How does copying work?")
+        else:
+            self.copy_explanation.pack(fill="x",after=self.copy_explain_button,
+                                       pady=(0,14))
+            self.copy_explain_button.configure(text="Hide explanation")
+
+    def _choose_copy_account(self, _event=None):
+        sid = self.copy_choice_map.get(self.copy_account_choice.get())
+        if not sid or not self.session_table.exists(sid):
+            self.copy_permission_var.set("Choose a connected receiving account")
+            self.copy_help_var.set("Add or reconnect your account in My accounts first.")
+            self.copy_route.set_state("off")
+            return
+        self.session_table.selection_set(sid)
+        self.session_table.focus(sid)
+        self._selected_session_details()
+        self._load_copy_permission()
+
+    def _load_copy_permission(self):
+        try:
+            slot, link = self._selected_copy_target()
+        except (SessionError, StopIteration):
+            self.copy_permission_var.set("Choose a connected receiving account")
+            self.copy_help_var.set("Select a receiving account above. You can add one in My accounts.")
+            self.copy_route.set_state("off")
+            return
+        self.copy_permission_var.set("Checking this account…")
+        self.copy_help_var.set("Reading the permission saved on your computer.")
+        def read():
+            try:
+                path = self._copy_database_path()
+                if not path.is_file():
+                    raise SessionError("This account has not finished its first sync.")
+                with sqlite3.connect(path, timeout=20) as db:
+                    prepare_copy_database(db)
+                    row = db.execute(
+                        "SELECT approved,mode FROM copy_local_permissions WHERE link=?", (link,)
+                    ).fetchone()
+                self.events.put({"state":"copy-permission-view","slot":slot,"link":link,
+                                 "approved":bool(row and row[0]),"mode":row[1] if row else "none"})
+            except Exception:
+                self.events.put({"state":"copy-permission-view","slot":slot,"link":link,
+                                 "approved":False,"mode":"none"})
+        threading.Thread(target=read, name="YMFX-copy-status",daemon=True).start()
 
     def toggle_advanced(self):
         if self.advanced.winfo_manager():
@@ -489,7 +665,7 @@ class ConnectorApp:
             self.show_page("pair")
             return
         if self.pc_state == "pc-service-incompatible":
-            self.banner_var.set("Staging needs a connector API update. Your PC pairing is saved; retry after the dashboard is updated.")
+            self.banner_var.set("Your dashboard and this connector need the same version. Your PC link is safe; update the connector and try again.")
             return
         if self.pc_state != "pc-online":
             self.banner_var.set("Contacting your dashboard. The login will open when this PC is online.")
@@ -557,11 +733,11 @@ class ConnectorApp:
 
     def _build_activity(self):
         page = self.pages["activity"]
-        self._stack_heading(page, "Activity & diagnostics",
-                            "Visible progress, safe retry messages and separate broker session activity.")
+        self._stack_heading(page, "Recent activity",
+                            "See what changed, what succeeded, and anything that needs your attention.")
         tools = tk.Frame(page, bg=BACKGROUND)
         tools.pack(fill="x", pady=(0, 12))
-        self._button(tools, "Copy diagnostics", self.copy_diagnostics,
+        self._button(tools, "Copy support details", self.copy_diagnostics,
                      primary=True).pack(side="left", padx=(0, 9))
         self._button(tools, "Clear display", self.clear_activity, quiet=True).pack(side="left")
         panel = self._card(page, 14)
@@ -582,8 +758,16 @@ class ConnectorApp:
 
     def _build_help(self):
         page = self._scrollable_page("help")
-        self._stack_heading(page, "Setup & troubleshooting",
-                            "Everything needed to prepare isolated broker terminals for capture.")
+        self._stack_heading(page, "Help & guidance",
+                            "Plain-language answers for connecting and monitoring your accounts.")
+        welcome = self._card(page, 18)
+        welcome.pack(fill="x", pady=(0, 14))
+        self._label(welcome, "New here? Take the quick tour", size=13,
+                    bold=True).pack(anchor="w", pady=(0, 6))
+        self._label(welcome, "Five short stops show where everything lives. You can skip, go back, "
+                    "or use the app normally while the guide is open.",
+                    size=10, color=MUTED, wrap=760).pack(anchor="w", pady=(0, 11))
+        self._button(welcome, "Show me around", self._tour_start, primary=True).pack(anchor="w")
         for title, desc in [
             ("Pair this PC once",
              "In the dashboard, choose MT5 Connections and Pair a PC. Paste the code in this app. "
@@ -598,13 +782,58 @@ class ConnectorApp:
              "PC online confirms the connection to your dashboard. Broker verified confirms the login. "
              "Journal synced means the dashboard received a capture from MT5."),
             ("Manage accounts",
-             "Open your dashboard to see each login, pause or resume monitoring, retry a sync, or review earlier trades.")
+             "Open your dashboard to see each login, pause or resume monitoring, retry a sync, or review earlier trades."),
+            ("Allow a receiving account to copy trades",
+             "Open Trade copying in this app. Choose the account that will receive trades, then choose Allow demo trade copying. "
+             "In Copy Fleet on the website, refresh and confirm it says Ready to copy. The permission belongs only to that account."),
+            ("Why can't I switch on copying?",
+             "Keep the Windows app and broker account open. Check that your account can place trades, monitoring is on, "
+             "and its permission matches demo or live mode. Choose Check permission, then refresh Copy Fleet on the website."),
+            ("Will switching on copy trading open my old trades?",
+             "No. The copier first sees which trades are already open, then follows eligible new changes. "
+             "Pausing stops new instructions but cannot undo an order already sent to MetaTrader.")
         ]:
             card = self._card(page, 14)
             card.pack(fill="x", pady=(0, 8))
             self._label(card, title, bold=True, size=11).pack(anchor="w")
             self._label(card, desc, color=MUTED, size=9,
                         wrap=790).pack(anchor="w", pady=(5, 0))
+
+    TOUR_STEPS = (
+        ("overview", "Your home: see whether the computer is connected and how many accounts are updating."),
+        ("pair", "Connect this PC: link this computer to your YoungMoney3 account one time."),
+        ("sessions", "My accounts: add, reconnect, or pause individual broker accounts."),
+        ("copy", "Trade copying: choose a receiving account and allow it to copy trades on this computer."),
+        ("activity", "Recent activity: review updates and copy support details if anything needs attention."),
+    )
+
+    def _tour_start(self):
+        self.tour_index = 0
+        self._tour_visit()
+
+    def _tour_visit(self):
+        if not 0 <= self.tour_index < len(self.TOUR_STEPS):
+            self._tour_end()
+            return
+        page,description=self.TOUR_STEPS[self.tour_index]
+        self.tour_step_var.set("GUIDE "+str(self.tour_index+1)+"/"+
+                               str(len(self.TOUR_STEPS))+"  ·  "+description)
+        if not self.tour_strip.winfo_manager():
+            self.tour_strip.pack(fill="x", pady=(0, 10))
+        self.show_page(page)
+
+    def _tour_next(self):
+        self.tour_index += 1
+        self._tour_visit()
+
+    def _tour_back(self):
+        self.tour_index = max(0,self.tour_index-1)
+        self._tour_visit()
+
+    def _tour_end(self):
+        self.tour_index = -1
+        self.tour_strip.pack_forget()
+        self.banner_var.set("Guide closed. You can open it again from Help.")
 
     def show_page(self, key):
         self.current_page = key
@@ -613,11 +842,13 @@ class ConnectorApp:
             selected = item == key
             button.set_tones(PANEL_ALT if selected else SIDEBAR, "#31212d")
             button.configure(fg=ACCENT if selected else MUTED)
-        if key == "sessions":
+        if key in ("sessions", "copy"):
             self.refresh_sessions()
-        titles = {"overview": "Account monitor", "sessions": "Account sessions",
-                  "pair": "Connect this PC", "activity": "Activity & diagnostics",
-                  "help": "Setup & troubleshooting"}
+        if key == "copy" and self.copy_account_choice.get():
+            self._choose_copy_account()
+        titles = {"overview": "Your connection", "sessions": "My accounts",
+                  "copy": "Trade copying", "pair": "Connect this PC",
+                  "activity": "Recent activity", "help": "Help & guidance"}
         art = self.header_art.get(titles.get(key))
         if art:
             art.reveal()
@@ -746,7 +977,7 @@ class ConnectorApp:
             identity += "  •  Last sync " + receipt[0] + "  •  " + str(receipt[1]) + " decisions awaiting review"
         copy_state = self.copy_authorization_by_slot.get(s["terminal"])
         if copy_state is not None:
-            identity += "  •  DEMO copier " + ("authorized" if copy_state else "disabled")
+            identity += "  •  copying " + ("allowed" if copy_state else "off")
         self.selected_details_var.set(s["name"] + "  •  " + identity)
 
     def _copy_database_path(self):
@@ -899,7 +1130,7 @@ class ConnectorApp:
         window.minsize(480,400)
         frame = tk.Frame(window,bg=BACKGROUND,padx=24,pady=22)
         frame.pack(fill="both",expand=True)
-        self._label(frame,"BROKER ACCOUNT  /  DIAGNOSTICS",size=9,bold=True,
+        self._label(frame,"YOUR BROKER ACCOUNT",size=9,bold=True,
                     color=ACCENT).pack(anchor="w")
         self._label(frame,str(item.get("name","Account")),size=20,bold=True).pack(anchor="w",pady=(8,5))
         self._label(frame,str(item.get("broker",""))+" · "+str(item.get("login","")),
@@ -913,12 +1144,12 @@ class ConnectorApp:
             ("Free margin", f"{health[3]:,.2f}" if health else "—"),
             ("Open positions", str(health[4]) if health else "—"),
             ("Pending orders", str(health[5]) if health else "—"),
-            ("Copy source", "Observed for an armed fleet" if health and health[6] else "Not acting as source"),
-            ("Local copy authorization", (str(item.get("copy_mode","none")).upper()+" · AUTHORIZED") if item.get("allowed") else "DISABLED"),
-            ("Journal evidence awaiting sync", str(item.get("queued",0))),
-            ("Positions awaiting broker closure", str(item.get("unresolved",0))),
-            ("Ambiguous/unacknowledged copy tasks", str(item.get("unacknowledged",0))),
-            ("Last copy result", str(health[7]) if health and health[7] else "No broker copy actions"),
+            ("Main account for copying", "Observed for an armed fleet" if health and health[6] else "Not acting as source"),
+            ("Trade copying on this computer", (str(item.get("copy_mode","none")).upper()+" · Allowed") if item.get("allowed") else "Not allowed"),
+            ("Trades waiting to update", str(item.get("queued",0))),
+            ("Trades awaiting final broker confirmation", str(item.get("unresolved",0))),
+            ("Copy orders awaiting confirmation", str(item.get("unacknowledged",0))),
+            ("Last copy result", str(health[7]) if health and health[7] else "No copied orders yet"),
         ]
         for label,value in rows:
             line=tk.Frame(frame,bg=BACKGROUND)
@@ -958,6 +1189,38 @@ class ConnectorApp:
                         str(Path(slot).parent)))
         if selected and self.session_table.exists(selected[0]):
             self.session_table.selection_set(selected[0])
+        mapping={}
+        for session in entries:
+            info=self.account_by_slot.get(session["terminal"])
+            if info and info.get("link"):
+                label=(session["name"]+"  ·  "+str(info.get("server") or "Broker")+
+                       "  /  "+str(info.get("login") or "Account"))
+                mapping[label]=session["id"]
+        self.copy_choice_map=mapping
+        self.copy_account_combo.configure(values=list(mapping))
+        if entries:
+            self.empty_accounts.place_forget()
+        else:
+            self.empty_accounts.place(relx=.5,rely=.48,anchor="center")
+            self.empty_accounts.lift()
+        if mapping:
+            self.copy_add_account_button.pack_forget()
+        elif not self.copy_add_account_button.winfo_manager():
+            self.copy_add_account_button.pack(anchor="w",pady=(13,0))
+        if self.copy_account_choice.get() not in mapping:
+            self.copy_account_choice.set(next(iter(mapping), ""))
+        self.account_total_var.set(str(len(mapping)))
+        self.account_active_var.set(str(sum(
+            1 for session in entries if
+            session["terminal"] in self.account_by_slot and session["enabled"] and
+            self.status_by_slot.get(session["terminal"]) in ("Synced","Capturing")
+        )))
+        self.account_attention_var.set(str(sum(
+            1 for session in entries if
+            session["terminal"] in self.account_by_slot and
+            (not session["enabled"] or self._session_state(session) in (
+                "Needs reconnection","Needs re-link","Terminal missing","Paused on dashboard"))
+        )))
         self._selected_session_details()
 
     def _safe_change(self, action):
@@ -965,7 +1228,7 @@ class ConnectorApp:
             action()
             self.refresh_sessions()
         except (SessionError, OSError, ValueError, StopIteration) as error:
-            self._log("Session configuration needs attention: " + str(error))
+            self._log("This account needs attention: " + str(error))
             messagebox.showwarning("Session manager", str(error))
 
     def _copy_named_terminal(self, source, name):
@@ -1256,7 +1519,7 @@ class ConnectorApp:
             self.banner_var.set("Finishing the current request and preserving the upload queue.")
             self._log("Safe stop requested. Waiting for current broker operation.")
         else:
-            self.status_var.set("Capture stopped")
+            self.status_var.set("Monitoring stopped")
 
     def _log(self, message):
         # Messages are composed from known app text, not user input, tokens or
@@ -1281,7 +1544,7 @@ class ConnectorApp:
         self.activity_text.configure(state="disabled")
 
     def copy_diagnostics(self):
-        header = "YoungMoney3 Connector " + VERSION + " • staging • capture only\n"
+        header = "YoungMoney3 Connector " + VERSION + " • staging • monitoring and optional copying\n"
         text = header + "\n".join(self.log_items)
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
@@ -1290,7 +1553,7 @@ class ConnectorApp:
     def _event(self, item):
         state = item.get("state", "unknown")
         slot = item.get("slot")
-        message = item.get("message", "")
+        message = trader_message(item.get("message", ""))
         if state == "pc-online":
             self.pc_state = state
             self.device_id = item["device"]
@@ -1327,7 +1590,7 @@ class ConnectorApp:
             self.pc_state = state
             self.status_var.set("Staging server needs an update")
             self.device_var.set("This PC's pairing remains saved. The staging API did not acknowledge connector check-ins.")
-            self.banner_var.set("The dashboard server must support this connector version. Update staging before adding accounts.")
+            self.banner_var.set("Update the app or dashboard before adding more accounts. Your saved account link is safe.")
             self._log("Connector check-in endpoint is unavailable or returned an incompatible response.")
         elif state == "pc-revoked":
             self.restart_due = None
@@ -1339,15 +1602,28 @@ class ConnectorApp:
         elif state in ("control-saved", "control-error"):
             self.banner_var.set(message)
             self._log(message)
+        elif state == "copy-permission-view":
+            try:
+                selected_slot,selected_link=self._selected_copy_target()
+            except (SessionError, StopIteration):
+                selected_slot,selected_link=None,None
+            if slot==selected_slot and item.get("link")==selected_link:
+                label,advice=permission_summary(bool(item.get("approved")),item.get("mode"),True)
+                self.copy_permission_var.set(label)
+                self.copy_help_var.set(advice)
+                self.copy_route.set_state("approved" if item.get("approved") else "off")
         elif state == "copy-consent-updated":
             self.copy_authorization_by_slot[slot] = bool(item.get("enabled"))
             mode=item.get("mode","demo").upper()
             self.banner_var.set((mode+" copy execution authorized for selected account only.") if item.get("enabled")
                                 else "Trade copy execution disabled for selected account.")
-            self._log("Local account-specific copy authorization updated. Other accounts remain independent.")
+            self._log("Copying permission changed for the selected account only.")
             self._selected_session_details()
+            self._load_copy_permission()
         elif state == "copy-consent-error":
-            self.banner_var.set("Local account execution permission could not be saved. Review the verified broker session.")
+            self.banner_var.set("We could not save this account's copying permission. Reconnect and try again.")
+            self.copy_permission_var.set("Permission could not be saved")
+            self.copy_help_var.set("Reconnect this account, then choose Allow trade copying again.")
         elif state == "copy-account-details":
             self._show_copy_account_details(item)
         elif state == "copy-account-details-error":
@@ -1384,6 +1660,8 @@ class ConnectorApp:
         elif state == "paired":
             self.pair_ok = True
             self.paired = True
+            self.hero_pc_button.configure(text="Rename this computer")
+            self.hero_pc_button.set_tones(PANEL_ALT,"#354450")
             self.resume_after_pair = True
             self.restart_due = None
             self.restart_delay = 0
@@ -1398,7 +1676,7 @@ class ConnectorApp:
             self.pair_stage_var.set("Success! Your PC is paired with staging.")
             self.pair_elapsed_var.set("Pairing confirmed by the staging server.")
             self.status_var.set("PC paired successfully")
-            self.banner_var.set("Pairing saved. Connecting this PC to your dashboard.")
+            self.banner_var.set("Computer connected. Getting your accounts ready.")
             self._log("PC pairing confirmed. No account credentials are stored in the GUI.")
         elif state == "verifying":
             self.focus_slot = slot
@@ -1412,9 +1690,9 @@ class ConnectorApp:
             self.connection_path.show(max(2, self.connection_path.level))
             self.status_var.set("Broker verified")
             self.store.clear_arm(slot)
-            self.banner_var.set("Staging accepted the broker login. First journal sync pending."
+            self.banner_var.set("Your broker account is connected. Your trade history is being updated."
                                 if item.get("acknowledged") else
-                                "Broker verified locally. Dashboard acknowledgement will retry without re-entering the password.")
+                                "Your broker account is ready. We are finishing the link to your dashboard.")
             self._log("Broker account linked to selected terminal " +
                       str(Path(slot).parent.name) + ".")
         elif state == "arm-consumed":
@@ -1448,7 +1726,7 @@ class ConnectorApp:
             self.status_by_slot[slot] = "Starting process"
             self._log("A dedicated MT5 capture process is starting.")
         elif state == "session-worker-exited":
-            if slot in self.account_by_slot and self.status_by_slot.get(slot) != "Connection issue":
+            if slot in self.account_by_slot and self.status_by_slot.get(slot) != "Needs reconnection":
                 self.status_by_slot[slot] = "Stopped"
         elif state == "session-unlinked":
             self.sync_by_slot.pop(slot, None)
@@ -1471,7 +1749,7 @@ class ConnectorApp:
             if state == "account-error" and self.focus_slot == slot:
                 self.focus_setup = False
                 self.status_var.set("Broker login needs attention")
-            self.status_by_slot[slot] = "Connection issue"
+            self.status_by_slot[slot] = "Needs reconnection"
             self.banner_var.set(message)
             self._log("Session attention required: " + message)
         elif state == "error":
@@ -1521,7 +1799,7 @@ class ConnectorApp:
                 self._log("Capture temporarily offline; retry scheduled.")
                 self.last_summary = "retrying"
         elif state == "paused":
-            self.status_var.set("Capture paused")
+            self.status_var.set("Monitoring paused")
         self.refresh_sessions()
 
     def poll(self):
@@ -1598,7 +1876,7 @@ def main():
                         raise RuntimeError("Smoke test requires the frozen executable")
                     # Exercise real nav/pairing widgets without starting capture
                     # or touching any user session/credential setting.
-                    if not {"overview", "sessions", "pair", "activity", "help"} <= set(app.pages):
+                    if not {"overview", "sessions", "copy", "pair", "activity", "help"} <= set(app.pages):
                         raise RuntimeError("New session manager navigation is incomplete")
                     app.code_var.set("a" * 32)
                     if not app._validate_code():
@@ -1637,14 +1915,14 @@ def main():
                             raise RuntimeError("Bundled Tcl/Tk data missing")
                     Path(sys.argv[2]).write_text(json.dumps({
                         "startup": "ok", "frozen": True, "capture_started": False,
-                        "session_manager": len(app.pages) == 5 and bool(app.session_table),
+                        "session_manager": len(app.pages) == 6 and bool(app.session_table),
                         "terminal_creation": bool(app.create_button) and bool(app.duplicate_button),
                         "pairing_controls": bool(app.pair_button) and bool(app.code_input),
                         "activity_view": bool(app.activity_text),
                         "responsive_layout": True,
                         "responsive_sizes": responsive_sizes,
                         "motion_controls": bool(app.motion_var is not None),
-                        "native_artwork": len(app.header_art) == 5,
+                        "native_artwork": len(app.header_art) == 6,
                         "tcl": window.tk.eval("info patchlevel"),
                         "tk": window.tk.eval("package present Tk"),
                         "tcl_bundled": Path(window.tk.eval("info library")).resolve() == (bundle / "_tcl_data").resolve(),

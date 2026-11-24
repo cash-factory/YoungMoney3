@@ -173,7 +173,7 @@ def capture_account(origin, database_path, slot, link, stop_event, event_queue, 
                     "synced_at": synced_at, "awaiting": awaiting,
                     "state": "session-synced", "slot": slot, "link": link,
                     "login": record[2], "server": record[3], "pending": pending,
-                    "message": "Account capture completed; next scan scheduled.",
+                    "message": "Account updated. We'll check for new trades again shortly.",
                 })
             except Exception as error:
                 if failures == 0:
@@ -315,7 +315,7 @@ def run_supervisor(origin, db, database_path, slots, token, report,
                         retry_after[link] = now + 10
                         if report:
                             report({"state": "session-error", "slot": slot,
-                                    "message": "Account process exited; retrying in 10 seconds."})
+                                    "message": "Account connection interrupted. We'll try again automatically."})
                     else:
                         retry_after.pop(link, None)
 
@@ -332,7 +332,7 @@ def run_supervisor(origin, db, database_path, slots, token, report,
                 children[link] = (proc, halt, row[1])
                 if report:
                     report({"state": "session-starting", "slot": row[1],
-                            "message": "Starting isolated MT5 account capture process."})
+                            "message": "Starting monitoring for this broker account."})
 
             requested = set()
             if retry_queue is not None:
@@ -443,7 +443,7 @@ def run_supervisor(origin, db, database_path, slots, token, report,
                                               for proc, halt, _ in children.values()),
                         "queued": db.execute("SELECT COUNT(*) FROM outbox").fetchone()[0],
                         "last_sync": datetime.now(timezone.utc).isoformat(),
-                        "message": "Independent account processes capture concurrently."})
+                        "message": "Your connected accounts are being monitored together."})
                 last_report = now
             if stop_event:
                 stop_event.wait(0.5)
