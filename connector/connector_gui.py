@@ -211,7 +211,9 @@ class ConnectorApp:
             def fit(_event=None):
                 inset = sum(parent.winfo_pixels(str(parent.cget(option)))
                             for option in ("padx", "borderwidth", "highlightthickness")) * 2
-                label.configure(wraplength=min(limit, max(100, parent.winfo_width() - inset - 2)))
+                target=min(limit,max(100,parent.winfo_width()-inset-2))
+                if int(label.cget("wraplength")) != target:
+                    label.configure(wraplength=target)
             parent.bind("<Configure>", fit, add="+")
         return label
 
@@ -323,8 +325,15 @@ class ConnectorApp:
         canvas.pack(side="left", fill="both", expand=True)
         frame = tk.Frame(canvas, bg=BACKGROUND)
         window = canvas.create_window((0, 0), window=frame, anchor="nw")
-        frame.bind("<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(window, width=e.width))
+        def update_scroll_region(_e=None):
+            bounds=canvas.bbox("all")
+            if bounds and tuple(int(v) for v in str(canvas.cget("scrollregion")).split())!=bounds:
+                canvas.configure(scrollregion=bounds)
+        def match_page_width(e):
+            if int(float(canvas.itemcget(window,"width") or 0))!=e.width:
+                canvas.itemconfigure(window,width=e.width)
+        frame.bind("<Configure>",update_scroll_region)
+        canvas.bind("<Configure>",match_page_width)
         self._page_canvases[name] = canvas
         return frame
 
