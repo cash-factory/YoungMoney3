@@ -250,7 +250,7 @@ class ConnectorApp:
         short = self.root.winfo_height() < 660
         self.sidebar_footer.configure(pady=12 if short else 20)
         self.environment_label.configure(text="●  STAGING" if short else "●  STAGING ENVIRONMENT")
-        self.sidebar_mode_label.configure(text="Read-only capture · copier opt-in" if short else "Journal capture: read-only  /  Trade copier: account opt-in")
+        self.sidebar_mode_label.configure(text="Journal + optional copier" if short else "Trade journal + optional copying, with your permission")
         if short:
             self.sidebar_version_label.pack_forget()
         elif not self.sidebar_version_label.winfo_manager():
@@ -282,6 +282,9 @@ class ConnectorApp:
         for art in self.header_art.values():
             if not self.motion_var.get():
                 art.reveal()
+        if not self.motion_var.get():
+            self.copy_route._cancel()
+            self.copy_route.draw()
 
     def _card(self, parent, pad=20):
         return tk.Frame(parent, bg=PANEL, highlightbackground=BORDER,
@@ -363,7 +366,7 @@ class ConnectorApp:
         self.environment_label = self._label(foot, "●  STAGING ENVIRONMENT", size=9,
                                              color=ACCENT, wrap=155, bold=True)
         self.environment_label.pack(anchor="w")
-        self.sidebar_mode_label = self._label(foot, "Journal: read-only  /  Copier: opt-in", color=MUTED,
+        self.sidebar_mode_label = self._label(foot, "Journal records trades; copying is optional", color=MUTED,
                                               size=9, wrap=155)
         self.sidebar_mode_label.pack(anchor="w", pady=(6, 0))
         self.sidebar_version_label = self._label(foot, "v" + VERSION + "   •   Windows x64",
@@ -683,10 +686,10 @@ class ConnectorApp:
     def _build_activity(self):
         page = self.pages["activity"]
         self._stack_heading(page, "Activity & diagnostics",
-                            "Visible progress, safe retry messages and separate broker session activity.")
+                            "See what changed, what succeeded, and anything that needs your attention.")
         tools = tk.Frame(page, bg=BACKGROUND)
         tools.pack(fill="x", pady=(0, 12))
-        self._button(tools, "Copy diagnostics", self.copy_diagnostics,
+        self._button(tools, "Copy support details", self.copy_diagnostics,
                      primary=True).pack(side="left", padx=(0, 9))
         self._button(tools, "Clear display", self.clear_activity, quiet=True).pack(side="left")
         panel = self._card(page, 14)
@@ -1024,7 +1027,7 @@ class ConnectorApp:
         window.minsize(480,400)
         frame = tk.Frame(window,bg=BACKGROUND,padx=24,pady=22)
         frame.pack(fill="both",expand=True)
-        self._label(frame,"BROKER ACCOUNT  /  DIAGNOSTICS",size=9,bold=True,
+        self._label(frame,"YOUR BROKER ACCOUNT",size=9,bold=True,
                     color=ACCENT).pack(anchor="w")
         self._label(frame,str(item.get("name","Account")),size=20,bold=True).pack(anchor="w",pady=(8,5))
         self._label(frame,str(item.get("broker",""))+" · "+str(item.get("login","")),
@@ -1039,7 +1042,7 @@ class ConnectorApp:
             ("Open positions", str(health[4]) if health else "—"),
             ("Pending orders", str(health[5]) if health else "—"),
             ("Copy source", "Observed for an armed fleet" if health and health[6] else "Not acting as source"),
-            ("Local copy authorization", (str(item.get("copy_mode","none")).upper()+" · AUTHORIZED") if item.get("allowed") else "DISABLED"),
+            ("Trade copying on this computer", (str(item.get("copy_mode","none")).upper()+" · Allowed") if item.get("allowed") else "Not allowed"),
             ("Journal evidence awaiting sync", str(item.get("queued",0))),
             ("Positions awaiting broker closure", str(item.get("unresolved",0))),
             ("Ambiguous/unacknowledged copy tasks", str(item.get("unacknowledged",0))),
