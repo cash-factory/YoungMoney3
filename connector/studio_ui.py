@@ -181,16 +181,16 @@ class StudioArt(tk.Canvas):
         self.delete("all")
         background = self.cget("bg")
         dim = blend(background, self.accent, .22)
-        soft = blend(background, "#ffffff", .12)
-        bright = blend(self.accent, "#ffffff", .5)
+        soft = blend(background, "#19283E", .27)
+        bright = blend(self.accent, "#FFFFFF", .15)
         if self.variant == "Your connection":
             # Quiet product-style composition: a Windows terminal, isolated
             # accounts and verified journal evidence. No loop or decorative
             # motion; connection animation is reserved for actual state changes.
-            edge = blend(background, "#ffffff", .24)
-            slate = blend(background, "#ffffff", .08)
-            screen = blend(background, "#ffffff", .045)
-            success = "#72cda4"
+            edge = blend(background, "#19283E", .22)
+            slate = blend(background, "#19283E", .055)
+            screen = blend(background, "#4357D6", .045)
+            success = "#218A73"
             self.create_rectangle(17, 20, 101, 79, fill=slate, outline=edge,
                                   width=1)
             self.create_rectangle(22, 25, 96, 70, fill=screen, outline=edge,
@@ -216,9 +216,9 @@ class StudioArt(tk.Canvas):
         # Compact enterprise vector scene instead of an animated zig-zag.
         # The art carries structure; actual connection progress is shown
         # separately by ConnectionPath only after server acknowledgements.
-        border = blend(background, "#ffffff", .24)
-        field = blend(background, "#ffffff", .065)
-        dark = blend(background, "#000000", .16)
+        border = blend(background, "#19283E", .23)
+        field = blend(background, "#4357D6", .048)
+        dark = blend(background, "#19283E", .035)
         self.create_rectangle(13, 12, 183, 94, fill=dark, outline=border, width=1)
         self.create_rectangle(18, 17, 178, 88, fill=field, outline="")
         self.create_line(18, 36, 178, 36, fill=border, width=1)
@@ -236,7 +236,7 @@ class StudioArt(tk.Canvas):
             for index,y in enumerate((39,59,79)):
                 self.create_line(104,y,128,y,fill=border,width=2)
                 self.create_rectangle(132,y-9,166,y+9,fill=background,outline=border,width=1)
-                self.create_oval(138,y-3,143,y+2,fill="#79d7b5",outline="")
+                self.create_oval(138,y-3,143,y+2,fill="#218A73",outline="")
                 self.create_line(149,y,159,y,fill=soft,width=2)
         elif self.variant == "My accounts":
             for i in range(3):
@@ -244,7 +244,7 @@ class StudioArt(tk.Canvas):
                 self.create_rectangle(x, y, 166, y + 10, fill=background,
                                       outline=border if i == 0 else dim, width=1)
                 self.create_oval(x + 5, y + 3, x + 9, y + 7,
-                                 fill="#75c8a7" if i != 2 else self.accent, outline="")
+                                 fill="#218A73" if i != 2 else self.accent, outline="")
                 self.create_line(x + 17, y + 5, x + 83, y + 5, fill=soft, width=2)
                 self.create_line(x + 103, y + 5, x + 125, y + 5,
                                  fill=self.accent, width=2)
@@ -255,12 +255,12 @@ class StudioArt(tk.Canvas):
             self.create_line(87, 61, 122, 61, fill=border, width=2)
             self.create_rectangle(127, 50, 162, 72, outline=border, fill=background)
             self.create_line(134, 61, 140, 66, 151, 55,
-                             fill="#75c8a7", width=2.5)
+                             fill="#218A73", width=2.5)
         elif self.variant == "Help & guidance":
             for i in range(3):
                 y = 46 + i * 12
                 self.create_oval(28, y, 35, y + 7, outline="",
-                                 fill="#75c8a7" if i == 0 else soft)
+                                 fill="#218A73" if i == 0 else soft)
                 self.create_line(43, y + 4, 114 + i * 12, y + 4,
                                  fill=bright if i == 0 else border, width=2)
                 self.create_line(143, y + 4, 161, y + 4,
@@ -271,7 +271,7 @@ class StudioArt(tk.Canvas):
             for i in range(3):
                 y = 45 + i * 14
                 self.create_oval(34, y - 3, 42, y + 5,
-                                 fill="#75c8a7" if i < 2 else self.accent, outline="")
+                                 fill="#218A73" if i < 2 else self.accent, outline="")
                 self.create_line(52, y + 1, 125 + i * 7, y + 1,
                                  fill=soft if i else bright, width=2)
 
@@ -315,18 +315,18 @@ class ConnectionPath(tk.Canvas):
         points = (margin, width / 2, width - margin)
         y = 24
         for i in range(2):
-            self.create_line(points[i], y, points[i+1], y, fill="#544652", width=2)
+            self.create_line(points[i], y, points[i+1], y, fill="#C9D2DF", width=2)
             progress = max(0, min(1, self.position - i - 1))
             if progress:
                 self.create_line(points[i], y, points[i] + (points[i+1] - points[i]) * progress,
-                                 y, fill="#a7ddc2", width=3)
+                                 y, fill="#2E9680", width=3)
         for i, x in enumerate(points):
             done = self.position >= i + .99
             current = i == self.level
-            tone = "#a7ddc2" if done else "#f2adbd" if current else "#9e95a1"
+            tone = "#218A73" if done else "#4357D6" if current else "#93A0B1"
             self.create_oval(x-8, y-8, x+8, y+8, fill=tone if done else self.cget("bg"), outline=tone, width=2)
             if done:
-                self.create_line(x-4,y,x-1,y+3,x+4,y-4,fill="#19281f",width=2)
+                self.create_line(x-4,y,x-1,y+3,x+4,y-4,fill="#FFFFFF",width=2)
             elif current:
                 self.create_oval(x-2,y-2,x+2,y+2,fill=tone,outline="")
             self.create_text(x, 51, text=self.labels[i], font=("Segoe UI", 9), fill=tone)
