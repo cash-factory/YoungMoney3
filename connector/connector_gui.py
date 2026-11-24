@@ -725,6 +725,8 @@ class ConnectorApp:
                 if not self.account_detail.winfo_manager():
                     self.account_detail.pack(fill="x",pady=(3,13),
                                               after=self.account_rows_host)
+                self.root.after_idle(self.session_actions.reflow)
+                self.root.after_idle(self.copy_controls.reflow)
             else:
                 self.account_detail.pack_forget()
         else:
