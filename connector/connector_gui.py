@@ -153,7 +153,7 @@ class ConnectorApp:
         # fallback for source-only installations without the optional theme.
         try:
             import ttkbootstrap
-            style = ttkbootstrap.Style(theme="darkly")
+            style = ttkbootstrap.Style(theme="tokyo-night-dark")
         except ImportError:
             style = ttk.Style(self.root)
             style.theme_use("clam")
