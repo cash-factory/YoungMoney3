@@ -120,6 +120,22 @@ try{
       tradeAllowed:true},'',token);
     assert.equal(t.status,200);
   }
+  // A paired computer alone is insufficient: the actual source and each
+  // receiving account need recent, broker-confirmed observations.
+  const warmSource=await call('mt5/device/copy-report',{link:source,balance:1000,
+    equity:1000,freeMargin:1000,currency:'USD',openPositions:0,pendingOrders:0,
+    connected:true,tradeAllowed:true},'',token);
+  assert.equal(warmSource.status,200);
+  await db.prepare('UPDATE copy_account_reports SET observed_at_ms=? WHERE link=?')
+    .bind(Date.now()-140000,f1).run();
+  const staleFollower=await call('copy/fleet-arm',{id:fleet,version:1,confirm:true},owner.cookie);
+  assert.equal(staleFollower.status,409);
+  assert.match(staleFollower.result.error,/has not updated recently/,
+    'An online PC cannot disguise a receiving account with stale broker updates.');
+  const newReport=await call('mt5/device/copy-report',{link:f1,balance:2000,equity:1950,
+    freeMargin:1800,currency:'USD',openPositions:1,pendingOrders:2,
+    connected:true,tradeAllowed:true},'',token);
+  assert.equal(newReport.status,200);
   const armed=await call('copy/fleet-arm',{id:fleet,version:1,confirm:true},owner.cookie);
   assert.equal(armed.status,200,JSON.stringify(armed.result));
   assert.equal(armed.result.state,'demo_armed');
