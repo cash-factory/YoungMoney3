@@ -113,6 +113,8 @@ try{
   for(const l of [f1,f2,f3]){
     const approved=await call('mt5/device/copy-consent',deviceConsent(l,true),'',token);
     assert.equal(approved.status,200,JSON.stringify(approved.result));
+    assert.ok(approved.result.expires_at>Date.now()+150000,
+      'Slow broker history scans must not expire copying permission after 45 seconds.');
     const t=await call('mt5/device/copy-report',{link:l,balance:2000,equity:1950,freeMargin:1800,
       currency:l===f2?'EUR':'USD',openPositions:1,pendingOrders:2,connected:true,
       tradeAllowed:true},'',token);
