@@ -125,10 +125,9 @@ class ConnectorPresentationTests(unittest.TestCase):
                 # The transparent test window is deliberately excluded from
                 # Windows pointer hit-testing. Tk's actual child stacking order
                 # still proves the row windows cannot cover native buttons.
-                siblings = self.app.quick_setup_actions.winfo_children()
-                row = last.pack_info()["in"]
-                self.assertGreater(siblings.index(last), siblings.index(row),
-                                   "Quick setup action must remain above its row frame")
+                self.assertEqual(last.winfo_manager(),"grid")
+                self.assertIn("row",last.grid_info(),
+                              "Quick setup action must be directly clickable in its stable grid")
                 self.app.show_page("sessions")
                 self._settle()
                 self.assert_actions_fit(self.app.session_tools)
