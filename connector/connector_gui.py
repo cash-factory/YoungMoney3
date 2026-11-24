@@ -262,6 +262,7 @@ class ConnectorApp:
             self.sidebar_version_label.pack(anchor="w", pady=(14, 0))
         self._arrange_overview()
         self._arrange_copy()
+        self._arrange_pair()
         for group in self.action_groups:
             group.reflow()
 
@@ -865,55 +866,82 @@ class ConnectorApp:
         webbrowser.open(STAGING_URL + "/?addAccount=" + self.device_id + "#mt5")
 
     def _build_pairing(self):
-        page = self._scrollable_page("pair")
-        self._stack_heading(page, "Connect this PC",
-                            "A guided, one-time secure link between this Windows user and your staging account.")
-        steps = self._card(page, 22)
-        steps.pack(fill="x", pady=(0, 14))
-        self._label(steps, "01   Generate a pairing code", size=13, bold=True).pack(anchor="w")
-        self._label(steps, "In YoungMoney3 staging, open MT5 Connections → Pair a PC. "
-                    "The code expires after five minutes.", size=10,
-                    color=MUTED, wrap=770).pack(anchor="w", pady=(6, 12))
-        self._button(steps, "Open MT5 Connections in staging",
-                     self.open_dashboard, quiet=True).pack(anchor="w")
-        field = self._card(page, 22)
-        field.pack(fill="x", pady=(0, 14))
-        self._label(field, "02   Paste the code", size=13, bold=True).pack(anchor="w")
-        self._label(field, "Use Ctrl+V, the Paste button, or right-click the field.",
-                    color=MUTED).pack(anchor="w", pady=(5, 12))
-        entryrow = tk.Frame(field, bg=PANEL)
-        entryrow.pack(fill="x")
-        self.code_input = tk.Entry(entryrow, textvariable=self.code_var,
-                                   width=38, show="●", font=("Consolas", 13),
-                                   bg=BACKGROUND, fg=TEXT, insertbackground=TEXT,
-                                   selectbackground="#662336", relief="flat",
-                                   highlightbackground=BORDER, highlightthickness=2,
-                                   highlightcolor=ACCENT)
-        self.code_input.pack(fill="x", ipady=11, pady=(0, 10))
-        self.code_actions = self._actions(field, [
-            ("Paste code", self.paste_code, {}),
-            ("Show / hide", self.toggle_code, {"quiet": True}),
-            ("Clear", lambda: self.code_var.set(""), {"quiet": True})], minimum=120)
+        page=self._scrollable_page("pair")
+        self._stack_heading(page,"Connect this computer",
+                            "Link this PC to your YoungMoney3 account once. Your connection will be saved.")
+        self.pair_columns=tk.Frame(page,bg=BACKGROUND)
+        self.pair_columns.pack(fill="x")
+        self.pair_left=tk.Frame(self.pair_columns,bg=BACKGROUND)
+        self.pair_right=tk.Frame(self.pair_columns,bg=BACKGROUND)
+
+        field=self._card(self.pair_left,24)
+        field.pack(fill="x")
+        self._label(field,"Your secure pairing code",size=17,bold=True).pack(anchor="w")
+        self._label(field,
+                    "Get the code from your dashboard. Paste it below to connect this computer.",
+                    size=10,color=MUTED,wrap=550).pack(anchor="w",pady=(5,13))
+        self.code_input=tk.Entry(field,textvariable=self.code_var,
+                                 width=38,show="●",font=("Consolas",13),
+                                 bg=PANEL_ALT,fg=TEXT,insertbackground=TEXT,
+                                 selectbackground="#D9E2FA",relief="flat",
+                                 highlightbackground=BORDER,highlightthickness=1,
+                                 highlightcolor=ACCENT)
+        self.code_input.pack(fill="x",ipady=12,pady=(0,9))
+        self.code_actions=self._actions(field,[
+            ("Paste code",self.paste_code,{"quiet":True}),
+            ("Show / hide",self.toggle_code,{"quiet":True}),
+            ("Clear",lambda:self.code_var.set(""),{"quiet":True})],minimum=130)
         self._attach_context_menu()
-        self._label(field, textvar=self.code_error_var, color=MUTED,
-                    wrap=790, size=9).pack(anchor="w", pady=(10, 0))
-        confirmation = self._card(page, 22)
-        confirmation.pack(fill="x")
-        self._label(confirmation, "03   Verify and confirm", size=13,
-                    bold=True).pack(anchor="w")
-        self._label(confirmation, textvar=self.pair_stage_var, color=ACCENT,
-                    size=10, wrap=770).pack(anchor="w", pady=(8, 8))
-        self._label(confirmation, textvar=self.pair_elapsed_var, size=9,
-                    color=MUTED).pack(anchor="w", pady=(0, 10))
-        self.pair_button = self._button(confirmation, "Pair this PC",
-                                        self.pair, primary=True)
-        self.pair_button.pack(anchor="w")
-        self.pair_progress = ttk.Progressbar(confirmation, mode="indeterminate",
-                                            style="YM.Horizontal.TProgressbar")
-        self._label(confirmation, "When it says 'PC paired successfully', choose Add account. "
-                    "The connector will find MetaTrader and prepare an isolated broker session for you. "
-                    "Enter the broker login securely on the dashboard, not here.", color=MUTED,
-                    wrap=770, size=9).pack(anchor="w", pady=(15, 0))
+        self._label(field,textvar=self.code_error_var,color=MUTED,
+                    wrap=530,size=9).pack(anchor="w",pady=(11,6))
+        self._label(field,textvar=self.pair_stage_var,color=ACCENT,
+                    wrap=550,size=10).pack(anchor="w",pady=(10,5))
+        self._label(field,textvar=self.pair_elapsed_var,color=MUTED,size=9).pack(anchor="w",pady=(0,8))
+        self.pair_button=self._button(field,"Connect this computer",self.pair,primary=True)
+        self.pair_button.pack(anchor="w",pady=(2,8))
+        self.pair_progress=ttk.Progressbar(field,mode="indeterminate",
+                                           style="YM.Horizontal.TProgressbar")
+
+        instructions=self._card(self.pair_right,21)
+        instructions.pack(fill="x")
+        self._label(instructions,"Three simple steps",size=16,bold=True).pack(anchor="w",pady=(0,12))
+        for num,name,detail in (
+            ("01","Open your dashboard","Go to MT5 Connections and select Pair a PC."),
+            ("02","Copy the code","It works once and expires in five minutes."),
+            ("03","Add your account","The connector will help set up your MT5 login."),
+        ):
+            row=tk.Frame(instructions,bg=PANEL)
+            row.pack(fill="x",pady=(0,14))
+            bullet=tk.Label(row,text=num,bg="#EEF2FC",fg=ACCENT,
+                            font=(FONT,9,"bold"),padx=8,pady=6)
+            bullet.pack(side="left",anchor="n",padx=(0,10))
+            words=tk.Frame(row,bg=PANEL)
+            words.pack(side="left",fill="both",expand=True)
+            self._label(words,name,size=10,bold=True).pack(anchor="w")
+            self._label(words,detail,size=9,color=MUTED,
+                        wrap=280).pack(anchor="w",pady=(4,0))
+        self._button(instructions,"Open MT5 Connections",
+                     self.open_dashboard,quiet=True).pack(fill="x")
+        self._label(instructions,
+                    "No broker password is saved in this screen. Your existing PC pairing is preserved when you update the connector.",
+                    size=9,color=MUTED,wrap=350).pack(anchor="w",pady=(15,0))
+        self._arrange_pair()
+
+    def _arrange_pair(self):
+        if not hasattr(self,"pair_columns"):return
+        compact=self.root.winfo_width()<1080
+        for item in (self.pair_left,self.pair_right):
+            item.grid_forget()
+        if compact:
+            self.pair_columns.grid_columnconfigure(0,weight=1)
+            self.pair_columns.grid_columnconfigure(1,weight=0)
+            self.pair_left.grid(row=0,column=0,sticky="ew")
+            self.pair_right.grid(row=1,column=0,sticky="ew",pady=(12,0))
+        else:
+            self.pair_columns.grid_columnconfigure(0,weight=3)
+            self.pair_columns.grid_columnconfigure(1,weight=2)
+            self.pair_left.grid(row=0,column=0,sticky="nsew",padx=(0,12))
+            self.pair_right.grid(row=0,column=1,sticky="nsew")
 
     def _build_activity(self):
         page = self.pages["activity"]
