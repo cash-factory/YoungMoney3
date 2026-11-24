@@ -506,6 +506,99 @@ class ConnectorApp:
             minimum=158)
         self.copy_controls.pack_configure(pady=(10, 0))
 
+    def _build_copy(self):
+        """One place for the receiving account and its on-PC permission."""
+        page = self._scrollable_page("copy")
+        self._stack_heading(page, "Trade copying",
+                            "You choose the accounts. Nothing is copied until you allow it here and switch on your fleet on the website.")
+        flow = self._card(page, 18)
+        flow.pack(fill="x", pady=(0, 14))
+        self._label(flow, "HOW COPY TRADING WORKS", size=9, bold=True,
+                    color=MUTED).pack(anchor="w", pady=(0, 5))
+        self.copy_route = TradeJourney(flow, background=PANEL,
+                                      accent=ACCENT, motion=self.motion_var.get)
+        self.copy_route.pack(fill="x")
+        self._label(flow, "A new trade on your chosen main account is checked before it reaches an approved receiving account. "
+                    "Each receiving account has its own risk and position-size settings.",
+                    color=MUTED, size=10, wrap=780).pack(anchor="w", pady=(4, 0))
+        account = self._card(page, 20)
+        account.pack(fill="x", pady=(0, 14))
+        self._label(account, "01  Choose the account that will RECEIVE trades",
+                    size=13, bold=True).pack(anchor="w", pady=(0, 10))
+        self.copy_account_combo = ttk.Combobox(account, textvariable=self.copy_account_choice,
+                                            state="readonly", style="YM.TCombobox", font=(FONT, 11))
+        self.copy_account_combo.pack(fill="x", pady=(0, 10))
+        self.copy_account_combo.bind("<<ComboboxSelected>>", self._choose_copy_account)
+        self._label(account, "You only need to approve receiving accounts. The main account is chosen on the website.",
+                    size=9, color=MUTED, wrap=770).pack(anchor="w")
+        consent_card = self._card(page, 20)
+        consent_card.pack(fill="x", pady=(0, 14))
+        self._label(consent_card, "02  Allow copying on this computer", size=13,
+                    bold=True).pack(anchor="w", pady=(0, 7))
+        self._label(consent_card, textvar=self.copy_permission_var,
+                    size=14, bold=True).pack(anchor="w", pady=(2, 6))
+        self._label(consent_card, textvar=self.copy_help_var, color=MUTED,
+                    size=10, wrap=780).pack(anchor="w", pady=(0, 13))
+        self.copy_action_buttons = self._actions(consent_card, [
+            ("Allow demo trade copying", self.authorize_selected_demo_copy, {"primary":True}),
+            ("Allow live trade copying", self.authorize_selected_live_copy, {}),
+            ("Turn off copying", self.disable_selected_demo_copy, {"quiet":True}),
+            ("Check permission", self._load_copy_permission, {"quiet":True}),
+        ], minimum=176)
+        self._label(consent_card, "Live trade copying involves real money and is not active in this test release. "
+                    "Allowing it here does not switch it on at the website.",
+                    color=WARM, size=9, wrap=800).pack(anchor="w", pady=(13, 0))
+        activation = self._card(page, 20)
+        activation.pack(fill="x", pady=(0, 14))
+        self._label(activation, "03  Switch on your fleet on the website",
+                    size=13, bold=True).pack(anchor="w", pady=(0, 8))
+        self._label(activation, "After the connector confirms your permission, open Copy Fleet, refresh the page, "
+                    "and check that every receiving account says Ready to copy. Then use Switch on / Arm on the website.",
+                    color=MUTED, size=10, wrap=780).pack(anchor="w", pady=(0, 12))
+        self.copy_web_actions = self._actions(activation, [
+            ("Open Copy Fleet", lambda: webbrowser.open(STAGING_URL+"/#copy-studio"), {"primary":True}),
+            ("Account details", self.inspect_selected_account, {"quiet":True})
+        ], minimum=162)
+
+    def _choose_copy_account(self, _event=None):
+        sid = self.copy_choice_map.get(self.copy_account_choice.get())
+        if not sid or not self.session_table.exists(sid):
+            self.copy_permission_var.set("Choose a connected receiving account")
+            self.copy_help_var.set("Add or reconnect your account in My accounts first.")
+            self.copy_route.set_state("off")
+            return
+        self.session_table.selection_set(sid)
+        self.session_table.focus(sid)
+        self._selected_session_details()
+        self._load_copy_permission()
+
+    def _load_copy_permission(self):
+        try:
+            slot, link = self._selected_copy_target()
+        except (SessionError, StopIteration):
+            self.copy_permission_var.set("Choose a connected receiving account")
+            self.copy_help_var.set("Select a receiving account above. You can add one in My accounts.")
+            self.copy_route.set_state("off")
+            return
+        self.copy_permission_var.set("Checking this account…")
+        self.copy_help_var.set("Reading the permission saved on your computer.")
+        def read():
+            try:
+                path = self._copy_database_path()
+                if not path.is_file():
+                    raise SessionError("This account has not finished its first sync.")
+                with sqlite3.connect(path, timeout=20) as db:
+                    prepare_copy_database(db)
+                    row = db.execute(
+                        "SELECT approved,mode FROM copy_local_permissions WHERE link=?", (link,)
+                    ).fetchone()
+                self.events.put({"state":"copy-permission-view","slot":slot,"link":link,
+                                 "approved":bool(row and row[0]),"mode":row[1] if row else "none"})
+            except Exception:
+                self.events.put({"state":"copy-permission-view","slot":slot,"link":link,
+                                 "approved":False,"mode":"none"})
+        threading.Thread(target=read, name="YMFX-copy-status",daemon=True).start()
+
     def toggle_advanced(self):
         if self.advanced.winfo_manager():
             self.advanced.pack_forget()
