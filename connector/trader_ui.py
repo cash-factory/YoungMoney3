@@ -43,7 +43,7 @@ def trader_message(message):
 class TradeJourney(tk.Canvas):
     """Quiet, state-driven trade-route illustration; motion stops after each change."""
     LABELS = ("Your trade", "Safety checks", "Receiving account")
-    def __init__(self, parent, *, background="#131b24", accent="#ff536d",
+    def __init__(self, parent, *, background="#FFFFFF", accent="#4357D6",
                  motion=lambda: True, **kwargs):
         super().__init__(parent, height=132, bg=background, highlightthickness=0,
                          takefocus=False, **kwargs)
@@ -86,9 +86,9 @@ class TradeJourney(tk.Canvas):
         width = max(380, self.winfo_width())
         xs = (65, width/2, width-95)
         center_y = 45
-        line = "#465663"
-        muted = "#c1cbd3"
-        good = "#79d7b5"
+        line = "#CFD8E5"
+        muted = "#5D6F84"
+        good = "#218A73"
         self.create_line(xs[0],center_y,xs[-1],center_y,fill=line,width=2)
         if self.state in ("approved","active"):
             self.create_line(xs[0],center_y,xs[0]+(xs[-1]-xs[0])*self._progress,center_y,
@@ -99,7 +99,7 @@ class TradeJourney(tk.Canvas):
             )
             stroke = good if done else line
             self.create_oval(x-18,center_y-18,x+18,center_y+18,
-                             fill="#202d36",outline=stroke,width=2)
+                             fill="#F5F7FA",outline=stroke,width=2)
             self.create_text(x,center_y,text=str(i+1),fill=good if done else muted,
                              font=("Segoe UI",11,"bold"))
             self.create_text(x,center_y+37,text=label,fill=muted,
