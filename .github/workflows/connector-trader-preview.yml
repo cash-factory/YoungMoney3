@@ -32,6 +32,15 @@ jobs:
       - name: Test account monitoring and trader interaction
         run: |
           python -m unittest discover -s connector -p 'test_*.py'
+      - name: Capture genuine Windows screen previews
+        run: |
+          python connector/render_preview.py "${{ runner.temp }}/connector-screens"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: connector-screen-review-${{ github.sha }}
+          path: ${{ runner.temp }}/connector-screens/*.png
+          retention-days: 7
+          if-no-files-found: error
       - name: Build independently testable Windows connector
         run: |
           python connector/build_windows.py
