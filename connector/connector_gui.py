@@ -667,64 +667,122 @@ class ConnectorApp:
             self.empty_accounts.pack(fill="x",pady=(0,8))
 
     def _build_copy(self):
-        """One place for the receiving account and its on-PC permission."""
-        page = self._scrollable_page("copy")
-        self._stack_heading(page, "Trade copying",
-                            "You choose the accounts. Nothing is copied until you allow it here and switch on your fleet on the website.")
-        flow = self._card(page, 18)
-        self.copy_explanation=flow
-        self._label(flow, "HOW COPY TRADING WORKS", size=9, bold=True,
-                    color=MUTED).pack(anchor="w", pady=(0, 5))
-        self.copy_route = TradeJourney(flow, background=PANEL,
-                                      accent=ACCENT, motion=self.motion_var.get)
-        self.copy_route.pack(fill="x")
-        self._label(flow, "A new trade on your chosen main account is checked before it reaches an approved receiving account. "
-                    "Each receiving account has its own risk and position-size settings.",
-                    color=MUTED, size=10, wrap=780).pack(anchor="w", pady=(4, 0))
-        account = self._card(page, 20)
-        account.pack(fill="x", pady=(0, 14))
-        self._label(account, "01  Choose the account that will RECEIVE trades",
-                    size=13, bold=True).pack(anchor="w", pady=(0, 10))
-        self.copy_account_combo = ttk.Combobox(account, textvariable=self.copy_account_choice,
-                                            state="readonly", style="YM.TCombobox", font=(FONT, 11))
-        self.copy_account_combo.pack(fill="x", pady=(0, 10))
-        self.copy_account_combo.bind("<<ComboboxSelected>>", self._choose_copy_account)
-        self._label(account, "Choose the account receiving trades. You choose the main account on the website.",
-                    size=9, color=MUTED, wrap=770).pack(anchor="w")
-        self.copy_add_account_button=self._button(account,"Add a receiving account",
-                                                   self.add_account,quiet=True)
-        self.copy_add_account_button.pack(anchor="w",pady=(13,0))
-        consent_card = self._card(page, 20)
-        consent_card.pack(fill="x", pady=(0, 14))
-        self._label(consent_card, "02  Allow copying on this computer", size=13,
-                    bold=True).pack(anchor="w", pady=(0, 7))
-        self._label(consent_card, textvar=self.copy_permission_var,
-                    size=14, bold=True).pack(anchor="w", pady=(2, 6))
-        self._label(consent_card, textvar=self.copy_help_var, color=MUTED,
-                    size=10, wrap=780).pack(anchor="w", pady=(0, 13))
-        self.copy_action_buttons = self._actions(consent_card, [
-            ("Allow demo trade copying", self.authorize_selected_demo_copy, {"primary":True}),
-            ("Allow live trade copying", self.authorize_selected_live_copy, {}),
-            ("Turn off copying", self.disable_selected_demo_copy, {"quiet":True}),
-            ("Check permission", self._load_copy_permission, {"quiet":True}),
-        ], minimum=176)
-        self._label(consent_card, "Live trade copying involves real money and is not active in this test release. "
-                    "Allowing it here does not switch it on at the website.",
-                    color=WARM, size=9, wrap=800).pack(anchor="w", pady=(13, 0))
-        activation = self._card(page, 20)
-        activation.pack(fill="x", pady=(0, 14))
-        self._label(activation, "03  Switch on your fleet on the website",
-                    size=13, bold=True).pack(anchor="w", pady=(0, 8))
-        self._label(activation, "After the connector confirms your permission, open Copy Fleet, refresh the page, "
-                    "and check that every receiving account says Ready to copy. Then use Switch on / Arm on the website.",
-                    color=MUTED, size=10, wrap=780).pack(anchor="w", pady=(0, 12))
-        self.copy_web_actions = self._actions(activation, [
-            ("Open Copy Fleet", lambda: webbrowser.open(STAGING_URL+"/#copy-studio"), {"primary":True}),
-            ("Account details", self.inspect_selected_account, {"quiet":True})
-        ], minimum=162)
+        page=self._scrollable_page("copy")
+        self._stack_heading(page,"Trade copying",
+                            "Choose who follows your trades. You decide when copying starts.")
+        steps=tk.Frame(page,bg=BACKGROUND)
+        steps.pack(fill="x",pady=(0,14))
+        for index,(title,subtitle) in enumerate((
+            ("01  CHOOSE","Receiving account"),
+            ("02  APPROVE","On this computer"),
+            ("03  START","On your dashboard"),
+        )):
+            segment=tk.Frame(steps,bg="#E9EDFC" if index==0 else PANEL,
+                             highlightbackground=BORDER,highlightthickness=1,
+                             padx=12,pady=10)
+            segment.pack(side="left",fill="both",expand=True,
+                         padx=(0,8) if index!=2 else 0)
+            self._label(segment,title,size=9,bold=True,
+                        color=ACCENT if index==0 else MUTED).pack(anchor="w")
+            self._label(segment,subtitle,size=9,color=TEXT,wrap=140).pack(anchor="w",pady=(3,0))
+        self.copy_columns=tk.Frame(page,bg=BACKGROUND)
+        self.copy_columns.pack(fill="x",pady=(0,12))
+        self.copy_columns.grid_columnconfigure(0,weight=3)
+        self.copy_columns.grid_columnconfigure(1,weight=2)
+        self.copy_left=tk.Frame(self.copy_columns,bg=BACKGROUND)
+        self.copy_right=tk.Frame(self.copy_columns,bg=BACKGROUND)
+
+        choose=self._card(self.copy_left,20)
+        choose.pack(fill="x",pady=(0,11))
+        self._label(choose,"Receiving account",size=16,bold=True).pack(anchor="w",pady=(0,5))
+        self._label(choose,"Select the broker account that should receive copied trades.",
+                    size=10,color=MUTED,wrap=520).pack(anchor="w",pady=(0,11))
+        self.copy_account_combo=ttk.Combobox(choose,textvariable=self.copy_account_choice,
+                                             state="readonly",style="YM.TCombobox",
+                                             font=(FONT,11))
+        self.copy_account_combo.pack(fill="x",ipady=4)
+        self.copy_account_combo.bind("<<ComboboxSelected>>",self._choose_copy_account)
+        self.copy_add_account_button=self._button(choose,"Add receiving account",
+                                                  self.add_account,quiet=True)
+        self.copy_add_account_button.pack(anchor="w",pady=(11,0))
+
+        allow=self._card(self.copy_left,20)
+        allow.pack(fill="x")
+        self._label(allow,"Copying permission",size=16,bold=True).pack(anchor="w",pady=(0,7))
+        self._label(allow,textvar=self.copy_permission_var,
+                    size=12,bold=True).pack(anchor="w",pady=(0,5))
+        self._label(allow,textvar=self.copy_help_var,
+                    color=MUTED,size=10,wrap=550).pack(anchor="w",pady=(0,13))
+        self.copy_action_buttons=self._actions(allow,[
+            ("Allow demo copying",self.authorize_selected_demo_copy,{"primary":True}),
+            ("Allow live copying",self.authorize_selected_live_copy,{"quiet":True}),
+            ("Stop copying",self.disable_selected_demo_copy,{"quiet":True}),
+            ("Check permission",self._load_copy_permission,{"quiet":True}),
+        ],minimum=156)
+        warning=tk.Frame(allow,bg="#FCF6EB",padx=11,pady=9)
+        warning.pack(fill="x",pady=(12,0))
+        self._label(warning,
+                    "Live copying can place real broker orders. It remains disabled in this test release.",
+                    size=9,color=WARM,wrap=560).pack(anchor="w")
+
+        activate=self._card(self.copy_right,20)
+        activate.pack(fill="x",pady=(0,11))
+        self._label(activate,"Finish on your dashboard",size=16,bold=True).pack(anchor="w",pady=(0,8))
+        for heading,detail in (
+            ("1. Allow this account","Confirm its permission here on this computer."),
+            ("2. Check every follower","Each receiving account needs its own permission."),
+            ("3. Switch on copying","Start the fleet on your YoungMoney3 dashboard."),
+        ):
+            line=tk.Frame(activate,bg=PANEL)
+            line.pack(fill="x",pady=(0,11))
+            self._label(line,heading,size=10,bold=True).pack(anchor="w")
+            self._label(line,detail,size=9,color=MUTED,
+                        wrap=330).pack(anchor="w",pady=(3,0))
+        self.copy_web_actions=self._actions(activate,[
+            ("Open Copy Fleet",lambda:webbrowser.open(STAGING_URL+"/#copy-studio"),
+             {"primary":True}),
+            ("Account details",self.inspect_selected_account,{"quiet":True}),
+        ],minimum=150)
+        safety=self._card(self.copy_right,18)
+        safety.pack(fill="x")
+        self._label(safety,"Built-in safeguards",size=12,bold=True).pack(anchor="w")
+        self._label(safety,
+                    "Only receiving accounts you approve can copy. "
+                    "Paused fleets do not send new instructions. "
+                    "Orders already placed at your broker cannot be undone by Pause.",
+                    size=9,color=MUTED,wrap=350).pack(anchor="w",pady=(8,0))
+        self._arrange_copy()
+
         self.copy_explain_button=self._button(
-            page,"How does copying work?",self._toggle_copy_explanation,quiet=True)
-        self.copy_explain_button.pack(anchor="w",pady=(0,13))
+            page,"How does trade copying work?",self._toggle_copy_explanation,quiet=True)
+        self.copy_explain_button.pack(anchor="w",pady=(3,12))
+        flow=self._card(page,18)
+        self.copy_explanation=flow
+        self._label(flow,"FROM YOUR MAIN ACCOUNT TO YOUR FOLLOWERS",
+                    size=9,color=MUTED,bold=True).pack(anchor="w",pady=(0,5))
+        self.copy_route=TradeJourney(flow,background=PANEL,
+                                    accent=ACCENT,motion=self.motion_var.get)
+        self.copy_route.pack(fill="x")
+        self._label(flow,
+                    "Copying watches eligible new changes on your chosen main account. "
+                    "Each receiving account uses its own limits and must pass broker checks.",
+                    color=MUTED,size=10,wrap=800).pack(anchor="w",pady=(5,0))
+
+    def _arrange_copy(self):
+        if not hasattr(self,"copy_columns"):return
+        compact=self.root.winfo_width()<1080
+        for panel in (self.copy_left,self.copy_right):
+            panel.grid_forget()
+        if compact:
+            self.copy_columns.grid_columnconfigure(0,weight=1)
+            self.copy_columns.grid_columnconfigure(1,weight=0)
+            self.copy_left.grid(row=0,column=0,sticky="ew")
+            self.copy_right.grid(row=1,column=0,sticky="ew",pady=(11,0))
+        else:
+            self.copy_columns.grid_columnconfigure(0,weight=3)
+            self.copy_columns.grid_columnconfigure(1,weight=2)
+            self.copy_left.grid(row=0,column=0,sticky="nsew",padx=(0,12))
+            self.copy_right.grid(row=0,column=1,sticky="nsew")
 
     def _toggle_copy_explanation(self):
         if self.copy_explanation.winfo_manager():
