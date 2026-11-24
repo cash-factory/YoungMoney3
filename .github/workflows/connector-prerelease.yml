@@ -16,7 +16,7 @@ defaults:
   run:
     shell: pwsh
 env:
-  VERSION: '0.6.1-rc1'
+  VERSION: '0.6.2-rc1'
   SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 concurrency:
   group: youngmoney3-staging-connector-release
@@ -255,5 +255,5 @@ jobs:
           $manifest = Get-Content staging-release/build-manifest.json -Raw | ConvertFrom-Json
           $digest = (Get-FileHash 'staging-release/YoungMoney3.Connector.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($manifest.commit -ne $env:SOURCE_SHA -or $manifest.version -ne $env:VERSION -or $manifest.sha256 -ne $digest -or $manifest.environment -ne 'staging') { throw 'Release provenance mismatch' }
-          gh release create $tag 'staging-release/YoungMoney3.Connector.exe' 'staging-release/YoungMoney3.Connector.exe.sha256' 'staging-release/build-manifest.json' 'staging-release/connector-dependencies.txt' --target $env:SOURCE_SHA --title "YoungMoney3 Connector $env:VERSION (STAGING)" --notes "YoungMoney3 0.6.1-rc1 trader-first Windows connector. New guided account and copying screens, account-specific permission status and clearer recovery feedback. Read-only broker capture and separately authorized demo/live Copy Fleet groundwork; live task dispatch requires an independent deployment gate, account-bound Windows consent, and fleet arming. Independent worker processes, durable outbox, and safe stop on revoked/conflicting PC identity. Pending acceptance: clean Windows frozen-app startup, multiple account sessions and broker-side trade copying. No real broker orders are sent during CI. Unsigned Windows x64; verify SHA-256 before opening. Real-money execution requires separate operator acceptance and is disabled by default." --prerelease --latest=false
+          gh release create $tag 'staging-release/YoungMoney3.Connector.exe' 'staging-release/YoungMoney3.Connector.exe.sha256' 'staging-release/build-manifest.json' 'staging-release/connector-dependencies.txt' --target $env:SOURCE_SHA --title "YoungMoney3 Connector $env:VERSION (STAGING)" --notes "YoungMoney3 0.6.2-rc1 soft studio desktop connector. New guided account and copying screens, account-specific permission status and clearer recovery feedback. Read-only broker capture and separately authorized demo/live Copy Fleet groundwork; live task dispatch requires an independent deployment gate, account-bound Windows consent, and fleet arming. Independent worker processes, durable outbox, and safe stop on revoked/conflicting PC identity. Pending acceptance: clean Windows frozen-app startup, multiple account sessions and broker-side trade copying. No real broker orders are sent during CI. Unsigned Windows x64; verify SHA-256 before opening. Real-money execution requires separate operator acceptance and is disabled by default." --prerelease --latest=false
           if ($LASTEXITCODE -ne 0) { throw 'Prerelease publication failed' }
