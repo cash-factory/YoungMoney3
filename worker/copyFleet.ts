@@ -42,6 +42,26 @@ async function links(db:D1Database,owner:string):Promise<Link[]>{
   const rows=await db.prepare(qlink+" ORDER BY l.company,l.login,l.id").bind(owner,owner).all<Link>();
   return rows.results;
 }
+type CopierConsent={follower_link:string;broker_login:string|null;broker_server:string|null;expires_at:number};
+function followerIssue(a:Link|undefined,mode:'demo'|'live',consents:CopierConsent[],now=Date.now()):string|null {
+  if(!a)return 'This follower is no longer linked. Add the account again.';
+  if(a.trade_mode!==(mode==='live'?2:0))
+    return 'This follower is a different account type. Choose a matching demo or live account.';
+  if(a.monitoring_paused!==0)
+    return 'Monitoring is paused for this account. Resume it in My accounts.';
+  if(!a.last_seen||Number(a.last_seen)<=now-45000)
+    return 'The Windows connector has not checked in recently. Open it and reconnect this account.';
+  if(a.access_level!=='trading-enabled')
+    return 'This account is connected for viewing only. Trade copying needs a trading-enabled broker login.';
+  if(!Number.isFinite(Number(a.broker_equity))||Number(a.broker_equity)<=0)
+    return 'Current broker equity is missing. Refresh the account connection.';
+  const permission=consents.find(c=>c.follower_link===a.id);
+  if(!permission||permission.expires_at<=now)
+    return 'Copying permission is missing or needs renewing. Select this account in the Windows connector and choose Allow trade copying.';
+  if(permission.broker_login!==a.login||permission.broker_server!==a.server)
+    return 'The broker account changed. Confirm permission again in the Windows connector.';
+  return null;
+}
 function eligible(account:Link|undefined,mode:'demo'|'live',now=Date.now()) {
   return !!account&&account.trade_mode===(mode==='live'?2:0)&&account.monitoring_paused===0&&
     Number(account.last_seen)>now-45000&&
@@ -59,7 +79,7 @@ export async function copyFleetOwner(request:Request,env:Env,owner:string,action
       links(db,owner),
       q("SELECT * FROM copy_fleets WHERE owner=? ORDER BY updated_at DESC LIMIT 30",owner).all<Fleet>(),
       q("SELECT * FROM copy_fleet_followers WHERE owner=? ORDER BY fleet_id,follower_link",owner).all<Target>(),
-      q("SELECT follower_link,demo_authorized,authorization_mode,expires_at FROM copy_device_consents WHERE owner=?",owner).all(),
+      q("SELECT follower_link,demo_authorized,authorization_mode,broker_login,broker_server,expires_at FROM copy_device_consents WHERE owner=?",owner).all(),
       q("SELECT * FROM copy_account_reports WHERE owner=? ORDER BY observed_at_ms DESC",owner).all(),
       q("SELECT id,fleet_id,source_key,action,status,follower_link,retcode,result_code,result_payload,created_at,finished_at FROM copy_execution_tasks WHERE owner=? ORDER BY created_at DESC LIMIT 100",owner).all(),
     ]);
@@ -194,13 +214,12 @@ export async function copyFleetOwner(request:Request,env:Env,owner:string,action
      Number(src.last_seen)<=Date.now()-45000||Number(src.broker_equity)<=0)
     return fail('The source must be online, verified and have current broker equity.',409);
   if(!targets.results.length)return fail('Enable at least one verified follower first.',409);
-  const blocked=targets.results.find(t=>{
-    const a=owned.find(x=>x.id===t.follower_link);
-    return !eligible(a,fleet.execution_mode)||a?.access_level!=='trading-enabled'||
-      !consentRows.results.some(c=>c.follower_link===t.follower_link&&
-        c.broker_login===a?.login&&c.broker_server===a?.server);
-  });
-  if(blocked)return fail('All enabled followers must be online, trading-enabled, mode-matched and locally authorized in their Windows connector.',409);
+  for(const target of targets.results) {
+    const account=owned.find(x=>x.id===target.follower_link);
+    const label=(account?.company||'Follower')+' · account ending '+String(account?.login||'').slice(-4);
+    const reason=followerIssue(account,fleet.execution_mode,consentRows.results);
+    if(reason)return fail(label+': '+reason,409);
+  }
   const routing=await q("SELECT f.source_link,t.follower_link FROM copy_fleets f JOIN copy_fleet_followers t ON t.fleet_id=f.id WHERE f.owner=? AND f.state IN ('demo_armed','live_armed') AND t.enabled=1",owner)
     .all<{source_link:string;follower_link:string}>();
   const engaged=new Set(routing.results.flatMap(x=>[x.source_link,x.follower_link]));
