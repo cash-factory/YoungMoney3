@@ -726,7 +726,16 @@ class ConnectorApp:
              "PC online confirms the connection to your dashboard. Broker verified confirms the login. "
              "Journal synced means the dashboard received a capture from MT5."),
             ("Manage accounts",
-             "Open your dashboard to see each login, pause or resume monitoring, retry a sync, or review earlier trades.")
+             "Open your dashboard to see each login, pause or resume monitoring, retry a sync, or review earlier trades."),
+            ("Allow a receiving account to copy trades",
+             "Open Trade copying in this app. Choose the account that will receive trades, then choose Allow demo trade copying. "
+             "In Copy Fleet on the website, refresh and confirm it says Ready to copy. The permission belongs only to that account."),
+            ("Why can't I switch on copying?",
+             "Keep the Windows app and broker account open. Check that your account can place trades, monitoring is on, "
+             "and its permission matches demo or live mode. Choose Check permission, then refresh Copy Fleet on the website."),
+            ("Will switching on copy trading open my old trades?",
+             "No. The copier first sees which trades are already open, then follows eligible new changes. "
+             "Pausing stops new instructions but cannot undo an order already sent to MetaTrader.")
         ]:
             card = self._card(page, 14)
             card.pack(fill="x", pady=(0, 8))
@@ -741,8 +750,10 @@ class ConnectorApp:
             selected = item == key
             button.set_tones(PANEL_ALT if selected else SIDEBAR, "#31212d")
             button.configure(fg=ACCENT if selected else MUTED)
-        if key == "sessions":
+        if key in ("sessions", "copy"):
             self.refresh_sessions()
+        if key == "copy" and self.copy_account_choice.get():
+            self._choose_copy_account()
         titles = {"overview": "Account monitor", "sessions": "Account sessions",
                   "copy": "Trade copying", "pair": "Connect this PC",
                   "activity": "Activity & diagnostics", "help": "Setup & troubleshooting"}
@@ -1432,7 +1443,7 @@ class ConnectorApp:
         self.activity_text.configure(state="disabled")
 
     def copy_diagnostics(self):
-        header = "YoungMoney3 Connector " + VERSION + " • staging • capture only\n"
+        header = "YoungMoney3 Connector " + VERSION + " • staging • monitoring and optional copying\n"
         text = header + "\n".join(self.log_items)
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
@@ -1441,7 +1452,7 @@ class ConnectorApp:
     def _event(self, item):
         state = item.get("state", "unknown")
         slot = item.get("slot")
-        message = item.get("message", "")
+        message = trader_message(item.get("message", ""))
         if state == "pc-online":
             self.pc_state = state
             self.device_id = item["device"]
@@ -1762,7 +1773,7 @@ def main():
                         raise RuntimeError("Smoke test requires the frozen executable")
                     # Exercise real nav/pairing widgets without starting capture
                     # or touching any user session/credential setting.
-                    if not {"overview", "sessions", "pair", "activity", "help"} <= set(app.pages):
+                    if not {"overview", "sessions", "copy", "pair", "activity", "help"} <= set(app.pages):
                         raise RuntimeError("New session manager navigation is incomplete")
                     app.code_var.set("a" * 32)
                     if not app._validate_code():
@@ -1801,14 +1812,14 @@ def main():
                             raise RuntimeError("Bundled Tcl/Tk data missing")
                     Path(sys.argv[2]).write_text(json.dumps({
                         "startup": "ok", "frozen": True, "capture_started": False,
-                        "session_manager": len(app.pages) == 5 and bool(app.session_table),
+                        "session_manager": len(app.pages) == 6 and bool(app.session_table),
                         "terminal_creation": bool(app.create_button) and bool(app.duplicate_button),
                         "pairing_controls": bool(app.pair_button) and bool(app.code_input),
                         "activity_view": bool(app.activity_text),
                         "responsive_layout": True,
                         "responsive_sizes": responsive_sizes,
                         "motion_controls": bool(app.motion_var is not None),
-                        "native_artwork": len(app.header_art) == 5,
+                        "native_artwork": len(app.header_art) == 6,
                         "tcl": window.tk.eval("info patchlevel"),
                         "tk": window.tk.eval("package present Tk"),
                         "tcl_bundled": Path(window.tk.eval("info library")).resolve() == (bundle / "_tcl_data").resolve(),
