@@ -34,7 +34,11 @@ export async function copyFleetDevice(db:D1Database,device:Device,action:string,
     if(input.allowed&&input.mode!==accountMode)return fail('Local permission mode differs from broker trade mode.',403);
     if(input.allowed&&link.access_level!=='trading-enabled')
       return fail('This broker login is read-only and cannot execute copy orders.',403);
-    const expiry=input.allowed?now+45000:0;
+    // An MT5 history scan can take longer than 45 seconds. Consent is renewed
+    // by the connector after each scan, while actual account availability is
+    // checked separately from the signed PC heartbeat (<45 seconds).
+    // A stale PC must never become eligible merely because consent remains.
+    const expiry=input.allowed?now+180000:0;
     const consentMode=input.allowed?accountMode:'none';
     await q("INSERT INTO copy_device_consents(follower_link,owner,device,demo_authorized,authorization_mode,broker_login,broker_server,expires_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(follower_link) DO UPDATE SET demo_authorized=excluded.demo_authorized,authorization_mode=excluded.authorization_mode,broker_login=excluded.broker_login,broker_server=excluded.broker_server,expires_at=excluded.expires_at,updated_at=excluded.updated_at WHERE copy_device_consents.owner=excluded.owner AND copy_device_consents.device=excluded.device",
       link.id,device.owner,device.id,input.allowed?1:0,consentMode,link.login,link.server,expiry,stamp()).run();
