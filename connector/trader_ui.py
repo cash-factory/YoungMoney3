@@ -37,6 +37,22 @@ def trader_message(message):
         return "We couldn't read the latest trade information. We'll retry without deleting saved history."
     if "local_demo_execution_not_consented" in text or "account_bound_execution_permission_missing" in text:
         return "This account has not been approved for trade copying on this computer."
+    if "not initialized" in text or "database is unavailable" in text:
+        return "Your account's first update is still being prepared. Keep MetaTrader open and try again."
+    if "saved Windows PC pairing is unavailable" in text:
+        return "This computer is not connected to your dashboard. Open Connect this computer."
+    if "Select a session" in text or "Choose an account" in text:
+        return "Choose a connected account first."
+    if "link" in text.lower() and "revoked" in text.lower():
+        return "This account's connection was removed. Reconnect it from My accounts."
+    # Never put exception classes, Windows paths or internal error codes
+    # on the main trading screen. Support information retains original detail.
+    if any(token in text for token in (
+        "Traceback", "AttributeError", "OperationalError", "KeyError",
+        "sqlite3.", "TypeError", "OSError", "HTTP 4", "HTTP 5",
+        "http_status", "worker-exit", "internal_error"
+    )):
+        return "Something interrupted this update. Saved trade history is safe. Try reconnecting, or copy support information from Recent activity."
     return text
 
 
