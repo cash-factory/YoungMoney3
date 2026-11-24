@@ -66,7 +66,11 @@ class ConnectorPresentationTests(unittest.TestCase):
         self.root.withdraw()
         self.root.attributes("-alpha", 0)
         self.addCleanup(self.root.destroy)
-        self.app = module.ConnectorApp(self.root)
+        # The optional bootstrap theme owns a global Tk style singleton.
+        # Repeated test-root destruction cannot exercise that singleton safely;
+        # the separate frozen-app and screenshot tests exercise the real theme.
+        with patch.dict(os.environ, {"YMFX_TK_UNIT_TEST": "1"}):
+            self.app = module.ConnectorApp(self.root)
         self.app.motion_var.set(False)
         self.root.deiconify()
         self._settle()
