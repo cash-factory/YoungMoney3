@@ -154,6 +154,26 @@ class ConnectorPresentationTests(unittest.TestCase):
                       "The identity-conflict explanation must survive a safe worker shutdown.")
         self.assertIsNone(self.app.restart_due)
 
+    def test_trader_guide_shows_real_pages_and_can_skip(self):
+        self.app.show_page("help")
+        self.app._tour_start()
+        self.assertEqual(self.app.current_page, "overview")
+        self.assertEqual(self.app.tour_index, 0)
+        self.assertTrue(self.app.tour_strip.winfo_manager())
+        self.app._tour_next()
+        self.assertEqual(self.app.current_page, "pair")
+        self.app._tour_next()
+        self.assertEqual(self.app.current_page, "sessions")
+        self.app._tour_next()
+        self.assertEqual(self.app.current_page, "copy")
+        self.app._tour_back()
+        self.assertEqual(self.app.current_page, "sessions")
+        self.app._tour_end()
+        self.assertEqual(self.app.tour_index, -1)
+        self.assertFalse(self.app.tour_strip.winfo_manager())
+        self.assertIsNone(self.app.worker)
+        self.assertFalse(self.settings.exists())
+
     def test_quick_setup_navigation_and_motion_toggle_do_not_start_capture(self):
         self.app.quick_setup_actions.buttons[0].invoke()
         self._settle()
