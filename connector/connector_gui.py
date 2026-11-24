@@ -273,8 +273,12 @@ class ConnectorApp:
         self._arrange_overview()
         self._arrange_copy()
         self._arrange_pair()
+        # Hidden pages manage their own row layout when first displayed.
+        # Reflowing every invisible action group on each resize can create a
+        # continual Tk geometry feedback loop when several grids are mounted.
         for group in self.action_groups:
-            group.reflow()
+            if group.winfo_ismapped():
+                group.reflow()
 
     def _wheel_page(self, event):
         canvas = self._page_canvases.get(self.current_page)
