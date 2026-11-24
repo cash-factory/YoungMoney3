@@ -138,6 +138,8 @@ class ConnectorApp:
         self.account_total_var = tk.StringVar(value="0")
         self.account_active_var = tk.StringVar(value="0")
         self.account_attention_var = tk.StringVar(value="0")
+        self.connection_badge_var = tk.StringVar(
+            value="● SAVED PAIRING" if self.paired else "● SETUP NEEDED")
         self._configure_ttk()
         self._build()
         self.root.bind("<Configure>", self._queue_responsive_layout, add="+")
@@ -250,7 +252,7 @@ class ConnectorApp:
     def _responsive_layout(self):
         self._layout_job = None
         compact = self.root.winfo_width() < 1060
-        self.sidebar.configure(width=162 if compact else 202)
+        self.sidebar.configure(width=180 if compact else 205)
         self.workspace.configure(padx=17 if compact else 29, pady=16 if compact else 21)
         short = self.root.winfo_height() < 660
         self.sidebar_footer.configure(pady=12 if short else 20)
@@ -352,8 +354,8 @@ class ConnectorApp:
         brand_mark(lockup, SIDEBAR).pack(side="left", padx=(0, 8))
         wordmark = tk.Frame(lockup, bg=SIDEBAR)
         wordmark.pack(side="left", fill="x", expand=True)
-        self._label(wordmark, "YOUNGMONEY3", size=8, bold=True, color=ACCENT).pack(anchor="w")
-        self._label(wordmark, "CONNECTOR", size=12, bold=True).pack(anchor="w", pady=(2, 0))
+        self._label(wordmark, "YOUNGMONEY3", size=7, bold=True, color=ACCENT).pack(anchor="w")
+        self._label(wordmark, "CONNECTOR", size=10, bold=True).pack(anchor="w", pady=(2, 0))
         self._label(brand, "Your trading companion.", size=9, color=MUTED, wrap=160).pack(anchor="w")
         tk.Frame(self.sidebar, bg=BORDER, height=1).pack(fill="x", padx=18, pady=(0, 18))
         self.nav_buttons = {}
@@ -449,7 +451,8 @@ class ConnectorApp:
         top = tk.Frame(hero,bg=PANEL)
         top.pack(fill="x",pady=(0,12))
         self._label(top,"CONNECTION STATUS",size=9,bold=True,color=MUTED).pack(side="left")
-        self._label(top,"● SECURE LINK",size=8,bold=True,color=SUCCESS).pack(side="right")
+        self._label(top,textvar=self.connection_badge_var,size=8,
+                    bold=True,color=SUCCESS).pack(side="right")
         self._label(hero,textvar=self.status_var,size=25,bold=True).pack(anchor="w",pady=(0,7))
         self._label(hero,textvar=self.device_var,size=10,color=MUTED,wrap=550).pack(anchor="w")
         self.connection_path = ConnectionPath(hero,background=PANEL,motion=self.motion_var.get)
@@ -491,7 +494,7 @@ class ConnectorApp:
 
     def _arrange_overview(self):
         if not hasattr(self,"overview_columns"):return
-        compact=self.root.winfo_width()<1080
+        compact=self.root.winfo_width()<920
         for item in (self.overview_status,self.overview_next):
             item.grid_forget()
         if compact:
@@ -550,8 +553,9 @@ class ConnectorApp:
         self._label(words,"Your accounts will appear here",size=15,bold=True).pack(anchor="w")
         self._label(words,"Add one MT5 account to see live connection status and saved trade updates.",
                     size=10,color=MUTED,wrap=550).pack(anchor="w",pady=(5,0))
-        self._button(self.empty_accounts,"Add my first account",self.add_account,
-                     primary=True).pack(anchor="w",pady=(18,0))
+        self._label(self.empty_accounts,
+                    "Once connected, choose the account card to open its controls.",
+                    color=MUTED,size=9).pack(anchor="w",pady=(12,0))
 
         self.account_detail=self._card(page,20)
         headline=tk.Frame(self.account_detail,bg=PANEL)
@@ -773,7 +777,7 @@ class ConnectorApp:
 
     def _arrange_copy(self):
         if not hasattr(self,"copy_columns"):return
-        compact=self.root.winfo_width()<1080
+        compact=self.root.winfo_width()<920
         for panel in (self.copy_left,self.copy_right):
             panel.grid_forget()
         if compact:
@@ -929,7 +933,7 @@ class ConnectorApp:
 
     def _arrange_pair(self):
         if not hasattr(self,"pair_columns"):return
-        compact=self.root.winfo_width()<1080
+        compact=self.root.winfo_width()<920
         for item in (self.pair_left,self.pair_right):
             item.grid_forget()
         if compact:
@@ -1776,6 +1780,7 @@ class ConnectorApp:
         slot = item.get("slot")
         message = trader_message(item.get("message", ""))
         if state == "pc-online":
+            self.connection_badge_var.set("● COMPUTER ONLINE")
             self.pc_state = state
             self.device_id = item["device"]
             self.pc_name = item.get("name") or ("PC "+self.device_id[:8])
@@ -1881,6 +1886,7 @@ class ConnectorApp:
         elif state == "paired":
             self.pair_ok = True
             self.paired = True
+            self.connection_badge_var.set("● PAIRING SAVED")
             self.hero_pc_button.configure(text="Rename this computer")
             self.hero_pc_button.set_tones(PANEL_ALT,"#354450")
             self.resume_after_pair = True
