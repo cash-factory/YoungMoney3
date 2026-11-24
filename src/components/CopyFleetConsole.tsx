@@ -28,7 +28,7 @@ type Fleet={
 };
 type Report={link:string;account_balance:number;account_equity:number;account_currency:string;margin_free:number;
   open_positions:number;pending_orders:number;broker_connected:number;demo_trading_enabled:number;observed_at_ms:number};
-type Consent={follower_link:string;demo_authorized:number;authorization_mode:string;expires_at:number};
+type Consent={follower_link:string;demo_authorized:number;authorization_mode:string;broker_login:string|null;broker_server:string|null;expires_at:number};
 type Task={id:string;fleet_id:string;source_key:string;action:string;status:string;follower_link:string;retcode:number|null;result_code:string|null;result_payload?:{lots?:number;risk_amount?:number;risk_pct_equity?:number;account_currency?:string}|null;created_at:number};
 type Status={mode:'demo-and-live';liveExecutionEnabled:boolean;requiresLocalConsent:true;maxFollowersPerFleet:number;
   accounts:Account[];fleets:Fleet[];reports:Report[];consents:Consent[];tasks:Task[]};
@@ -62,8 +62,26 @@ const parseSymbolMapText=(text:string):Record<string,string>|null=>{
   }
   return map;
 };
-const permission=(a:Account,mode:ExecutionMode)=>a.trade_mode===(mode==='live'?2:0)&&a.access_level==='trading-enabled'&&
-  a.monitoring_paused===0&&Number(a.last_seen)>Date.now()-45000;
+const followerReadiness=(a:Account|undefined, mode:ExecutionMode, approved:Consent|undefined, now=Date.now())=>{
+  if(!a)return {ready:false,label:'Account unavailable',help:'Reconnect this follower account in the Windows connector.'};
+  if(a.trade_mode!==(mode==='live'?2:0))
+    return {ready:false,label:'Wrong account type',help:'Demo fleets need demo followers. Live fleets need real-money followers.'};
+  if(a.monitoring_paused!==0)
+    return {ready:false,label:'Monitoring paused',help:'Resume monitoring on this account in My accounts.'};
+  if(!a.last_seen||Number(a.last_seen)<=now-45000)
+    return {ready:false,label:'Connection not current',help:'Open the Windows connector and keep this broker account connected.'};
+  if(a.access_level!=='trading-enabled')
+    return {ready:false,label:'Viewing access only',help:'This broker login cannot place orders. Sign in with a trading-enabled account.'};
+  if(!Number.isFinite(Number(a.broker_equity))||Number(a.broker_equity)<=0)
+    return {ready:false,label:'Waiting for account balance',help:'Keep the broker account online until its balance and equity appear.'};
+  if(!approved?.demo_authorized||approved.authorization_mode!==mode||approved.expires_at<=now)
+    return {ready:false,label:'Permission needed on this PC',
+      help:'Open YoungMoney3 Connector → My accounts → select this follower → Allow '+(mode==='demo'?'demo':'live')+' trade copying. Return here and refresh.'};
+  if(approved.broker_login!==a.login||approved.broker_server!==a.server)
+    return {ready:false,label:'Account changed',
+      help:'This broker login or server has changed. Reconfirm copying permission in the Windows connector.'};
+  return {ready:true,label:'Ready to copy',help:'This account is online and has confirmed copying permission.'};
+};
 export function CopyFleetConsole(){
   const [status,setStatus]=useState<Status|null>(null);
   const [selected,setSelected]=useState<string|null>(null);
@@ -168,7 +186,7 @@ export function CopyFleetConsole(){
       <div><small>Armed fleets</small><strong>{armed.length}</strong><span>{armed.filter(f=>f.execution_mode==='live').length} live · account-specific Windows consent</span></div>
       <div><small>Unresolved dispatches</small><strong>{status?.tasks.filter(t=>t.status==='dispatched'||t.status==='unknown').length||0}</strong><span>Never silently retried</span></div>
     </div>
-    <div className="ym-cf-safety"><ShieldCheck size={18}/><span><strong>Execution is disabled by default.</strong> LIVE followers can place real broker orders and incur real losses. Every follower requires a matching Windows consent, fresh verification and MT5 preflight. Emergency pause cannot undo orders already sent; execution outcomes must be reconciled with the broker.</span></div>
+    <div className="ym-cf-safety"><ShieldCheck size={18}/><span><strong>Before you switch on copying:</strong> allow trade copying for every receiving account in the Windows app. Then refresh this page until each account says <strong>Ready to copy</strong>. A live fleet stays unavailable until real-money testing has been approved. Pausing does not reverse orders already placed.</span></div>
     {alert&&<div className="ym-cs-feedback" data-kind="error" role="alert"><AlertTriangle size={16}/><span>{alert}</span><button type="button" onClick={()=>setAlert('')}>Dismiss</button></div>}
     {notice&&<div className="ym-cs-feedback" data-kind="success" role="status"><CheckCircle2 size={16}/><span>{notice}</span><button type="button" onClick={()=>setNotice('')}>Dismiss</button></div>}
     <div className="ym-cf-layout">
@@ -203,11 +221,13 @@ export function CopyFleetConsole(){
           const a=accounts.find(x=>x.id===target.link);
           const report=reports.get(target.link);
           const authorized=consent.get(target.link);
-          const ready=Boolean(a&&permission(a,draft.executionMode)&&authorized?.demo_authorized&&authorized.authorization_mode===draft.executionMode&&Number(authorized.expires_at)>Date.now());
+          const readiness=followerReadiness(a,draft.executionMode,authorized);
+          const ready=readiness.ready;
           return <div className="ym-cf-target" key={target.link}>
-            <div className="ym-cf-target-top"><div><span className="ym-cf-index">{String(i+1).padStart(2,'0')}</span><strong>{title(a)}</strong><span className="ym-cf-tag" data-ready={ready}>{ready?'LOCAL CONSENT ACTIVE':a?.access_level==='trading-restricted'?'INVESTOR / READ-ONLY':'LOCAL CONSENT NEEDED'}</span></div>
+            <div className="ym-cf-target-top"><div><span className="ym-cf-index">{String(i+1).padStart(2,'0')}</span><strong>{title(a)}</strong><span className="ym-cf-tag" data-ready={ready}>{readiness.label}</span></div>
               <button type="button" title="Remove follower" aria-label={'Remove follower '+title(a)} disabled={!!busy||(picked&&picked.state!=='paused')} onClick={()=>setDraft(d=>({...d,targets:d.targets.filter(t=>t.link!==target.link)}))}><X size={17}/></button>
             </div>
+            <p className="ym-cf-readiness" role="status">{readiness.help}</p>
             <div className="ym-cf-target-controls">
               <label>Allocation method<select className="input-field" value={target.mode} disabled={!!busy||(picked&&picked.state!=='paused')} onChange={e=>mutate(target.link,{mode:e.target.value as RiskMode,value:1})}>
                 {Object.entries(modeLabel).map(([k,v])=><option key={k} value={k}>{v}</option>)}
