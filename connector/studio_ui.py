@@ -142,7 +142,7 @@ class ResponsiveActions(tk.Frame):
 
     def reflow(self):
         self._job = None
-        if not self.winfo_exists() or not self.buttons or not self.winfo_ismapped():
+        if not self.winfo_exists() or not self.buttons:
             return
         # Buttons are children of this frame. Keep them in place and switch
         # only their grid slots; never rebuild containing row frames.
