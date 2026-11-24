@@ -94,7 +94,10 @@ class AnimatedButton(tk.Button):
 
 
 class ResponsiveActions(tk.Frame):
-    """A wrapping action row driven by measured Tk button requests and DPI scaling."""
+    """Stable grid-based toolbar that wraps to measured space, without
+    creating or destroying containers whenever Windows recalculates its layout.
+    A responsive action must never move repeatedly or become unclickable.
+    """
     def __init__(self, parent, *, gap=8, minimum=132, **kwargs):
         super().__init__(parent, **kwargs)
         self.buttons = []
@@ -102,8 +105,8 @@ class ResponsiveActions(tk.Frame):
         self.gap = gap
         self.minimum = minimum
         self._job = None
-        self._row_frames = []
         self._signature = None
+        self._last_width = None
         self.bind("<Configure>", self._queue_layout, add="+")
         self.bind("<Destroy>", self._cleanup, add="+")
 
@@ -112,45 +115,50 @@ class ResponsiveActions(tk.Frame):
         self._queue_layout()
         return button
 
-    def _cleanup(self, _event=None):
+    def _cleanup(self, event=None):
+        if event is not None and event.widget is not self:
+            return
         if self._job is not None:
             self.after_cancel(self._job)
             self._job = None
 
-    def _queue_layout(self, _event=None):
-        self._cleanup()
+    def _queue_layout(self, event=None):
+        if event is not None and event.widget is not self:
+            return
+        if event is not None and event.width == self._last_width:
+            return
+        if event is not None:
+            self._last_width = event.width
+        if self._job is not None:
+            return
         self._job = self.after_idle(self.reflow)
 
     def reflow(self):
         self._job = None
         if not self.winfo_exists() or not self.buttons:
             return
+        # Buttons are children of this frame. Keep them in place and switch
+        # only their grid slots; never rebuild containing row frames.
         width = self.winfo_width()
         if width <= 1:
-            width = max(self.minimum, self.master.winfo_width() - 44)
+            width = max(self.minimum, self.master.winfo_width() - 40)
         requested = [button.winfo_reqwidth() for button in self.buttons]
         rows = action_rows(width, requested, self.gap, self.minimum)
-        signature = (rows, requested)
+        signature = (tuple(tuple(r) for r in rows), tuple(requested))
         if signature == self._signature:
             return
         self._signature = signature
         for button in self.buttons:
-            button.pack_forget()
-        for frame in self._row_frames:
-            frame.destroy()
-        self._row_frames = []
-        for row in rows:
-            frame = tk.Frame(self, bg=self.cget("bg"))
-            frame.pack(fill="x")
-            self._row_frames.append(frame)
-            for position, index in enumerate(row):
-                button = self.buttons[index]
-                button.pack(in_=frame, side="left", fill="x", expand=True,
-                            padx=(0, self.gap if position < len(row) - 1 else 0),
-                            pady=(0, self.gap))
-                # Buttons belong to this action group while their geometry is
-                # managed inside row frames. Keep them above those row windows.
-                button.lift()
+            button.grid_forget()
+        # Clear unused weights from any previous row layout.
+        for col in range(max(len(self.buttons), max(map(len,self.rows),default=0))):
+            self.grid_columnconfigure(col,weight=0,minsize=0)
+        for r, indices in enumerate(rows):
+            for col, index in enumerate(indices):
+                self.grid_columnconfigure(col,weight=1,uniform="")
+                self.buttons[index].grid(row=r,column=col,sticky="ew",
+                    padx=(0,self.gap if col<len(indices)-1 else 0),
+                    pady=(0,self.gap))
         self.rows = rows
 
 
