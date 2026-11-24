@@ -2206,9 +2206,9 @@ def main():
                                 for button in group.buttons:
                                     if button.winfo_width() < button.winfo_reqwidth() or button.winfo_rootx() + button.winfo_width() > edge + 1:
                                         raise RuntimeError("Responsive action label was clipped")
-                                    siblings = group.winfo_children()
-                                    if siblings.index(button) < siblings.index(button.pack_info()["in"]):
-                                        raise RuntimeError("Responsive action covered by row frame")
+                                    if button.winfo_manager() != "grid" or
+                                            button.grid_info().get("in") != group:
+                                        raise RuntimeError("Responsive action is not in the visible toolbar grid")
                         responsive_sizes.append([width, height])
                     if app.worker is not None or SETTINGS.exists():
                         raise RuntimeError("Presentation smoke started capture or wrote settings")
