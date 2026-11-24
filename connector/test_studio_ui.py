@@ -141,6 +141,40 @@ class ConnectorPresentationTests(unittest.TestCase):
         self.assertIsNone(self.app.worker)
         self.assertFalse(self.settings.exists())
 
+    def test_account_card_expands_only_when_trader_selects_it(self):
+        terminal=Path(self.temp.name)/"terminal64.exe"
+        terminal.write_bytes(b"review fixture only")
+        record={"id":"demo-account-1","name":"Demo account", "terminal":str(terminal),
+                "enabled":True}
+        with patch.object(self.app.store,"snapshot",return_value=[record]):
+            self.app.refresh_sessions()
+            self._settle()
+            self.assertFalse(self.app.empty_accounts.winfo_manager())
+            self.assertFalse(self.app.account_detail.winfo_manager())
+            self.assertTrue(self.app.session_table.exists(record["id"]))
+            self.app._select_account(record["id"])
+            self._settle()
+            self.assertTrue(self.app.account_detail.winfo_manager())
+            self.assertIn("Demo account",self.app.selected_details_var.get())
+            self.assert_actions_fit(self.app.session_actions)
+            self.assert_actions_fit(self.app.copy_controls)
+            self.app._hide_account_detail()
+            self._settle()
+            self.assertFalse(self.app.account_detail.winfo_manager())
+        self.assertFalse(self.settings.exists())
+
+    def test_help_answers_are_optional_instead_of_always_visible(self):
+        self.app.show_page("help")
+        self._settle()
+        header,answer=self.app.help_items[0]
+        self.assertFalse(answer.winfo_manager())
+        header.invoke()
+        self._settle()
+        self.assertTrue(answer.winfo_manager())
+        header.invoke()
+        self._settle()
+        self.assertFalse(answer.winfo_manager())
+
     def test_pair_confirmation_starts_pc_service_without_any_configured_terminals(self):
         self.assertEqual(self.app.store.all_terminals(), [])
         with patch.object(self.app, "_start_worker") as start:
