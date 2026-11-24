@@ -1070,9 +1070,9 @@ class ConnectorApp:
             self.refresh_sessions()
         if key == "copy" and self.copy_account_choice.get():
             self._choose_copy_account()
-        titles = {"overview": "Your connection", "sessions": "My accounts",
-                  "copy": "Trade copying", "pair": "Connect this PC",
-                  "activity": "Recent activity", "help": "Help & guidance"}
+        titles = {"overview": "Your trading accounts", "sessions": "My accounts",
+                  "copy": "Trade copying", "pair": "Connect this computer",
+                  "activity": "Recent activity", "help": "Help when you need it"}
         art = self.header_art.get(titles.get(key))
         if art:
             art.reveal()
@@ -2114,7 +2114,7 @@ def main():
                     for width, height in ((720, 560), (780, 600), (1024, 768), (1440, 900)):
                         window.geometry(f"{width}x{height}")
                         for page, groups in (("overview", [app.quick_setup_actions]),
-                                             ("sessions", [app.session_tools, app.session_actions]),
+                                             ("sessions", [app.session_tools]),
                                              ("pair", [app.code_actions])):
                             app.show_page(page)
                             for _ in range(3):
