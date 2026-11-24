@@ -183,7 +183,7 @@ class StudioArt(tk.Canvas):
         dim = blend(background, self.accent, .22)
         soft = blend(background, "#19283E", .27)
         bright = blend(self.accent, "#FFFFFF", .15)
-        if self.variant == "Your connection":
+        if self.variant == "Your trading accounts":
             # Quiet product-style composition: a Windows terminal, isolated
             # accounts and verified journal evidence. No loop or decorative
             # motion; connection animation is reserved for actual state changes.
@@ -248,7 +248,7 @@ class StudioArt(tk.Canvas):
                 self.create_line(x + 17, y + 5, x + 83, y + 5, fill=soft, width=2)
                 self.create_line(x + 103, y + 5, x + 125, y + 5,
                                  fill=self.accent, width=2)
-        elif self.variant == "Connect this PC":
+        elif self.variant == "Connect this computer":
             self.create_rectangle(29, 46, 86, 76, outline=bright, fill=background, width=2)
             self.create_line(50, 80, 66, 80, fill=soft, width=2)
             self.create_line(57, 76, 57, 80, fill=soft, width=2)
@@ -256,7 +256,7 @@ class StudioArt(tk.Canvas):
             self.create_rectangle(127, 50, 162, 72, outline=border, fill=background)
             self.create_line(134, 61, 140, 66, 151, 55,
                              fill="#218A73", width=2.5)
-        elif self.variant == "Help & guidance":
+        elif self.variant == "Help when you need it":
             for i in range(3):
                 y = 46 + i * 12
                 self.create_oval(28, y, 35, y + 7, outline="",
