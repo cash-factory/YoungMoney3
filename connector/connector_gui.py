@@ -617,7 +617,7 @@ class ConnectorApp:
             self.show_page("pair")
             return
         if self.pc_state == "pc-service-incompatible":
-            self.banner_var.set("Staging needs a connector API update. Your PC pairing is saved; retry after the dashboard is updated.")
+            self.banner_var.set("Your dashboard and this connector need the same version. Your PC link is safe; update the connector and try again.")
             return
         if self.pc_state != "pc-online":
             self.banner_var.set("Contacting your dashboard. The login will open when this PC is online.")
@@ -1052,12 +1052,12 @@ class ConnectorApp:
             ("Free margin", f"{health[3]:,.2f}" if health else "—"),
             ("Open positions", str(health[4]) if health else "—"),
             ("Pending orders", str(health[5]) if health else "—"),
-            ("Copy source", "Observed for an armed fleet" if health and health[6] else "Not acting as source"),
+            ("Main account for copying", "Observed for an armed fleet" if health and health[6] else "Not acting as source"),
             ("Trade copying on this computer", (str(item.get("copy_mode","none")).upper()+" · Allowed") if item.get("allowed") else "Not allowed"),
-            ("Journal evidence awaiting sync", str(item.get("queued",0))),
-            ("Positions awaiting broker closure", str(item.get("unresolved",0))),
-            ("Ambiguous/unacknowledged copy tasks", str(item.get("unacknowledged",0))),
-            ("Last copy result", str(health[7]) if health and health[7] else "No broker copy actions"),
+            ("Trades waiting to update", str(item.get("queued",0))),
+            ("Trades awaiting final broker confirmation", str(item.get("unresolved",0))),
+            ("Copy orders awaiting confirmation", str(item.get("unacknowledged",0))),
+            ("Last copy result", str(health[7]) if health and health[7] else "No copied orders yet"),
         ]
         for label,value in rows:
             line=tk.Frame(frame,bg=BACKGROUND)
@@ -1118,7 +1118,7 @@ class ConnectorApp:
             1 for session in entries if
             session["terminal"] in self.account_by_slot and
             (not session["enabled"] or self._session_state(session) in (
-                "Connection issue","Needs re-link","Terminal missing","Paused on dashboard"))
+                "Needs reconnection","Needs re-link","Terminal missing","Paused on dashboard"))
         )))
         self._selected_session_details()
 
@@ -1127,7 +1127,7 @@ class ConnectorApp:
             action()
             self.refresh_sessions()
         except (SessionError, OSError, ValueError, StopIteration) as error:
-            self._log("Session configuration needs attention: " + str(error))
+            self._log("This account needs attention: " + str(error))
             messagebox.showwarning("Session manager", str(error))
 
     def _copy_named_terminal(self, source, name):
@@ -1418,7 +1418,7 @@ class ConnectorApp:
             self.banner_var.set("Finishing the current request and preserving the upload queue.")
             self._log("Safe stop requested. Waiting for current broker operation.")
         else:
-            self.status_var.set("Capture stopped")
+            self.status_var.set("Monitoring stopped")
 
     def _log(self, message):
         # Messages are composed from known app text, not user input, tokens or
@@ -1489,7 +1489,7 @@ class ConnectorApp:
             self.pc_state = state
             self.status_var.set("Staging server needs an update")
             self.device_var.set("This PC's pairing remains saved. The staging API did not acknowledge connector check-ins.")
-            self.banner_var.set("The dashboard server must support this connector version. Update staging before adding accounts.")
+            self.banner_var.set("Update the app or dashboard before adding more accounts. Your saved account link is safe.")
             self._log("Connector check-in endpoint is unavailable or returned an incompatible response.")
         elif state == "pc-revoked":
             self.restart_due = None
@@ -1573,7 +1573,7 @@ class ConnectorApp:
             self.pair_stage_var.set("Success! Your PC is paired with staging.")
             self.pair_elapsed_var.set("Pairing confirmed by the staging server.")
             self.status_var.set("PC paired successfully")
-            self.banner_var.set("Pairing saved. Connecting this PC to your dashboard.")
+            self.banner_var.set("Computer connected. Getting your accounts ready.")
             self._log("PC pairing confirmed. No account credentials are stored in the GUI.")
         elif state == "verifying":
             self.focus_slot = slot
@@ -1587,9 +1587,9 @@ class ConnectorApp:
             self.connection_path.show(max(2, self.connection_path.level))
             self.status_var.set("Broker verified")
             self.store.clear_arm(slot)
-            self.banner_var.set("Staging accepted the broker login. First journal sync pending."
+            self.banner_var.set("Your broker account is connected. Your trade history is being updated."
                                 if item.get("acknowledged") else
-                                "Broker verified locally. Dashboard acknowledgement will retry without re-entering the password.")
+                                "Your broker account is ready. We are finishing the link to your dashboard.")
             self._log("Broker account linked to selected terminal " +
                       str(Path(slot).parent.name) + ".")
         elif state == "arm-consumed":
@@ -1623,7 +1623,7 @@ class ConnectorApp:
             self.status_by_slot[slot] = "Starting process"
             self._log("A dedicated MT5 capture process is starting.")
         elif state == "session-worker-exited":
-            if slot in self.account_by_slot and self.status_by_slot.get(slot) != "Connection issue":
+            if slot in self.account_by_slot and self.status_by_slot.get(slot) != "Needs reconnection":
                 self.status_by_slot[slot] = "Stopped"
         elif state == "session-unlinked":
             self.sync_by_slot.pop(slot, None)
@@ -1646,7 +1646,7 @@ class ConnectorApp:
             if state == "account-error" and self.focus_slot == slot:
                 self.focus_setup = False
                 self.status_var.set("Broker login needs attention")
-            self.status_by_slot[slot] = "Connection issue"
+            self.status_by_slot[slot] = "Needs reconnection"
             self.banner_var.set(message)
             self._log("Session attention required: " + message)
         elif state == "error":
@@ -1696,7 +1696,7 @@ class ConnectorApp:
                 self._log("Capture temporarily offline; retry scheduled.")
                 self.last_summary = "retrying"
         elif state == "paused":
-            self.status_var.set("Capture paused")
+            self.status_var.set("Monitoring paused")
         self.refresh_sessions()
 
     def poll(self):
