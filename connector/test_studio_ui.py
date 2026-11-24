@@ -1,5 +1,7 @@
 """Presentation regressions: no MT5 calls, pairing request or account settings writes."""
 import importlib.util
+import os
+import faulthandler
 import sys
 import tempfile
 import time
@@ -10,6 +12,12 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from studio_ui import action_rows, blend, AnimatedButton, restart_wait_seconds
+
+# Give the Windows review an actionable Python stack instead of silently
+# running until the CI job timeout if a native layout event loop stalls.
+if os.environ.get("GITHUB_ACTIONS") == "true":
+    faulthandler.dump_traceback_later(35, repeat=True)
+
 
 
 class ActionLayoutTests(unittest.TestCase):
