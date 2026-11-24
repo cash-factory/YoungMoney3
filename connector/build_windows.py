@@ -33,6 +33,7 @@ def main():
         # MetaTrader5's compiled extension imports NumPy through the C API;
         # static Python import analysis cannot discover that dependency.
         "--collect-all", "numpy", "--hidden-import", "numpy",
+        "--collect-all", "ttkbootstrap",
         "--collect-all", "tzdata", "connector/connector_gui.py",
     ])
     archive = CArchiveReader("dist/YoungMoney3 Connector.exe")
