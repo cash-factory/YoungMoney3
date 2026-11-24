@@ -160,6 +160,8 @@ class ConnectorApp:
         # appearance. The original high-contrast ttk styles remain a safe
         # fallback for source-only installations without the optional theme.
         try:
+            if os.environ.get("YMFX_TK_UNIT_TEST") == "1":
+                raise ImportError("Unit tests use isolated native ttk theme")
             import ttkbootstrap
             style = ttkbootstrap.Style(theme="litera")
         except ImportError:
