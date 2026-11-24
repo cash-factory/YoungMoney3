@@ -509,72 +509,162 @@ class ConnectorApp:
             self.show_page("pair")
 
     def _build_sessions(self):
-        page = self._scrollable_page("sessions")
-        self._stack_heading(page, "My accounts", "Every broker account in one place. Choose one to check or manage it.")
-        self.session_tools = self._actions(page, [
-            ("Add account", self.add_account, {"primary": True}),
-            ("Open dashboard", self.open_dashboard, {}),
-            ("Extra tools", self.toggle_advanced, {"quiet": True})])
-        self.session_tools.pack_configure(pady=(0, 8))
-        self.advanced = self._card(page, 14)
-        self._label(self.advanced, "Advanced account setup · only when needed", size=11, bold=True).pack(anchor="w")
-        advanced = self._actions(self.advanced, [
-            ("Create terminal", self.create_named_terminal, {}), ("Duplicate selected", self.duplicate_selected, {}),
-            ("Add existing", self.add_session, {}), ("Detect terminals", self.detect_sessions, {}),
-            ("Prepare for next login", self.arm_selected, {}), ("Open folder", self.open_selected_folder, {}),
-            ("Open MT5", self.launch_selected, {}), ("Stop connector", self.stop, {})])
-        self.create_button, self.duplicate_button = advanced.buttons[:2]
-        table_area = self._card(page, 12)
-        table_area.pack(fill="both", expand=True, pady=(0, 12))
-        columns = ("name", "account", "status", "location")
-        self.session_table = ttk.Treeview(table_area, columns=columns, show="headings",
-                                           style="YM.Treeview", selectmode="browse", height=7)
-        for key, text, width in (("name", "SESSION", 160),
-                                  ("account", "BROKER / LOGIN", 176),
-                                  ("status", "STATE", 145),
-                                  ("location", "TERMINAL DIRECTORY", 270)):
-            self.session_table.heading(key, text=text, anchor="w")
-            self.session_table.column(key, width=width, minwidth=90, stretch=True, anchor="w")
-        self.session_table.configure(displaycolumns=("name", "account", "status"))
-        bar = ttk.Scrollbar(table_area, orient="vertical", command=self.session_table.yview,
-                            style="YM.Vertical.TScrollbar")
-        horizontal = ttk.Scrollbar(table_area, orient="horizontal", command=self.session_table.xview,
-                                   style="YM.Horizontal.TScrollbar")
-        self.session_table.configure(yscrollcommand=bar.set, xscrollcommand=horizontal.set)
-        table_area.grid_columnconfigure(0, weight=1)
-        table_area.grid_rowconfigure(0, weight=1)
-        self.session_table.grid(row=0, column=0, sticky="nsew")
-        bar.grid(row=0, column=1, sticky="ns")
-        horizontal.grid(row=1, column=0, sticky="ew", pady=(5, 0))
-        self.session_table.bind("<<TreeviewSelect>>", lambda _event: self._selected_session_details())
-        self.empty_accounts=tk.Frame(table_area,bg=PANEL,padx=24,pady=22)
-        glyph=tk.Canvas(self.empty_accounts,width=56,height=56,bg=PANEL,
-                        highlightthickness=0)
-        glyph.pack()
-        glyph.create_oval(6,6,50,50,outline=BORDER,width=2)
-        glyph.create_line(17,28,39,28,fill=ACCENT,width=3)
-        glyph.create_line(28,17,28,39,fill=ACCENT,width=3)
-        self._label(self.empty_accounts,"No accounts connected yet",
-                    size=15,bold=True).pack(anchor="center",pady=(9,5))
-        self._label(self.empty_accounts,
-            "Add a broker account to start saving your trades here.",
-            size=10,color=MUTED,wrap=420).pack(anchor="center",pady=(0,14))
-        self._button(self.empty_accounts,"Add my first account",
-                     self.add_account,primary=True).pack(anchor="center")
-        detail = self._card(page, 15)
-        detail.pack(fill="x")
-        self._label(detail, textvar=self.selected_details_var, size=10,
-                    color=MUTED, wrap=810).pack(anchor="w", pady=(0, 9))
-        self.session_actions = self._actions(detail, [
-            ("Resume", self.start_selected, {}), ("Retry this account", self.retry_selected, {}),
-            ("Pause", self.pause_selected, {}), ("Rename locally", self.rename_selected, {"quiet": True}),
-            ("Remove local session", self.remove_selected, {"quiet": True})], minimum=126)
-        self.copy_controls = self._actions(detail, [
-            ("Account details", self.inspect_selected_account, {"quiet": True}),
-            ("Copying permissions", lambda: self.show_page("copy"), {}),
-            ("Open Copy Fleet", lambda: webbrowser.open(STAGING_URL + "/#copy-studio"), {"quiet": True})],
-            minimum=158)
-        self.copy_controls.pack_configure(pady=(10, 0))
+        page=self._scrollable_page("sessions")
+        self._stack_heading(page,"My accounts",
+                            "Select any account to view its connection and manage it.")
+        self.session_tools=self._actions(page,[
+            ("Add account",self.add_account,{"primary":True}),
+            ("Open dashboard",self.open_dashboard,{"quiet":True}),
+            ("More options",self.toggle_advanced,{"quiet":True})],minimum=150)
+        self.session_tools.pack_configure(pady=(0,14))
+
+        # Keep Treeview as the proven keyboard-addressable selection model.
+        # The trader sees account cards instead of a filesystem-style table.
+        table_area=tk.Frame(page,bg=BACKGROUND)
+        columns=("name","account","status","location")
+        self.session_table=ttk.Treeview(table_area,columns=columns,show="headings",
+                                        style="YM.Treeview",selectmode="browse",height=5)
+        for key,title,width in (("name","ACCOUNT",180),("account","BROKER",200),
+                                 ("status","STATUS",160),("location","INSTALLATION",260)):
+            self.session_table.heading(key,text=title,anchor="w")
+            self.session_table.column(key,width=width,minwidth=90,stretch=True,anchor="w")
+        self.session_table.configure(displaycolumns=("name","account","status"))
+        self.session_table.bind("<<TreeviewSelect>>",lambda _e:self._selected_session_details())
+
+        self.account_rows_host=tk.Frame(page,bg=BACKGROUND)
+        self.account_rows_host.pack(fill="x",pady=(0,12))
+        self._account_signature=None
+        self.empty_accounts=self._card(self.account_rows_host,24)
+        empty=tk.Frame(self.empty_accounts,bg=PANEL)
+        empty.pack(fill="x")
+        symbol=tk.Canvas(empty,width=58,height=60,bg=PANEL,highlightthickness=0)
+        symbol.pack(side="left",padx=(0,20))
+        symbol.create_oval(6,5,53,52,fill="#EBEFFC",outline="")
+        symbol.create_line(18,29,42,29,fill=ACCENT,width=3)
+        symbol.create_line(30,17,30,41,fill=ACCENT,width=3)
+        words=tk.Frame(empty,bg=PANEL)
+        words.pack(side="left",fill="both",expand=True)
+        self._label(words,"Your accounts will appear here",size=15,bold=True).pack(anchor="w")
+        self._label(words,"Add one MT5 account to see live connection status and saved trade updates.",
+                    size=10,color=MUTED,wrap=550).pack(anchor="w",pady=(5,0))
+        self._button(self.empty_accounts,"Add my first account",self.add_account,
+                     primary=True).pack(anchor="w",pady=(18,0))
+
+        self.account_detail=self._card(page,20)
+        headline=tk.Frame(self.account_detail,bg=PANEL)
+        headline.pack(fill="x",pady=(0,10))
+        self._label(headline,"ACCOUNT CONTROLS",size=9,bold=True,
+                    color=ACCENT).pack(anchor="w")
+        self._label(self.account_detail,textvar=self.selected_details_var,size=11,
+                    color=MUTED,wrap=770).pack(anchor="w",pady=(0,14))
+        self._label(self.account_detail,"Monitoring",size=12,bold=True).pack(anchor="w",pady=(0,8))
+        self.session_actions=self._actions(self.account_detail,[
+            ("Resume",self.start_selected,{"primary":True}),
+            ("Try reconnecting",self.retry_selected,{"quiet":True}),
+            ("Pause",self.pause_selected,{"quiet":True}),
+            ("Rename",self.rename_selected,{"quiet":True}),
+            ("Remove",self.remove_selected,{"quiet":True})],minimum=135)
+        self._label(self.account_detail,"Copying & details",size=12,
+                    bold=True).pack(anchor="w",pady=(15,8))
+        self.copy_controls=self._actions(self.account_detail,[
+            ("Account details",self.inspect_selected_account,{"quiet":True}),
+            ("Copying permissions",lambda:self.show_page("copy"),{"quiet":True}),
+            ("Open Copy Fleet",lambda:webbrowser.open(STAGING_URL+"/#copy-studio"),
+             {"quiet":True})],minimum=152)
+        self._button(self.account_detail,"Close account controls",
+                     self._hide_account_detail,quiet=True).pack(anchor="e",pady=(12,0))
+
+        self.advanced=self._card(page,16)
+        self._label(self.advanced,"Advanced MT5 tools",size=12,
+                    bold=True).pack(anchor="w",pady=(0,5))
+        self._label(self.advanced,
+                    "Only needed for custom terminal installations or special connection problems.",
+                    size=10,color=MUTED,wrap=790).pack(anchor="w",pady=(0,12))
+        advanced=self._actions(self.advanced,[
+            ("Create terminal",self.create_named_terminal,{"quiet":True}),
+            ("Duplicate",self.duplicate_selected,{"quiet":True}),
+            ("Find existing",self.add_session,{"quiet":True}),
+            ("Find MT5",self.detect_sessions,{"quiet":True}),
+            ("Prepare login",self.arm_selected,{"quiet":True}),
+            ("Open folder",self.open_selected_folder,{"quiet":True}),
+            ("Open MT5",self.launch_selected,{"quiet":True}),
+            ("Stop monitoring",self.stop,{"quiet":True})],minimum=135)
+        self.create_button,self.duplicate_button=advanced.buttons[:2]
+
+    def _select_account(self,session_id):
+        if not self.session_table.exists(session_id):
+            return
+        self.session_table.selection_set(session_id)
+        self.session_table.focus(session_id)
+        self._selected_session_details()
+        self._render_account_cards(force=True)
+        self.root.after_idle(
+            lambda: self._page_canvases["sessions"].yview_moveto(1))
+
+    def _hide_account_detail(self):
+        self.session_table.selection_remove(self.session_table.selection())
+        self.account_detail.pack_forget()
+        self._render_account_cards(force=True)
+
+    def _render_account_cards(self,force=False):
+        entries=self.store.snapshot()
+        selected=self.session_table.selection()
+        active=selected[0] if selected else None
+        signature=tuple((s["id"],s["name"],s["enabled"],
+                         self._session_state(s),
+                         str(self.account_by_slot.get(s["terminal"],{}).get("login") or ""),
+                         s["id"]==active) for s in entries)
+        if not force and signature==self._account_signature:
+            return
+        self._account_signature=signature
+        for widget in list(self.account_rows_host.winfo_children()):
+            if widget is not self.empty_accounts:
+                widget.destroy()
+        if entries:
+            self.empty_accounts.pack_forget()
+            for record in entries:
+                info=self.account_by_slot.get(record["terminal"],{})
+                selected_now=record["id"]==active
+                row=tk.Frame(self.account_rows_host,bg=PANEL,
+                             highlightthickness=1,
+                             highlightbackground=ACCENT if selected_now else BORDER,
+                             padx=18,pady=13)
+                row.pack(fill="x",pady=(0,9))
+                emblem=tk.Canvas(row,width=43,height=43,bg=PANEL,
+                                  highlightthickness=0)
+                emblem.pack(side="left",padx=(0,13))
+                emblem.create_oval(1,1,42,42,fill="#EDF1FC",outline="")
+                emblem.create_text(22,22,text="MT",fill=ACCENT,
+                                   font=(FONT,10,"bold"))
+                copy=tk.Frame(row,bg=PANEL)
+                copy.pack(side="left",fill="both",expand=True)
+                self._label(copy,record["name"],size=12,bold=True).pack(anchor="w")
+                broker=str(info.get("server") or "Awaiting broker login")
+                login=str(info.get("login") or "")
+                self._label(copy,broker+("  ·  "+login if login else ""),
+                            color=MUTED,size=9,wrap=460).pack(anchor="w",pady=(3,0))
+                right=tk.Frame(row,bg=PANEL)
+                right.pack(side="right")
+                status=self._session_state(record)
+                positive=status in ("Synced","Capturing","Ready")
+                chip=tk.Label(right,text=("●  "+status),
+                              font=(FONT,9,"bold"),
+                              fg=SUCCESS if positive else (DANGER if "issue" in status.lower()
+                                                or "missing" in status.lower() else MUTED),
+                              bg="#E8F6F0" if positive else PANEL_ALT,
+                              padx=10,pady=5)
+                chip.pack(anchor="e",pady=(0,7))
+                self._button(right,"Manage account",lambda sid=record["id"]:
+                             self._select_account(sid),quiet=True).pack(anchor="e")
+            if active and self.session_table.exists(active):
+                if not self.account_detail.winfo_manager():
+                    self.account_detail.pack(fill="x",pady=(3,13),
+                                              after=self.account_rows_host)
+            else:
+                self.account_detail.pack_forget()
+        else:
+            self.account_detail.pack_forget()
+            self.empty_accounts.pack(fill="x",pady=(0,8))
 
     def _build_copy(self):
         """One place for the receiving account and its on-PC permission."""
