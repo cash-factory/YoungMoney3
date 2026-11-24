@@ -440,7 +440,10 @@ class ConnectorApp:
         self.connection_path = ConnectionPath(hero, background=PANEL, motion=self.motion_var.get)
         self.connection_path.pack(fill="x", pady=(4, 4))
         self._label(hero, textvar=self.device_var, size=10, color=MUTED, wrap=730).pack(anchor="w")
-        self._button(hero, "Rename this PC", self.rename_this_pc, quiet=True).pack(anchor="w", pady=(10, 2))
+        self.hero_pc_button=self._button(hero,
+            "Rename this computer" if self.paired else "Connect this computer",
+            self._hero_pc_action,primary=not self.paired,quiet=self.paired)
+        self.hero_pc_button.pack(anchor="w",pady=(10,2))
         self.progress = ttk.Progressbar(hero, style="YM.Horizontal.TProgressbar")
         numbers = tk.Frame(page, bg=BACKGROUND)
         numbers.pack(fill="x", pady=(0, 16))
@@ -464,6 +467,12 @@ class ConnectorApp:
             ("Open dashboard", self.open_dashboard, {}),
             ("See my accounts", lambda: self.show_page("sessions"), {"quiet": True}),
             ("Set up copying", lambda: self.show_page("copy"), {"quiet": True})], minimum=144)
+
+    def _hero_pc_action(self):
+        if self.paired:
+            self.rename_this_pc()
+        else:
+            self.show_page("pair")
 
     def _build_sessions(self):
         page = self._scrollable_page("sessions")
@@ -504,6 +513,20 @@ class ConnectorApp:
         bar.grid(row=0, column=1, sticky="ns")
         horizontal.grid(row=1, column=0, sticky="ew", pady=(5, 0))
         self.session_table.bind("<<TreeviewSelect>>", lambda _event: self._selected_session_details())
+        self.empty_accounts=tk.Frame(table_area,bg=PANEL,padx=24,pady=22)
+        glyph=tk.Canvas(self.empty_accounts,width=56,height=56,bg=PANEL,
+                        highlightthickness=0)
+        glyph.pack()
+        glyph.create_oval(6,6,50,50,outline=BORDER,width=2)
+        glyph.create_line(17,28,39,28,fill=ACCENT,width=3)
+        glyph.create_line(28,17,28,39,fill=ACCENT,width=3)
+        self._label(self.empty_accounts,"No accounts connected yet",
+                    size=15,bold=True).pack(anchor="center",pady=(9,5))
+        self._label(self.empty_accounts,
+            "Add a broker account to start saving your trades here.",
+            size=10,color=MUTED,wrap=420).pack(anchor="center",pady=(0,14))
+        self._button(self.empty_accounts,"Add my first account",
+                     self.add_account,primary=True).pack(anchor="center")
         detail = self._card(page, 15)
         detail.pack(fill="x")
         self._label(detail, textvar=self.selected_details_var, size=10,
@@ -525,7 +548,7 @@ class ConnectorApp:
         self._stack_heading(page, "Trade copying",
                             "You choose the accounts. Nothing is copied until you allow it here and switch on your fleet on the website.")
         flow = self._card(page, 18)
-        flow.pack(fill="x", pady=(0, 14))
+        self.copy_explanation=flow
         self._label(flow, "HOW COPY TRADING WORKS", size=9, bold=True,
                     color=MUTED).pack(anchor="w", pady=(0, 5))
         self.copy_route = TradeJourney(flow, background=PANEL,
@@ -542,8 +565,11 @@ class ConnectorApp:
                                             state="readonly", style="YM.TCombobox", font=(FONT, 11))
         self.copy_account_combo.pack(fill="x", pady=(0, 10))
         self.copy_account_combo.bind("<<ComboboxSelected>>", self._choose_copy_account)
-        self._label(account, "You only need to approve receiving accounts. The main account is chosen on the website.",
+        self._label(account, "Choose the account receiving trades. You choose the main account on the website.",
                     size=9, color=MUTED, wrap=770).pack(anchor="w")
+        self.copy_add_account_button=self._button(account,"Add a receiving account",
+                                                   self.add_account,quiet=True)
+        self.copy_add_account_button.pack(anchor="w",pady=(13,0))
         consent_card = self._card(page, 20)
         consent_card.pack(fill="x", pady=(0, 14))
         self._label(consent_card, "02  Allow copying on this computer", size=13,
@@ -572,6 +598,18 @@ class ConnectorApp:
             ("Open Copy Fleet", lambda: webbrowser.open(STAGING_URL+"/#copy-studio"), {"primary":True}),
             ("Account details", self.inspect_selected_account, {"quiet":True})
         ], minimum=162)
+        self.copy_explain_button=self._button(
+            page,"How does copying work?",self._toggle_copy_explanation,quiet=True)
+        self.copy_explain_button.pack(anchor="w",pady=(0,13))
+
+    def _toggle_copy_explanation(self):
+        if self.copy_explanation.winfo_manager():
+            self.copy_explanation.pack_forget()
+            self.copy_explain_button.configure(text="How does copying work?")
+        else:
+            self.copy_explanation.pack(fill="x",after=self.copy_explain_button,
+                                       pady=(0,14))
+            self.copy_explain_button.configure(text="Hide explanation")
 
     def _choose_copy_account(self, _event=None):
         sid = self.copy_choice_map.get(self.copy_account_choice.get())
@@ -1160,6 +1198,15 @@ class ConnectorApp:
                 mapping[label]=session["id"]
         self.copy_choice_map=mapping
         self.copy_account_combo.configure(values=list(mapping))
+        if entries:
+            self.empty_accounts.place_forget()
+        else:
+            self.empty_accounts.place(relx=.5,rely=.48,anchor="center")
+            self.empty_accounts.lift()
+        if mapping:
+            self.copy_add_account_button.pack_forget()
+        elif not self.copy_add_account_button.winfo_manager():
+            self.copy_add_account_button.pack(anchor="w",pady=(13,0))
         if self.copy_account_choice.get() not in mapping:
             self.copy_account_choice.set(next(iter(mapping), ""))
         self.account_total_var.set(str(len(mapping)))
@@ -1613,6 +1660,8 @@ class ConnectorApp:
         elif state == "paired":
             self.pair_ok = True
             self.paired = True
+            self.hero_pc_button.configure(text="Rename this computer")
+            self.hero_pc_button.set_tones(PANEL_ALT,"#354450")
             self.resume_after_pair = True
             self.restart_due = None
             self.restart_delay = 0
