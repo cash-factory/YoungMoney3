@@ -62,11 +62,6 @@ function followerIssue(a:Link|undefined,mode:'demo'|'live',consents:CopierConsen
     return 'The broker account changed. Confirm permission again in the Windows connector.';
   return null;
 }
-function eligible(account:Link|undefined,mode:'demo'|'live',now=Date.now()) {
-  return !!account&&account.trade_mode===(mode==='live'?2:0)&&account.monitoring_paused===0&&
-    Number(account.last_seen)>now-45000&&
-    Number.isFinite(Number(account.broker_equity))&&Number(account.broker_equity)>0;
-}
 async function audit(db:D1Database,owner:string,fleet:string,event:string,details:Obj){
   await db.prepare("INSERT INTO copy_execution_audit(id,owner,fleet_id,event,details,created_at) VALUES(?,?,?,?,?,?)")
     .bind(crypto.randomUUID(),owner,fleet,event,JSON.stringify(details),stamp()).run();
