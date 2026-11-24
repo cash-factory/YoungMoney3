@@ -273,8 +273,10 @@ class ConnectorApp:
         elif not self.sidebar_version_label.winfo_manager():
             self.sidebar_version_label.pack(anchor="w", pady=(14, 0))
         self._arrange_overview()
-        self._arrange_copy()
-        self._arrange_pair()
+        if self.current_page == "copy":
+            self._arrange_copy()
+        elif self.current_page == "pair":
+            self._arrange_pair()
         # Hidden pages manage their own row layout when first displayed.
         # Reflowing every invisible action group on each resize can create a
         # continual Tk geometry feedback loop when several grids are mounted.
@@ -817,7 +819,8 @@ class ConnectorApp:
                     "Paused fleets do not send new instructions. "
                     "Orders already placed at your broker cannot be undone by Pause.",
                     size=9,color=MUTED,wrap=350).pack(anchor="w",pady=(8,0))
-        self._arrange_copy()
+        # Mount the copying columns only when this screen is shown.
+        # Hidden wide form layouts must not consume Windows resize events.
 
         self.copy_explain_button=self._button(
             page,"How does trade copying work?",self._toggle_copy_explanation,quiet=True)
@@ -993,7 +996,7 @@ class ConnectorApp:
         self._label(instructions,
                     "No broker password is saved in this screen. Your existing PC pairing is preserved when you update the connector.",
                     size=9,color=MUTED,wrap=350).pack(anchor="w",pady=(15,0))
-        self._arrange_pair()
+        # Pairing columns are first laid out when this screen opens.
 
     def _arrange_pair(self):
         if not hasattr(self,"pair_columns"):return
@@ -1141,6 +1144,10 @@ class ConnectorApp:
         if not shown.winfo_manager():
             shown.place(x=0,y=0,relwidth=1,relheight=1)
         shown.tkraise()
+        if key == "copy":
+            self._arrange_copy()
+        elif key == "pair":
+            self._arrange_pair()
         for item, button in self.nav_buttons.items():
             selected = item == key
             button.set_tones("#E8ECFC" if selected else SIDEBAR, "#EEF1FA")
