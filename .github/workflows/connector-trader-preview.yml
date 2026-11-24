@@ -31,7 +31,7 @@ jobs:
           python -m pip install -r connector/requirements.txt pyinstaller==6.16.0
       - name: Test account monitoring and trader interaction
         run: |
-          python -m unittest discover -s connector -p 'test_*.py'
+          python -m unittest discover -s connector -p 'test_*.py' -v
       - name: Capture genuine Windows screen previews
         run: |
           python connector/render_preview.py "${{ runner.temp }}/connector-screens"
