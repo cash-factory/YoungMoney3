@@ -476,8 +476,9 @@ class ConnectorApp:
         top = tk.Frame(hero,bg=PANEL)
         top.pack(fill="x",pady=(0,12))
         self._label(top,"CONNECTION STATUS",size=9,bold=True,color=MUTED).pack(side="left")
-        self._label(top,textvar=self.connection_badge_var,size=8,
-                    bold=True,color=SUCCESS).pack(side="right")
+        self.connection_badge_widget=self._label(top,textvar=self.connection_badge_var,
+                    size=8,bold=True,color=SUCCESS if self.paired else WARM)
+        self.connection_badge_widget.pack(side="right")
         self._label(hero,textvar=self.status_var,size=25,bold=True).pack(anchor="w",pady=(0,7))
         self._label(hero,textvar=self.device_var,size=10,color=MUTED,wrap=550).pack(anchor="w")
         self.connection_path = ConnectionPath(hero,background=PANEL,motion=self.motion_var.get)
@@ -553,7 +554,7 @@ class ConnectorApp:
             ("Open dashboard",self.open_dashboard,{"quiet":True}),
             ("More options",self.toggle_advanced,{"quiet":True})],minimum=150)
         self.session_tools.pack_configure(pady=(0,14))
-        find=tk.Frame(page,bg=BACKGROUND)
+        find=self.account_search_bar=tk.Frame(page,bg=BACKGROUND)
         find.pack(fill="x",pady=(0,11))
         self._label(find,"Find an account",size=10,bold=True).pack(side="left")
         self.account_search_entry=tk.Entry(
@@ -1502,6 +1503,13 @@ class ConnectorApp:
 
     def refresh_sessions(self):
         entries = self.store.snapshot()
+        # Search has no purpose until at least one account exists.
+        if entries:
+            if not self.account_search_bar.winfo_manager():
+                self.account_search_bar.pack(fill="x",after=self.session_tools,
+                                              pady=(0,11))
+        else:
+            self.account_search_bar.pack_forget()
         selected = self.session_table.selection()
         for item in self.session_table.get_children():
             self.session_table.delete(item)
@@ -1888,6 +1896,7 @@ class ConnectorApp:
         message = trader_message(item.get("message", ""))
         if state == "pc-online":
             self.connection_badge_var.set("● COMPUTER ONLINE")
+            self.connection_badge_widget.configure(fg=SUCCESS)
             self.pc_state = state
             self.device_id = item["device"]
             self.pc_name = item.get("name") or ("PC "+self.device_id[:8])
@@ -1994,6 +2003,7 @@ class ConnectorApp:
             self.pair_ok = True
             self.paired = True
             self.connection_badge_var.set("● PAIRING SAVED")
+            self.connection_badge_widget.configure(fg=SUCCESS)
             self.hero_pc_button.configure(text="Rename this computer")
             self.hero_pc_button.set_tones(PANEL_ALT,"#354450")
             self.resume_after_pair = True
