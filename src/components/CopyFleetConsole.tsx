@@ -62,7 +62,8 @@ const parseSymbolMapText=(text:string):Record<string,string>|null=>{
   }
   return map;
 };
-const followerReadiness=(a:Account|undefined, mode:ExecutionMode, approved:Consent|undefined, now=Date.now())=>{
+const followerReadiness=(a:Account|undefined, mode:ExecutionMode, approved:Consent|undefined,
+                         report:Report|undefined,now=Date.now())=>{
   if(!a)return {ready:false,label:'Account unavailable',help:'Reconnect this follower account in the Windows connector.'};
   if(a.trade_mode!==(mode==='live'?2:0))
     return {ready:false,label:'Wrong account type',help:'Demo fleets need demo followers. Live fleets need real-money followers.'};
@@ -74,6 +75,10 @@ const followerReadiness=(a:Account|undefined, mode:ExecutionMode, approved:Conse
     return {ready:false,label:'Viewing access only',help:'This broker login cannot place orders. Sign in with a trading-enabled account.'};
   if(!Number.isFinite(Number(a.broker_equity))||Number(a.broker_equity)<=0)
     return {ready:false,label:'Waiting for account balance',help:'Keep the broker account online until its balance and equity appear.'};
+  if(!report||report.broker_connected!==1||Number(report.observed_at_ms)<=now-120000)
+    return {ready:false,label:'Waiting for your broker',help:'Keep MetaTrader and the Windows connector open until this account sends a fresh update.'};
+  if(report.demo_trading_enabled!==1)
+    return {ready:false,label:'Broker has disabled trading',help:'This broker account is not currently allowed to place trades. Check your MetaTrader permissions.'};
   if(!approved?.demo_authorized||approved.authorization_mode!==mode||approved.expires_at<=now)
     return {ready:false,label:'Permission needed on this PC',
       help:'Open YoungMoney3 Connector → My accounts → select this follower → Allow '+(mode==='demo'?'demo':'live')+' trade copying. Return here and refresh.'};
@@ -221,7 +226,7 @@ export function CopyFleetConsole(){
           const a=accounts.find(x=>x.id===target.link);
           const report=reports.get(target.link);
           const authorized=consent.get(target.link);
-          const readiness=followerReadiness(a,draft.executionMode,authorized);
+          const readiness=followerReadiness(a,draft.executionMode,authorized,report);
           const ready=readiness.ready;
           return <div className="ym-cf-target" key={target.link}>
             <div className="ym-cf-target-top"><div><span className="ym-cf-index">{String(i+1).padStart(2,'0')}</span><strong>{title(a)}</strong><span className="ym-cf-tag" data-ready={ready}>{readiness.label}</span></div>
@@ -278,8 +283,8 @@ export function CopyFleetConsole(){
             }else if(window.confirm('Arm DEMO fleet? Only locally authorized demo followers will execute broker orders.')){
               void act('fleet-arm',{id:picked.id,version:picked.version,confirm:true},'Demo fleet armed.');
             }
-          }}><Play size={16}/>Arm {picked.execution_mode==='live'?'LIVE · REAL MONEY':'demo'} fleet</button>}
-          {(picked&&picked.state!=='paused')&&<button type="button" className="ym-cf-kill" disabled={!!busy} onClick={()=>void act('fleet-pause',{id:picked.id,version:picked.version},'Fleet paused.')}><PauseCircle size={16}/>Pause this fleet</button>}
+          }}><Play size={16}/>Switch on {picked.execution_mode==='live'?'LIVE COPYING · REAL MONEY':'demo copying'}</button>}
+          {(picked&&picked.state!=='paused')&&<button type="button" className="ym-cf-kill" disabled={!!busy} onClick={()=>void act('fleet-pause',{id:picked.id,version:picked.version},'Fleet paused.')}><PauseCircle size={16}/>Pause copying</button>}
         </div>
         {picked&&<div className="ym-cf-preview">
           <div className="ym-cf-smallhead"><strong>PRE-TRADE ALLOCATION PREVIEW</strong><span>BROKER PREFLIGHT FOLLOWS LOCALLY</span></div>
