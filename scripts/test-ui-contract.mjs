@@ -489,7 +489,7 @@ test('paired PCs are named consistently on the dashboard and connector; repeated
     'Dashboard must show stable PC names and discourage repeated pairings');
   assert.ok(site.includes('pairedPcName(pc)')&&mobile.includes('Paired PC:')&&types.includes('pc_name'),
     'Account cards and monitors must expose the responsible paired PC');
-  assert.ok(desktop.includes('Rename this PC')&&desktop.includes('self.pc_name')&&
+  assert.ok(desktop.includes('Rename this computer')&&desktop.includes('self.pc_name')&&
     desktop.includes('rename_paired_pc'),'Desktop must share PC names with dashboard');
   assert.ok(presence.includes('installationId')&&presence.includes('name=reply.get'),
     'Presence must advertise stable installation and return remote label');
