@@ -130,6 +130,8 @@ class ConnectorApp:
         self.copy_choice_map = {}
         self.copy_permission_var = tk.StringVar(value="Choose a receiving account")
         self.copy_help_var = tk.StringVar(value="Select the account that should receive copied trades.")
+        self.tour_step_var = tk.StringVar(value="")
+        self.tour_index = -1
         self.account_total_var = tk.StringVar(value="0")
         self.account_active_var = tk.StringVar(value="0")
         self.account_attention_var = tk.StringVar(value="0")
@@ -407,6 +409,14 @@ class ConnectorApp:
         footer.pack(fill="x", pady=(2, 0))
         self._label(footer, textvar=self.banner_var, size=9,
                     color=WARM, wrap=1000).pack(fill="x", pady=(0, 10))
+        self.tour_strip = tk.Frame(footer, bg=PANEL_ALT,
+                                   highlightbackground=BORDER, highlightthickness=1,
+                                   padx=12, pady=10)
+        self._label(self.tour_strip, textvar=self.tour_step_var, color=TEXT, size=9,
+                    wrap=650).pack(side="left", fill="x", expand=True, padx=(0, 12))
+        self._button(self.tour_strip, "Back", self._tour_back, quiet=True).pack(side="left", padx=4)
+        self._button(self.tour_strip, "Next", self._tour_next, primary=True).pack(side="left", padx=4)
+        self._button(self.tour_strip, "Skip", self._tour_end, quiet=True).pack(side="left", padx=4)
         footer_actions = tk.Frame(footer, bg=BACKGROUND)
         footer_actions.pack(fill="x")
         tk.Checkbutton(footer_actions, text="Motion", variable=self.motion_var,
@@ -712,6 +722,14 @@ class ConnectorApp:
         page = self._scrollable_page("help")
         self._stack_heading(page, "Help & guidance",
                             "Plain-language answers for connecting and monitoring your accounts.")
+        welcome = self._card(page, 18)
+        welcome.pack(fill="x", pady=(0, 14))
+        self._label(welcome, "New here? Take the quick tour", size=13,
+                    bold=True).pack(anchor="w", pady=(0, 6))
+        self._label(welcome, "Five short stops show where everything lives. You can skip, go back, "
+                    "or use the app normally while the guide is open.",
+                    size=10, color=MUTED, wrap=760).pack(anchor="w", pady=(0, 11))
+        self._button(welcome, "Show me around", self._tour_start, primary=True).pack(anchor="w")
         for title, desc in [
             ("Pair this PC once",
              "In the dashboard, choose MT5 Connections and Pair a PC. Paste the code in this app. "
@@ -742,6 +760,42 @@ class ConnectorApp:
             self._label(card, title, bold=True, size=11).pack(anchor="w")
             self._label(card, desc, color=MUTED, size=9,
                         wrap=790).pack(anchor="w", pady=(5, 0))
+
+    TOUR_STEPS = (
+        ("overview", "Your home: see whether the computer is connected and how many accounts are updating."),
+        ("pair", "Connect this PC: link this computer to your YoungMoney3 account one time."),
+        ("sessions", "My accounts: add, reconnect, or pause individual broker accounts."),
+        ("copy", "Trade copying: choose a receiving account and allow it to copy trades on this computer."),
+        ("activity", "Recent activity: review updates and copy support details if anything needs attention."),
+    )
+
+    def _tour_start(self):
+        self.tour_index = 0
+        self._tour_visit()
+
+    def _tour_visit(self):
+        if not 0 <= self.tour_index < len(self.TOUR_STEPS):
+            self._tour_end()
+            return
+        page,description=self.TOUR_STEPS[self.tour_index]
+        self.tour_step_var.set("GUIDE "+str(self.tour_index+1)+"/"+
+                               str(len(self.TOUR_STEPS))+"  ·  "+description)
+        if not self.tour_strip.winfo_manager():
+            self.tour_strip.pack(fill="x", pady=(0, 10))
+        self.show_page(page)
+
+    def _tour_next(self):
+        self.tour_index += 1
+        self._tour_visit()
+
+    def _tour_back(self):
+        self.tour_index = max(0,self.tour_index-1)
+        self._tour_visit()
+
+    def _tour_end(self):
+        self.tour_index = -1
+        self.tour_strip.pack_forget()
+        self.banner_var.set("Guide closed. You can open it again from Help.")
 
     def show_page(self, key):
         self.current_page = key
