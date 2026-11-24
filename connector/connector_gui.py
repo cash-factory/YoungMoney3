@@ -422,7 +422,7 @@ class ConnectorApp:
 
     def _build_overview(self):
         page = self._scrollable_page("overview")
-        self._stack_heading(page, "Account monitor", "A dedicated connection for every MT5 account.")
+        self._stack_heading(page, "Your connection", "Keep every trading account connected, even when you use different brokers.")
         hero = self._card(page, 24)
         hero.pack(fill="x", pady=(0, 16))
         self._label(hero, "HOW YOUR CONNECTION IS DOING", size=9, bold=True, color=MUTED).pack(anchor="w")
@@ -457,7 +457,7 @@ class ConnectorApp:
 
     def _build_sessions(self):
         page = self._scrollable_page("sessions")
-        self._stack_heading(page, "Account sessions", "Every broker account in one place. Choose one to check or manage it.")
+        self._stack_heading(page, "My accounts", "Every broker account in one place. Choose one to check or manage it.")
         self.session_tools = self._actions(page, [
             ("Add account", self.add_account, {"primary": True}),
             ("Open dashboard", self.open_dashboard, {}),
@@ -685,7 +685,7 @@ class ConnectorApp:
 
     def _build_activity(self):
         page = self.pages["activity"]
-        self._stack_heading(page, "Activity & diagnostics",
+        self._stack_heading(page, "Recent activity",
                             "See what changed, what succeeded, and anything that needs your attention.")
         tools = tk.Frame(page, bg=BACKGROUND)
         tools.pack(fill="x", pady=(0, 12))
@@ -710,7 +710,7 @@ class ConnectorApp:
 
     def _build_help(self):
         page = self._scrollable_page("help")
-        self._stack_heading(page, "Setup & troubleshooting",
+        self._stack_heading(page, "Help & guidance",
                             "Plain-language answers for connecting and monitoring your accounts.")
         for title, desc in [
             ("Pair this PC once",
@@ -754,9 +754,9 @@ class ConnectorApp:
             self.refresh_sessions()
         if key == "copy" and self.copy_account_choice.get():
             self._choose_copy_account()
-        titles = {"overview": "Account monitor", "sessions": "Account sessions",
+        titles = {"overview": "Your connection", "sessions": "My accounts",
                   "copy": "Trade copying", "pair": "Connect this PC",
-                  "activity": "Activity & diagnostics", "help": "Setup & troubleshooting"}
+                  "activity": "Recent activity", "help": "Help & guidance"}
         art = self.header_art.get(titles.get(key))
         if art:
             art.reveal()
