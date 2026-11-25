@@ -407,6 +407,7 @@ class ConnectorApp:
         self._label(copy, textvar=self.device_var, size=10, color=MUTED,
                     wrap=620).pack(anchor="w")
         art = EnterpriseHeroArt(lead, background=HERO)
+        self.operations_hero = art  # Real Home artwork; preserved for frozen-startup QA.
         art.pack(side="right", padx=(10, 0))
         def fit_hero(event):
             if event.width < 630:
@@ -1697,7 +1698,8 @@ def main():
                         "responsive_layout": True,
                         "responsive_sizes": responsive_sizes,
                         "motion_controls": bool(app.motion_var is not None),
-                        "native_artwork": len(app.header_art) == 5,
+                        "native_artwork": isinstance(getattr(app, "operations_hero", None), EnterpriseHeroArt)
+                        and bool(app.operations_hero.find_all()),
                         "tcl": window.tk.eval("info patchlevel"),
                         "tk": window.tk.eval("package present Tk"),
                         "tcl_bundled": Path(window.tk.eval("info library")).resolve() == (bundle / "_tcl_data").resolve(),
