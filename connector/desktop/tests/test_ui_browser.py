@@ -20,7 +20,7 @@ def load_app(page,native=False):
 
 MOCK=r'''(() => {
   const snapshot={source:'local-connector',demo:false,paired:false,capture_active:false,
-    connection_state:'unpaired',device:'LOCAL-WORKSTATION',copying_armed:false,
+    connection_state:'unpaired',device:'LOCAL-WORKSTATION',user:'Verified Example Trader',copying_armed:false,
     copy_permission_available:false,sessions:[],events:[]};
   const callbacks={};
   const command={
@@ -55,7 +55,8 @@ def run_qa():
             page=browser.new_page(viewport={'width':width,'height':height},device_scale_factor=1)
             page.on('pageerror',lambda err:errors.append(str(err)))
             load_app(page,native=True)
-            page.wait_for_timeout(300)
+            page.wait_for_function("() => window.YMFXNative.debug().modelKey !== null", timeout=10000)
+            page.wait_for_timeout(70)
             # set_content() has no filesystem base URL; resolve the real shipped SVG
             # into its data URI solely for the isolated browser QA screenshots.
             page.evaluate("(uri) => document.querySelectorAll('img[src=\"assets/ymfx-brand.svg\"]').forEach(img => img.src = uri)", LOGO_DATA)
@@ -64,7 +65,9 @@ def run_qa():
             assert 'Copying Ready' not in page.locator('body').inner_text()
             assert '3 sample accounts' not in page.locator('body').inner_text()
             assert 'Not paired' in page.locator('body').inner_text()
-            assert 'LOCAL-WORKSTATION' in page.locator('body').inner_text(), 'Native IPC snapshot did not populate the device identity'
+            assert 'Verified Example Trader' in (page.evaluate('window.YMFXNative.debug().modelKey') or ''), 'Native IPC snapshot did not populate the dashboard user'
+            if width>=1100: assert 'Verified Example Trader' in page.locator('body').inner_text(), 'Desktop owner identity not visible'
+            assert 'LOCAL-WORKSTATION' not in page.locator('.sidebar').inner_text(), 'PC identity belongs on dashboard, not connector sidebar'
             assert 'Unable to start the local connector service' not in page.locator('body').inner_text()
             assert 'Could not refresh the connector status' not in page.locator('body').inner_text()
             for id,label in [('home','Trading Operations Hub'),('accounts','My Accounts'),('copy','Trade Copying'),('pair','Connect this PC'),('activity','Recent Activity'),('help','Help & Guides')]:

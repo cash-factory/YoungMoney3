@@ -6,6 +6,7 @@ bridge for the existing capture engine, not an alternative trading engine.
 """
 from __future__ import annotations
 import hashlib
+import multiprocessing
 import json
 import os
 import queue
@@ -14,6 +15,7 @@ import re
 import socket
 import sys
 import threading
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -24,7 +26,8 @@ SESSIONS = APP_ROOT / 'staging-gui' / 'preferences.json'
 HEX_CODE = re.compile(r'[0-9a-fA-F]{32}\Z')
 ALLOWED = frozenset({'snapshot', 'scan_terminals', 'pair_pc', 'start_monitoring',
                      'stop_monitoring', 'set_session_enabled', 'rename_session',
-                     'remove_session', 'retry_session', 'open_dashboard',
+                     'remove_session', 'retry_session', 'add_account', 'open_account_terminal',
+                     'open_dashboard',
                      'open_copy_studio', 'ping', 'shutdown'})
 
 
@@ -54,9 +57,20 @@ class Bridge:
         self.pairing_check = pairing_check
         self._lock = threading.RLock()
         self._store = None
+        self._sources = {}
+        self.setup_state = {'status': 'idle'}
+        self._setup_thread = None
+        self._setup_cancel = threading.Event()
+        self._service_stop = threading.Event()
+        self._discovery_thread = None
+        self._last_scan_request = None
+        self._discovered = {}
+        self.dashboard_user = None
         self._read_store()
         self.paired = self._read_pairing()
         self.state = 'offline' if self.paired else 'unpaired'
+        if self.paired:
+            self._start_discovery_service()
 
     def _read_store(self):
         from sessions import SessionStore
@@ -114,6 +128,9 @@ class Bridge:
             'pair-success':'Computer pairing check completed',
             'worker-exit':'Capture operation ended',
             'queued':'Capture updates pending synchronization',
+            'discovery-complete':'Local broker-account scan completed for the dashboard',
+            'discovery-attention':'Account discovery needs a connected MT5 terminal',
+            'discovery-link':'Dashboard monitoring selection verified locally',
         }
         if kind not in descriptions:
             return
@@ -192,7 +209,9 @@ class Bridge:
                 rows.append({
                     'id':str(entry['id']), 'name':sanitized(entry['name'], 48),
                     'enabled':bool(entry['enabled']), 'terminal_present':present,
-                    'server':link.get('server') or None, 'login':link.get('login') or None,
+                    'server':link.get('server') or self._discovered.get(entry['id'],{}).get('server') or None,
+                    'login':link.get('login') or self._discovered.get(entry['id'],{}).get('login') or None,
+                    'account_name':self._discovered.get(entry['id'],{}).get('account_name') or None,
                     'status':status, 'last_sync':health.get('last_sync'),
                     'verified_link':bool(link.get('link')),
                     'copy_authorized':None,
@@ -200,12 +219,136 @@ class Bridge:
             return {'source':'local-connector', 'demo':False, 'paired':self.paired,
                     'capture_active':capture_active, 'connection_state':self.state,
                     'device':sanitized(socket.gethostname(), 64),
-                    'sessions':rows, 'events':list(self.reports[-30:]),
+                    'sessions':rows, 'user':self.dashboard_user,
+                    'discovered_accounts':len(self._discovered), 'setup':dict(self.setup_state),
+                    'events':list(self.reports[-30:]),
                     'queued_updates':self.queue_count,
                     'active_capture_workers':self.active_worker_count if capture_active else 0,
                     'copying_armed':False, 'copying_armed_verified':False,
                     'copy_permission_available':False,
                     'last_error':sanitized(self.last_error, 100)}
+
+    def _prepare_account(self, source: str, servers: str | None, label: str):
+        # This background job may copy up to 2 GB. Never block the IPC reader.
+        # MT5 credentials are entered ONLY in the visible isolated terminal.
+        try:
+            from terminal_factory import create_terminal
+            from terminal_launch import open_managed_terminal
+            # A cloned session must not start capturing merely because it exists.
+            terminal = create_terminal(source, self.settings.parent.parent / 'terminals',
+                                       label, broker_directory=Path(servers) if servers else None,
+                                       cancel=self._setup_cancel)
+            record = self._store.add(str(terminal), label, enabled=False)
+            try:
+                open_managed_terminal(terminal)
+            except (OSError, RuntimeError, ValueError):
+                with self._lock:
+                    self.setup_state = {'status':'needs-open','session_id':record['id'],
+                                        'message':'MT5 is ready. Open the login window for this account.'}
+                return
+            with self._lock:
+                self.setup_state = {'status':'awaiting-login','session_id':record['id'],
+                                    'message':'Log in inside MT5, then scan for this account from the dashboard.'}
+        except Exception as error:
+            # Keep filesystem paths and private broker details out of WebView.
+            with self._lock:
+                self.setup_state = {'status':'error', 'message':
+                    'Could not prepare a private MT5 terminal ('+type(error).__name__[:40]+').'}
+
+    def _start_discovery_service(self):
+        # This lightweight device channel stays alive when monitoring is OFF.
+        # A paired PC can therefore respond to an authenticated dashboard scan.
+        if self._discovery_thread and self._discovery_thread.is_alive():return
+        self._service_stop.clear()
+        self._discovery_thread = threading.Thread(target=self._discovery_loop,
+            name='SignalDesk-dashboard-discovery',daemon=True)
+        self._discovery_thread.start()
+
+    def _scan_local_accounts(self):
+        from account_discovery import probe_terminal
+        verified=[]
+        for entry in self._store.snapshot():
+            if self._service_stop.is_set():break
+            slot=str(entry['terminal'])
+            if not Path(slot).is_file() or not (Path(slot).parent/'.ym-managed.json').is_file():continue
+            # Active linked capture already owns its own MT5 process. Never attach
+            # a second inspector to that terminal while it is being monitored.
+            if self.worker and self.worker.is_alive() and slot in self.links:continue
+            broker=probe_terminal(slot)
+            if broker.get('status')!='verified':continue
+            if not re.fullmatch(r'[0-9]{1,24}',str(broker.get('login',''))):continue
+            if not broker.get('server') or broker.get('mode') not in (0,1,2):continue
+            row={'slot':entry['id'],'login':broker['login'],
+                 'server':sanitized(broker['server'],128),
+                 'account_name':sanitized(broker.get('account_name'),96),
+                 'company':sanitized(broker.get('company'),128),
+                 'currency':sanitized(broker.get('currency'),12),
+                 'mode':int(broker['mode'])}
+            verified.append(row)
+            with self._lock:self._discovered[entry['id']] = row
+        return verified[:24]
+
+    def _accept_discovered_monitor(self, approval):
+        # Adopt an explicitly selected verified login, never a remote path.
+        from account_discovery import (probe_terminal, request_device,
+            adopted_link_database, persist_manual_link, clear_receipt)
+        # A different isolated terminal can be verified while the read-only
+        # capture supervisor monitors other accounts. SQLite WAL and a
+        # separate MetaTrader5 probe process preserve account isolation.
+        key=approval.get('slot')
+        link=approval.get('link')
+        row=next((x for x in self._store.snapshot() if x['id']==key),None)
+        if not row or not isinstance(link,str) or not isinstance(key,str):return
+        slot=str(row['terminal'])
+        if slot in self.links and self.links[slot].get('link') != link:return
+        if not Path(slot).is_file() or not (Path(slot).parent/'.ym-managed.json').is_file():return
+        info=probe_terminal(slot)  # fresh broker identity, not cached UI data
+        if info.get('status')!='verified':return
+        if (info['login']!=str(approval.get('login','')) or
+                info['server'].casefold()!=str(approval.get('server','')).casefold()):return
+        import keyring
+        from keyring.backends.Windows import WinVaultKeyring
+        from account_discovery import ORIGIN
+        keyring.set_keyring(WinVaultKeyring())
+        token=keyring.get_password('YMFX MT5 '+hashlib.sha256(ORIGIN.encode()).hexdigest()[:16],'token')
+        if not token:return
+        database=adopted_link_database(token,self.settings.parent.parent)
+        receipt=persist_manual_link(database,link,slot,info)
+        response=request_device('verified',receipt)
+        if not response.get('ok'):return
+        clear_receipt(database,link)
+        self._store.set_enabled(key,True)
+        with self._lock:
+            self.links[slot]={'link':link,'server':info['server'],'login':info['login']}
+        self._report({'state':'discovery-link'})
+
+    def _discovery_loop(self):
+        from account_discovery import request_device
+        while not self._service_stop.is_set():
+            try:
+                reply=request_device('discovery-poll',{})
+                if isinstance(reply,dict):
+                    user=reply.get('owner')
+                    if isinstance(user,str):
+                        with self._lock:self.dashboard_user=sanitized(user,64)
+                    job=reply.get('scan')
+                    if isinstance(job,dict) and isinstance(job.get('request'),str):
+                        request_id=job['request']
+                        if request_id != self._last_scan_request:
+                            found=self._scan_local_accounts()
+                            # Only acknowledge locally after the authenticated device
+                            # endpoint commits the report. A network interruption must
+                            # leave the scan retryable, never silently marked finished.
+                            request_device('discovery-report',{'request':request_id,'accounts':found})
+                            self._last_scan_request=request_id
+                            self._report({'state':'discovery-complete' if found else 'discovery-attention'})
+                    for approval in reply.get('approvals',[])[:20]:
+                        if isinstance(approval,dict):
+                            self._accept_discovered_monitor(approval)
+            except Exception:
+                # Never relay raw HTTP, Windows paths, account or credential errors.
+                pass
+            self._service_stop.wait(10)
 
     def _worker_main(self, pair_code=None):
         try:
@@ -219,6 +362,7 @@ class Bridge:
                                  report=self._report)
                 self.paired = self._read_pairing()
                 self.state = 'offline' if self.paired else 'unpaired'
+                if self.paired: self._start_discovery_service()
                 self._report({'state': 'paired' if self.paired else 'error',
                               'message':'Pairing verified' if self.paired else 'Pairing not verified'})
                 return
@@ -252,7 +396,38 @@ class Bridge:
         if method == 'scan_terminals':
             from managed_accounts import discover_installations
             found = discover_installations()
-            return {'count': len(found), 'terminals': [{'name': sanitized(p.parent.name, 70)} for p, _ in found]}
+            with self._lock:
+                self._sources = {uuid.uuid4().hex: (str(exe), str(servers) if servers else None)
+                                 for exe, servers in found[:24]}
+                return {'count':len(self._sources), 'terminals':[
+                    {'id':ident, 'name':sanitized(Path(path).parent.name, 70)}
+                    for ident, (path, _servers) in self._sources.items()]}
+        if method == 'add_account':
+            # UI can select ONLY a previously discovered installed terminal.
+            # No arbitrary executable paths or credentials are accepted.
+            identifier = params.get('source_id')
+            label = params.get('name','New MT5 account')
+            if not isinstance(identifier,str) or identifier not in self._sources:
+                raise ValueError('Scan MT5 installations and choose the source terminal first')
+            if not isinstance(label,str) or not re.fullmatch(r'[\w .()&\-]{2,48}',label.strip()):
+                raise ValueError('Enter a 2–48 character account label')
+            with self._lock:
+                if self._setup_thread and self._setup_thread.is_alive():
+                    raise ValueError('Finish the current MT5 terminal setup first')
+                source, servers = self._sources[identifier]
+                self._setup_cancel.clear()
+                self.setup_state = {'status':'preparing','message':'Preparing a private MT5 login window'}
+                self._setup_thread = threading.Thread(target=self._prepare_account,
+                    args=(source,servers,label.strip()),name='SignalDesk-add-account',daemon=True)
+                self._setup_thread.start()
+            return {'accepted':True, 'monitoring_enabled':False, 'login_method':'MT5 window'}
+        if method == 'open_account_terminal':
+            ident = params.get('id')
+            row = next((x for x in self._store.snapshot() if x['id']==ident),None)
+            if not row: raise ValueError('Select a local account session')
+            from terminal_launch import open_managed_terminal
+            open_managed_terminal(row['terminal'])
+            return {'opened':True,'account':ident}
         if method == 'rename_session':
             key = params.get('id')
             name = params.get('name')
@@ -294,8 +469,10 @@ class Bridge:
             key = str(params.get('id', ''))
             enabled = params.get('enabled')
             if not isinstance(enabled, bool): raise ValueError('Enabled must be true or false')
-            if not any(row['id'] == key for row in self._store.snapshot()):
-                raise ValueError('Session not found')
+            row=next((entry for entry in self._store.snapshot() if entry['id']==key),None)
+            if not row:raise ValueError('Session not found')
+            if enabled and str(row['terminal']) not in self.links:
+                raise ValueError('Choose Monitor account on your dashboard before enabling this session')
             self._store.set_enabled(key, enabled)
             return {'updated': True, 'snapshot': self.snapshot()}
         if method == 'pair_pc':
@@ -339,6 +516,8 @@ class Bridge:
             target = STAGING + ('/#copy-studio' if method == 'open_copy_studio' else '/#mt5')
             return {'opened': bool(webbrowser.open(target))}
         if method == 'shutdown':
+            self._setup_cancel.set()
+            self._service_stop.set()
             self.stop.set()
             return {'stop_requested': True}
         raise ValueError('Unsupported desktop operation')
@@ -373,6 +552,9 @@ def serve(bridge: Bridge, input_stream=sys.stdin, output_stream=sys.stdout):
 
 
 if __name__ == '__main__':
+    # Required by PyInstaller for spawned per-terminal MetaTrader5 probes.
+    # Without this, Windows spawned children reopen the UI bridge protocol.
+    multiprocessing.freeze_support()
     # Capture engine prints do not share the JSON-RPC protocol stdout.
     # Keep a dedicated duplicated descriptor for responses before silencing
     # third-party print statements. Do not redirect globally per thread.

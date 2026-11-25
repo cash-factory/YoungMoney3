@@ -16,7 +16,7 @@ concurrency:
   group: signaldesk-native-${{ github.ref }}
   cancel-in-progress: false
 env:
-  SIGNALDESK_VERSION: '0.2.0'
+  SIGNALDESK_VERSION: '0.3.0'
 jobs:
   browser-qa:
     runs-on: ubuntu-24.04
@@ -59,6 +59,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r connector/requirements.txt 'pyinstaller==6.16.0'
           python -m unittest discover -s connector/desktop/tests -p 'test_desktop_bridge.py' -v
+          python -m unittest discover -s connector/desktop/tests -p 'test_account_setup.py' -v
       - name: Build only the isolated Python bridge
         shell: pwsh
         run: |

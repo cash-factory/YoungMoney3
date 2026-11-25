@@ -88,3 +88,12 @@ body.ym-native{background:#f6f7f9}
 @media(max-width:1160px){.ym-native .native-split{grid-template-columns:minmax(0,1fr)}.ym-native .native-health{min-height:200px}}
 @media(max-width:900px){.ym-native .native-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}.ym-native .native-operations{grid-template-columns:1fr}.ym-native .native-inline-actions .btn{flex:1 1 180px}}
 @media(prefers-reduced-motion:reduce){.ym-native .native-filter-btn,.ym-native .native-status{animation:none!important;transition:none!important}}
+
+/* Signal Desk native account-first setup. Keep desktop controls large and stable. */
+.native-account-setup{margin:0 0 22px;max-width:100%}
+.native-setup-flow>.native-field-label{display:block;margin:16px 0 6px;font-size:12px;font-weight:650;color:#424954}
+.native-setup-flow>.native-text-input{display:block;width:min(100%,560px);min-height:45px;padding:10px 13px;margin-bottom:12px;border-radius:10px;border:1px solid #d9dde4;background:#fff;color:#202126}
+.native-setup-flow>.native-help-bubble{margin-top:16px;max-width:760px}
+.native-setup-flow>.native-inline-actions{gap:12px;flex-wrap:wrap;margin:12px 0}
+.native-account-setup .native-card-head{align-items:center}
+@media(max-width:780px){.native-account-setup{margin-bottom:14px}.native-setup-flow>.native-text-input{width:100%}}

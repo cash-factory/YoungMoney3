@@ -92,7 +92,62 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         connector_spec_artifacts:(await q("SELECT COUNT(*) AS n FROM mt5_conflict_classifications WHERE link=? AND owner=?",link.id,owner).first<{n:number}>())?.n??0,
         recovery:(await q("SELECT state,scanned_through,target_at,unresolved_positions,unobserved_stop_changes,updated_at FROM mt5_recovery_status WHERE link=? AND owner=?",link.id,owner).first())??null
       })));
-      return json({ accounts:accounts.results, devices: devices.results, links: states, demoOnly: !liveAccountCaptureAllowed, capturePaused: await capturePaused() });
+      const discoveries=await q(`SELECT a.device,a.slot,a.login,a.server,a.account_name,a.company,a.currency,a.trade_mode,a.last_seen,
+        l.id AS link,l.status AS link_status FROM mt5_discovered_accounts a
+        JOIN mt5_devices d ON d.id=a.device AND d.owner=a.owner AND d.revoked=0
+        LEFT JOIN mt5_discovery_approvals v ON v.device=a.device AND v.slot=a.slot AND v.link=(SELECT a2.link FROM mt5_discovery_approvals a2 WHERE a2.device=a.device AND a2.slot=a.slot ORDER BY a2.requested_at DESC LIMIT 1)
+        LEFT JOIN mt5_links l ON l.id=v.link AND l.owner=a.owner
+        WHERE a.owner=? ORDER BY a.last_seen DESC LIMIT 100`, owner).all();
+      const scans=await q('SELECT device,requested_at,completed_at,request_id FROM mt5_device_scans WHERE owner=?',owner).all();
+      return json({ accounts:accounts.results, devices: devices.results, links: states,
+        discoveries:discoveries.results, scans:scans.results,
+        demoOnly: !liveAccountCaptureAllowed, capturePaused: await capturePaused() });
+    }
+
+    // Explicit owner request: asks the paired Windows app to inspect its own
+    // already-open MT5 terminals. This does not authorize monitoring or orders.
+    if (action === 'scan-local-accounts') {
+      if (!limited(input.device,64)) return fail('Choose a paired computer.');
+      const pc=await q('SELECT id FROM mt5_devices WHERE id=? AND owner=? AND revoked=0 AND public_key IS NOT NULL AND last_seen>?',input.device,owner,unix-90000).first();
+      if (!pc) return fail('Open Signal Desk on that PC before scanning.',409);
+      const requestId=uuid();
+      await q(`INSERT INTO mt5_device_scans(device,owner,request_id,requested_at,completed_at)
+        VALUES(?,?,?,?,NULL)
+        ON CONFLICT(device) DO UPDATE SET request_id=excluded.request_id,
+        requested_at=excluded.requested_at,completed_at=NULL`,
+        input.device,owner,requestId,unix).run();
+      return json({ok:true,request:requestId,state:'requested'});
+    }
+    if (action === 'monitor-discovered-account') {
+      if (!limited(input.device,64)||!limited(input.slot,64)||input.monitor!==true)
+        return fail('Choose a discovered account and confirm monitoring.');
+      if(await capturePaused()) return fail('Account monitoring is paused by your administrator.',403);
+      const found=await q(`SELECT a.login,a.server,a.trade_mode,a.last_seen
+        FROM mt5_discovered_accounts a JOIN mt5_devices d ON d.id=a.device
+        WHERE a.owner=? AND a.device=? AND a.slot=? AND d.owner=? AND d.revoked=0
+        AND d.public_key IS NOT NULL AND d.last_seen>?`,
+        owner,input.device,input.slot,owner,unix-90000).first<{login:string;server:string;trade_mode:number;last_seen:number}>();
+      if(!found||found.last_seen<unix-5*60*1000) return fail('Account verification is stale. Scan the device again.',409);
+      if(found.trade_mode===2&&!liveAccountCaptureAllowed) return fail('Real-account read-only capture requires staging approval.',403);
+      const pendingSlot=await q(`SELECT a.link FROM mt5_discovery_approvals a JOIN mt5_links l ON l.id=a.link WHERE a.device=? AND a.slot=? AND l.status='verifying' AND l.expires>?`,input.device,input.slot,unix).first();
+      if(pendingSlot) return fail('This local MT5 login is already awaiting confirmation.',409);
+      const existing=await q(`SELECT l.id FROM mt5_links l JOIN mt5_devices d ON d.id=l.device
+        WHERE d.owner=? AND d.revoked=0 AND l.login=? AND l.server=?
+        AND (l.status='connected' OR (l.status='verifying' AND l.expires>?))`,
+        owner,found.login,found.server,unix).first();
+      if(existing) return fail('This broker login is already linked or awaiting local approval.',409);
+      if(input.account!==undefined&&(!limited(input.account,100)||
+          !await q("SELECT id FROM workspace_records WHERE user_id=? AND table_name='trading_accounts' AND id=?",owner,input.account).first()))
+        return fail('Choose one of your existing journal accounts.');
+      const id=uuid(),accountId=input.account||uuid(),expires=unix+30*60*1000;
+      await db.batch([
+        q(`INSERT INTO mt5_links(id,device,owner,account_id,status,expires,server,monitoring_paused)
+          VALUES(?,?,?,?,?,?,?,0)`,id,input.device,owner,accountId,'verifying',expires,found.server),
+        q(`INSERT INTO mt5_discovery_approvals(link,device,owner,slot,login,server,requested_at)
+          VALUES(?,?,?,?,?,?,?)`,id,input.device,owner,input.slot,found.login,found.server,unix),
+      ]);
+      return json({ok:true,link:id,state:'awaiting_local_verification',monitoring:false,
+        message:'Selection saved. Signal Desk must verify this same MT5 login before capture starts.'});
     }
     if (action === 'evidence-conflicts') {
       if (!limited(input.link,64)) return fail('Select a connected MT5 account.');
@@ -468,6 +523,67 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
   if (!device) return json({error:'Device access revoked.',code:'device_revoked'},403);
   if (action.startsWith('device/copy-')) return copyFleetDevice(db,device,action,input,env.MT5_LIVE_COPY_EXECUTION==='true');
   if (action === 'device/set-monitoring') return setMonitoring(device.owner, device.id);
+
+  // Account discovery is bound to the same enrolled Windows installation.
+  // A valid bearer token alone is insufficient on a copied/cloned connector.
+  if (action.startsWith('device/discovery-')) {
+    if (!installationId(input.installationId)) return fail('Connector identity required.',403);
+    const identity=await hash(input.installationId.toLowerCase());
+    if(device.installation_hash && identity!==device.installation_hash)
+      return json({error:'This installation does not own the paired PC.',code:'pc_identity_mismatch'},409);
+    if(!device.installation_hash) {
+      const other=await q('SELECT id FROM mt5_devices WHERE owner=? AND installation_hash=? AND revoked=0 AND public_key IS NOT NULL AND id<>?',device.owner,identity,device.id).first();
+      if(other) return json({error:'An existing paired PC owns that installation.',code:'pc_already_paired'},409);
+      await q('UPDATE mt5_devices SET installation_hash=? WHERE id=? AND installation_hash IS NULL',identity,device.id).run();
+    }
+  }
+  if (action === 'device/discovery-poll') {
+    await q('UPDATE mt5_devices SET last_seen=? WHERE id=?',unix,device.id).run();
+    const scan=await q('SELECT request_id,requested_at,completed_at FROM mt5_device_scans WHERE device=? AND owner=?',device.id,device.owner)
+      .first<{request_id:string;requested_at:number;completed_at:number|null}>();
+    const ownerProfile=await q('SELECT display_name FROM users WHERE id=?',device.owner).first<{display_name:string}>();
+    const approvals=await q(`SELECT a.link,a.slot,a.login,a.server FROM mt5_discovery_approvals a
+      JOIN mt5_links l ON l.id=a.link AND l.device=a.device
+      WHERE a.device=? AND a.owner=? AND a.verified_at IS NULL
+      AND l.status='verifying' AND l.expires>? ORDER BY a.requested_at ASC LIMIT 20`,
+      device.id,device.owner,unix).all();
+    return json({owner:ownerProfile?.display_name||null,
+      scan:scan && !scan.completed_at && scan.requested_at>unix-10*60*1000
+        ?{request:scan.request_id}:null,approvals:approvals.results});
+  }
+  if (action === 'device/discovery-report') {
+    if (!limited(input.request,64)||!Array.isArray(input.accounts)||input.accounts.length>24)
+      return fail('Invalid local account scan.');
+    const task=await q('SELECT request_id,requested_at,completed_at FROM mt5_device_scans WHERE device=? AND owner=?',device.id,device.owner)
+      .first<{request_id:string;requested_at:number;completed_at:number|null}>();
+    if(!task || task.request_id!==input.request||task.completed_at ||
+        task.requested_at<unix-10*60*1000) return fail('Account scan has expired.',409);
+    const seen=new Set<string>();
+    const records: ReturnType<typeof q>[]=[];
+    for(const item of input.accounts) {
+      if(!isObject(item)||!limited(item.slot,64)||!/^\w{12}$/.test(item.slot)||
+          !limited(item.login,24)||!/^\d+$/.test(item.login)||
+          !limited(item.server,128)||typeof item.account_name!=='string'||item.account_name.length>96||
+          typeof item.company!=='string'||item.company.length>128||
+          typeof item.currency!=='string'||item.currency.length>12||
+          ![0,1,2].includes(Number(item.mode))||seen.has(item.slot))
+        return fail('Invalid verified account identity.');
+      seen.add(item.slot);
+      records.push(q(`INSERT INTO mt5_discovered_accounts
+        (device,owner,slot,login,server,account_name,company,currency,trade_mode,last_seen)
+        VALUES(?,?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(device,slot) DO UPDATE SET login=excluded.login,
+        server=excluded.server,account_name=excluded.account_name,
+        company=excluded.company,currency=excluded.currency,trade_mode=excluded.trade_mode,
+        last_seen=excluded.last_seen`,
+        device.id,device.owner,item.slot,item.login,item.server,item.account_name,item.company,
+        item.currency,item.mode,unix));
+    }
+    records.push(q(`UPDATE mt5_device_scans SET completed_at=? WHERE device=? AND owner=? AND request_id=? AND completed_at IS NULL`,
+      unix,device.id,device.owner,input.request));
+    await db.batch(records);
+    return json({ok:true,verified:seen.size});
+  }
   if (action === 'device/rename') {
     const name=pcLabel(input.name);
     if(!name) return fail('Choose a PC name between 2 and 48 characters.');
@@ -580,6 +696,11 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     if(await capturePaused()) return fail('MT5 capture is paused by the administrator.',403);
     if (link.status==='connected') return json({ok:true});
     if (link.status!=='verifying' || link.expires<=unix) return fail('Login expired.',409);
+    const approval=await q('SELECT login,server FROM mt5_discovery_approvals WHERE link=? AND device=?',link.id,device.id)
+      .first<{login:string;server:string}>();
+    if(approval && (String(input.login)!==approval.login ||
+        String(input.server).toLowerCase()!==approval.server.toLowerCase()))
+      return fail('Local MT5 login does not match the dashboard selection.',409);
     // Require an actual numeric MT5 mode before testing the real-account release gate.
     if(input.ok && (typeof input.mode!=='number' || ![0,1,2].includes(input.mode))) return fail('Invalid MT5 account mode.');
     if (!input.ok || (!liveAccountCaptureAllowed && input.mode===2)) {
@@ -618,6 +739,10 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     const accessLevel=typeof input.trade_access==='boolean' ? (input.trade_access?'trading-enabled':'trading-restricted') : 'unknown';
     await db.batch([q("UPDATE mt5_links SET status='connected',login=?,server=?,company=?,currency=?,linked_at=?,trade_mode=?,access_level=? WHERE id=?",input.login,input.server,input.company,input.currency,time,input.mode,accessLevel,link.id),
       q("INSERT INTO workspace_records(id,user_id,table_name,payload,created_at,updated_at) VALUES(?,?,'trading_accounts',?,?,?) ON CONFLICT(id) DO UPDATE SET payload=json_patch(workspace_records.payload,?),updated_at=excluded.updated_at WHERE workspace_records.user_id=excluded.user_id AND workspace_records.table_name='trading_accounts'",link.account_id,device.owner,JSON.stringify(account),time,time,JSON.stringify({broker_name:input.company,account_number:input.login}))]);
+    if (approval) {
+      await q('UPDATE mt5_discovery_approvals SET verified_at=? WHERE link=? AND device=? AND verified_at IS NULL',
+        unix,link.id,device.id).run();
+    }
     return json({ok:true});
   }
   if(action!=='device/sync'||link.status!=='connected') return fail('Link unavailable.',409);

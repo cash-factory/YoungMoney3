@@ -47,3 +47,13 @@ This implementation adapts the user-approved Signal Desk V4 interface into a Win
 - **Deployment:** an isolated staging preview can be published from validated `main` under a separate `staging-signaldesk-v0.2.0-preview.1` prerelease tag. The legacy connector and the journal website remain unchanged.
 
 **Unverified:** real user Windows MT5 sessions, actual permission-bound copying, broker-side reconciliation under disconnection, installer code signing and in-field accessibility acceptance. There is no order transmission from this shell.
+
+## Account-first onboarding (device discovery, staging only)
+
+- **Windows Signal Desk → Add MT5 Account** discovers installed MT5 program files, clones an isolated blank portable terminal using `terminal_factory.py`, registers a new local session with monitoring **disabled**, and opens the genuine MT5 login window. Account passwords are typed into MT5, never into the WebView or Signal Desk preferences.
+- **Authenticated website → MT5 Connections → Scan for accounts** sends a scan job only to the owner's selected paired device. A separate Windows process reads `MetaTrader5.account_info()` and confirms the terminal's own portable profile. The connector posts only account identity, server, mode, currency and display name—not credentials, positions, orders or filesystem paths.
+- **Website → Monitor account** creates an account-bound approval. The same PC must re-check the currently logged-in MT5 identity before registering the link in the original token-scoped SQLite evidence database; the account becomes active only after server acknowledgement. Multiple distinct portable terminals can be monitored concurrently.
+- **Copy Studio remains separate.** Discovering or linking an account never arms copying, grants execution consent, or permits sending broker orders in the new Signal Desk UI. Existing copier owner/device safety gates stay authoritative.
+- The connector sidebar displays the **authenticated dashboard user's display name** and selected real broker login. **PC display names and PC-level management stay on the web dashboard.** No invented or simulated account is returned in native mode.
+
+A paired Windows PC polls the authenticated discovery channel independently of active capture, allowing the website to scan when monitoring is stopped. The service cannot read a broker password from MT5 or reconstruct a missed account history without the capture engine. Users must keep the dedicated terminal logged in to allow read-only reconciliation. This staging feature has automated browser and Python tests but still requires real Windows/MT5 field acceptance before production release.

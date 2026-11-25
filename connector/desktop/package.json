@@ -1,6 +1,6 @@
 {
   "name":"youngmoney3-signaldesk-desktop",
-  "version":"0.2.0",
+  "version":"0.3.0",
   "private":true,
   "description":"YoungMoney3 Windows connector native shell",
   "scripts":{

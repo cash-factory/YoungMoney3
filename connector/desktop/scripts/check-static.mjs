@@ -17,6 +17,9 @@ assert(!bridge.includes('demo: true'));
 assert(conf.bundle.externalBin.includes('binaries/ymfx-bridge'));
 const shell=permission.permissions.find(p=>typeof p==='object'&&p.identifier==='shell:allow-spawn');
 assert(shell&&shell.allow.length===1&&shell.allow[0].name==='binaries/ymfx-bridge'&&shell.allow[0].args===false);
-for(const method of ['snapshot','scan_terminals','pair_pc','stop_monitoring','start_monitoring','retry_session','rename_session','remove_session'])
+for(const method of ['snapshot','scan_terminals','pair_pc','add_account','open_account_terminal','stop_monitoring','start_monitoring','retry_session','rename_session','remove_session'])
   assert(bridge.includes(`'${method}'`));
 console.log('Static design, safety boundaries and Tauri packaging contracts passed');
+
+assert(bridge.includes('prepare-account-setup') && bridge.includes('native-account-label'),'Account creation must be a local MT5 terminal action');
+assert(bridge.includes('model.user') && !bridge.includes('model.device)'), 'Connector sidebar must identify user and account, not computer');

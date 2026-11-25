@@ -36,3 +36,17 @@ def start_managed_terminal(slot):
         settings.wShowWindow=subprocess.SW_HIDE
         kwargs["startupinfo"]=settings
     return subprocess.Popen([str(executable),"/portable"],**kwargs)
+
+
+def open_managed_terminal(slot):
+    """Open the exact isolated MT5 login window visibly, without credentials.
+
+    Does not reuse a stranger's default terminal, inject login parameters,
+    or issue trade commands. Its executable must carry the YM-FX marker.
+    """
+    executable=Path(slot).resolve()
+    if executable.name.lower()!="terminal64.exe" or not (executable.parent/".ym-managed.json").is_file():
+        raise TerminalLaunchError('Only a YoungMoney3-owned MT5 terminal can be opened.')
+    if not executable.is_file():
+        raise TerminalLaunchError('MT5 program is missing from this account.')
+    return subprocess.Popen([str(executable),"/portable"],cwd=str(executable.parent),close_fds=True)

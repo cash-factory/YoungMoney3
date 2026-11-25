@@ -25,6 +25,12 @@ type PositionSummary = {
   capital_at_entry?:{value?:string|null;source?:string;observed_at?:string|null};
 };
 type PositionRow = {link:string;account_id:string;lifecycle_id:string;version:number;recorded_at:string;summary:PositionSummary};
+type DeviceDiscovery = {
+  device:string; slot:string; login:string; server:string; account_name:string;
+  company:string; currency:string; trade_mode:number; last_seen:number;
+  link?:string|null; link_status?:string|null;
+};
+type DeviceScan = { device:string; requested_at:number; completed_at:number|null; request_id:string };
 type HistoryScan = { link: string; request: string };
 type SelectedScan = HistoryScan & { name: string; brokerAccount: string };
 type HistoryPage = HistoryScan & { rows: Record<string,unknown>[]; more: boolean; nextOffset: number };
@@ -35,6 +41,8 @@ export function Mt5Connections() {
   const [editingPc,setEditingPc] = useState<string | null>(null);
   const [pcNameDraft,setPcNameDraft] = useState('');
   const [links,setLinks] = useState<Link[]>([]);
+  const [discoveries,setDiscoveries] = useState<DeviceDiscovery[]>([]);
+  const [deviceScans,setDeviceScans] = useState<DeviceScan[]>([]);
   const dialog = useRef<HTMLDialogElement>(null);
   const [device,setDevice] = useState('');
   const [selectedPcId,setSelectedPcId] = useState<string|null>(null);
@@ -82,7 +90,10 @@ export function Mt5Connections() {
     const [data,rich]=await Promise.all([action('status'),action('positions').catch(()=>({rows:[],more:false}))]);
     if (revision !== latestRefresh.current) return;
     setAccountNames(Object.fromEntries((data.accounts||[]).map((a:{id:string;name:string})=>[a.id,a.name])));
-    setDevices(data.devices); setLinks(data.links); setDemo(data.demoOnly); setCapturePaused(Boolean(data.capturePaused)); setLoaded(true);
+    setDevices(data.devices); setLinks(data.links);
+    setDiscoveries(Array.isArray(data.discoveries)?data.discoveries:[]);
+    setDeviceScans(Array.isArray(data.scans)?data.scans:[]);
+    setDemo(data.demoOnly); setCapturePaused(Boolean(data.capturePaused)); setLoaded(true);
     setPositions(rich.rows || []);setPositionsMore(Boolean(rich.more));
   }, []);
   useEffect(() => {
@@ -112,18 +123,20 @@ export function Mt5Connections() {
     }
   }
   function startAccountSetup() {
-    setSetupHint('');
-    const ready = devices.filter(pc => pcOnline(pc) && pc.setup_state !== 'install');
-    if (ready.length === 1) { openLogin(ready[0].id); return; }
-    if (ready.length > 1) {
-      setSetupHint('Choose the PC to monitor this account on using Add account beside that PC.');
-    } else if (devices.some(pc => pcOnline(pc) && pc.setup_state === 'install')) {
-      setSetupHint('MetaTrader 5 is not installed on your paired PC. Install it using the connector instructions; detection runs automatically.');
-    } else if (devices.length) {
-      setSetupHint('Open the YoungMoney3 Connector on your PC. Your pairing is saved, and the login form will become available when it is online.');
-    } else {
-      setSetupHint('First download and open the Windows Connector, then choose Pair a PC. You will not need to find any MT5 program folders.');
-    }
+    setSetupHint('Open Signal Desk on your Windows PC, choose My Accounts → Add MT5 Account, then sign in inside the new MT5 window. Return here and choose Scan for accounts on that PC. Your account is not monitored until you select it.');
+  }
+  function scanDevice(deviceId:string) {
+    void run(async()=>{
+      await action('scan-local-accounts',{device:deviceId});
+      setSelectedPcId(deviceId);
+    },'Scan requested. Keep Signal Desk and MT5 open; verified accounts will appear here shortly.','scan-'+deviceId);
+  }
+  function monitorDiscovered(account:DeviceDiscovery) {
+    if(!window.confirm('Enable read-only journal monitoring for '+account.login+' on '+pairedPcName(devices.find(d=>d.id===account.device))+'? This does not authorize trade copying.'))return;
+    void run(async()=>{
+      await action('monitor-discovered-account',{device:account.device,slot:account.slot,monitor:true});
+      setSelectedPcId(account.device);
+    },'Account selected. Waiting for Signal Desk to reverify this MT5 login; monitoring is not confirmed yet.','monitor-'+account.slot);
   }
   const source = (t: typeof trades[number]) => (t as {trade_source?:string}).trade_source;
   const historyAccount = links.find(link => link.id === historyScan?.link);
@@ -150,11 +163,55 @@ export function Mt5Connections() {
     {error && !feedback && <div className="ym-action-feedback" data-kind="error" role="alert"><AlertTriangle size={16}/>{error}</div>}
     {capturePaused && <div className="ym-action-feedback" data-kind="warning" role="alert"><AlertTriangle size={17}/>Capture paused by your staging administrator.</div>}
     {outdatedCapturePc && <div className="ym-action-feedback" data-kind="warning" role="status"><AlertTriangle size={17}/><span>A newer connector may be available for your linked MT5 account. Check the latest published version and checksum before updating; retain the same Windows user to preserve pairing and pending capture records. Do not unpair or remove the account. <a href="/connector-download.html" rel="noopener noreferrer" className="underline font-semibold">View latest connector</a>.</span></div>}
+
+    <section className="card ym-connection-section ym-account-discovery" aria-labelledby="mt5-discovery-title">
+      <header className="ym-connection-heading">
+        <div><p className="ym-connection-eyebrow">01 / ACCOUNT DISCOVERY</p><h2 id="mt5-discovery-title">Find accounts from Signal Desk</h2>
+          <p className="ym-discovery-intro">Create an account in the Windows connector, sign in to MT5, then scan the selected PC here. You choose which verified account to monitor; copying requires separate approval.</p>
+        </div>
+        <button type="button" className="btn-secondary" onClick={startAccountSetup}><Laptop size={16}/> How to add an account</button>
+      </header>
+      {devices.length===0&&<div className="ym-connection-empty"><Monitor size={25}/><strong>No paired computer yet</strong><p>Pair the Windows connector before scanning for MT5 accounts.</p></div>}
+      <div className="ym-discovery-devices">
+        {devices.map(pc=>{
+          const available=discoveries.filter(a=>a.device===pc.id);
+          const online=pcOnline(pc),scan=deviceScans.find(x=>x.device===pc.id);
+          const pending=!!scan && !scan.completed_at && Date.now()-scan.requested_at<10*60*1000;
+          return <div key={pc.id} className="ym-discovery-device">
+            <div className="ym-discovery-device-head">
+              <span className="ym-discovery-device-title"><Monitor size={17}/><strong>{pairedPcName(pc)}</strong>
+                <small>{online?'Online':'Offline'}</small></span>
+              <button type="button" className="btn-primary" disabled={!online||!!busyAction||capturePaused}
+                onClick={()=>scanDevice(pc.id)}><RefreshCw size={15} className={pending?'animate-spin':''}/> {pending?'Scan requested · Rescan':'Scan for accounts'}</button>
+            </div>
+            {pending&&<p role="status" className="ym-discovery-status">Waiting for the paired connector to check authenticated MT5 terminals. No broker account will be added automatically.</p>}
+            {available.length===0
+              ?<p className="ym-discovery-empty">{scan?.completed_at?'No logged-in MT5 accounts were verified on this PC. Open the account’s MT5 terminal and try again.':'No discovered accounts yet. Scan after logging in to MT5 from Signal Desk.'}</p>
+              :<div className="ym-discovery-accounts">{available.map(account=>{
+                const linked=account.link_status==='connected';
+                const verifying=account.link_status==='verifying';
+                const fresh=Date.now()-account.last_seen<5*60*1000;
+                const mode=account.trade_mode===2?'Real':account.trade_mode===1?'Contest':'Demo';
+                return <div className="ym-discovery-account" key={pc.id+'-'+account.slot}>
+                  <div className="ym-discovery-identity"><strong>{account.account_name||account.company||'MT5 account'} <span>#{account.login}</span></strong>
+                    <small>{account.server} · {mode} · {account.currency}</small></div>
+                  <div className="ym-discovery-account-actions">
+                    <span className="ym-connection-badge" data-tone={linked?'success':fresh?'neutral':'warning'}>{linked?'Linked':verifying?'Awaiting verification':fresh?'Ready to select':'Rescan required'}</span>
+                    <button type="button" className="btn-secondary" disabled={!online||!!busyAction||linked||verifying||!fresh||capturePaused}
+                      onClick={()=>monitorDiscovered(account)}>{linked?'Linked':verifying?'Verifying':'Monitor account'}</button>
+                  </div>
+                </div>;
+              })}</div>}
+          </div>;
+        })}
+      </div>
+      <p className="ym-discovery-safety"><CircleHelp size={16}/> Scanning reads broker identity only. No passwords, orders, or open positions are imported by discovery. Monitoring requires owner selection and a fresh MT5 identity check; copying requires its own authorizations.</p>
+    </section>
     <section className="card ym-connection-section" aria-labelledby="paired-pc-title">
       <header className="ym-connection-heading">
-        <div><p className="ym-connection-eyebrow">01 / YOUR DEVICES</p><h2 id="paired-pc-title">Paired PCs</h2></div>
+        <div><p className="ym-connection-eyebrow">02 / YOUR DEVICES</p><h2 id="paired-pc-title">Paired PCs</h2></div>
         <div className="ym-connection-actions">
-          <button type="button" className="btn-primary" disabled={capturePaused||!!busyAction} onClick={startAccountSetup}>Add account <ArrowRight size={15}/></button>
+          <button type="button" className="btn-primary" disabled={capturePaused||!!busyAction} onClick={startAccountSetup}>Add in connector <ArrowRight size={15}/></button>
           <button type="button" className="btn-secondary" disabled={capturePaused||!!busyAction} onClick={()=>{
             if(devices.length && !window.confirm('Pair a different computer? If it is this same PC, reopen its existing connector instead.'))return;
             void run(async()=>setCode((await action('pair')).code),'Pairing code created. Enter it in the connector within five minutes.','pair');
@@ -185,7 +242,7 @@ export function Mt5Connections() {
               </div>
               {editingPc===d.id ? <div className="ym-edit-row"><label>Computer name<input className="input-field" maxLength={48} value={pcNameDraft} onChange={e=>setPcNameDraft(e.target.value)} placeholder="Trading Laptop"/></label><button type="button" className="btn-primary" disabled={pcNameDraft.trim().length<2||!!busyAction} onClick={()=>void run(async()=>{await action('rename-pc',{device:d.id,name:pcNameDraft.trim()});setEditingPc(null);},'PC renamed. The connector will display the new name at its next check-in.','rename-pc')}>{busyAction==='rename-pc'?'Saving…':'Save name'}</button><button type="button" className="btn-secondary" onClick={()=>setEditingPc(null)}>Cancel</button></div> :
                 <div className="ym-connection-actions">
-                  <button type="button" className="btn-primary" disabled={!online||d.setup_state==='install'||capturePaused} onClick={()=>openLogin(d.id)}>Add broker account</button>
+                  <button type="button" className="btn-primary" disabled={!online||d.setup_state==='install'||capturePaused} onClick={()=>scanDevice(d.id)}><RefreshCw size={15}/> Scan accounts</button>
                   <button type="button" className="btn-secondary" onClick={()=>{setEditingPc(d.id);setPcNameDraft(pairedPcName(d));}}>Rename PC</button>
                   <button type="button" className="btn-secondary" onClick={()=>{if(window.confirm('Unpair '+pairedPcName(d)+'? This revokes its connected broker sessions. Do not unpair the PC currently capturing your trades.'))void run(()=>action('revoke',{device:d.id}),'PC unpaired. Historical trade evidence was retained.','revoke-pc');}}>Unpair PC</button>
                 </div>}
@@ -223,7 +280,7 @@ export function Mt5Connections() {
     </section>
     <section id="ym-linked-accounts" className="card ym-connection-section" aria-labelledby="linked-accounts-title">
       <header className="ym-connection-heading">
-        <div><p className="ym-connection-eyebrow">02 / BROKER CONNECTIONS</p><h2 id="linked-accounts-title">Linked accounts <span className="ym-section-count">{visibleLinks.length}</span></h2></div>
+        <div><p className="ym-connection-eyebrow">03 / BROKER CONNECTIONS</p><h2 id="linked-accounts-title">Linked accounts <span className="ym-section-count">{visibleLinks.length}</span></h2></div>
         {selectedPc && <button type="button" className="btn-secondary" onClick={()=>{setSelectedPcId(null);setSelectedAccountId(null);}}>Show all PCs <X size={14}/></button>}
       </header>
       {selectedPc && <p className="ym-context-short">Showing accounts on <strong>{pairedPcName(selectedPc)}</strong>.</p>}
