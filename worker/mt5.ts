@@ -95,7 +95,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
       const discoveries=await q(`SELECT a.device,a.slot,a.login,a.server,a.account_name,a.company,a.currency,a.trade_mode,a.last_seen,
         l.id AS link,l.status AS link_status FROM mt5_discovered_accounts a
         JOIN mt5_devices d ON d.id=a.device AND d.owner=a.owner AND d.revoked=0
-        LEFT JOIN mt5_discovery_approvals v ON v.device=a.device AND v.slot=a.slot
+        LEFT JOIN mt5_discovery_approvals v ON v.device=a.device AND v.slot=a.slot AND v.link=(SELECT a2.link FROM mt5_discovery_approvals a2 WHERE a2.device=a.device AND a2.slot=a.slot ORDER BY a2.requested_at DESC LIMIT 1)
         LEFT JOIN mt5_links l ON l.id=v.link AND l.owner=a.owner
         WHERE a.owner=? ORDER BY a.last_seen DESC LIMIT 100`, owner).all();
       const scans=await q('SELECT device,requested_at,completed_at,request_id FROM mt5_device_scans WHERE owner=?',owner).all();
@@ -129,6 +129,8 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         owner,input.device,input.slot,owner,unix-90000).first<{login:string;server:string;trade_mode:number;last_seen:number}>();
       if(!found||found.last_seen<unix-5*60*1000) return fail('Account verification is stale. Scan the device again.',409);
       if(found.trade_mode===2&&!liveAccountCaptureAllowed) return fail('Real-account read-only capture requires staging approval.',403);
+      const pendingSlot=await q(`SELECT a.link FROM mt5_discovery_approvals a JOIN mt5_links l ON l.id=a.link WHERE a.device=? AND a.slot=? AND l.status='verifying' AND l.expires>?`,input.device,input.slot,unix).first();
+      if(pendingSlot) return fail('This local MT5 login is already awaiting confirmation.',409);
       const existing=await q(`SELECT l.id FROM mt5_links l JOIN mt5_devices d ON d.id=l.device
         WHERE d.owner=? AND d.revoked=0 AND l.login=? AND l.server=?
         AND (l.status='connected' OR (l.status='verifying' AND l.expires>?))`,
