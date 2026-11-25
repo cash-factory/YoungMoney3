@@ -116,15 +116,17 @@ class SessionStore:
                 return session
         raise SessionError("Choose an existing session.")
 
-    def add(self, path: str, name: str = "") -> dict:
+    def add(self, path: str, name: str = "", *, enabled: bool = True) -> dict:
         resolved = terminal_path(path)
+        if type(enabled) is not bool:
+            raise SessionError('The monitoring selection must be true or false.')
         with self._lock:
             if any(path_key(s["terminal"]) == path_key(resolved) for s in self._sessions):
                 raise SessionError("This terminal already has a session. Each account needs its own portable MT5 directory.")
             name = name.strip()[:48] if isinstance(name, str) else ""
             session = {
                 "id": uuid.uuid4().hex[:12], "name": name or f"Session {len(self._sessions) + 1}",
-                "terminal": resolved, "enabled": True
+                "terminal": resolved, "enabled": enabled
             }
             self._sessions.append(session)
             try:
