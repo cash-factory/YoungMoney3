@@ -1,0 +1,63 @@
+name: YoungMoney3 Signal Desk — Native Windows Preview
+on:
+  pull_request:
+    paths:
+      - 'connector/desktop/**'
+      - '.github/workflows/connector-signaldesk-native.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-preview:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: 'x64'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - name: Install and test existing broker dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r connector/requirements.txt 'pyinstaller==6.16.0'
+          python -m unittest discover -s connector/desktop/tests -p 'test_desktop_bridge.py' -v
+      - name: Build only the isolated Python bridge
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --console --name ymfx-bridge --paths connector --collect-all MetaTrader5 --collect-all keyring --collect-all numpy --collect-all tzdata connector/desktop/bridge/desktop_bridge.py
+          New-Item -ItemType Directory -Force connector/desktop/src-tauri/binaries | Out-Null
+          Copy-Item dist/ymfx-bridge.exe connector/desktop/src-tauri/binaries/ymfx-bridge-x86_64-pc-windows-msvc.exe
+      - name: Verify frozen IPC starts without changing account state
+        run: python connector/desktop/scripts/smoke_bridge_windows.py connector/desktop/src-tauri/binaries/ymfx-bridge-x86_64-pc-windows-msvc.exe
+      - name: Validate UI contract and build native application
+        shell: pwsh
+        working-directory: connector/desktop
+        run: |
+          npm install --no-audit --no-fund
+          npm run test:static
+          npx tauri icon desktop-ui/assets/ymfx-brand.svg -o src-tauri/icons
+          npm run build:windows
+      - name: Stage checksum and installer artifact
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem connector/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          if (!$installer) { throw 'NSIS installer was not built' }
+          (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant() | Out-File "$($installer.FullName).sha256" -Encoding ascii
+      - uses: actions/upload-artifact@v4
+        with:
+          name: youngmoney3-signaldesk-native-unsigned-preview
+          path: |
+            connector/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+            connector/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.sha256
+          if-no-files-found: error
+          retention-days: 14

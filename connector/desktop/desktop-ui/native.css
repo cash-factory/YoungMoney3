@@ -1,0 +1,64 @@
+/* Native application overrides: never hide a safety or connection disclaimer. */
+:root{--native-padding:22px}
+body.ym-native{background:#f6f7f9}
+.ym-native .workspace{scrollbar-gutter:stable}
+.ym-native .native-subtitle{color:#67717d;line-height:1.5;max-width:850px}
+.ym-native .native-shell-grid{display:grid;gap:16px;grid-template-columns:minmax(0,1.6fr) minmax(280px,.7fr)}
+.ym-native .native-kpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;margin:17px 0}
+.ym-native .native-operations{display:grid;grid-template-columns:minmax(280px,1fr) minmax(300px,1fr);gap:16px}
+.ym-native .native-pad{padding:20px}
+.ym-native .native-card{border:1px solid #e2e5e9;background:#fff;border-radius:13px;overflow:hidden;box-shadow:0 3px 15px rgba(19,21,31,.025)}
+.ym-native .native-card h2{font-size:16px;letter-spacing:-.025em;font-weight:750}
+.ym-native .native-card h3{font-size:13px}
+.ym-native .native-card p{color:#68717e;font-size:12px;line-height:1.65}
+.ym-native .native-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:17px 20px;border-bottom:1px solid #edf0f3}
+.ym-native .native-card-head h2{display:flex;align-items:center;gap:10px}
+.ym-native .native-card-head svg{width:19px;height:19px}
+.ym-native .native-overview-art{width:41%;min-width:220px;max-width:380px;display:flex;align-items:center}
+.ym-native .native-overview-art svg{width:100%;height:auto}
+.ym-native .native-health{display:flex;align-items:center;gap:18px;padding:23px 22px;min-height:220px}
+.ym-native .native-health-copy{min-width:0;flex:1}
+.ym-native .native-health-copy h2{font-size:30px;line-height:1.2;letter-spacing:-.04em;margin:10px 0 5px}
+.ym-native .native-health .native-step-row{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:23px;color:#68707b;font-size:11px}
+.ym-native .native-health .native-step-row span{display:inline-flex;gap:6px;align-items:center}
+.ym-native .native-step-row .is-ready{color:#12805a}
+.ym-native .native-step-row .is-unverified{color:#8c929d}
+.ym-native .native-action-row{display:grid;gap:10px;padding:17px 20px}
+.ym-native .native-action-row button{width:100%;min-height:43px;justify-content:space-between}
+.ym-native .native-stat{padding:18px 20px;min-height:108px}
+.ym-native .native-stat strong{display:block;font-size:25px;letter-spacing:-.04em;line-height:1.25;margin-top:8px}
+.ym-native .native-stat small{display:block;color:#737b85;margin-top:6px;line-height:1.4}
+.ym-native .native-overline{color:#8a9099;font-size:11px;font-weight:750;letter-spacing:.07em;text-transform:uppercase}
+.ym-native .native-rows{display:grid;gap:0}
+.ym-native .native-account{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:16px;min-height:70px;padding:13px 18px;border-bottom:1px solid #f0f1f3}
+.ym-native .native-account:last-child{border-bottom:0}
+.ym-native .native-account button{border:0;background:transparent;cursor:pointer;font-weight:650;color:#1e2530;text-align:left;max-width:100%;min-width:0}
+.ym-native .native-account button:hover{color:#c8102e}
+.ym-native .native-account small{display:block;color:#79808b;margin-top:5px}
+.ym-native .native-status{display:inline-flex;gap:6px;align-items:center;border-radius:20px;font-size:11px;font-weight:700;padding:6px 11px;background:#eef1f3;color:#555e67;white-space:nowrap}
+.ym-native .native-status:before{content:"";width:7px;height:7px;border-radius:50%;background:#aab2bc}
+.ym-native .native-status.online{background:#e7f7ee;color:#126e48}.ym-native .native-status.online:before{background:#20ad69}
+.ym-native .native-status.working{background:#fff3e6;color:#916116}.ym-native .native-status.working:before{background:#ed9d25}
+.ym-native .native-status.danger{background:#fff0f2;color:#b71e3b}.ym-native .native-status.danger:before{background:#ce2540}
+.ym-native .native-inline-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+.ym-native .native-inline-actions button{min-height:40px}
+.ym-native .native-split{display:grid;grid-template-columns:minmax(260px,.85fr) minmax(0,1.4fr);gap:16px}
+.ym-native .native-inspector h2{font-size:18px;margin-bottom:9px}
+.ym-native .native-info-row{display:grid;grid-template-columns:minmax(140px,35%) minmax(0,1fr);gap:12px;padding:11px 0;border-bottom:1px solid #f0f1f2;font-size:12px}
+.ym-native .native-info-row span{color:#737b86}.ym-native .native-info-row strong{overflow-wrap:anywhere}
+.ym-native .native-help-bubble{border:1px solid #efdadf;background:#fff8f9;border-radius:11px;padding:13px 15px;color:#8c2536;line-height:1.6;font-size:12px;margin-top:14px}
+.ym-native .native-event{padding:13px 18px;border-bottom:1px solid #f1f2f4;display:flex;gap:13px;justify-content:space-between;font-size:12px}
+.ym-native .native-event:last-child{border-bottom:0}.ym-native .native-event small{color:#7b818b;font-size:11px}
+.ym-native .native-event b{display:block;margin-bottom:4px}
+.ym-native .native-text-input{width:100%;padding:13px 14px;border:1px solid #cdd2d8;border-radius:9px;background:white;font-size:14px;letter-spacing:.08em}
+.ym-native .native-text-input:focus-visible{outline:2px solid #c8102e;outline-offset:2px}
+.ym-native .native-hidden-on-native{display:none!important}
+@media(max-width:1250px){.ym-native .native-shell-grid{grid-template-columns:1fr}.ym-native .native-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}.ym-native .native-operations{grid-template-columns:1fr}}
+@media(max-width:850px){.ym-native .native-split{grid-template-columns:1fr}.ym-native .native-health{flex-direction:column;align-items:flex-start}.ym-native .native-overview-art{width:100%;max-width:350px}.ym-native .native-inline-actions{gap:8px}}
+@media(max-width:600px){.ym-native .native-kpi{grid-template-columns:1fr}.ym-native .native-card-head{padding:14px}.ym-native .native-pad{padding:15px}.ym-native .native-health-copy h2{font-size:23px}}
+@media(prefers-reduced-motion:reduce){.ym-native svg *{animation:none!important;transition:none!important}}
+
+.ym-native .system-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:36px;white-space:nowrap;overflow:hidden;padding-inline:12px;font-size:11px}
+.ym-native .system-bar>div{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.ym-native .system-bar>div:last-child{text-align:right;flex:1}
+.ym-native .native-action-row button:focus-visible,.ym-native .native-inline-actions button:focus-visible{outline:2px solid #C8102E;outline-offset:2px}

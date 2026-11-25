@@ -1,0 +1,17 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "signal-desk-local-bridge",
+  "description": "Single trusted local bridge; no arbitrary shell programs or arguments.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {"name":"binaries/ymfx-bridge", "cmd":"", "sidecar":true, "args":false}
+      ]
+    },
+    "shell:allow-stdin-write",
+    "shell:allow-kill"
+  ]
+}
