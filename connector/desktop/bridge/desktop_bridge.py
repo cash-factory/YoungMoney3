@@ -335,9 +335,12 @@ class Bridge:
                     if isinstance(job,dict) and isinstance(job.get('request'),str):
                         request_id=job['request']
                         if request_id != self._last_scan_request:
-                            self._last_scan_request=request_id
                             found=self._scan_local_accounts()
+                            # Only acknowledge locally after the authenticated device
+                            # endpoint commits the report. A network interruption must
+                            # leave the scan retryable, never silently marked finished.
                             request_device('discovery-report',{'request':request_id,'accounts':found})
+                            self._last_scan_request=request_id
                             self._report({'state':'discovery-complete' if found else 'discovery-attention'})
                     for approval in reply.get('approvals',[])[:20]:
                         if isinstance(approval,dict):
