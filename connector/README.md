@@ -2,7 +2,7 @@
 
 ## Windows app
 
-**Current staging Windows x64 build:** [v0.5.7-rc1](https://github.com/cash-factory/YoungMoney3/releases/tag/staging-connector-v0.5.7-rc1) — an unsigned, read-only MT5 recovery build from the reviewed staging branch and smoke-validated on a clean Windows CI machine. [Download the executable](https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.7-rc1/YoungMoney3.Connector.exe) and compare its SHA-256 with the official [checksum file](https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.7-rc1/YoungMoney3.Connector.exe.sha256): `4fe6ca4278f608ebb876d327f1672e694fe7b916e854a2b21a276bd2f0d4e4fb`.
+**Latest verified Windows connector:** use the [GitHub staging releases](https://github.com/cash-factory/YoungMoney3/releases) and verify the published SHA-256 checksum. The enterprise V1 interface is prepared for **v0.6.3-rc1** and must pass the immutable release workflow before users download it. Do not replace an installed connector with an unpublished preview.
 
 **This build corrects an MT5 specification-evidence identity defect**: older connectors reused a symbol-specification key across multiple position IDs, generating thousands of false integrity conflicts. v0.5.7 uses position-scoped, first-observed snapshots and reconstructs previously observed positions from broker deals/orders after an offline interval. Unobserved interim SL/TP changes are flagged as such, not invented. **Do not delete local capture.db or unpair the PC**; close the old app and open v0.5.7 in the same Windows user. Real MT5 broker recovery remains an acceptance check.
 

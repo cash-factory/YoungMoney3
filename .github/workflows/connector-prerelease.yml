@@ -16,7 +16,7 @@ defaults:
   run:
     shell: pwsh
 env:
-  VERSION: '0.6.0-rc1'
+  VERSION: '0.6.3-rc1'
   SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 concurrency:
   group: youngmoney3-staging-connector-release

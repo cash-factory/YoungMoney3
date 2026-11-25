@@ -216,15 +216,22 @@ test('every workspace page has its own text-free design image next to real headi
   assert.ok(read('src/pages/OnboardingPage.tsx').includes('/assets/page-art/workspace-setup.svg'));
 });
 
-test('connector visual refresh preserves read-only capture and editable headings',()=>{
+test('connector enterprise V1 preserves read-only boundaries and real headings',()=>{
   const connector=read('connector/connector_gui.py');
-  const graphic=read('connector/assets/connector-scene.svg');
-  assert.ok(connector.includes('ACCENT = "#ff365c"'),'Connector should share studio-red accent');
-  assert.ok(connector.includes('BACKGROUND = "#09090d"'),'Connector surfaces should be obsidian-dark');
-  assert.ok(connector.includes('def _draw_header_art('),'Connector panels need native, dependency-free illustrations');
-  assert.ok(connector.includes('def _stack_heading('),'Connector heading must remain real text');
-  assert.ok(connector.includes('READ-ONLY  •  NO TRADING COMMANDS'),'Read-only safety language must be retained');
-  assert.ok(graphic.startsWith('<svg ')&&!/<text(?:\s|>)/i.test(graphic),'Standalone connector artwork must be text-free');
+  const theme=read('connector/enterprise_theme.py');
+  const graphic=read('connector/assets/enterprise-v1/hero-operations-dark.svg');
+  assert.ok(theme.includes('"red": "#C8102E"')&&theme.includes('"nav": "#18191D"'),
+    'Connector must follow the approved V1 red/black palette');
+  assert.ok(theme.includes('"canvas": "#F6F7F8"')&&theme.includes('def label_color('),
+    'Connector must support light workspace and accessible dark-surface text');
+  assert.ok(connector.includes('ACCENT = COLORS["red"]')&&connector.includes('BACKGROUND = COLORS["canvas"]'),
+    'Connector must consume V1 palette rather than the legacy pink/dark shell');
+  assert.ok(connector.includes('def _stack_heading(')&&connector.includes('EnterpriseHeroArt'),
+    'Page headings stay native text and hero remains lightweight vector artwork');
+  assert.ok(connector.includes('MONITORING: READ-ONLY')&&connector.includes('COPYING: LOCAL APPROVAL REQUIRED'),
+    'Capture and copier safety constraints must remain explicit');
+  assert.ok(graphic.startsWith('<svg ')&&!/<text(?:\\s|>)/i.test(graphic),
+    'The asset-kit illustration must be text-free');
 });
 
 test('all homepage icons meet contrast targets in each of twelve light and dark palettes',()=>{
