@@ -5,8 +5,10 @@ from test_ui_browser import HTML,CSS,NATIVE,APP,MOCK
 import re
 
 mock=MOCK.replace('const snapshot={','window.__testModel={').replace('result=snapshot;','result=window.__testModel;')
+mock=mock.replace('result={count:0,terminals:[]};',"result={count:1,terminals:[{id:'opaque-source',name:'MT5 Programme'}]};")
 mock=mock.replace("window.__TAURI__={shell", '''window.__ops=[];
   window.__testModel.paired=true;
+  window.__testModel.user='Verified Example Trader';
   window.__testModel.capture_active=true;
   window.__testModel.connection_state='connected';
   window.__testModel.sessions=[{id:'abc',name:'London Terminal',login:'1042',server:'Example-Live',status:'monitoring',last_sync:'2026-11-25T15:12:00Z',verified_link:true,terminal_present:true,enabled:true}];
@@ -19,6 +21,8 @@ mock=mock.replace("else result={ok:true};", '''else if(req.method==='rename_sess
         window.__testModel.sessions[0].enabled=req.params.enabled;result={updated:true};
       }else if(req.method==='stop_monitoring'){
         window.__testModel.capture_active=false;window.__testModel.connection_state='offline';result={stop_requested:true};
+      }else if(req.method==='scan_terminals'){result={count:1,terminals:[{id:'opaque-source',name:'MT5 Programme'}]};
+      }else if(req.method==='add_account'){result={accepted:true,monitoring_enabled:false,login_method:'MT5 window'};
       }else if(req.method==='remove_session'){
         window.__testModel.sessions=[];result={removed:true,broker_evidence_preserved:true};
       }else result={ok:true};''')
@@ -32,6 +36,16 @@ with sync_playwright() as p:
     page.wait_for_function("() => window.YMFXNative.debug().modelKey !== null")
     page.locator('[data-page="accounts"]').first.click()
     assert page.locator('.native-account').count()==1
+    page.locator('[data-native-action="prepare-account-setup"]').first.click()
+    page.wait_for_function("() => !!document.querySelector('#native-source-id')")
+    assert page.locator('input#native-account-label').count()==1
+    page.locator('#native-account-label').fill('My second account')
+    page.locator('[data-native-action="add_account"]').click()
+    page.wait_for_function("() => window.__ops.some(x=>x.method==='add_account')")
+    assert page.evaluate("window.__ops.find(x=>x.method==='add_account').params.source_id")=='opaque-source'
+    assert page.evaluate("window.__ops.find(x=>x.method==='add_account').params.name")=='My second account'
+    assert not page.locator('[data-native-action="execute-trade"]').count()
+    page.locator('[data-native-action="cancel-add-account"]').first.click()
     assert page.locator('[data-native-action="retry-session"]').is_enabled()
     page.locator('[data-native-action="retry-session"]').click()
     page.wait_for_function("() => window.__ops.some(x=>x.method==='retry_session')")
@@ -53,7 +67,9 @@ with sync_playwright() as p:
     page.locator('[data-native-action="remove-session"]').click()
     page.locator('#native-remove-confirm').fill('REMOVE')
     page.locator('[data-native-action="remove-session-confirmed"]').click()
-    page.wait_for_function('() => document.body.textContent.includes("No saved terminal sessions")')
+    page.wait_for_function('() => window.__ops.some(x=>x.method==="remove_session")')
+    page.wait_for_timeout(300)
+    assert not page.evaluate('window.__testModel.sessions.length'), ('Remove should only erase local shortcut',page.locator('body').inner_text()[-400:])
     assert page.evaluate("window.__ops.some(x=>x.method==='remove_session' && x.params.confirm==='REMOVE')")
     assert not errors,errors
     print('Native workflows browser QA passed: selected account, recheck, rename, filtered events, disarmed copying, confirmed shortcut removal.')
