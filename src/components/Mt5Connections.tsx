@@ -1,5 +1,6 @@
 import { Select } from '@/components/Select';
 import { pnlTone, signedMoney } from '@/lib/tradingTone';
+import { announceAction } from '@/lib/actionFeedback';
 import { Monitor, Link2, X, ChevronDown, CheckCircle2, AlertTriangle, CircleHelp, RefreshCw, Wallet, Clock3, History, Laptop, ArrowRight } from 'lucide-react';
 import { CashFlowPanel } from '@/components/CashFlowPanel';
 import { EvidenceConflictPanel } from '@/components/EvidenceConflictPanel';
