@@ -303,10 +303,6 @@ export function Layout({ current, onNavigate, onQuickAdd, onOpenGuide, children 
           </div>
         </div>
 
-        <div className="ym-studio-stripe" aria-hidden="true">
-          <span>PROCESS <b>•</b> PRECISION <b>•</b> DISCIPLINE <b>•</b> GROWTH</span>
-        </div>
-
         <main tabIndex={-1} id="workspace-content" className="ym-main-content p-4 sm:p-6 lg:p-8 xl:px-10 max-w-[1480px] mx-auto animate-fade-in pb-32 lg:pb-12">
           {isSample && <section role="status" aria-label="Fictional demo account"
             className="mb-5 rounded-xl border border-themed bg-secondary p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
