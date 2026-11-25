@@ -737,6 +737,10 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     const accessLevel=typeof input.trade_access==='boolean' ? (input.trade_access?'trading-enabled':'trading-restricted') : 'unknown';
     await db.batch([q("UPDATE mt5_links SET status='connected',login=?,server=?,company=?,currency=?,linked_at=?,trade_mode=?,access_level=? WHERE id=?",input.login,input.server,input.company,input.currency,time,input.mode,accessLevel,link.id),
       q("INSERT INTO workspace_records(id,user_id,table_name,payload,created_at,updated_at) VALUES(?,?,'trading_accounts',?,?,?) ON CONFLICT(id) DO UPDATE SET payload=json_patch(workspace_records.payload,?),updated_at=excluded.updated_at WHERE workspace_records.user_id=excluded.user_id AND workspace_records.table_name='trading_accounts'",link.account_id,device.owner,JSON.stringify(account),time,time,JSON.stringify({broker_name:input.company,account_number:input.login}))]);
+    if (approval) {
+      await q('UPDATE mt5_discovery_approvals SET verified_at=? WHERE link=? AND device=? AND verified_at IS NULL',
+        unix,link.id,device.id).run();
+    }
     return json({ok:true});
   }
   if(action!=='device/sync'||link.status!=='connected') return fail('Link unavailable.',409);
