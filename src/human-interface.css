@@ -1,0 +1,238 @@
+/* User-first workspace pass. Keep each palette's identity; standardise the
+   reading order, hit targets, and the meaning of attention across the product. */
+:root[data-palette] {
+  --ym-reading-size: .875rem;
+  --ym-support-size: .8125rem;
+  --ym-micro-size: .75rem;
+  --ym-focus-ring: 0 0 0 3px color-mix(in srgb, var(--brand) 21%, transparent);
+  --ym-panel-shadow: 0 4px 22px hsl(var(--shadow-color) / .045);
+}
+.ym-workspace {
+  font-size: var(--ym-reading-size);
+  line-height: 1.55;
+  text-rendering: optimizeLegibility;
+}
+.ym-workspace :is(p, li, dd, dt) { overflow-wrap: break-word; }
+.ym-workspace .ym-main-content :is(p, li, small).text-xs {
+  font-size: var(--ym-support-size);
+  line-height: 1.55;
+}
+.ym-workspace :is(.font-mono, .ym-stat-value, .ym-market-value, .ym-dash-balance-number,
+  .ym-dash-result-value, .ym-connection-summary strong) {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.ym-workspace .card { box-shadow: var(--ym-panel-shadow); }
+.ym-workspace .card-hover:hover { transform: none; box-shadow: 0 6px 24px hsl(var(--shadow-color) / .085); }
+.ym-workspace .ym-main-content { padding-bottom: max(44px, env(safe-area-inset-bottom)); }
+.ym-workspace .ym-sidebar-brand h1 { font-size: .9375rem; line-height: 1.3; }
+.ym-workspace .ym-brand-caption { font-size: .6875rem; letter-spacing: .09em; }
+.ym-workspace .ym-quick-find { min-height: 44px; font-size: .8125rem; }
+.ym-workspace .ym-quick-find kbd { font-size: .6875rem; }
+.ym-workspace .ym-sidebar-nav .ym-nav-group {
+  min-height: 44px; font-size: .8125rem; letter-spacing: .02em;
+}
+.ym-workspace .ym-sidebar-nav .ym-nav-item {
+  min-height: 44px; font-size: .875rem; line-height: 1.35;
+}
+.ym-workspace .ym-nav-subitem { padding-block: 10px; }
+.ym-workspace .ym-profile-trigger { min-height: 48px; }
+.ym-workspace .ym-profile-avatar { background: var(--button-bg); box-shadow: inset 0 0 0 1px color-mix(in srgb, white 16%, transparent); }
+.ym-workspace .ym-topbar-eyebrow { font-size: .6875rem; letter-spacing: .11em; }
+.ym-workspace .ym-topbar-search,
+.ym-workspace .ym-guide-topbar-launch { min-height: 40px; font-size: .8125rem; }
+.ym-workspace .ym-topbar-search kbd { font-size: .6875rem; }
+.ym-workspace .ym-workspace-topbar { min-height: 72px; }
+.ym-workspace .ym-mobile-topbar button { min-width: 44px; min-height: 44px; justify-content: center; }
+.ym-workspace .ym-mobile-dock .ym-dock-item { min-height: 56px; font-size: .6875rem; }
+.ym-workspace .ym-desktop-quick-add { border-radius: 16px; }
+/* Repeated slogans take the first scan line away from the trader's actual work. */
+.ym-workspace .ym-studio-stripe { display: none; }
+/* Action colors indicate affordance, never profit/loss. */
+.ym-workspace :is(.btn-primary, .btn-secondary) {
+  min-height: 44px;
+  justify-content: center;
+  font-size: .875rem;
+  font-weight: 650;
+  line-height: 1.3;
+  transition: background-color .16s ease, border-color .16s ease,
+    box-shadow .16s ease, color .16s ease, transform .12s ease;
+}
+.ym-workspace .btn-primary { background: var(--button-bg); color: #fff; }
+.ym-workspace .btn-primary::after { display: none; }
+.ym-workspace .btn-primary:not(:disabled):hover {
+  transform: none; background: var(--button-hover-bg);
+  box-shadow: 0 3px 12px hsl(var(--shadow-color) / .15);
+}
+.ym-workspace .btn-secondary:not(:disabled):hover {
+  transform: none; border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--brand) 5%, var(--bg-card));
+  box-shadow: none;
+}
+.ym-workspace :is(button, [role="button"], a, summary, input, select, textarea):focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+  box-shadow: var(--ym-focus-ring);
+}
+.ym-workspace button:disabled { opacity: .58; cursor: not-allowed; }
+.ym-workspace .input-field { min-height: 44px; font-size: .875rem; line-height: 1.45; }
+.ym-workspace .input-field:focus { box-shadow: var(--ym-focus-ring); }
+/* Page introductions keep a clear foreground even with palette-tinted imagery. */
+[data-workspace-page] .ym-page-heading {
+  min-height: 150px; border-color: var(--border);
+  box-shadow: var(--ym-panel-shadow);
+}
+[data-workspace-page] .ym-page-heading-main {
+  width: min(83%, 880px); min-height: 150px; gap: 13px;
+  background: linear-gradient(90deg, var(--bg-card) 69%,
+    color-mix(in srgb, var(--bg-card) 95%, transparent) 88%, transparent);
+}
+[data-workspace-page] .ym-page-heading-copy { max-width: 66ch; }
+[data-workspace-page] .ym-page-heading-copy h1 {
+  font-size: clamp(1.65rem, 2.5vw, 2.35rem); line-height: 1.15;
+  letter-spacing: -.035em;
+}
+[data-workspace-page] .ym-page-heading-copy > p.mt-2 {
+  font-size: .875rem; line-height: 1.55;
+  color: var(--text-secondary);
+}
+[data-workspace-page] .ym-page-heading .ym-page-chapter {
+  font-size: .75rem; letter-spacing: .075em; line-height: 1.35;
+}
+[data-workspace-page] .ym-page-art img { opacity: .22; }
+:root.dark[data-palette="craftylabs-studio"] [data-workspace-page] .ym-page-art img { opacity: .33; }
+/* Dashboard: strong numerical hierarchy, quiet explanatory copy. */
+.ym-workspace .ym-dashboard .ym-dash-heading h1 {
+  font-size: clamp(1.75rem, 3vw, 2.55rem);
+  line-height: 1.17;
+}
+.ym-workspace .ym-dashboard .ym-dash-heading-copy > p:last-child {
+  font-size: .875rem; line-height: 1.6;
+}
+.ym-workspace .ym-dashboard .ym-dash-heading-art {
+  opacity: .22; filter: grayscale(.88);
+}
+:root.dark[data-palette="craftylabs-studio"] .ym-workspace .ym-dashboard .ym-dash-heading-art { opacity: .34; }
+.ym-workspace .ym-dashboard .ym-dash-focus-description {
+  font-size: .875rem; line-height: 1.6; margin-bottom: 19px;
+}
+.ym-workspace .ym-dashboard .ym-dash-jump button {
+  min-height: 46px; font-size: .8125rem; font-weight: 650; letter-spacing: .005em;
+}
+.ym-workspace .ym-dashboard .ym-dash-controls { gap: 18px; }
+.ym-workspace .ym-dashboard .ym-dash-quality-notice > summary { min-height: 52px; }
+.ym-workspace .ym-dashboard .ym-dash-quality-notice strong { font-size: .8125rem; }
+.ym-workspace .ym-dashboard .ym-dash-quality-notice small,
+.ym-workspace .ym-dashboard .ym-dash-quality-notice > p {
+  font-size: .8125rem; line-height: 1.55;
+}
+.ym-workspace .ym-dashboard .ym-dash-history-alert { font-size: .875rem; line-height: 1.55; }
+.ym-workspace .ym-dash-result-description,
+.ym-workspace .ym-dash-balance-hint,
+.ym-workspace .ym-dash-section-title > span { font-size: .8125rem; line-height: 1.55; }
+.ym-workspace .ym-stat-label { font-size: .75rem; letter-spacing: .055em; }
+.ym-workspace .ym-stat-card p.text-muted { font-size: .8125rem; }
+.ym-workspace .ym-stat-icon {
+  display: grid; place-items: center; width: 42px; height: 42px;
+  min-width: 42px; padding: 8px;
+}
+.ym-workspace .ym-stat-icon > svg { width: 21px; height: 21px; }
+/* Connection health is not a promotional metric. Make missing and stale data legible. */
+.ym-connection-hub .ym-connection-summary small { font-size: .8125rem; line-height: 1.4; }
+.ym-connection-hub .ym-connection-summary strong { font-size: clamp(1.45rem, 2vw, 1.8rem); }
+.ym-connection-hub .ym-connection-heading h2 { font-size: clamp(1.125rem, 2vw, 1.4rem); }
+.ym-connection-hub .ym-connection-eyebrow { font-size: .75rem; letter-spacing: .055em; }
+.ym-connection-hub :is(.ym-discovery-intro, .ym-discovery-status, .ym-discovery-empty,
+  .ym-discovery-safety, .ym-context-help > p, .ym-connection-empty p) {
+  font-size: .8125rem; line-height: 1.6;
+}
+.ym-connection-hub .ym-selection-primary strong { font-size: .875rem; }
+.ym-connection-hub .ym-selection-primary small { font-size: .8125rem; }
+.ym-connection-hub .ym-connection-badge {
+  font-size: .75rem; line-height: 1.3; padding: 6px 10px;
+  max-width: 220px; font-weight: 700; flex-shrink: 0;
+}
+.ym-connection-hub .ym-selectable-trigger { min-height: 76px; }
+.ym-connection-hub .ym-selection-icon {
+  width: 42px; height: 42px; min-width: 42px; flex-shrink: 0;
+}
+.ym-connection-hub .ym-detail-grid span,
+.ym-connection-hub .ym-context-help > summary,
+.ym-connection-hub .ym-account-tabs button { font-size: .8125rem; }
+.ym-connection-hub .ym-detail-grid strong { font-size: .875rem; }
+.ym-connection-hub .ym-account-tabs button {
+  min-height: 44px; line-height: 1.35; padding: 10px 13px;
+}
+.ym-connection-hub .ym-action-feedback {
+  align-items: flex-start; font-size: .875rem; line-height: 1.5; padding: 14px 16px;
+  overflow-wrap: anywhere;
+}
+.ym-connection-hub .ym-action-feedback button {
+  min-width: 36px; min-height: 36px; display: grid; place-items: center;
+}
+.ym-connection-summary-meta {
+  display: flex; justify-content: flex-end; align-items: center;
+  flex-wrap: wrap; gap: 9px; margin-top: -3px;
+}
+.ym-connection-summary-meta .ym-check-time {
+  font-size: .8125rem; color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.ym-connection-summary-meta button { min-height: 36px; padding: 6px 11px; font-size: .8125rem; }
+.ym-connection-summary [data-attention="true"] {
+  border-color: color-mix(in srgb, var(--warning-text) 38%, var(--border));
+}
+.ym-connection-summary [data-attention="true"] > svg { color: var(--warning-text); }
+.ym-connection-hub .ym-discovery-device-head .btn-primary { min-height: 44px; }
+/* A notification is a receipt, not an advertisement: stable, readable, and dismissible. */
+.ym-feedback-stack { width: min(420px, calc(100vw - 24px)); gap: 10px; }
+.ym-feedback-toast { padding: 16px; border-radius: 12px; }
+.ym-feedback-toast::after { display: none; }
+.ym-feedback-toast-icon { width: 36px; height: 36px; flex-shrink: 0; }
+.ym-feedback-toast-body > strong { font-size: .8125rem; letter-spacing: 0; line-height: 1.4; }
+.ym-feedback-toast-body p { font-size: .875rem; line-height: 1.55; font-weight: 450; }
+.ym-feedback-toast button { min-width: 40px; min-height: 40px; display: grid; place-items: center; }
+.ym-feedback-toast[data-tone="warning"] { border-left-width: 5px; }
+.ym-feedback-toast[data-tone="error"] { border-left-width: 5px; }
+@media (max-width: 900px) {
+  [data-workspace-page] .ym-page-heading-main { width: 89%; }
+  .ym-workspace .ym-main-content { padding-inline: 20px; }
+}
+@media (max-width: 640px) {
+  .ym-workspace .ym-main-content { padding-inline: 16px; padding-bottom: max(96px, env(safe-area-inset-bottom)); }
+  [data-workspace-page] .ym-page-heading-main {
+    width: 100%; padding: 22px; background: color-mix(in srgb, var(--bg-card) 95%, transparent);
+  }
+  [data-workspace-page] .ym-page-heading-copy h1 { font-size: clamp(1.6rem, 7vw, 2rem); }
+  [data-workspace-page] .ym-page-art { opacity: .35; }
+  .ym-workspace .ym-dashboard .ym-dash-heading-copy { max-width: 100%; }
+  .ym-workspace .ym-dashboard .ym-dash-heading-art { opacity: .12; }
+  .ym-workspace .ym-dashboard .ym-dash-jump button { font-size: .8125rem; min-height: 44px; }
+  .ym-connection-hub .ym-connection-summary { gap: 8px; }
+  .ym-connection-hub .ym-connection-summary > div { min-width: 0; padding: 12px 8px; }
+  .ym-connection-hub .ym-connection-summary small { font-size: .75rem; }
+  .ym-connection-hub .ym-selection-primary strong,
+  .ym-connection-hub .ym-selection-primary small {
+    white-space: normal; overflow-wrap: anywhere; text-overflow: clip;
+  }
+  .ym-connection-hub .ym-selectable-trigger { flex-wrap: wrap; }
+  .ym-connection-hub .ym-connection-badge { font-size: .75rem; max-width: none; }
+  .ym-connection-hub .ym-account-tabs button { font-size: .8125rem; }
+  .ym-feedback-stack { inset-inline: 12px; width: auto; }
+}
+@media (hover: hover) {
+  .ym-workspace :is(.ym-nav-item, .ym-nav-group, .ym-selectable-trigger):not(:disabled):hover {
+    transition-duration: .14s;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ym-workspace *, .ym-workspace *::before, .ym-workspace *::after,
+  .ym-feedback-stack *, .ym-feedback-stack *::before, .ym-feedback-stack *::after {
+    animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important; scroll-behavior: auto !important;
+  }
+}
+@media (forced-colors: active) {
+  .ym-workspace :is(button, a, summary):focus-visible { outline: 2px solid Highlight; }
+  .ym-workspace .ym-nav-item[data-active="true"],
+  .ym-workspace .ym-dash-jump button[aria-selected="true"] { outline: 1px solid Highlight; }
+}

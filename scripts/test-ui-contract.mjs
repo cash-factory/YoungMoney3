@@ -95,7 +95,8 @@ test('CraftyLabs Studio is a distinct black, red and white editorial trading the
   assert.ok(css.includes('--bg-primary:#080809'),'Dark surfaces should be near-black');
   assert.ok(css.includes('--brand:#ff2145'),'Dark accent should be vivid signal red');
   assert.ok(css.includes('--text-primary:#fafafa'),'Dark headings should remain legible');
-  assert.ok(layout.includes('className="ym-studio-stripe" aria-hidden="true"'));
+  assert.ok(!layout.includes('className="ym-studio-stripe" aria-hidden="true"'),
+    'The signed-in trading workspace should prioritize account data over a repeated slogan');
   assert.ok(css.includes('.ym-studio-landing-ticker'),'Welcome page should gain angled editorial banner only for this palette');
   assert.ok(landing.includes('className="ym-studio-landing '));
   assert.ok(css.includes('prefers-reduced-motion'),'Respect motion sensitivity');
