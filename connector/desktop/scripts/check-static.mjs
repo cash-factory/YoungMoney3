@@ -9,6 +9,7 @@ assert.match(html,/assets\/native\.js/);assert.match(html,/assets\/signal-desk\.
 assert(!/<script>/.test(html),'Production must not embed executable scripts in HTML');
 assert(css.includes('native-overview-art'));assert(app.includes('YMFXNative.install'));
 assert(bridge.includes('copy_permission_available:false'));
+assert(bridge.includes("x.status==='monitoring'"),'An online PC must not masquerade as verified broker capture');
 assert(!bridge.includes('demo: true'));
 assert(conf.bundle.externalBin.includes('binaries/ymfx-bridge'));
 const shell=permission.permissions.find(p=>typeof p==='object'&&p.identifier==='shell:allow-spawn');
