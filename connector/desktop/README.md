@@ -1,4 +1,4 @@
-# YoungMoney3 — Signal Desk native connector migration
+# YoungMoney3 — Signal Desk V0.2 native connector migration
 
 **Connector-only development.** The non-connector journal, website, Worker and broker ledger have **not** been redesigned or altered here.
 
@@ -37,3 +37,13 @@ This implementation adapts the user-approved Signal Desk V4 interface into a Win
 - Verify GUI keyboard/assistive-technology accessibility, all modal paths, touch/scale factors and reduced-motion OS settings on physical Windows systems.
 
 **No test reported here establishes that the native installer or broker capture works on a real Windows PC.** The existing `0.6.3-rc1` legacy release had a startup contract mismatch in Windows CI; this migration does not silently bypass that gate.
+
+## V0.2 flicker fix and safer session operations
+
+- **No whole-window redraw every 3.5 seconds.** The bridge snapshot is compared before painting; changed sections are DOM-reconciled while maintaining the SVG motion timeline, scroll position, and focused input. Background polling pauses while hidden.
+- **Genuine account-level capture truth.** Each broker account becomes *Monitoring* only after an observed account capture-complete event for the current worker lifetime. A paired PC or starting worker does not make account capture green.
+- **Local session operations.** Rename a saved local session, pause/resume its monitoring preference, and request a history recheck through the existing isolated MT5 supervisor. Removing a saved local session requires typing `REMOVE` and stopping monitoring; immutable broker records and Windows credentials are preserved.
+- **Sanitized event history.** Only allowlisted event kinds and predefined messages enter the native UI; broker exception messages, URL parameters and other raw response bodies are not displayed.
+- **Deployment:** an isolated staging preview can be published from validated `main` under a separate `staging-signaldesk-v0.2.0-preview.1` prerelease tag. The legacy connector and the journal website remain unchanged.
+
+**Unverified:** real user Windows MT5 sessions, actual permission-bound copying, broker-side reconciliation under disconnection, installer code signing and in-field accessibility acceptance. There is no order transmission from this shell.

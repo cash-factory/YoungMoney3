@@ -62,3 +62,29 @@ body.ym-native{background:#f6f7f9}
 .ym-native .system-bar>div{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .ym-native .system-bar>div:last-child{text-align:right;flex:1}
 .ym-native .native-action-row button:focus-visible,.ym-native .native-inline-actions button:focus-visible{outline:2px solid #C8102E;outline-offset:2px}
+
+/* Signal Desk 0.2: roomy, keyboard-operable session controls and factual states. */
+.ym-native .native-selected-account{background:#fff9fa;box-shadow:inset 3px 0 #c8102e}
+.ym-native .native-selected-account button{color:#a90927}
+.ym-native .native-inspector-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:8px}
+.ym-native .native-inspector-heading h2{margin:0;font-size:20px}
+.ym-native .native-inline-actions .btn{min-height:44px;padding-inline:17px}
+.ym-native .native-edit-box{margin-top:18px;border:1px solid #e2e5e9;border-radius:11px;background:#f8f9fb;padding:18px;max-width:650px}
+.ym-native .native-edit-box strong{display:block;font-size:14px;margin-bottom:6px}
+.ym-native .native-edit-box p{margin-bottom:13px}
+.ym-native .native-danger-zone{border-color:#eacbd2;background:#fff8f9}
+.ym-native .native-danger-zone .btn:first-child{border-color:#d52041;color:#ae1230;background:#fff}
+.ym-native .native-field-label{display:block;margin:0 0 8px;font-size:12px;font-weight:650;color:#3a424e}
+.ym-native .native-edit-box .native-text-input{font-size:14px;letter-spacing:0;min-height:45px}
+.ym-native .native-filter-row{display:flex;gap:7px;padding:15px 18px;border-bottom:1px solid #eef0f3;flex-wrap:wrap}
+.ym-native .native-filter-btn{font-size:12px;font-weight:650;background:#fff;border:1px solid #e1e5e8;border-radius:7px;padding:10px 14px;color:#565f69;min-height:39px}
+.ym-native .native-filter-btn.active{background:#fff1f3;border-color:#e8bac4;color:#af0e2d}
+.ym-native .native-filter-btn:hover{background:#f8f9fa}
+.ym-native .native-filter-btn.active:hover{background:#ffe4e9}
+.ym-native .native-card button:disabled{opacity:.55;cursor:not-allowed}
+.ym-native .native-event{align-items:center;min-height:60px}
+.ym-native .native-event>small{white-space:nowrap}
+.ym-native .native-info-row strong{font-size:12px;font-weight:680}
+@media(max-width:1160px){.ym-native .native-split{grid-template-columns:minmax(0,1fr)}.ym-native .native-health{min-height:200px}}
+@media(max-width:900px){.ym-native .native-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}.ym-native .native-operations{grid-template-columns:1fr}.ym-native .native-inline-actions .btn{flex:1 1 180px}}
+@media(prefers-reduced-motion:reduce){.ym-native .native-filter-btn,.ym-native .native-status{animation:none!important;transition:none!important}}

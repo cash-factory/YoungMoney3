@@ -4,10 +4,38 @@ on:
     paths:
       - 'connector/desktop/**'
       - '.github/workflows/connector-signaldesk-native.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'connector/desktop/**'
+      - '.github/workflows/connector-signaldesk-native.yml'
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: signaldesk-native-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  SIGNALDESK_VERSION: '0.2.0'
 jobs:
+  browser-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install a consistent Chromium renderer
+        run: |
+          python -m pip install 'playwright==1.57.0'
+          python -m playwright install --with-deps chromium
+      - name: Test real DOM stability, interactions, motion and responsive screens
+        run: |
+          python connector/desktop/tests/test_ui_browser.py
+          python connector/desktop/tests/test_native_flicker_browser.py
+          python connector/desktop/tests/test_native_workflows_browser.py
+
   native-preview:
     runs-on: windows-2022
     timeout-minutes: 60
@@ -94,3 +122,46 @@ jobs:
             connector/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.sha256
           if-no-files-found: error
           retention-days: 14
+
+  publish-staging:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [native-preview, browser-qa]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: youngmoney3-signaldesk-native-unsigned-preview
+          path: staged-installer
+      - name: Verify validated installer and publish isolated Signal Desk prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Refuse to publish a stale build if main moves while CI is working.
+          current=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)
+          test "$current" = "$GITHUB_SHA" || { echo 'Main moved; declining stale staging publication'; exit 1; }
+          installer=$(find staged-installer -name '*-setup.exe' -type f | head -1)
+          test -n "$installer" && test -s "$installer"
+          checksum="$installer.sha256"
+          test -f "$checksum"
+          expected=$(tr -d '\r\n ' < "$checksum" | tr 'A-F' 'a-f')
+          actual=$(sha256sum "$installer" | awk '{print $1}')
+          test "$expected" = "$actual" || { echo 'Staging binary checksum mismatch'; exit 1; }
+          tag="staging-signaldesk-v${SIGNALDESK_VERSION}-preview.1"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'A release already exists for this immutable staging tag; refusing to overwrite it.'
+            exit 1
+          fi
+          cat > staged-installer/release-manifest.txt <<EOF
+          product=YoungMoney3 Signal Desk
+          channel=staging-preview
+          version=${SIGNALDESK_VERSION}
+          commit=${GITHUB_SHA}
+          sha256=${actual}
+          trading_authority=none-in-new-shell
+          signed=no
+          EOF
+          gh release create "$tag" "$installer" "$checksum" staged-installer/release-manifest.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "YoungMoney3 Signal Desk ${SIGNALDESK_VERSION} - Windows Preview" --notes "Connector-only unsigned Windows staging preview. Stable refresh fixes flicker; broker capture states from verified events. Existing Python MT5 engine is unchanged. Copy execution remains unavailable in this shell. Verify SHA256 and run supervised MT5 acceptance before operational use." --prerelease --latest=false

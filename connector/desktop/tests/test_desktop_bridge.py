@@ -18,6 +18,12 @@ class FakeSessionStore:
     def all_terminals(self):return []
     def active_terminals(self):return []
     def armed_terminal(self):return None
+    def rename(self,id,name):
+        assert id=='abc'
+        self.items[0]['name']=name
+    def remove(self,id):
+        assert id=='abc'
+        self.items=[]
     def set_enabled(self,id,enabled):
         assert id=='abc'
         self.changed.append((id,enabled))
@@ -36,7 +42,7 @@ class BridgeTests(unittest.TestCase):
         self.assertFalse(state['copying_armed'])
         self.assertFalse(state['copy_permission_available'])
         self.assertIsNone(state['sessions'][0]['login'])
-        self.assertEqual(state['sessions'][0]['status'],'not-verified')
+        self.assertEqual(state['sessions'][0]['status'],'terminal-missing')
         self.assertFalse(self.bridge.settings.exists())
     def test_reject_unknown_commands_and_pairing_secrets(self):
         for command in ('execute_order','authorize_live_copy','delete_trade','open_url'):
@@ -77,6 +83,49 @@ class BridgeTests(unittest.TestCase):
         self.assertFalse(replies[1]['ok'])
         self.assertFalse(replies[2]['ok'])
         self.assertNotIn('SECRET',output.getvalue())
+    def test_no_false_live_status_before_completed_broker_capture(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as temp:
+            slot=Path(temp)/'terminal64.exe';slot.write_bytes(b'')
+            self.bridge._store.items[0]['terminal']=str(slot)
+            self.bridge.worker=types.SimpleNamespace(is_alive=lambda:True)
+            self.bridge.worker_mode='capture'
+            self.bridge.worker_started=1234
+            self.bridge._report({'state':'known-links','links':[{'slot':str(slot),'login':'1234','server':'Example-Demo','link':'verified-link'}]})
+            self.bridge._report({'state':'pc-online'})
+            self.assertEqual(self.bridge.snapshot()['sessions'][0]['status'],'not-verified')
+            self.bridge._report({'state':'session-synced','slot':str(slot),'message':'token=secret should not appear'})
+            self.assertEqual(self.bridge.snapshot()['sessions'][0]['status'],'monitoring')
+            self.assertNotIn('token=secret',json.dumps(self.bridge.snapshot()))
+            self.bridge._report({'state':'session-error','slot':str(slot),'message':'password=stolen'})
+            self.assertEqual(self.bridge.snapshot()['sessions'][0]['status'],'needs-attention')
+            self.assertNotIn('password=stolen',json.dumps(self.bridge.snapshot()))
+
+    def test_retry_requests_verified_slot_from_existing_supervisor(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as temp:
+            slot=Path(temp)/'terminal64.exe';slot.write_bytes(b'')
+            self.bridge._store.items[0]['terminal']=str(slot)
+            with self.assertRaisesRegex(ValueError,'Start monitoring'):
+                self.bridge.dispatch('retry_session',{'id':'abc'})
+            self.bridge.worker=types.SimpleNamespace(is_alive=lambda:True)
+            self.bridge.worker_mode='capture'
+            with self.assertRaisesRegex(ValueError,'verified'):
+                self.bridge.dispatch('retry_session',{'id':'abc'})
+            self.bridge._report({'state':'known-links','links':[{'slot':str(slot),'login':'1234','server':'Example','link':'test-link'}]})
+            self.assertTrue(self.bridge.dispatch('retry_session',{'id':'abc'})['retry_queued'])
+            self.assertEqual(self.bridge.retry_queue.get_nowait(),str(slot))
+
+    def test_session_rename_and_remove_require_validated_intent(self):
+        with self.assertRaisesRegex(ValueError,'name'):
+            self.bridge.dispatch('rename_session',{'id':'abc','name':'/'})
+        self.assertTrue(self.bridge.dispatch('rename_session',{'id':'abc','name':'London Desk'})['updated'])
+        self.assertEqual(self.bridge.snapshot()['sessions'][0]['name'],'London Desk')
+        with self.assertRaisesRegex(ValueError,'confirmation'):
+            self.bridge.dispatch('remove_session',{'id':'abc','confirm':'remove'})
+        self.assertTrue(self.bridge.dispatch('remove_session',{'id':'abc','confirm':'REMOVE'})['broker_evidence_preserved'])
+        self.assertEqual(self.bridge.snapshot()['sessions'],[])
+
     def test_pair_success_only_when_real_pairing_is_confirmed(self):
         present={'paired':False}
         def pair(code,report):
