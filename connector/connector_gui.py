@@ -421,7 +421,7 @@ class ConnectorApp:
         actions.pack(fill="x", pady=(7, 0))
         self._button(actions, "Connect this PC", lambda: self.show_page("pair"),
                      primary=True).pack(side="left", padx=(0, 8))
-        self._button(actions, "Rename PC", self.rename_this_pc,
+        self._button(actions, "Rename this PC", self.rename_this_pc,
                      quiet=True).pack(side="left")
         self.progress = ttk.Progressbar(hero, style="YM.Horizontal.TProgressbar")
 
