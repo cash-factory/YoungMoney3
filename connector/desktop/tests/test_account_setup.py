@@ -48,6 +48,9 @@ class AccountSetupTests(unittest.TestCase):
                 self.assertEqual(bridge.snapshot()['setup']['status'],'awaiting-login')
                 self.assertEqual(len(bridge.snapshot()['sessions']),1)
                 self.assertFalse(bridge.snapshot()['sessions'][0]['enabled'])
+                # The connector cannot activate a never-linked session by itself.
+                with self.assertRaisesRegex(ValueError,'dashboard'):
+                    bridge.dispatch('set_session_enabled',{'id':'locally-created','enabled':True})
                 self.assertIsNone(bridge.snapshot()['sessions'][0]['login'])
                 self.assertEqual(calls[0][0],'copy')
                 self.assertEqual(calls[1],('open',str(target)))

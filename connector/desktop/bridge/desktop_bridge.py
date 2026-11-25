@@ -469,8 +469,10 @@ class Bridge:
             key = str(params.get('id', ''))
             enabled = params.get('enabled')
             if not isinstance(enabled, bool): raise ValueError('Enabled must be true or false')
-            if not any(row['id'] == key for row in self._store.snapshot()):
-                raise ValueError('Session not found')
+            row=next((entry for entry in self._store.snapshot() if entry['id']==key),None)
+            if not row:raise ValueError('Session not found')
+            if enabled and str(row['terminal']) not in self.links:
+                raise ValueError('Choose Monitor account on your dashboard before enabling this session')
             self._store.set_enabled(key, enabled)
             return {'updated': True, 'snapshot': self.snapshot()}
         if method == 'pair_pc':
