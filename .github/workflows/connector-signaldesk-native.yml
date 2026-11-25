@@ -47,6 +47,39 @@ jobs:
           npm run test:static
           npx tauri icon desktop-ui/assets/ymfx-brand.svg -o src-tauri/icons
           npm run build:windows
+      - name: Launch real Tauri window and require Python bridge process
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $app = 'connector/desktop/src-tauri/target/release/youngmoney3-signal-desk.exe'
+          if (!(Test-Path $app)) { throw 'Native application executable was not produced' }
+          $clean = Join-Path $env:RUNNER_TEMP 'signaldesk-clean-profile'
+          New-Item -ItemType Directory -Force $clean | Out-Null
+          $env:LOCALAPPDATA = $clean
+          $env:APPDATA = $clean
+          $process = Start-Process -FilePath $app -PassThru
+          try {
+            $windowVisible = $false
+            $bridgeStarted = $false
+            foreach ($attempt in 1..20) {
+              Start-Sleep -Seconds 1
+              $process.Refresh()
+              if ($process.HasExited) { throw 'Native desktop exited unexpectedly at startup' }
+              if ($process.MainWindowHandle -ne 0) { $windowVisible = $true }
+              $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$($process.Id)" |
+                Where-Object { $_.Name -like 'ymfx-bridge*' })
+              if ($children.Count -gt 0) { $bridgeStarted = $true }
+              if ($windowVisible -and $bridgeStarted) { break }
+            }
+            if (!$windowVisible) { throw 'Native connector did not show its real Windows window' }
+            if (!$bridgeStarted) { throw 'Native interface did not launch the packaged Python bridge' }
+            if (Test-Path (Join-Path $clean 'YMFX/staging-gui/preferences.json')) {
+              throw 'Native startup unexpectedly modified the saved MT5 account state'
+            }
+            Write-Output 'Actual Tauri desktop window and isolated Python bridge launched successfully.'
+          } finally {
+            if (!$process.HasExited) { taskkill /PID $process.Id /T /F | Out-Null }
+          }
       - name: Stage checksum and installer artifact
         shell: pwsh
         run: |
