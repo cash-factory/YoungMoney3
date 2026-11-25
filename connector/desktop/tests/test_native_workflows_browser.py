@@ -1,0 +1,60 @@
+from pathlib import Path
+"""Production UI contract against a fake, isolated local MT5 bridge only."""
+from playwright.sync_api import sync_playwright
+from test_ui_browser import HTML,CSS,NATIVE,APP,MOCK
+import re
+
+mock=MOCK.replace('const snapshot={','window.__testModel={').replace('result=snapshot;','result=window.__testModel;')
+mock=mock.replace("window.__TAURI__={shell", '''window.__ops=[];
+  window.__testModel.paired=true;
+  window.__testModel.capture_active=true;
+  window.__testModel.connection_state='connected';
+  window.__testModel.sessions=[{id:'abc',name:'London Terminal',login:'1042',server:'Example-Live',status:'monitoring',last_sync:'2026-11-25T15:12:00Z',verified_link:true,terminal_present:true,enabled:true}];
+  window.__testModel.events=[{time:'2026-11-25T15:12:00Z',kind:'session-synced',message:'Broker capture cycle completed'}];
+  window.__TAURI__={shell''')
+mock=mock.replace("else result={ok:true};", '''else if(req.method==='rename_session'){
+        window.__testModel.sessions[0].name=req.params.name; result={updated:true};
+      }else if(req.method==='retry_session'){result={retry_queued:true};
+      }else if(req.method==='set_session_enabled'){
+        window.__testModel.sessions[0].enabled=req.params.enabled;result={updated:true};
+      }else if(req.method==='stop_monitoring'){
+        window.__testModel.capture_active=false;window.__testModel.connection_state='offline';result={stop_requested:true};
+      }else if(req.method==='remove_session'){
+        window.__testModel.sessions=[];result={removed:true,broker_evidence_preserved:true};
+      }else result={ok:true};''')
+mock=mock.replace('const req=JSON.parse(str);', 'const req=JSON.parse(str);window.__ops.push(req);')
+with sync_playwright() as p:
+    b=p.chromium.launch(headless=True,executable_path=('/usr/bin/chromium' if Path('/usr/bin/chromium').exists() else None),args=['--no-sandbox','--disable-dev-shm-usage'])
+    page=b.new_page(viewport={'width':1366,'height':768})
+    errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+    page.set_content(re.sub(r'<script[^>]*></script>','',re.sub(r'<link[^>]*>','',HTML)),wait_until='domcontentloaded')
+    page.add_style_tag(content=CSS);page.evaluate(mock);page.add_script_tag(content=NATIVE);page.add_script_tag(content=APP)
+    page.wait_for_function("() => window.YMFXNative.debug().modelKey !== null")
+    page.locator('[data-page="accounts"]').first.click()
+    assert page.locator('.native-account').count()==1
+    assert page.locator('[data-native-action="retry-session"]').is_enabled()
+    page.locator('[data-native-action="retry-session"]').click()
+    page.wait_for_function("() => window.__ops.some(x=>x.method==='retry_session')")
+    page.locator('[data-native-action="edit-session-name"]').click()
+    page.locator('#native-session-name').fill('New London Desk')
+    page.locator('[data-native-action="save-session-name"]').click()
+    page.wait_for_function("() => document.body.textContent.includes('New London Desk')")
+    assert page.evaluate("window.__ops.some(x=>x.method==='rename_session' && x.params.name==='New London Desk')")
+    page.locator('[data-page="activity"]').first.click()
+    page.locator('[data-native-filter="capture"]').click()
+    assert page.locator('[data-native-filter="capture"]').get_attribute('aria-pressed')=='true'
+    page.locator('[data-page="copy"]').first.click()
+    assert page.locator('[data-native-action*="execute"]').count()==0
+    assert not page.get_by_text('Copying Ready',exact=True).count()
+    page.locator('[data-page="home"]').first.click()
+    page.locator('[data-native-action="toggle-capture"]').click()
+    page.wait_for_function('() => window.__testModel.capture_active===false')
+    page.locator('[data-page="accounts"]').first.click()
+    page.locator('[data-native-action="remove-session"]').click()
+    page.locator('#native-remove-confirm').fill('REMOVE')
+    page.locator('[data-native-action="remove-session-confirmed"]').click()
+    page.wait_for_function('() => document.body.textContent.includes("No saved terminal sessions")')
+    assert page.evaluate("window.__ops.some(x=>x.method==='remove_session' && x.params.confirm==='REMOVE')")
+    assert not errors,errors
+    print('Native workflows browser QA passed: selected account, recheck, rename, filtered events, disarmed copying, confirmed shortcut removal.')
+    b.close()

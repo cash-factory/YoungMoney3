@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 278" role="img" aria-label="Laptop connected to isolated trading account servers">
+<defs>
+ <linearGradient id="laptopScreen" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FBFCFF"/><stop offset="1" stop-color="#DFE4EF"/></linearGradient>
+ <linearGradient id="front" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#BFC6D4"/></linearGradient>
+ <linearGradient id="server" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FFFFFF"/><stop offset=".72" stop-color="#E5E9F2"/><stop offset="1" stop-color="#BAC4D2"/></linearGradient>
+ <linearGradient id="lid" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#8E9AAF"/><stop offset="1" stop-color="#424B5A"/></linearGradient>
+ <linearGradient id="cable" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#F7A5AF"/><stop offset=".45" stop-color="#E11E3F"/><stop offset="1" stop-color="#C60C2B"/></linearGradient>
+ <filter id="shadow" x="-35%" y="-50%" width="175%" height="240%"><feGaussianBlur stdDeviation="7"/></filter>
+ <filter id="halo" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="4"/></filter>
+ </defs>
+ <!-- quiet workspace shadows -->
+ <ellipse cx="148" cy="242" rx="115" ry="20" fill="#9AA5B5" opacity=".13" filter="url(#shadow)"/>
+ <ellipse cx="463" cy="228" rx="101" ry="18" fill="#97A2B4" opacity=".17" filter="url(#shadow)"/>
+ <path d="M210 191C286 173 318 206 368 181C390 171 405 157 428 169" fill="none" stroke="#D8B9C0" opacity=".5" stroke-width="8" stroke-linecap="round"/>
+ <path class="signal-track" d="M210 191C286 173 318 206 368 181C390 171 405 157 428 169" fill="none" stroke="url(#cable)" stroke-width="3.2" stroke-linecap="round"/>
+ <path class="signal-scan" d="M210 191C286 173 318 206 368 181C390 171 405 157 428 169" fill="none" stroke="#FFF8F9" stroke-width="3.5" stroke-dasharray="2 35" stroke-linecap="round"/>
+ <circle class="signal-dot" r="4" fill="#D51634"><animateMotion dur="4s" repeatCount="indefinite" path="M210 191C286 173 318 206 368 181C390 171 405 157 428 169"/></circle>
+ <!-- laptop shadow and base -->
+ <path d="M41 214L142 252L249 214L149 180Z" fill="#ACB4C0" opacity=".3" filter="url(#shadow)"/>
+ <path d="M43 208L149 245L251 206L142 172Z" fill="url(#front)" stroke="#BAC2CD" stroke-width="1"/>
+ <path d="M51 208L147 239L239 206L144 176Z" fill="#F5F7FB" stroke="#D2D8E2"/>
+ <path d="M68 207L146 231L215 207L139 183Z" fill="#B4BFCD" opacity=".62"/>
+ <path d="M103 219L156 235L170 230L119 214Z" fill="#E7EBF2"/>
+ <!-- keyboard lines -->
+ <g stroke="#8994A6" stroke-width="1" opacity=".6"><path d="M79 205l65 20M93 200l65 20M108 196l65 20M123 192l65 20"/><path d="M92 212l59-21M109 217l58-21M125 223l58-21M140 227l57-20"/></g>
+ <!-- lid screen left leaning -->
+ <path d="M51 69Q48 64 54 62L157 92Q163 93 163 99L163 198Q163 203 158 201L53 166Q49 164 49 160Z" fill="url(#lid)" stroke="#596479" stroke-width="2.5"/>
+ <path d="M58 75L153 104L153 187L58 155Z" fill="url(#laptopScreen)"/>
+ <path d="M66 87l80 24v64l-80-25Z" fill="#F5F6FA" opacity=".64"/>
+ <path d="M98 123l11 8-8 10 9 4 16-18" fill="none" stroke="#C8102E" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+ <path d="M117 139l6 8 10-10" fill="none" stroke="#C8102E" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+ <circle cx="103" cy="94" r="1.6" fill="#CBD3DD"/>
+ <!-- server stack -->
+ <g>
+  <path d="M392 156L455 183L535 148L470 124Z" fill="#D0D7E2" opacity=".48"/>
+  <path d="M391 144L455 167L533 134L469 110Z" fill="#EEF1F7" stroke="#CCD3DF"/>
+  <path d="M391 144L455 167L455 190L391 169Z" fill="url(#server)" stroke="#C3CDDA"/>
+  <path d="M455 167L533 134L533 157L455 190Z" fill="#CDD5E0" stroke="#BAC4D2"/>
+  <ellipse cx="513" cy="153" rx="3.1" ry="3.5" fill="#CE1837"/>
+  <ellipse cx="502" cy="157" rx="2" ry="2.3" fill="#9BA7B7"/>
+ </g>
+ <g>
+  <path d="M391 118L455 141L533 109L469 85Z" fill="#F9FAFD" stroke="#CFD6E0"/>
+  <path d="M391 118L455 141L455 165L391 143Z" fill="url(#server)" stroke="#C4CBD8"/>
+  <path d="M455 141L533 109L533 133L455 165Z" fill="#D5DCE7" stroke="#BDC7D4"/>
+  <ellipse cx="513" cy="128" rx="3.1" ry="3.5" fill="#C8102E"/>
+  <ellipse cx="502" cy="132" rx="2" ry="2.3" fill="#9AA6B5"/>
+ </g>
+ <g>
+  <path d="M390 92L454 116L532 82L470 59Z" fill="#FFFFFF" stroke="#D0D7E0"/>
+  <path d="M390 92L454 116L454 140L390 118Z" fill="url(#server)" stroke="#CDD4DE"/>
+  <path d="M454 116L532 82L532 107L454 140Z" fill="#DEE4ED" stroke="#BFC9D7"/>
+  <ellipse cx="512" cy="103" rx="3.1" ry="3.5" fill="#C8102E"/>
+  <ellipse cx="501" cy="107" rx="2" ry="2.3" fill="#9CA8B7"/>
+ </g>
+ <path d="M390 92L454 116L532 82L470 59Z" fill="none" stroke="#FFFFFF" opacity=".7" stroke-width="2"/>
+ <g opacity=".9"><circle cx="224" cy="189" r="3.6" fill="#D7193D"/><circle cx="355" cy="186" r="3.2" fill="#D7193D"/><circle cx="421" cy="169" r="3.2" fill="#D7193D"/></g>
+</svg>

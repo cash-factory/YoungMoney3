@@ -1,0 +1,167 @@
+name: YoungMoney3 Signal Desk — Native Windows Preview
+on:
+  pull_request:
+    paths:
+      - 'connector/desktop/**'
+      - '.github/workflows/connector-signaldesk-native.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'connector/desktop/**'
+      - '.github/workflows/connector-signaldesk-native.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: signaldesk-native-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  SIGNALDESK_VERSION: '0.2.0'
+jobs:
+  browser-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install a consistent Chromium renderer
+        run: |
+          python -m pip install 'playwright==1.57.0'
+          python -m playwright install --with-deps chromium
+      - name: Test real DOM stability, interactions, motion and responsive screens
+        run: |
+          python connector/desktop/tests/test_ui_browser.py
+          python connector/desktop/tests/test_native_flicker_browser.py
+          python connector/desktop/tests/test_native_workflows_browser.py
+
+  native-preview:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: 'x64'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - name: Install and test existing broker dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r connector/requirements.txt 'pyinstaller==6.16.0'
+          python -m unittest discover -s connector/desktop/tests -p 'test_desktop_bridge.py' -v
+      - name: Build only the isolated Python bridge
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --console --name ymfx-bridge --paths connector --collect-all MetaTrader5 --collect-all keyring --collect-all numpy --collect-all tzdata connector/desktop/bridge/desktop_bridge.py
+          New-Item -ItemType Directory -Force connector/desktop/src-tauri/binaries | Out-Null
+          Copy-Item dist/ymfx-bridge.exe connector/desktop/src-tauri/binaries/ymfx-bridge-x86_64-pc-windows-msvc.exe
+      - name: Verify frozen IPC starts without changing account state
+        run: python connector/desktop/scripts/smoke_bridge_windows.py connector/desktop/src-tauri/binaries/ymfx-bridge-x86_64-pc-windows-msvc.exe
+      - name: Validate UI contract and build native application
+        shell: pwsh
+        working-directory: connector/desktop
+        run: |
+          npm install --no-audit --no-fund
+          npm run test:static
+          npx tauri icon desktop-ui/assets/ymfx-brand.svg -o src-tauri/icons
+          npm run build:windows
+      - name: Launch real Tauri window and require Python bridge process
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $app = 'connector/desktop/src-tauri/target/release/youngmoney3-signal-desk.exe'
+          if (!(Test-Path $app)) { throw 'Native application executable was not produced' }
+          $clean = Join-Path $env:RUNNER_TEMP 'signaldesk-clean-profile'
+          New-Item -ItemType Directory -Force $clean | Out-Null
+          $env:LOCALAPPDATA = $clean
+          $env:APPDATA = $clean
+          $process = Start-Process -FilePath $app -PassThru
+          try {
+            $windowVisible = $false
+            $bridgeStarted = $false
+            foreach ($attempt in 1..20) {
+              Start-Sleep -Seconds 1
+              $process.Refresh()
+              if ($process.HasExited) { throw 'Native desktop exited unexpectedly at startup' }
+              if ($process.MainWindowHandle -ne 0) { $windowVisible = $true }
+              $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$($process.Id)" |
+                Where-Object { $_.Name -like 'ymfx-bridge*' })
+              if ($children.Count -gt 0) { $bridgeStarted = $true }
+              if ($windowVisible -and $bridgeStarted) { break }
+            }
+            if (!$windowVisible) { throw 'Native connector did not show its real Windows window' }
+            if (!$bridgeStarted) { throw 'Native interface did not launch the packaged Python bridge' }
+            if (Test-Path (Join-Path $clean 'YMFX/staging-gui/preferences.json')) {
+              throw 'Native startup unexpectedly modified the saved MT5 account state'
+            }
+            Write-Output 'Actual Tauri desktop window and isolated Python bridge launched successfully.'
+          } finally {
+            if (!$process.HasExited) { taskkill /PID $process.Id /T /F | Out-Null }
+          }
+      - name: Stage checksum and installer artifact
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem connector/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          if (!$installer) { throw 'NSIS installer was not built' }
+          (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant() | Out-File "$($installer.FullName).sha256" -Encoding ascii
+      - uses: actions/upload-artifact@v4
+        with:
+          name: youngmoney3-signaldesk-native-unsigned-preview
+          path: |
+            connector/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+            connector/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-staging:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [native-preview, browser-qa]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: youngmoney3-signaldesk-native-unsigned-preview
+          path: staged-installer
+      - name: Verify validated installer and publish isolated Signal Desk prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Refuse to publish a stale build if main moves while CI is working.
+          current=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)
+          test "$current" = "$GITHUB_SHA" || { echo 'Main moved; declining stale staging publication'; exit 1; }
+          installer=$(find staged-installer -name '*-setup.exe' -type f | head -1)
+          test -n "$installer" && test -s "$installer"
+          checksum="$installer.sha256"
+          test -f "$checksum"
+          expected=$(tr -d '\r\n ' < "$checksum" | tr 'A-F' 'a-f')
+          actual=$(sha256sum "$installer" | awk '{print $1}')
+          test "$expected" = "$actual" || { echo 'Staging binary checksum mismatch'; exit 1; }
+          tag="staging-signaldesk-v${SIGNALDESK_VERSION}-preview.1"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'A release already exists for this immutable staging tag; refusing to overwrite it.'
+            exit 1
+          fi
+          cat > staged-installer/release-manifest.txt <<EOF
+          product=YoungMoney3 Signal Desk
+          channel=staging-preview
+          version=${SIGNALDESK_VERSION}
+          commit=${GITHUB_SHA}
+          sha256=${actual}
+          trading_authority=none-in-new-shell
+          signed=no
+          EOF
+          gh release create "$tag" "$installer" "$checksum" staged-installer/release-manifest.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "YoungMoney3 Signal Desk ${SIGNALDESK_VERSION} - Windows Preview" --notes "Connector-only unsigned Windows staging preview. Stable refresh fixes flicker; broker capture states from verified events. Existing Python MT5 engine is unchanged. Copy execution remains unavailable in this shell. Verify SHA256 and run supervised MT5 acceptance before operational use." --prerelease --latest=false

@@ -1,0 +1,11 @@
+[package]
+name = "youngmoney3-signal-desk"
+version = "0.2.0"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2" }
+
+[dependencies]
+tauri = { version = "2" }
+tauri-plugin-shell = "2"
