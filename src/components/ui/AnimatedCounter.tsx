@@ -6,13 +6,19 @@ interface AnimatedCounterProps {
   duration?: number;
 }
 
-export function AnimatedCounter({ value, format, duration = 800 }: AnimatedCounterProps) {
-  const [display, setDisplay] = useState(0);
+export function AnimatedCounter({ value, format, duration = 0 }: AnimatedCounterProps) {
+  const [display, setDisplay] = useState(value);
   const startRef = useRef<number | null>(null);
   const fromRef = useRef(0);
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
+    // Intermediate numerical states can be mistaken for actual financial figures.
+    // Default to a truthful, stable value. Explicit animations respect user preferences.
+    if (duration <= 0 || window.matchMedia('(prefers-reduced-motion: reduce)').matches || document.hidden) {
+      setDisplay(value);
+      return;
+    }
     fromRef.current = display;
     startRef.current = null;
 
@@ -37,5 +43,5 @@ export function AnimatedCounter({ value, format, duration = 800 }: AnimatedCount
   }, [value, duration]);
 
   const fmt = format || ((v: number) => v.toFixed(2));
-  return <span>{fmt(display)}</span>;
+  return <span>{fmt(duration <= 0 ? value : display)}</span>;
 }
