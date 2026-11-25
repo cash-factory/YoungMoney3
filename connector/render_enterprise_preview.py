@@ -37,6 +37,12 @@ def main():
                 h = min(root.winfo_screenheight()-45, 800 if wide else 620)
                 root.geometry(f"{w}x{h}+15+15")
                 app.show_page(page)
+                if page == "overview" and not (
+                    isinstance(getattr(app, "operations_hero", None), module.EnterpriseHeroArt)
+                    and app.operations_hero.winfo_exists()
+                    and len(app.operations_hero.find_all()) > 0
+                ):
+                    raise RuntimeError("Actual operations hero artwork is missing")
                 if page == "sessions" and not app.session_table.get_children():
                     if not app.empty_account_panel.winfo_manager():
                         raise RuntimeError("No-account empty state did not appear")
