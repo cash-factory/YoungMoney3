@@ -74,7 +74,7 @@
   }
   function statusLabel(){
     if(!model.paired)return 'Not paired';
-    if(model.connection_state==='connected')return 'Connected and monitoring';
+    if(model.connection_state==='connected')return model.sessions.some(x=>x.status==='monitoring')?'Connected and monitoring':'PC connected · awaiting MT5 account capture';
     if(model.connection_state==='recovering')return 'Recovering broker history';
     if(model.connection_state==='attention')return 'Connection needs attention';
     return 'Monitoring is stopped';
