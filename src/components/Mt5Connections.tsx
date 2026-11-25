@@ -1,7 +1,6 @@
 import { Select } from '@/components/Select';
 import { pnlTone, signedMoney } from '@/lib/tradingTone';
 import { Monitor, Link2, X, ChevronDown, CheckCircle2, AlertTriangle, CircleHelp, RefreshCw, Wallet, Clock3, History, Laptop, ArrowRight } from 'lucide-react';
-import { announceAction } from '@/lib/actionFeedback';
 import { CashFlowPanel } from '@/components/CashFlowPanel';
 import { EvidenceConflictPanel } from '@/components/EvidenceConflictPanel';
 import { SectionHeader } from '@/components/ui/SectionHeader';
@@ -34,6 +33,10 @@ type DeviceScan = { device:string; requested_at:number; completed_at:number|null
 type HistoryScan = { link: string; request: string };
 type SelectedScan = HistoryScan & { name: string; brokerAccount: string };
 type HistoryPage = HistoryScan & { rows: Record<string,unknown>[]; more: boolean; nextOffset: number };
+// Preserve card instances and expanded details when polling returns unchanged data.
+function keepUnchanged<T>(previous:T, incoming:T):T {
+  return JSON.stringify(previous)===JSON.stringify(incoming) ? previous : incoming;
+}
 export function Mt5Connections() {
   const { user } = useAuth();
   const { trades, fetchTrades } = useTrades(user?.id);
@@ -69,6 +72,7 @@ export function Mt5Connections() {
   },[devices,requestedPc,openLogin,capturePaused]);
   const [accountNames,setAccountNames]=useState<Record<string,string>>({});
   const [loaded,setLoaded] = useState(false);
+  const [lastCheckedAt,setLastCheckedAt] = useState<number|null>(null);
   const [code,setCode] = useState('');
   const [error,setError] = useState('');
   const [setupHint,setSetupHint] = useState('');
@@ -89,12 +93,17 @@ export function Mt5Connections() {
     const revision = ++latestRefresh.current;
     const [data,rich]=await Promise.all([action('status'),action('positions').catch(()=>({rows:[],more:false}))]);
     if (revision !== latestRefresh.current) return;
-    setAccountNames(Object.fromEntries((data.accounts||[]).map((a:{id:string;name:string})=>[a.id,a.name])));
-    setDevices(data.devices); setLinks(data.links);
-    setDiscoveries(Array.isArray(data.discoveries)?data.discoveries:[]);
-    setDeviceScans(Array.isArray(data.scans)?data.scans:[]);
+    const names=Object.fromEntries((data.accounts||[]).map((a:{id:string;name:string})=>[a.id,a.name]));
+    setAccountNames(previous=>keepUnchanged(previous,names));
+    setDevices(previous=>keepUnchanged(previous,data.devices||[]));
+    setLinks(previous=>keepUnchanged(previous,data.links||[]));
+    setDiscoveries(previous=>keepUnchanged(previous,Array.isArray(data.discoveries)?data.discoveries:[]));
+    setDeviceScans(previous=>keepUnchanged(previous,Array.isArray(data.scans)?data.scans:[]));
     setDemo(data.demoOnly); setCapturePaused(Boolean(data.capturePaused)); setLoaded(true);
-    setPositions(rich.rows || []);setPositionsMore(Boolean(rich.more));
+    setPositions(previous=>keepUnchanged(previous,rich.rows||[]));
+    setPositionsMore(Boolean(rich.more));
+    setLastCheckedAt(Date.now());
+    setError('');
   }, []);
   useEffect(() => {
     const read = () => { if (!document.hidden) void refresh().catch(e=>setError(e.message)); };
@@ -108,16 +117,13 @@ export function Mt5Connections() {
       setError('');
       await operation();
       setFeedback({kind:'success',message:success});
-      announceAction('success',success);
       try { await refresh(); } catch {
         setFeedback({kind:'info',message:'Change saved, but account details could not refresh. Retry shortly.'});
-        announceAction('warning','Change saved; the latest account details could not be fetched.');
       }
     } catch (e) {
       const message=e instanceof Error?e.message:'Request failed. Please try again.';
       setError(message);
       setFeedback({kind:'error',message});
-      announceAction('error',message);
     } finally {
       setBusyAction(null);
     }
@@ -142,17 +148,29 @@ export function Mt5Connections() {
   const historyAccount = links.find(link => link.id === historyScan?.link);
   const failedLinks = links.filter(link => ['failed','expired'].includes(link.status));
   const activeLinks = links.filter(link => !['failed','expired'].includes(link.status));
-  const outdatedCapturePc = activeLinks.some(link => link.status==='connected' && devices.some(pc=>pc.id===link.device && pc.connector_version!=='0.5.7-rc1'));
+  const outdatedCapturePc = activeLinks.some(link => link.status==='connected' &&
+    devices.some(pc=>pc.id===link.device && /^0\.[0-5]\./.test(pc.connector_version||'')));
+  const notMonitoringCount = activeLinks.filter(link =>
+    monitoringStatus(link,devices.find(pc=>pc.id===link.device),capturePaused)!=='Monitoring').length;
   const visibleLinks = selectedPcId ? activeLinks.filter(link=>link.device===selectedPcId):activeLinks;
   const selectedPc=devices.find(pc=>pc.id===selectedPcId);
   const selected = trades.find(t=>t.id===imported);
   const matches = trades.filter(t=>selected && source(t)!=='mt5' && selected.pair===t.pair && t.account_id===selected.account_id && t.direction===selected.direction);
   return <main className="ym-connection-hub space-y-5">
     <SectionHeader title="MT5 Connections" subtitle="Your connected computers and broker accounts — one place to manage them." />
+    <div className="ym-connection-summary-meta">
+      <span className="ym-check-time" role="status" aria-live="off">
+        {lastCheckedAt ? 'Last checked ' + new Date(lastCheckedAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}) : 'Checking connection status…'}
+      </span>
+      <button type="button" className="btn-secondary" disabled={!!busyAction}
+        onClick={()=>void run(refresh,'Account status refreshed.','refresh-status')}>
+        <RefreshCw size={15} aria-hidden="true" /> Refresh status
+      </button>
+    </div>
     <div className="ym-connection-summary" aria-label="Connection overview">
       <div><Monitor size={17}/><span><strong>{devices.length}</strong><small>Paired PCs</small></span></div>
       <div><Link2 size={17}/><span><strong>{activeLinks.filter(l=>l.status==='connected').length}</strong><small>Linked accounts</small></span></div>
-      <div><AlertTriangle size={17}/><span><strong>{activeLinks.filter(l=>monitoringStatus(l,devices.find(d=>d.id===l.device),capturePaused)!=='Monitoring').length}</strong><small>Need attention</small></span></div>
+      <div data-attention={notMonitoringCount>0}><AlertTriangle size={17}/><span><strong>{notMonitoringCount}</strong><small>Not monitoring</small></span></div>
     </div>
     {feedback && <div role={feedback.kind==='error'?'alert':'status'} className="ym-action-feedback" data-kind={feedback.kind}>
       {feedback.kind==='success'?<CheckCircle2 size={19}/>:feedback.kind==='error'?<AlertTriangle size={19}/>:<RefreshCw className="animate-spin" size={17}/>}
@@ -181,8 +199,8 @@ export function Mt5Connections() {
             <div className="ym-discovery-device-head">
               <span className="ym-discovery-device-title"><Monitor size={17}/><strong>{pairedPcName(pc)}</strong>
                 <small>{online?'Online':'Offline'}</small></span>
-              <button type="button" className="btn-primary" disabled={!online||!!busyAction||capturePaused}
-                onClick={()=>scanDevice(pc.id)}><RefreshCw size={15} className={pending?'animate-spin':''}/> {pending?'Scan requested · Rescan':'Scan for accounts'}</button>
+              <button type="button" className="btn-primary" disabled={!online||!!busyAction||capturePaused||pending}
+                onClick={()=>scanDevice(pc.id)}><RefreshCw size={15} className={pending?'animate-spin':''}/> {pending?'Scanning accounts…':'Scan for accounts'}</button>
             </div>
             {pending&&<p role="status" className="ym-discovery-status">Waiting for the paired connector to check authenticated MT5 terminals. No broker account will be added automatically.</p>}
             {available.length===0
