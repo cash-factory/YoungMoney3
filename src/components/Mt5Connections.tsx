@@ -280,7 +280,7 @@ export function Mt5Connections() {
     </section>
     <section id="ym-linked-accounts" className="card ym-connection-section" aria-labelledby="linked-accounts-title">
       <header className="ym-connection-heading">
-        <div><p className="ym-connection-eyebrow">02 / BROKER CONNECTIONS</p><h2 id="linked-accounts-title">Linked accounts <span className="ym-section-count">{visibleLinks.length}</span></h2></div>
+        <div><p className="ym-connection-eyebrow">03 / BROKER CONNECTIONS</p><h2 id="linked-accounts-title">Linked accounts <span className="ym-section-count">{visibleLinks.length}</span></h2></div>
         {selectedPc && <button type="button" className="btn-secondary" onClick={()=>{setSelectedPcId(null);setSelectedAccountId(null);}}>Show all PCs <X size={14}/></button>}
       </header>
       {selectedPc && <p className="ym-context-short">Showing accounts on <strong>{pairedPcName(selectedPc)}</strong>.</p>}
