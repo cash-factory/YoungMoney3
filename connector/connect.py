@@ -206,6 +206,10 @@ def terminal_account(slot, login, server, password, verify_password):
             code = mt5.last_error()[0]
             if code not in (-10003, -10005):
                 raise LoginFailure(_terminal_start_issue(code), code)
+            if password is None:
+                # Manually logged-in accounts never pass blank passwords to MT5.
+                # Ask the trader to finish login in the visible, exact terminal.
+                raise LoginFailure('manual_login_required', code)
             # Some MT5 builds do not expose IPC from a completely empty profile
             # until an account is supplied at startup. This is a last resort,
             # limited to a marked managed instance, not the default login path.
@@ -231,6 +235,10 @@ def terminal_account(slot, login, server, password, verify_password):
     # after checking both identity fields and its actual broker connection.
     same_account = (info is not None and info.login == login
                     and info.server.casefold() == server.casefold())
+    if password is None and (verify_password or not same_account or not terminal.connected):
+        # No broker password is stored for accounts added via the MT5 login UI.
+        # Only reuse an already connected matching broker identity.
+        raise LoginFailure('manual_login_required')
     if verify_password or not same_account or not terminal.connected:
         try:
             logged_in = mt5.login(login, password=password, server=server, timeout=60000)
