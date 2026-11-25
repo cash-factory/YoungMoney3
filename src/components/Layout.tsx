@@ -19,8 +19,8 @@ interface LayoutProps {
 
 const NAV_SECTIONS: { id: string; label: string; icon: typeof LayoutDashboard; items: { id: PageId; label: string; icon: typeof LayoutDashboard }[] }[] = [
   { id: 'home', label: 'Today', icon: LayoutDashboard, items: [
-    { id: 'workspace-setup', label: 'Workspace setup', icon: ClipboardList },
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'workspace-setup', label: 'Workspace setup', icon: ClipboardList },
   ] },
   { id: 'journal', label: 'Journal', icon: BookOpen, items: [
     { id: 'trades', label: 'Trades', icon: CandlestickChart },
@@ -98,6 +98,15 @@ export function Layout({ current, onNavigate, onQuickAdd, onOpenGuide, children 
     };
   }, [mobileOpen]);
 
+  useEffect(() => {
+    if (!profileMenuOpen) return;
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setProfileMenuOpen(false);
+    };
+    window.addEventListener('keydown', onEscape);
+    return () => window.removeEventListener('keydown', onEscape);
+  }, [profileMenuOpen]);
+
   const handleNav = (page: PageId) => {
     onNavigate(page);
     rememberWorkspaceDestination(page);
@@ -156,18 +165,6 @@ export function Layout({ current, onNavigate, onQuickAdd, onOpenGuide, children 
 
         <nav aria-label="Main navigation" className="ym-sidebar-nav relative flex-1 px-3 py-4 overflow-y-auto">
           <div className="space-y-1">
-            <button type="button" data-active={current === 'account-settings'}
-              aria-current={current === 'account-settings' ? 'page' : undefined}
-              onClick={() => handleNav('account-settings')}
-              className="ym-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium">
-              <Settings size={18} /> Account Settings
-            </button>
-            {profile?.role === 'admin' && profile.account_status === 'active' && <button type="button"
-              aria-current={current === 'admin-operations' ? 'page' : undefined}
-              onClick={() => handleNav('admin-operations')}
-              data-active={current === 'admin-operations'} className="ym-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium">
-              <Shield size={18} /> Admin Operations
-            </button>}
             <button type="button" aria-current={current === 'mt5' ? 'page' : undefined}
               onClick={() => handleNav('mt5')}
               data-active={current === 'mt5'} className="ym-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium">
@@ -209,6 +206,21 @@ export function Layout({ current, onNavigate, onQuickAdd, onOpenGuide, children 
                 </div>
               </section>
             )})}
+            <div className="ym-nav-preferences mt-4 pt-3 border-t border-themed" aria-label="Settings and administration">
+              <p className="px-3 pb-2 text-xs font-semibold text-muted">Preferences</p>
+            <button type="button" data-active={current === 'account-settings'}
+              aria-current={current === 'account-settings' ? 'page' : undefined}
+              onClick={() => handleNav('account-settings')}
+              className="ym-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium">
+              <Settings size={18} /> Account Settings
+            </button>
+            {profile?.role === 'admin' && profile.account_status === 'active' && <button type="button"
+              aria-current={current === 'admin-operations' ? 'page' : undefined}
+              onClick={() => handleNav('admin-operations')}
+              data-active={current === 'admin-operations'} className="ym-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium">
+              <Shield size={18} /> Admin Operations
+            </button>}
+            </div>
           </div>
           <div className="sticky bottom-0 left-0 right-0 h-8 -mx-3 -mb-4 pointer-events-none bg-gradient-to-t from-card via-card/90 to-transparent" />
         </nav>
@@ -223,7 +235,7 @@ export function Layout({ current, onNavigate, onQuickAdd, onOpenGuide, children 
               {profile?.avatar_url ? (
                 <img src={profile.avatar_url} alt={displayName} className="w-8 h-8 rounded-full object-cover ring-2 ring-orange-500/20" />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center text-white text-xs font-bold shadow-sm">
+                <div className="ym-profile-avatar w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold">
                   {initials}
                 </div>
               )}
