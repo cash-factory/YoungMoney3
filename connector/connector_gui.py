@@ -30,21 +30,24 @@ from concurrent_capture import run_parallel_smoke
 from managed_accounts import ManagedAccounts, discover_installations, INSTALL_PAGE
 from studio_ui import AnimatedButton, ResponsiveActions, ConnectionPath, StudioArt, brand_mark, windows_motion_enabled, restart_wait_seconds
 from version import VERSION
+from enterprise_theme import COLORS, EnterpriseHeroArt, label_color
 from copy_execution import prepare_database as prepare_copy_database, set_consent as update_copy_consent
 
 STAGING_URL = "https://ym-fx-staging.ethical-hacker263.workers.dev"
 ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "YMFX" / "staging-gui"
 SETTINGS = ROOT / "preferences.json"
-BACKGROUND = "#09090d"
-SIDEBAR = "#111014"
-PANEL = "#18151b"
-PANEL_ALT = "#241c25"
-BORDER = "#473341"
-TEXT = "#f8f3f5"
-MUTED = "#bcb1b9"
-ACCENT = "#ff365c"
-WARM = "#f9c9ab"
-DANGER = "#ff8da7"
+# UI-only enterprise V1 tokens; broker services and security are unchanged.
+BACKGROUND = COLORS["canvas"]
+SIDEBAR = COLORS["nav"]
+PANEL = COLORS["surface"]
+PANEL_ALT = COLORS["surface_alt"]
+BORDER = COLORS["line"]
+TEXT = COLORS["text"]
+MUTED = COLORS["muted"]
+ACCENT = COLORS["red"]
+WARM = COLORS["red_hover"]
+DANGER = COLORS["red"]
+HERO = COLORS["ink"]
 FONT = "Segoe UI"
 
 
@@ -53,9 +56,9 @@ def terminal_candidates():
 
 
 class ConnectorApp:
-    NAV = (("overview", "Overview"), ("sessions", "Accounts"),
-           ("pair", "Pair this PC"), ("activity", "Activity"),
-           ("help", "Setup & help"))
+    NAV = (("overview", "Home"), ("sessions", "My Accounts"),
+           ("pair", "Connect this PC"), ("activity", "Recent Activity"),
+           ("help", "Help & Guides"))
 
     def __init__(self, root, *, restore=True):
         self.root = root
@@ -143,30 +146,25 @@ class ConnectorApp:
         style = ttk.Style(self.root)
         style.theme_use("clam")
         style.configure("YM.Treeview", background=PANEL, fieldbackground=PANEL,
-                        foreground=TEXT, rowheight=42, font=(FONT, 10),
+                        foreground=TEXT, rowheight=46, font=(FONT, 10),
                         relief="flat", borderwidth=0)
         style.configure("YM.Treeview.Heading", background=PANEL_ALT,
                         foreground=MUTED, font=(FONT, 9, "bold"),
-                        padding=(12, 12), relief="flat")
-        style.map("YM.Treeview", background=[("selected", "#662336")],
+                        padding=(14, 12), relief="flat")
+        style.map("YM.Treeview", background=[("selected", COLORS["red_pale"])],
                   foreground=[("selected", TEXT)])
-        style.configure("YM.Vertical.TScrollbar", background=PANEL_ALT,
-                        troughcolor=BACKGROUND, borderwidth=0, bordercolor=BACKGROUND,
-                        lightcolor=PANEL_ALT, darkcolor=PANEL_ALT,
-                        arrowcolor=MUTED, width=11, arrowsize=11)
-        style.map("YM.Vertical.TScrollbar", background=[("active", "#663347")])
-        style.configure("YM.Horizontal.TScrollbar", background=PANEL_ALT,
-                        troughcolor=BACKGROUND, borderwidth=0, bordercolor=BACKGROUND,
-                        lightcolor=PANEL_ALT, darkcolor=PANEL_ALT,
-                        arrowcolor=MUTED, width=11, arrowsize=11)
-        style.map("YM.Horizontal.TScrollbar", background=[("active", "#663347")])
+        for name in ("YM.Vertical.TScrollbar", "YM.Horizontal.TScrollbar"):
+            style.configure(name, background=PANEL_ALT, troughcolor=BACKGROUND,
+                            borderwidth=0, bordercolor=BACKGROUND, lightcolor=PANEL_ALT,
+                            darkcolor=PANEL_ALT, arrowcolor=MUTED, width=11, arrowsize=11)
+            style.map(name, background=[("active", "#D2D5D9")])
         style.configure("YM.Horizontal.TProgressbar", troughcolor=PANEL_ALT,
                         background=ACCENT, borderwidth=0, bordercolor=PANEL_ALT,
                         lightcolor=ACCENT, darkcolor=ACCENT, thickness=5)
 
     def _label(self, parent, text="", *, size=10, color=TEXT, bold=False,
                wrap=0, textvar=None):
-        opts = {"bg": parent.cget("bg"), "fg": color, "font": (FONT, size, "bold" if bold else "normal"),
+        opts = {"bg": parent.cget("bg"), "fg": label_color(parent.cget("bg"), color), "font": (FONT, size, "bold" if bold else "normal"),
                 "anchor": "w", "justify": "left"}
         if wrap:
             opts["wraplength"] = wrap
@@ -185,18 +183,19 @@ class ConnectorApp:
         return label
 
     def _button(self, parent, text, command, *, primary=False, quiet=False, width=None):
-        background = ACCENT if primary else (PANEL_ALT if quiet else "#3a2130")
-        foreground = BACKGROUND if primary else TEXT
+        """Enterprise controls; the original handler callbacks remain authoritative."""
+        background = ACCENT if primary else (PANEL_ALT if quiet else PANEL)
+        foreground = "#FFFFFF" if primary else TEXT
+        hover = COLORS["red_hover"] if primary else "#E9EAED"
         opts = {"text": text, "command": command, "bg": background, "fg": foreground,
-                "activebackground": "#ff7590" if primary else "#552d3d",
-                "activeforeground": BACKGROUND if primary else TEXT,
+                "activebackground": hover, "activeforeground": foreground,
                 "font": (FONT, 10, "bold"), "relief": "flat", "bd": 0,
-                "cursor": "hand2", "padx": 15, "pady": 10,
+                "cursor": "hand2", "padx": 16, "pady": 11,
                 "highlightthickness": 2, "highlightbackground": background,
-                "highlightcolor": ACCENT, "takefocus": True}
+                "highlightcolor": COLORS["focus"], "takefocus": True}
         if width:
             opts["width"] = width
-        opts["disabledforeground"] = "#948590"
+        opts["disabledforeground"] = COLORS["disabled"]
         return AnimatedButton(parent, motion=self.motion_var.get, **opts)
 
     def _actions(self, parent, specifications, *, minimum=132):
@@ -225,8 +224,8 @@ class ConnectorApp:
     def _responsive_layout(self):
         self._layout_job = None
         compact = self.root.winfo_width() < 1060
-        self.sidebar.configure(width=174 if compact else 210)
-        self.workspace.configure(padx=20 if compact else 30, pady=20)
+        self.sidebar.configure(width=182 if compact else 224)
+        self.workspace.configure(padx=18 if compact else 28, pady=18)
         short = self.root.winfo_height() < 660
         self.sidebar_footer.configure(pady=12 if short else 20)
         self.environment_label.configure(text="●  STAGING" if short else "●  STAGING ENVIRONMENT")
@@ -296,9 +295,9 @@ class ConnectorApp:
         header.pack(fill="x", pady=(0, 17))
         copy = tk.Frame(header, bg=BACKGROUND)
         copy.pack(side="left", fill="both", expand=True)
-        self._label(copy, "THE DESK  /  STAGING", size=8, bold=True,
+        self._label(copy, "YOUNGMONEY3  /  MT5 CONNECTOR", size=8, bold=True,
                     color=ACCENT).pack(anchor="w", pady=(0, 6))
-        self._label(copy, title, size=22, bold=True).pack(anchor="w", pady=(0, 7))
+        self._label(copy, title, size=23, bold=True).pack(anchor="w", pady=(0, 7))
         self._label(copy, description, size=10, color=MUTED,
                     wrap=470).pack(anchor="w")
         art = self._draw_header_art(header, title)
@@ -310,7 +309,7 @@ class ConnectorApp:
         header.bind("<Configure>", fit_header, add="+")
 
     def _build(self):
-        self.sidebar = tk.Frame(self.root, bg=SIDEBAR, width=205,
+        self.sidebar = tk.Frame(self.root, bg=SIDEBAR, width=224,
                                 highlightbackground=BORDER, highlightthickness=1)
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
@@ -321,9 +320,9 @@ class ConnectorApp:
         brand_mark(lockup, SIDEBAR).pack(side="left", padx=(0, 8))
         wordmark = tk.Frame(lockup, bg=SIDEBAR)
         wordmark.pack(side="left", fill="x", expand=True)
-        self._label(wordmark, "YOUNGMONEY3", size=8, bold=True, color=ACCENT).pack(anchor="w")
+        self._label(wordmark, "YOUNGMONEY3", size=9, bold=True, color=TEXT).pack(anchor="w")
         self._label(wordmark, "CONNECTOR", size=12, bold=True).pack(anchor="w", pady=(2, 0))
-        self._label(brand, "Trading evidence, in sync.", size=9, color=MUTED, wrap=150).pack(anchor="w")
+        self._label(brand, "MT5 CONNECTOR  /  STAGING", size=8, color=MUTED, wrap=175).pack(anchor="w")
         tk.Frame(self.sidebar, bg=BORDER, height=1).pack(fill="x", padx=18, pady=(0, 18))
         self.nav_buttons = {}
         for key, title in self.NAV:
@@ -331,9 +330,9 @@ class ConnectorApp:
             row.pack(fill="x", pady=3)
             button = AnimatedButton(row, motion=self.motion_var.get,
                                text=title, command=lambda page=key: self.show_page(page),
-                               font=(FONT, 11), anchor="w", padx=14, pady=13,
+                               font=(FONT, 10, "bold"), anchor="w", padx=14, pady=13,
                                bg=SIDEBAR, fg=MUTED, relief="flat", borderwidth=0,
-                               activebackground=PANEL_ALT, activeforeground=TEXT,
+                               activebackground=COLORS["nav_hover"], activeforeground="#FFFFFF",
                                cursor="hand2", takefocus=True)
             button.pack(fill="x")
             self.nav_buttons[key] = button
@@ -354,10 +353,10 @@ class ConnectorApp:
         right.pack(side="left", fill="both", expand=True)
         header = tk.Frame(right, bg=BACKGROUND)
         header.pack(fill="x", pady=(0, 16))
-        bridge_label = self._label(header, "MT5  /  THE CONNECTION BRIDGE", size=10, bold=True,
+        bridge_label = self._label(header, "MT5  /  CONNECTION WORKSPACE", size=10, bold=True,
                                    color=ACCENT)
         bridge_label.pack(side="left")
-        safety_label = self._label(header, "READ-ONLY  •  NO TRADING COMMANDS", size=9,
+        safety_label = self._label(header, "MONITORING: READ-ONLY  /  COPYING: LOCAL APPROVAL REQUIRED", size=9,
                                    color=MUTED)
         safety_label.pack(side="right")
         def fit_topbar(event):
@@ -366,7 +365,6 @@ class ConnectorApp:
                                          pady=(0, 5 if narrow else 0))
             safety_label.pack_configure(side="top" if narrow else "right", anchor="w")
         header.bind("<Configure>", fit_topbar, add="+")
-        tk.Frame(right, bg=ACCENT, height=3).pack(fill="x")
         tk.Frame(right, bg=BORDER, height=1).pack(fill="x")
         self.page_host = tk.Frame(right, bg=BACKGROUND)
         self.page_host.pack(fill="both", expand=True, pady=(22, 12))
@@ -383,7 +381,7 @@ class ConnectorApp:
         footer = tk.Frame(right, bg=BACKGROUND)
         footer.pack(fill="x", pady=(2, 0))
         self._label(footer, textvar=self.banner_var, size=9,
-                    color=WARM, wrap=1000).pack(fill="x", pady=(0, 10))
+                    color=MUTED, wrap=1000).pack(fill="x", pady=(0, 10))
         footer_actions = tk.Frame(footer, bg=BACKGROUND)
         footer_actions.pack(fill="x")
         tk.Checkbutton(footer_actions, text="Motion", variable=self.motion_var,
@@ -392,35 +390,73 @@ class ConnectorApp:
                        activebackground=BACKGROUND, activeforeground=TEXT,
                        font=(FONT, 9), cursor="hand2", highlightthickness=0,
                        takefocus=True).pack(side="left")
-        self._label(footer_actions, "CAPTURE ONLY", color=MUTED, size=8).pack(side="left", padx=12)
+        self._label(footer_actions, "CAPTURE: READ-ONLY  •  COPYING REQUIRES CONSENT", color=MUTED, size=8).pack(side="left", padx=12)
         self._button(footer_actions, "Open dashboard  ↗", lambda: webbrowser.open(STAGING_URL),
                      quiet=True).pack(side="right")
         self.show_page("overview")
 
     def _build_overview(self):
         page = self._scrollable_page("overview")
-        self._stack_heading(page, "Account monitor", "A dedicated connection for every MT5 account.")
-        hero = self._card(page, 24)
-        hero.pack(fill="x", pady=(0, 16))
-        self._label(hero, "CONNECTION STATUS", size=9, bold=True, color=MUTED).pack(anchor="w")
-        self._label(hero, textvar=self.status_var, size=20, bold=True).pack(anchor="w", pady=(4, 8))
-        self.connection_path = ConnectionPath(hero, background=PANEL, motion=self.motion_var.get)
-        self.connection_path.pack(fill="x", pady=(4, 4))
-        self._label(hero, textvar=self.device_var, size=10, color=MUTED, wrap=730).pack(anchor="w")
-        self._button(hero, "Rename this PC", self.rename_this_pc, quiet=True).pack(anchor="w", pady=(10, 2))
+        self._stack_heading(page, "Trading Operations Hub",
+                            "Connect MT5 accounts, monitor capture, and manage permissions.")
+
+        # Account and connection states are broker-derived, never demo metrics.
+        hero = tk.Frame(page, bg=HERO, padx=23, pady=21)
+        hero.pack(fill="x", pady=(0, 14))
+        self._label(hero, "CONNECTION HEALTH", size=9, bold=True, color=MUTED).pack(anchor="w")
+        lead = tk.Frame(hero, bg=HERO)
+        lead.pack(fill="x", pady=(7, 2))
+        copy = tk.Frame(lead, bg=HERO)
+        copy.pack(side="left", fill="x", expand=True)
+        self._label(copy, textvar=self.status_var, size=22, bold=True).pack(anchor="w", pady=(0, 6))
+        self._label(copy, textvar=self.device_var, size=10, color=MUTED,
+                    wrap=620).pack(anchor="w")
+        art = EnterpriseHeroArt(lead, background=HERO)
+        art.pack(side="right", padx=(10, 0))
+        def fit_hero(event):
+            if event.width < 630:
+                art.pack_forget()
+            elif not art.winfo_manager():
+                art.pack(side="right", padx=(10, 0))
+        lead.bind("<Configure>", fit_hero, add="+")
+        self.connection_path = ConnectionPath(hero, background=HERO,
+                                             motion=self.motion_var.get)
+        self.connection_path.pack(fill="x", pady=(10, 5))
+        actions = tk.Frame(hero, bg=HERO)
+        actions.pack(fill="x", pady=(7, 0))
+        self._button(actions, "Connect this PC", lambda: self.show_page("pair"),
+                     primary=True).pack(side="left", padx=(0, 8))
+        self._button(actions, "Rename PC", self.rename_this_pc,
+                     quiet=True).pack(side="left")
         self.progress = ttk.Progressbar(hero, style="YM.Horizontal.TProgressbar")
-        next_card = self._card(page, 20)
-        next_card.pack(fill="x")
-        self._label(next_card, "Broker accounts", size=15, bold=True).pack(anchor="w")
-        self._label(next_card, textvar=self.queue_var, color=MUTED, size=10).pack(anchor="w", pady=(6, 12))
+
+        next_card = self._card(page, 21)
+        next_card.pack(fill="x", pady=(0, 14))
+        self._label(next_card, "MY ACCOUNTS", size=9, bold=True,
+                    color=MUTED).pack(anchor="w", pady=(0, 5))
+        self._label(next_card, "Account monitoring", size=16, bold=True).pack(anchor="w")
+        self._label(next_card, textvar=self.queue_var, color=MUTED, size=10).pack(anchor="w",
+                                                                                  pady=(6, 13))
         self.quick_setup_actions = self._actions(next_card, [
             ("Add account", self.add_account, {"primary": True}),
             ("Open dashboard", self.open_dashboard, {}),
-            ("View accounts", lambda: self.show_page("sessions"), {"quiet": True})], minimum=144)
+            ("View accounts", lambda: self.show_page("sessions"), {"quiet": True})],
+            minimum=144)
+
+        note = self._card(page, 17)
+        note.pack(fill="x")
+        self._label(note, "COPYING PERMISSIONS", size=9, bold=True,
+                    color=MUTED).pack(anchor="w")
+        self._label(note, "Journal monitoring is read-only. Trade copying requires "
+                    "separate account authorization and fleet arming.",
+                    color=MUTED, size=10, wrap=800).pack(anchor="w", pady=(5, 10))
+        self._button(note, "Review Copy Studio",
+                     lambda: webbrowser.open(STAGING_URL + "/#copy-studio"),
+                     quiet=True).pack(anchor="w")
 
     def _build_sessions(self):
         page = self._scrollable_page("sessions")
-        self._stack_heading(page, "Account sessions", "Monitor each broker login and its latest journal sync.")
+        self._stack_heading(page, "My Accounts", "Choose a broker session to review monitoring, recovery, and local permissions.")
         self.session_tools = self._actions(page, [
             ("Add account", self.add_account, {"primary": True}),
             ("Open dashboard", self.open_dashboard, {}),
@@ -525,8 +561,8 @@ class ConnectorApp:
         entryrow.pack(fill="x")
         self.code_input = tk.Entry(entryrow, textvariable=self.code_var,
                                    width=38, show="●", font=("Consolas", 13),
-                                   bg=BACKGROUND, fg=TEXT, insertbackground=TEXT,
-                                   selectbackground="#662336", relief="flat",
+                                   bg=PANEL, fg=TEXT, insertbackground=TEXT,
+                                   selectbackground=COLORS["red_pale"], relief="flat",
                                    highlightbackground=BORDER, highlightthickness=2,
                                    highlightcolor=ACCENT)
         self.code_input.pack(fill="x", ipady=11, pady=(0, 10))
@@ -557,7 +593,7 @@ class ConnectorApp:
 
     def _build_activity(self):
         page = self.pages["activity"]
-        self._stack_heading(page, "Activity & diagnostics",
+        self._stack_heading(page, "Recent Activity",
                             "Visible progress, safe retry messages and separate broker session activity.")
         tools = tk.Frame(page, bg=BACKGROUND)
         tools.pack(fill="x", pady=(0, 12))
@@ -567,7 +603,7 @@ class ConnectorApp:
         panel = self._card(page, 14)
         panel.pack(fill="both", expand=True)
         self.activity_text = tk.Text(panel, wrap="word", bg=BACKGROUND, fg=TEXT,
-                                     selectbackground="#552d3d",
+                                     selectbackground=COLORS["red_pale"],
                                      font=("Consolas", 10), relief="flat",
                                      borderwidth=0, spacing2=5,
                                      insertbackground=TEXT, state="disabled")
@@ -582,7 +618,7 @@ class ConnectorApp:
 
     def _build_help(self):
         page = self._scrollable_page("help")
-        self._stack_heading(page, "Setup & troubleshooting",
+        self._stack_heading(page, "Help & Guides",
                             "Everything needed to prepare isolated broker terminals for capture.")
         for title, desc in [
             ("Pair this PC once",
@@ -611,13 +647,14 @@ class ConnectorApp:
         self.pages[key].tkraise()
         for item, button in self.nav_buttons.items():
             selected = item == key
-            button.set_tones(PANEL_ALT if selected else SIDEBAR, "#31212d")
-            button.configure(fg=ACCENT if selected else MUTED)
+            button.set_tones(ACCENT if selected else SIDEBAR,
+                             COLORS["red_hover"] if selected else COLORS["nav_hover"])
+            button.configure(fg="#FFFFFF" if selected else COLORS["muted_dark"])
         if key == "sessions":
             self.refresh_sessions()
-        titles = {"overview": "Account monitor", "sessions": "Account sessions",
-                  "pair": "Connect this PC", "activity": "Activity & diagnostics",
-                  "help": "Setup & troubleshooting"}
+        titles = {"overview": "Trading Operations Hub", "sessions": "My Accounts",
+                  "pair": "Connect this PC", "activity": "Recent Activity",
+                  "help": "Help & Guides"}
         art = self.header_art.get(titles.get(key))
         if art:
             art.reveal()
