@@ -63,7 +63,7 @@ try {
           primaryForeground:primary.color,
           primaryBackground:primary.backgroundColor,
           preferencesAfterTasks:Boolean(sections.compareDocumentPosition(preferences)&Node.DOCUMENT_POSITION_FOLLOWING),
-          sloganHidden:getComputedStyle(ribbon).display==='none',
+          sloganHidden:!ribbon || getComputedStyle(ribbon).display==='none',
           pageAnimation:getComputedStyle(document.querySelector('.ym-dash-focus-panel')).animationName,
           dockHeight:document.querySelector('.ym-mobile-dock .ym-dock-item').getBoundingClientRect().height,
           overflow:document.documentElement.scrollWidth>innerWidth+2,
