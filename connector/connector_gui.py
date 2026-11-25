@@ -493,6 +493,23 @@ class ConnectorApp:
         bar.grid(row=0, column=1, sticky="ns")
         horizontal.grid(row=1, column=0, sticky="ew", pady=(5, 0))
         self.session_table.bind("<<TreeviewSelect>>", lambda _event: self._selected_session_details())
+        # Empty-state overlay: the Treeview remains intact for real broker sessions.
+        # Never invent demo account rows to fill a screenshot.
+        self.empty_account_panel = tk.Frame(table_area, bg=PANEL, padx=24, pady=18)
+        empty_symbol = tk.Canvas(self.empty_account_panel, bg=PANEL, width=68,
+                                 height=65, highlightthickness=0, takefocus=False)
+        empty_symbol.pack()
+        empty_symbol.create_oval(10, 7, 58, 55, fill=COLORS["red_pale"],
+                                 outline=COLORS["red_border"], width=1)
+        empty_symbol.create_line(34, 19, 34, 43, fill=ACCENT, width=3)
+        empty_symbol.create_line(22, 31, 46, 31, fill=ACCENT, width=3)
+        self._label(self.empty_account_panel, "No accounts connected yet",
+                    size=16, bold=True).pack(anchor="center", pady=(10, 6))
+        self._label(self.empty_account_panel,
+                    "Connect your first MT5 account to monitor capture and review activity.",
+                    size=10, color=MUTED, wrap=430).pack(anchor="center", pady=(0, 16))
+        self._button(self.empty_account_panel, "Add your first account",
+                     self.add_account, primary=True).pack(anchor="center")
         detail = self._card(page, 15)
         detail.pack(fill="x")
         self._label(detail, textvar=self.selected_details_var, size=10,
@@ -996,6 +1013,10 @@ class ConnectorApp:
         if selected and self.session_table.exists(selected[0]):
             self.session_table.selection_set(selected[0])
         self._selected_session_details()
+        if entries:
+            self.empty_account_panel.place_forget()
+        else:
+            self.empty_account_panel.place(relx=.5, rely=.53, anchor="center")
 
     def _safe_change(self, action):
         try:
