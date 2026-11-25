@@ -209,3 +209,33 @@
 .ym-evidence-review-details .ym-context-short{font-size:11px;line-height:1.65;color:var(--text-secondary)}
 .ym-evidence-review-details p:last-child{display:flex;align-items:center;gap:9px}
 @media(prefers-reduced-motion:reduce){.ym-evidence-review-details *{transition:none}}
+
+
+/* Paired-device MT5 discovery — account-first connector setup */
+.ym-account-discovery{overflow:hidden}
+.ym-discovery-intro{font-size:.9rem;line-height:1.65;max-width:760px;margin:9px 0 0;color:var(--text-muted,var(--muted,#6b7280))}
+.ym-discovery-devices{display:grid;gap:12px;margin:16px 0}
+.ym-discovery-device{border:1px solid var(--border-color,var(--border,#dfe2e8));border-radius:15px;background:var(--card-bg,var(--surface,#fff));overflow:hidden}
+.ym-discovery-device-head{padding:16px 18px;display:flex;gap:16px;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border-color,var(--border,#e5e7eb))}
+.ym-discovery-device-title{display:flex;align-items:center;gap:10px;min-width:0}
+.ym-discovery-device-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ym-discovery-device-title small{font-size:12px;font-weight:600;color:var(--text-muted,var(--muted,#6b7280))}
+.ym-discovery-device-head button{display:inline-flex;align-items:center;gap:8px;flex-shrink:0;min-height:40px}
+.ym-discovery-accounts{padding:5px 18px 10px}
+.ym-discovery-account{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:15px 0;border-bottom:1px solid var(--border-color,var(--border,#e5e7eb))}
+.ym-discovery-account:last-child{border-bottom:0}
+.ym-discovery-identity{min-width:0;display:flex;flex-direction:column;gap:6px}
+.ym-discovery-identity strong{font-size:14px;overflow-wrap:anywhere}
+.ym-discovery-identity strong span{color:var(--text-muted,var(--muted,#6b7280));font-weight:600}
+.ym-discovery-identity small{color:var(--text-muted,var(--muted,#6b7280));font-size:12px;overflow-wrap:anywhere}
+.ym-discovery-account-actions{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.ym-discovery-account-actions button{min-height:39px;white-space:nowrap}
+.ym-discovery-empty,.ym-discovery-status{padding:15px 18px;margin:0;color:var(--text-muted,var(--muted,#6b7280));font-size:13px;line-height:1.6}
+.ym-discovery-status{background:color-mix(in srgb,var(--accent,#c8102e) 5%,transparent)}
+.ym-discovery-safety{margin:15px 0 0;font-size:12px;line-height:1.65;color:var(--text-muted,var(--muted,#6b7280));display:flex;align-items:flex-start;gap:9px}
+.ym-discovery-safety svg{flex-shrink:0;margin-top:2px}
+@media(max-width:740px){
+ .ym-discovery-device-head,.ym-discovery-account{flex-direction:column;align-items:stretch}
+ .ym-discovery-device-head button{align-self:flex-start}
+ .ym-discovery-account-actions{flex-wrap:wrap;justify-content:space-between}
+}
