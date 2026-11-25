@@ -300,13 +300,8 @@ class ConnectorApp:
         self._label(copy, title, size=23, bold=True).pack(anchor="w", pady=(0, 7))
         self._label(copy, description, size=10, color=MUTED,
                     wrap=470).pack(anchor="w")
-        art = self._draw_header_art(header, title)
-        def fit_header(event):
-            if event.width < 660:
-                art.pack_forget()
-            elif not art.winfo_manager():
-                art.pack(side="right", padx=(18, 0))
-        header.bind("<Configure>", fit_header, add="+")
+        # Enterprise headers use typography and spacing, not decorative panels.
+        # The approved operations hero remains on Home, where it has context.
 
     def _build(self):
         self.sidebar = tk.Frame(self.root, bg=SIDEBAR, width=224,
