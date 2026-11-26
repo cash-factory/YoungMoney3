@@ -27,10 +27,11 @@ HERO = COLORS["ink"]
 class ClassicGuidePanel:
     """An isolated, keyboard-accessible help controller for the shipped Tk app."""
 
-    def __init__(self, app, parent, progress_path: Path):
+    def __init__(self, app, parent, progress_path: Path, copy_studio_url: str):
         self.app = app
         self.parent = parent
         self.progress_path = Path(progress_path)
+        self.copy_studio_url = copy_studio_url
         self.topic_id = "connect"
         self.position = 0
         self.open_answer = None
@@ -258,7 +259,7 @@ class ClassicGuidePanel:
             self.app.open_dashboard()
         elif destination == "copy-studio":
             import webbrowser
-            webbrowser.open(self.app.guide_copy_studio_url())
+            webbrowser.open(self.copy_studio_url)
 
     def _render_faq(self):
         if not hasattr(self, "faq_list"):
