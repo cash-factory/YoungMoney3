@@ -34,7 +34,7 @@ class TestConnectorHelpGuide(unittest.TestCase):
         self.assertEqual(len(search_faq("")), len(FAQ))
         answers = search_faq("BROKER records")
         self.assertGreaterEqual(len(answers), 1)
-        self.assertTrue(any("original" in answer.lower() for _, _, answer in answers))
+        self.assertTrue(any("first observed" in answer.lower() for _, _, answer in answers))
         self.assertEqual(search_faq("nonsense-unmatched-phrase"), [])
 
     def test_broker_and_copying_disclaimers(self):
