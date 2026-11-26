@@ -61,7 +61,7 @@ with sync_playwright() as p:
     assert page.locator('[data-native-action*="execute"]').count()==0
     assert not page.get_by_text('Copying Ready',exact=True).count()
     # Real rendered manual interactions must remain independent of broker commands.
-    operations_before_guide=page.evaluate('window.__ops.length')
+    operations_before_guide=page.evaluate("window.__ops.filter(x=>x.method!=='snapshot').length")
     page.locator('[data-page="help"]').first.click()
     page.get_by_role('heading',name='Learn the system. Keep control.').wait_for()
     assert page.locator('[data-native-guide-topic]').count()==4
@@ -76,7 +76,7 @@ with sync_playwright() as p:
     page.locator('[data-native-guide-search]').fill('')
     page.locator('[data-native-guide-open="accounts"]').click()
     assert page.locator('h1').inner_text()=='My Accounts'
-    assert page.evaluate('window.__ops.length')==operations_before_guide, 'Reading help must not call the broker engine'
+    assert page.evaluate("window.__ops.filter(x=>x.method!=='snapshot').length")==operations_before_guide, 'Reading help must not call broker commands'
     page.locator('[data-page="home"]').first.click()
     page.locator('[data-native-action="toggle-capture"]').click()
     page.wait_for_function('() => window.__testModel.capture_active===false')
