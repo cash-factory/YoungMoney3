@@ -15,6 +15,15 @@ YoungMoney3 gives a trader a way to answer a question after a position closes: *
 
 These application captures use synthetic records. Select either image for a full-size view.
 
+<details>
+<summary>Watch the nine-second dashboard and media walkthrough</summary>
+
+![Three close-ups show how to choose the account and trade source, read the account snapshot and find entry and close attachments.](docs/assets/screenshots/journal-walkthrough.gif)
+
+[Open the walkthrough at full size](docs/assets/screenshots/journal-walkthrough.gif)
+
+</details>
+
 ### From plan to review
 
 1. **Before entry** — Choose the account, strategy and setup. Record the entry criteria, initial risk and checklist in the dashboard.

@@ -1,4 +1,4 @@
-name: Visual QA — landing icons (staging only)
+name: Landing page visual QA
 
 on:
   pull_request:
@@ -6,9 +6,10 @@ on:
     paths:
       - 'src/pages/LandingPage.tsx'
       - 'src/components/LandingIcon.tsx'
-      - 'src/index.css'
+      - 'src/*.css'
       - 'src/context/ThemeContext.ts'
       - 'scripts/test-landing-icons-browser.mjs'
+      - 'scripts/test-workflow-ribbon-browser.mjs'
       - '.github/workflows/landing-theme-visual.yml'
   workflow_dispatch:
 
@@ -17,18 +18,10 @@ permissions:
 
 jobs:
   landing-theme-icons:
-    if: >-
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.head.repo.full_name == github.repository &&
-       github.event.pull_request.head.ref == 'feat/rich-capture-staging-20261110') ||
-      (github.event_name == 'workflow_dispatch' &&
-       github.ref == 'refs/heads/feat/rich-capture-staging-20261110')
-    runs-on: ubuntu-latest
-    container:
-      image: mcr.microsoft.com/playwright:v1.56.1-noble
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      - name: Check out staging branch for visual QA
+      - name: Check out the revision under review
         uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -41,8 +34,8 @@ jobs:
         run: |
           npm run test:ui
           npm run build
-      - name: Use the browser preinstalled in the pinned Playwright container
-        run: npm install --no-save --ignore-scripts playwright@1.56.1
+      - name: Install Chromium for the locked Playwright version
+        run: npx playwright install --with-deps chromium
       - name: Check 12 palettes in both modes at 4 responsive sizes
         shell: bash
         run: |
@@ -53,12 +46,16 @@ jobs:
             sleep 1
           done
           curl --fail http://127.0.0.1:4173/ >/dev/null || { cat "$RUNNER_TEMP/ym3-preview.log"; exit 1; }
-          YM3_PREVIEW_URL=http://127.0.0.1:4173/ node scripts/test-landing-icons-browser.mjs
+          export YM3_PREVIEW_URL=http://127.0.0.1:4173/
+          node scripts/test-landing-icons-browser.mjs
+          node scripts/test-workflow-ribbon-browser.mjs
       - name: Preserve feature-card screenshots for manual visual review
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: landing-icon-palettes-${{ github.sha }}
-          path: artifacts/landing-icons/
+          path: |
+            artifacts/landing-icons/
+            artifacts/workflow-ribbon/
           if-no-files-found: warn
           retention-days: 7

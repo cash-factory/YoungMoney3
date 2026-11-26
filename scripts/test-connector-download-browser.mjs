@@ -57,6 +57,18 @@ try{
     await page.getByRole('status').filter({hasText:/Latest release could not be verified automatically/}).waitFor();
     assert.equal(await page.getByRole('link',{name:'Download Connector v0.6.3-rc1'}).getAttribute('href'),exe);
     assert.deepEqual(exceptions,[]);
+    // A checksum for another published tag cannot authenticate this download.
+    await page.unroute(api);
+    const mixedAssets = [
+      verified[0].assets[0],
+      { ...verified[0].assets[1], browser_download_url: checksum.replace(tag, 'staging-connector-v0.6.0-rc1') },
+    ];
+    await page.route(api, route => route.fulfill({
+      json: [{ ...verified[0], assets: mixedAssets }],
+    }));
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.getByRole('status').filter({ hasText: /Latest release could not be verified automatically/ }).waitFor();
+    assert.equal(await page.locator('#checksum').getAttribute('href'), checksum);
     await context.close();
   }
   console.log(JSON.stringify({passed:true,widths:[390,1440],verifiedVersion:tag,untrustedUrlsRejected:true,offlineFallback:true}));
