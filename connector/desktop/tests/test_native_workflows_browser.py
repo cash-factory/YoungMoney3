@@ -1,7 +1,7 @@
 from pathlib import Path
 """Production UI contract against a fake, isolated local MT5 bridge only."""
 from playwright.sync_api import sync_playwright
-from test_ui_browser import HTML,CSS,NATIVE,APP,MOCK
+from test_ui_browser import HTML,CSS,NATIVE,GUIDE,APP,MOCK
 import re
 
 mock=MOCK.replace('const snapshot={','window.__testModel={').replace('result=snapshot;','result=window.__testModel;')
@@ -32,7 +32,7 @@ with sync_playwright() as p:
     page=b.new_page(viewport={'width':1366,'height':768})
     errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(re.sub(r'<script[^>]*></script>','',re.sub(r'<link[^>]*>','',HTML)),wait_until='domcontentloaded')
-    page.add_style_tag(content=CSS);page.evaluate(mock);page.add_script_tag(content=NATIVE);page.add_script_tag(content=APP)
+    page.add_style_tag(content=CSS);page.evaluate(mock);page.add_script_tag(content=NATIVE);page.add_script_tag(content=GUIDE);page.add_script_tag(content=APP)
     page.wait_for_function("() => window.YMFXNative.debug().modelKey !== null")
     page.locator('[data-page="accounts"]').first.click()
     assert page.locator('.native-account').count()==1
@@ -60,6 +60,23 @@ with sync_playwright() as p:
     page.locator('[data-page="copy"]').first.click()
     assert page.locator('[data-native-action*="execute"]').count()==0
     assert not page.get_by_text('Copying Ready',exact=True).count()
+    # Real rendered manual interactions must remain independent of broker commands.
+    operations_before_guide=page.evaluate('window.__ops.length')
+    page.locator('[data-page="help"]').first.click()
+    page.get_by_role('heading',name='Learn the system. Keep control.').wait_for()
+    assert page.locator('[data-native-guide-topic]').count()==4
+    page.locator('[data-native-guide-topic="recover"]').click()
+    assert page.get_by_role('heading',name='Check the PC connection first').count()==1
+    page.locator('[data-native-guide-move="next"]').click()
+    assert page.get_by_role('heading',name='Inspect the affected MT5 account').count()==1
+    page.locator('[data-native-guide-faq="3"]').click()
+    assert page.locator('[data-native-guide-faq="3"]').get_attribute('aria-expanded')=='true'
+    page.locator('[data-native-guide-search]').fill('broker records')
+    assert page.locator('[data-native-guide-faq]').count()==1
+    page.locator('[data-native-guide-search]').fill('')
+    page.locator('[data-native-guide-open="accounts"]').click()
+    assert page.locator('h1').inner_text()=='My Accounts'
+    assert page.evaluate('window.__ops.length')==operations_before_guide, 'Reading help must not call the broker engine'
     page.locator('[data-page="home"]').first.click()
     page.locator('[data-native-action="toggle-capture"]').click()
     page.wait_for_function('() => window.__testModel.capture_active===false')
