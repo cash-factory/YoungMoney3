@@ -1,108 +1,97 @@
-<p align="center">
-  <img src="docs/assets/readme-banner.svg" alt="Young-Money-Fx — a clearer process, a better review" width="100%" />
-</p>
+# YM-FX · Trading journal and MT5 connector
 
-<p align="center">
-  A focused workspace for planning trades, capturing execution and turning reviews into a better process.
-</p>
+![YM-FX trading workspace. Plan, capture, test and review.](docs/assets/readme-banner.svg)
 
-<p align="center">
-  <a href="https://ym-fx-staging.ethical-hacker263.workers.dev/"><strong>Explore staging ↗</strong></a> &nbsp; · &nbsp;
-  <a href="https://github.com/cash-factory/YoungMoney3/tree/feat/rich-capture-staging-20261110">Current app source</a> &nbsp; · &nbsp;
-  <a href="docs/ASSETS.md">Brand &amp; assets</a> &nbsp; · &nbsp;
-  <a href="#run-locally">Run locally</a>
-</p>
+YoungMoney3 gives a trader a way to answer a question after a position closes: **Did I follow the plan I had when I opened it?** The dashboard brings the entry plan, broker fills, screenshots and review notes together. The Windows connector can collect execution history while the trader works from the dashboard on a phone or PC.
 
-> **Current preview:** the screenshots and feature tour reflect the staging branch. Production promotion is a separate release step.
+[Open the invite-only staging dashboard](https://ym-fx-staging.ethical-hacker263.workers.dev/) · [Windows downloads](https://github.com/cash-factory/YoungMoney3/releases) · [Local setup](#run-the-dashboard-locally) · [Validation runs](https://github.com/cash-factory/YoungMoney3/actions/workflows/validate.yml)
 
-## One workspace. A complete trading process.
+## Inside the workspace
 
-| Plan with intent | Capture with context | Review with clarity |
-| :--- | :--- | :--- |
-| Trading plans, strategies, entry models and setup checklists. | Manual trades, account context and a read-only Windows MT5 connector. | Focused dashboard sections, performance analysis and weekly reflections. |
-| Account-specific risk rules and progress goals. | Screenshots and voice notes linked to entry and closure. | A searchable Media Library, trading calendar and journal. |
+| Trading desk | Media library |
+| --- | --- |
+| [![Trading dashboard with synthetic account records](docs/assets/screenshots/dashboard.png)](docs/assets/screenshots/dashboard.png) | [![Media Library showing trade-linked chart captures and recordings](docs/assets/screenshots/media-library.png)](docs/assets/screenshots/media-library.png) |
+| Review the account, record a decision and return to unfinished work. | Open the chart or voice note attached to an entry or close. |
 
-The **CraftyLabs-inspired** visual system brings editorial typography, clean page-specific layouts and restrained motion to **12 color palettes**, each with light and dark modes. Keyboard navigation and reduced-motion preferences are supported.
-
-<table>
-  <tr>
-    <td width="50%"><a href="docs/assets/screenshots/dashboard.png"><img src="docs/assets/screenshots/dashboard.png" alt="Focused trading dashboard in the CraftyLabs dark theme, using synthetic demo data" width="100%" /></a></td>
-    <td width="50%"><a href="docs/assets/screenshots/media-library.png"><img src="docs/assets/screenshots/media-library.png" alt="Media Library showing sample chart captures and voice notes linked to trades" width="100%" /></a></td>
-  </tr>
-  <tr><td align="center"><strong>Your desk, one focus at a time.</strong></td><td align="center"><strong>Every capture, connected to its trade.</strong></td></tr>
-</table>
-
-<sub>Actual application screens with synthetic demo records. Click a screen to view it at full size.</sub>
-
-## Built for a connected workflow
-
-**React + TypeScript + Vite + Tailwind CSS** power the interface. A **Cloudflare Worker** serves the app and same-origin API; **D1** stores workspace records. Private images and audio use **Supabase Storage**, with legacy **R2** support. The optional **Python / MetaTrader 5** connector runs on Windows and captures broker execution without placing orders.
-
-## Run locally
-
-Use **Node.js 22+**. The latest interface lives on the staging branch:
+These application captures use synthetic records. Select either image for a full-size view.
 
 <details>
-<summary><strong>Open the API + frontend setup</strong></summary>
+<summary>Watch the nine-second dashboard and media walkthrough</summary>
+
+![Three close-ups show how to choose the account and trade source, read the account snapshot and find entry and close attachments.](docs/assets/screenshots/journal-walkthrough.gif)
+
+[Open the walkthrough at full size](docs/assets/screenshots/journal-walkthrough.gif)
+
+</details>
+
+### From plan to review
+
+1. **Before entry** — Choose the account, strategy and setup. Record the entry criteria, initial risk and checklist in the dashboard.
+2. **During the position** — Log a manual trade or pair a Windows PC in **MT5 Connections**. Check the account’s last successful sync. A PC can be online while its terminal is disconnected.
+3. **After the close** — Review the position across its fills and partial closes. The journal preserves original broker evidence and records discrepancies separately. Later stop changes have their own history. An offline interval can leave gaps in the observed stop history.
+4. **At the weekly review** — Compare the plan with the recorded decisions. Use Decision Replay and the Improvement Lab to turn an observation into an experiment you can evaluate on later trades.
+
+## Choose a Windows connector
+
+| | Windows connector | Signal Desk native preview |
+| --- | --- | --- |
+| Best starting point | Pair a PC, link accounts, capture history and manage monitoring. | Try the native Windows interface and its account discovery workflow. |
+| Link an account | From **MT5 Connections**, pair the PC, then use **Add account** and confirm the server, login and account timezone. | Use **Add MT5 Account**, sign in through the dedicated MT5 window, then use the dashboard to scan the paired PC and select the account to monitor. |
+| Copy Studio | Separate from journal capture. Execution depends on deployment settings, local follower consent and the fleet’s armed state. | This shell exposes monitoring and session management. Order submission is unavailable here. |
+| Install and troubleshoot | [Windows connector guide](connector/README.md) | [Signal Desk guide and build instructions](connector/desktop/README.md) |
+
+Both tracks use a Windows PC with MT5 for broker connectivity. Compare the downloaded executable’s SHA-256 with its matching release checksum. For an existing pairing, reopen the connector under the same Windows user so it can reuse credentials and pending uploads.
+
+**After a disconnect**, reconnect the same dedicated terminal and inspect the last acknowledged account sync. Reconcile positions that closed while offline, partial fills, costs and the original protective stop against the broker statement. The [release acceptance matrix](docs/release-acceptance-matrix.md) and [Copy Studio pilot guide](docs/LIVE_COPY_PILOT.md) cover the checks that require broker access.
+
+## Run the dashboard locally
+
+Use Node.js 22.18+ on the 22.x line and Python 3.13 for the connector packaging step. The default branch contains the dashboard, Worker and connector sources.
 
 ```sh
-git clone --branch feat/rich-capture-staging-20261110 https://github.com/cash-factory/YoungMoney3.git
+git clone https://github.com/cash-factory/YoungMoney3.git
 cd YoungMoney3
 npm ci
 npm run build
 npm run cf:migrate:local
 ```
 
-Start the local API and frontend in two terminals:
+Start the local API in one terminal. Use a development-only invite code.
 
 ```sh
-# Terminal 1 — local Worker and test database
 npm run cf:dev -- --local --var PILOT_INVITE_CODE:local-demo-invite
+```
 
-# Terminal 2 — frontend at http://localhost:5173
+In a second terminal, start the frontend and open **http://localhost:5173**. Vite forwards `/api` to the local Worker on port 8787.
+
+```sh
 npm run dev
 ```
 
-Private uploads need storage configuration; the Windows connector has its own [setup guide](https://github.com/cash-factory/YoungMoney3/blob/feat/rich-capture-staging-20261110/connector/README.md). See [Operations](docs/OPERATIONS.md) for environment setup and [Staging release](docs/STAGING_RELEASE.md) for deployment.
+The build generates the downloadable connector source ZIP from the checked-in Python modules. Private media uploads require a configured storage backend. [Storage and environment setup](docs/OPERATIONS.md)
 
-</details>
+## Verify a change
 
-<details>
-<summary><strong>Checks and project map</strong></summary>
+| Area | Command or check |
+| --- | --- |
+| Types and lint | `npm run typecheck` and `npm run lint` |
+| Journal calculations and domain rules | `npm test` |
+| UI contracts and broker search | `npm run test:ui` |
+| Worker, account isolation and Copy Studio | `npm run test:worker` |
+| Staging configuration | `npm run test:staging` |
+| Shipped connector source | `npm run build`, then `python scripts/test-connector-archive.py --check-dist` |
+| Windows connector engine | On Windows x64 with Python 3.13, install `connector/requirements.txt`, then run `python -m unittest discover -s connector -p "test_*.py"` |
+| Rendered workflows | [Dashboard browser checks](.github/workflows/platform-visual.yml) and [Signal Desk browser, bridge and installer checks](.github/workflows/connector-signaldesk-native.yml) |
 
-```text
-React workspace ── same-origin API ── Cloudflare Worker ── D1
-                                           ├── Private media storage
-Windows MT5 connector ── paired HTTPS ──────┘
-```
+## Repository map
 
-```sh
-npm run typecheck
-npm run lint
-npm test
-npm run test:ui
-npm run test:staging
-npm run test:worker
-npm run build
-```
+| Path | What lives here |
+| --- | --- |
+| [src/](src/) | React and TypeScript dashboard, page routes, shared controls and journal calculations |
+| [worker/](worker/) · [migrations/](migrations/) | Same-origin Cloudflare API, account access, capture ingestion and ordered D1 schema changes |
+| [connector/](connector/) · [connector/desktop/](connector/desktop/) | Python MT5 engine, local evidence store and native Tauri shell |
+| [scripts/](scripts/) · [.github/workflows/](.github/workflows/) | Source packaging, validation, browser checks and release workflows |
+| [docs/references/trading-plan/](docs/references/trading-plan/) | Photon plan references and the original Notion template export |
+| [docs/ASSETS.md](docs/ASSETS.md) | Brand artwork, interface illustrations, screenshots and credits |
 
-| Path | Purpose |
-| :--- | :--- |
-| `src/` | Pages, shared controls, themes and domain logic |
-| `worker/` · `migrations/` | API, authentication and D1 schema |
-| `connector/` | Windows MT5 capture and session management |
-| `public/visuals/` | Runtime logo and illustration assets |
-| `docs/assets/` | README banner, brand exports and demo screenshots |
-| `docs/` | Architecture, operations, release and recovery guides |
-
-The staging UI is covered by page/theme checks and dashboard, dropdown, media and motion regressions. [Browse CI runs](https://github.com/cash-factory/YoungMoney3/actions).
-
-</details>
-
-## Go deeper
-
-[Architecture](docs/ARCHITECTURE.md) · [Operations](docs/OPERATIONS.md) · [Backup & recovery](docs/BACKUP_RECOVERY.md) · [Release readiness](docs/PRODUCTION_READINESS.md) · [Asset catalogue & credits](docs/ASSETS.md) · [Logo directions](docs/LOGO_DIRECTIONS.md)
-
-Implementation references: [React](https://react.dev/) · [TypeScript](https://www.typescriptlang.org/docs/) · [Vite](https://vite.dev/) · [Cloudflare Workers](https://developers.cloudflare.com/workers/) / [D1](https://developers.cloudflare.com/d1/) · [Supabase Storage](https://supabase.com/docs/guides/storage) · [MT5 Python API](https://www.mql5.com/en/docs/python_metatrader5)
-
-<p align="center"><sub>Plan deliberately. Capture honestly. Review consistently.</sub></p>
+[Architecture](docs/ARCHITECTURE.md) · [Administration](docs/ADMIN_OPERATIONS.md) · [Backup and recovery](docs/BACKUP_RECOVERY.md) · [Release procedures](docs/STAGING_RELEASE.md)

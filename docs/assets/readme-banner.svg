@@ -2,10 +2,19 @@
   <title id="title">Young-Money-Fx — The trading workspace</title>
   <desc id="desc">An editorial black, white and scarlet brand banner. Plan, capture, test and review.</desc>
   <defs><pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M48 0H0V48" fill="none" stroke="#fff" stroke-opacity=".035"/></pattern></defs>
+  <style>
+    @media (prefers-reduced-motion: no-preference) {
+      .trade-path { animation: draw 1.7s ease-out both; }
+      @keyframes draw {
+        from { stroke-dasharray: 1; stroke-dashoffset: 1; }
+        to { stroke-dasharray: 1; stroke-dashoffset: 0; }
+      }
+    }
+  </style>
   <rect width="1280" height="390" rx="18" fill="#0c0c0f"/>
   <rect x="760" width="520" height="390" fill="url(#grid)"/>
   <path d="M995 0h285v282l-95 108H786Z" fill="#ff2145" fill-opacity=".035"/>
-  <path d="m876 273 58-57 45 23 69-85 47 24 113-121" fill="none" stroke="#ff2145" stroke-width="3"/>
+  <path class="trade-path" pathLength="1" d="m876 273 58-57 45 23 69-85 47 24 113-121" fill="none" stroke="#ff2145" stroke-width="3"/>
   <path d="m876 288 58-35 45 18 69-57 47 18 113-89" fill="none" stroke="#fff" stroke-opacity=".13" stroke-width="2"/>
   <circle cx="1208" cy="57" r="6" fill="#ff2145"/>
   <g fill="none" stroke="#fff" stroke-opacity=".12"><circle cx="1061" cy="193" r="101"/><circle cx="1061" cy="193" r="131"/></g>

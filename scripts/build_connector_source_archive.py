@@ -67,6 +67,7 @@ def generate_archive(destination: Path, root=ROOT):
             for packaged, data in contents.items():
                 info = ZipInfo(packaged, (1980, 1, 1, 0, 0, 0))
                 info.compress_type = ZIP_DEFLATED
+                info.create_system = 3  # Unix mode bits on every build host.
                 info.external_attr = 0o100644 << 16
                 archive.writestr(info, data, compress_type=ZIP_DEFLATED, compresslevel=9)
         with ZipFile(intermediate) as archive:

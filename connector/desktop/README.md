@@ -1,10 +1,8 @@
-# YoungMoney3 — Signal Desk V0.2 native connector migration
-
-**Connector-only development.** The non-connector journal, website, Worker and broker ledger have **not** been redesigned or altered here.
+# Signal Desk for Windows
 
 This implementation adapts the user-approved Signal Desk V4 interface into a Windows desktop shell using **Tauri 2 (Rust/WebView2)** with a bundled **Python MT5 bridge**. It preserves the trading engine in `connector/connect.py` and uses the real `SessionStore` instead of imaginary broker accounts when installed natively.
 
-## Already implemented
+## Connector capabilities
 
 - Custom desktop chrome/navigation, six page views, V4 spacious spacing and responsive breakpoints, exact YoungMoney3 brand SVG, original connection/copying/pairing vector art and state-dependent motion.
 - Separately auditable external CSS and JavaScript under `desktop-ui/assets/`, using no runtime CDN or network dependencies.
@@ -36,7 +34,7 @@ This implementation adapts the user-approved Signal Desk V4 interface into a Win
 - Integrate copier **read-only telemetry** and a separately reviewed local authorization mechanism before offering any Arm/Authorize action in the new UI.
 - Verify GUI keyboard/assistive-technology accessibility, all modal paths, touch/scale factors and reduced-motion OS settings on physical Windows systems.
 
-**No test reported here establishes that the native installer or broker capture works on a real Windows PC.** The existing `0.6.3-rc1` legacy release had a startup contract mismatch in Windows CI; this migration does not silently bypass that gate.
+The installer and checksum are available from [Signal Desk 0.3.0 preview](https://github.com/cash-factory/YoungMoney3/releases/tag/staging-signaldesk-v0.3.0-preview.1). Broker acceptance requires a logged-in MT5 terminal.
 
 ## V0.2 flicker fix and safer session operations
 
@@ -44,7 +42,6 @@ This implementation adapts the user-approved Signal Desk V4 interface into a Win
 - **Genuine account-level capture truth.** Each broker account becomes *Monitoring* only after an observed account capture-complete event for the current worker lifetime. A paired PC or starting worker does not make account capture green.
 - **Local session operations.** Rename a saved local session, pause/resume its monitoring preference, and request a history recheck through the existing isolated MT5 supervisor. Removing a saved local session requires typing `REMOVE` and stopping monitoring; immutable broker records and Windows credentials are preserved.
 - **Sanitized event history.** Only allowlisted event kinds and predefined messages enter the native UI; broker exception messages, URL parameters and other raw response bodies are not displayed.
-- **Deployment:** an isolated staging preview can be published from validated `main` under a separate `staging-signaldesk-v0.2.0-preview.1` prerelease tag. The legacy connector and the journal website remain unchanged.
 
 **Unverified:** real user Windows MT5 sessions, actual permission-bound copying, broker-side reconciliation under disconnection, installer code signing and in-field accessibility acceptance. There is no order transmission from this shell.
 
