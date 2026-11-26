@@ -63,7 +63,13 @@ try {
           primaryForeground:primary.color,
           primaryBackground:primary.backgroundColor,
           preferencesAfterTasks:Boolean(sections.compareDocumentPosition(preferences)&Node.DOCUMENT_POSITION_FOLLOWING),
-          sloganHidden:!ribbon || getComputedStyle(ribbon).display==='none',
+          ribbonVisible:Boolean(ribbon && getComputedStyle(ribbon).display!=='none'),
+          ribbonHeight:ribbon?.getBoundingClientRect().height||0,
+          ribbonWords:[...document.querySelectorAll('.ym-ribbon-group:first-child .ym-ribbon-word')].map(node=>node.textContent),
+          ribbonCopyCount:document.querySelectorAll('.ym-ribbon-group').length,
+          ribbonTextSize:parseFloat(getComputedStyle(document.querySelector('.ym-ribbon-word')).fontSize),
+          ribbonMotion:getComputedStyle(document.querySelector('.ym-ribbon-track')).animationName,
+          headingSize:parseFloat(getComputedStyle(document.querySelector('.ym-dash-heading h1')).fontSize),
           pageAnimation:getComputedStyle(document.querySelector('.ym-dash-focus-panel')).animationName,
           dockHeight:document.querySelector('.ym-mobile-dock .ym-dock-item').getBoundingClientRect().height,
           overflow:document.documentElement.scrollWidth>innerWidth+2,
@@ -76,7 +82,13 @@ try {
       assert.ok(contrast(sample.primaryForeground,sample.primaryBackground)>=4.5,
         'Primary control text must pass 4.5:1 contrast: '+JSON.stringify({palette,appearance,sample}));
       assert.equal(sample.preferencesAfterTasks,true,'Settings belong below daily trader tasks');
-      assert.equal(sample.sloganHidden,true,'Decorative slogan cannot interrupt the data reading sequence');
+      assert.ok(sample.ribbonVisible,'Restore the signature editorial ribbon on trader pages');
+      assert.ok(sample.ribbonHeight>=35 && sample.ribbonHeight<=41,'Keep the ribbon slim, never a second hero');
+      assert.deepEqual(sample.ribbonWords,['PROCESS','PRECISION','DISCIPLINE','CONSISTENCY','GROWTH']);
+      assert.equal(sample.ribbonCopyCount,2,'Seamless scroll uses two identical visual tracks');
+      assert.ok(sample.ribbonTextSize>=10.5 && sample.ribbonTextSize<=12.5,'Premium ribbon words stay proportionate');
+      assert.equal(sample.ribbonMotion,'none','Reduced motion must stop the moving words');
+      assert.ok(sample.headingSize<=35,'Page heading must not feel enlarged: '+JSON.stringify(sample));
       assert.equal(sample.overflow,false,'The workspace must not overflow horizontally');
       assert.equal(sample.pageAnimation,'none','Reduce motion must disable panel entrance effects');
       if(width===390) assert.ok(sample.dockHeight>=55,'Mobile dock targets must be generous');
@@ -98,6 +110,22 @@ try {
     assert.deepEqual(errors,[],'No runtime errors at '+width+'px');
     await context.close();
   }
+  // Motion opt-out must not disable the standard (subtle) animation for users
+  // who actually want it. Avoid timing-based screenshot assertions.
+  const motionContext=await browser.newContext({viewport:{width:1280,height:800},reducedMotion:'no-preference'});
+  const motionPage=await motionContext.newPage();
+  await installDashboardFixtures(motionPage);
+  await motionPage.goto(base+'#dashboard',{waitUntil:'domcontentloaded'});
+  await motionPage.getByRole('heading',{name:/Trading Overview/}).waitFor();
+  const actualMotion=await motionPage.locator('.ym-ribbon-track').evaluate(node=>({
+    name:getComputedStyle(node).animationName,
+    duration:getComputedStyle(node).animationDuration,
+    playState:getComputedStyle(node).animationPlayState,
+  }));
+  assert.equal(actualMotion.name,'ym-editorial-drift','The ribbon needs a real CSS animation');
+  assert.equal(actualMotion.duration,'60s','Movement must remain slow and non-distracting');
+  assert.equal(actualMotion.playState,'running');
+  await motionContext.close();
   console.log(JSON.stringify({passed:true,cases:results.length,widths:[390,1440],palettes,
     lowestPrimaryContrast:Math.min(...results.map(row=>row.contrast))}));
 } finally {
