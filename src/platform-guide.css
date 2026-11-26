@@ -247,3 +247,10 @@
 @media(max-width:680px){.ym-guide-journey-heading{margin-bottom:8px}.ym-guide-journeys{gap:6px;margin-bottom:12px}.ym-guide-journeys button{padding:9px}.ym-guide-journey-icon{width:29px;height:29px}.ym-guide-journeys small{font-size:9px}.ym-guide-howto{padding:10px 12px}.ym-guide-howto li{font-size:11px}}
 @media(max-width:400px){.ym-guide-journey-arrow{display:none}.ym-guide-journey-heading>span:last-child{font-size:10px}}
 @media(prefers-reduced-motion:reduce){.ym-guide-journeys button{transition:none!important;transform:none!important}}
+
+/* The expanded learning paths must not push destination buttons under the footer.
+   One scroll container owns the whole directory, even on short desktop windows. */
+.ym-guide-directory{overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin}
+.ym-guide-directory-heading,.ym-guide-journey-heading,.ym-guide-journeys,.ym-guide-category-tabs{flex-shrink:0}
+.ym-guide-destinations{overflow:visible;min-height:0;flex:none}
+.ym-guide-hub-footer{position:relative;z-index:2;background:var(--guide-surface)}
