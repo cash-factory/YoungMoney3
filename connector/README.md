@@ -2,15 +2,9 @@
 
 ## Windows app
 
-**Latest verified Windows connector:** use the [GitHub staging releases](https://github.com/cash-factory/YoungMoney3/releases) and verify the published SHA-256 checksum. The enterprise V1 interface is prepared for **v0.6.3-rc1** and must pass the immutable release workflow before users download it. Do not replace an installed connector with an unpublished preview.
+Download the Windows x64 executable and its matching SHA-256 file from the dashboard’s **MT5 Connections** page or the [official connector releases](https://github.com/cash-factory/YoungMoney3/releases). The separate [Signal Desk preview](https://github.com/cash-factory/YoungMoney3/releases/tag/staging-signaldesk-v0.3.0-preview.1) uses MT5’s own login window.
 
-**This build corrects an MT5 specification-evidence identity defect**: older connectors reused a symbol-specification key across multiple position IDs, generating thousands of false integrity conflicts. v0.5.7 uses position-scoped, first-observed snapshots and reconstructs previously observed positions from broker deals/orders after an offline interval. Unobserved interim SL/TP changes are flagged as such, not invented. **Do not delete local capture.db or unpair the PC**; close the old app and open v0.5.7 in the same Windows user. Real MT5 broker recovery remains an acceptance check.
-
-**This build retains the named-tuple fix from v0.5.5-rc1 and additionally identifies repeated Capture API HTTP failures.** Record the first message with HTTP status and fixed category to diagnose the server rejection. **This diagnostic update does not, by itself, bypass an HTTP rejection.**
-
-**The preceding v0.5.5-rc1 build fixed repeated Broker capture error (AttributeError)** in automatic balance-history scanning. MetaTrader5 exposes history deals as named tuples, now normalized before exact evidence serialization. Exit the old connector and start the new executable from the **same Windows user**. Never delete `capture.db`, erase pairing credentials or unpair your PC to address this regression. Real broker acceptance on your device remains a separate check.
-
-The update reuses your existing Windows Credential Manager pairing and local durable capture database **when opened as the same Windows user**. The new release stops monitoring if the server reports a revoked or conflicting PC installation identity, without wiping queued evidence. Do not create a second pairing to resolve a conflict; inspect the paired PCs on your dashboard. Passing CI does **not** verify actual broker IPC on your device; use demo accounts for initial acceptance.
+Open an update under the same Windows user to reuse the pairing, terminal assignments and queued evidence. Keep `capture.db` and the existing Credential Manager entries during recovery. If an upload fails, record the HTTP status and category shown in the connector.
 
 1. Download the Windows connector from **MT5 Connections**. Open it using the same Windows user as your previous version.
 2. For a new PC, choose **Pair a PC** in the dashboard and paste its code into the connector. Existing pairings reconnect when you open the app.
@@ -18,7 +12,7 @@ The update reuses your existing Windows Credential Manager pairing and local dur
 4. Keep the connector open. **PC online** confirms the connection to the dashboard. **Broker verified** confirms the login. **Journal synced** follows an acknowledged account upload.
 5. Use **Broker accounts** on the trading dashboard to see each login, check its last sync, or pause and resume monitoring. **Manage accounts** opens retries, timezones and historical imports.
 
-## Identify a paired Windows PC (staging v0.5.7-rc1)
+## Identify a paired Windows PC
 
 Each connector installation has one random, persistent installation identifier in
 the current Windows user's LOCALAPPDATA/YMFX folder. It is not a hardware ID,
@@ -60,9 +54,9 @@ The optional command-line client uses 64-bit Python 3.13 and desktop MetaTrader 
 5. Enter the code at the prompt. From your phone or PC choose **Connect MT5 account** on the website and enter the exact server, account number, and investor password.
 6. Leave the connector running. Restart it with the same command without `--pair`. An already-paired installation refuses another active pairing. If replacing an obsolete pairing, revoke the old PC explicitly in MT5 Connections first.
 
-Credentials use the current Windows user's Credential Manager. The private key and device token never belong in source control or logs. The local SQLite journal under LOCALAPPDATA/YMFX contains private trade history and pending uploads. Protect this Windows user profile. The connector supports investor or standard MT5 credentials, performs read operations only, and uses outbound HTTPS. A standard password can still authorize trading inside the external MT5 terminal. YoungMoney3 itself has no order controls. A broker that requires an unsupported second authentication step must be verified in a demo environment before use.
+Credentials use the current Windows user's Credential Manager. The private key and device token never belong in source control or logs. The local SQLite journal under LOCALAPPDATA/YMFX contains private trade history and pending uploads. Protect this Windows user profile. Journal monitoring supports investor or standard MT5 credentials and uploads over outbound HTTPS. A standard password can still authorize trading inside the external MT5 terminal. Copy Studio has a separate execution path with account-specific local consent and fleet arming. A broker that requires an unsupported second authentication step must be verified in a demo environment before use.
 
-Capture starts at linking. Positions already open and fills from that point forward appear in the journal. MT5 supplies broker history for fill reconciliation. Changes to SL/TP between samples or during an offline interval may be unavailable. Live imports are disabled by default. The installation owner should enable MT5_ALLOW_LIVE=true only after demo reconciliation, including reconnection and two-account isolation checks.
+Capture starts at linking. Positions already open and fills from that point forward appear in the journal. MT5 supplies broker history for fill reconciliation. Changes to SL/TP between samples or during an offline interval may be unavailable. Real-account capture depends on the workspace release configuration.
 
 ## Optional earlier trade history
 
@@ -91,15 +85,14 @@ The connector checks Windows program locations, registered installations and MT5
 One PC check-in runs independently of terminal preparation and capture. Temporary network loss triggers automatic retries. A revoked PC must be paired again. Closing the connector or shutting down Windows pauses monitoring until the connector reopens.
 
 Historical data defaults to 30 days (approximately one month). The available
-7/14/30/60/90-day choices require explicit preview approval; the staging server
-rejects requests beyond 90 days.
+preset and custom date ranges are described under **Detailed historical imports** below.
 Timezone labels require the account owner to verify an IANA broker timezone
 and separately attest the historical UTC conversion against broker evidence;
 otherwise historical sessions remain unresolved.
 
 The first standalone binary is unsigned: Windows may warn before opening it.
 Always verify the release SHA256 and use only the staging website/release.
-Staging is invite-only and real-account capture is disabled.
+Staging is invite-only.
 
 
 ### CraftyLabs-inspired connector appearance
@@ -144,9 +137,7 @@ receipt for retry, without repeating the user's login entry.
 Automatic detection of the installed MT5 program is not the same as discovering
 every broker's proprietary server. Where a new terminal has no knowledge of a
 requested server, the user may still need to use MT5's native **File → Open an
-Account** broker search to obtain the assigned server. YoungMoney3 does not
-invent broker endpoints, save account passwords in its SQLite evidence
-database, or place trade orders. Pending add-account requests expire after
+Account** broker search to obtain the assigned server. Account setup uses broker-supplied endpoints and keeps passwords out of the SQLite evidence database. Pending add-account requests expire after
 10 minutes; claimed broker verification after 12 minutes. Failed requests can
 be resubmitted from Add account.
 

@@ -12,6 +12,9 @@ def verify(path):
     with ZipFile(path) as archive:
         assert archive.testzip() is None, "Connector ZIP is corrupt"
         assert set(archive.namelist()) == set(FILES), "Unexpected file in connector source ZIP"
+        assert all(entry.create_system == 3 for entry in archive.infolist()), (
+            "Connector ZIP metadata must be identical on Windows and Linux"
+        )
         for packaged, source in FILES.items():
             assert archive.read(packaged) == expected[packaged], (
                 "Stale connector source distribution: " + source

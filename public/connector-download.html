@@ -28,15 +28,15 @@
 <main>
   <p class="eyebrow">YOUNGMONEY3 / STAGING DOWNLOADS</p>
   <h1>The MT5 connector, without the terminal commands.</h1>
-  <p class="muted">An unsigned Windows x64 prerelease for capturing demo and contest MT5 trading records. It does not place, modify or cancel orders.</p>
+  <p class="muted">An unsigned Windows x64 prerelease for pairing this PC and syncing MT5 records to your journal. Copy Studio requires separate local authorization and fleet arming.</p>
   <section class="card" aria-labelledby="release-heading">
     <h2 id="release-heading">Download the Windows connector</h2>
     <p id="status" role="status">Verified staging executable available.</p>
-    <p id="version" class="muted">Version: staging-connector-v0.5.7-rc1 · Windows x64 · unsigned</p>
-    <p><a id="download" class="button" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.7-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer">Download Connector v0.5.7-rc1</a>
-       <a id="checksum" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.5.7-rc1/YoungMoney3.Connector.exe.sha256" rel="noopener noreferrer">Download SHA-256 checksum</a></p>
+    <p id="version" class="muted">Version: staging-connector-v0.6.3-rc1 · Windows x64 · unsigned</p>
+    <p><a id="download" class="button" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.6.3-rc1/YoungMoney3.Connector.exe" rel="noopener noreferrer">Download Connector v0.6.3-rc1</a>
+       <a id="checksum" href="https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.6.3-rc1/YoungMoney3.Connector.exe.sha256" rel="noopener noreferrer">Download SHA-256 checksum</a></p>
     <p class="muted" style="font-size:.8rem">SHA-256 verification:</p>
-    <code id="digest">4fe6ca4278f608ebb876d327f1672e694fe7b916e854a2b21a276bd2f0d4e4fb</code>
+    <code id="digest">9e910cc6b943734fa681b9a10bfe9ea618785ffef86d8ace9d4957e6a9627755</code>
     <p id="fallback"><a href="https://github.com/cash-factory/YoungMoney3/releases" rel="noopener noreferrer">View verified GitHub releases</a></p>
     <p class="muted" style="font-size:.8rem">Downloads are hosted on the official YoungMoney3 GitHub release. This page defaults to the last verified release and checks for newer published staging versions when the official GitHub API is available. Do not use third-party mirrors.</p>
   </section>
@@ -48,7 +48,7 @@
       <li>The connector finds MetaTrader and prepares each account. If MetaTrader is missing, open its installer from the connector and finish installation.</li>
       <li>Keep the connector open while monitoring. See the latest sync, pause, resume, or retry individual accounts on the dashboard.</li>
     </ul>
-    <p class="muted"><strong>Important:</strong> The executable is unsigned and Windows SmartScreen may show a warning. Compare its SHA-256 against the published checksum before launching. Real-account capture remains disabled.</p>
+    <p class="muted"><strong>Important:</strong> The executable is unsigned and Windows SmartScreen may show a warning. Compare its SHA-256 against the published checksum before launching. Real-account capture depends on the workspace configuration.</p>
     <p><a href="/mt5-connector.zip" download>Python-source fallback ZIP</a></p>
     <p><a href="/">Return to staging dashboard</a></p>
   </section>
@@ -63,7 +63,7 @@
     const releases=await response.json();
     const release=Array.isArray(releases)&&releases.find(row=>row.prerelease && !row.draft && /^staging-connector-v\d/.test(row.tag_name));
     const assets=release&&Array.isArray(release.assets)?release.assets:[];
-    const base='https://github.com/cash-factory/YoungMoney3/releases/download/';
+    const base='https://github.com/cash-factory/YoungMoney3/releases/download/'+encodeURIComponent(release?.tag_name || '')+'/';
     const exe=assets.find(row=>/^YoungMoney3(?:[. -])Connector\.exe$/i.test(row.name) && typeof row.browser_download_url==='string' && row.browser_download_url.startsWith(base));
     const checksum=assets.find(row=>/^YoungMoney3(?:[. -])Connector\.exe\.sha256$/i.test(row.name) && typeof row.browser_download_url==='string' && row.browser_download_url.startsWith(base));
     if(!release||!exe||!checksum){

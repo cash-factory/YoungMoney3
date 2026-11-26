@@ -31,3 +31,6 @@ wrangler.staging.jsonc
 
 # Generated from current connector sources before website build.
 /public/mt5-connector.zip
+
+# Local Supabase CLI metadata
+/supabase/.temp/
