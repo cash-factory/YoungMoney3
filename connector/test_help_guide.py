@@ -41,7 +41,7 @@ class TestConnectorHelpGuide(unittest.TestCase):
         copy_topic = topic_for("copy")
         text = " ".join(part for step in copy_topic["steps"] for part in step)
         self.assertIn("LIVE", text)
-        self.assertIn("local approval", text)
+        self.assertIn("local consent", text)
         self.assertIn("guide never", text.lower())
         recovery = " ".join(part for step in topic_for("recover")["steps"] for part in step)
         self.assertIn("not evidence", recovery)
