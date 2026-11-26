@@ -46,7 +46,7 @@
 .ym-workspace .ym-mobile-dock .ym-dock-item { min-height: 56px; font-size: .6875rem; }
 .ym-workspace .ym-desktop-quick-add { border-radius: 16px; }
 /* Repeated slogans take the first scan line away from the trader's actual work. */
-.ym-workspace .ym-studio-stripe { display: none; }
+/* Signature ribbon restored: presentation follows the final refinement rules below. */
 /* Action colors indicate affordance, never profit/loss. */
 .ym-workspace :is(.btn-primary, .btn-secondary) {
   min-height: 44px;
@@ -235,4 +235,225 @@
   .ym-workspace :is(button, a, summary):focus-visible { outline: 2px solid Highlight; }
   .ym-workspace .ym-nav-item[data-active="true"],
   .ym-workspace .ym-dash-jump button[aria-selected="true"] { outline: 1px solid Highlight; }
+}
+
+
+/* 2026-11-26 — Signature editorial ribbon
+   A slow, seamless text drift restores the original identity without a
+   scrolling page jump, flashing signal, or deceptive live-data movement. */
+:root[data-palette] .ym-workspace .ym-studio-stripe.ym-editorial-ribbon {
+  --ym-ribbon-ink: #fffdfd;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  height: 40px !important;
+  min-height: 40px !important;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #c31b3e;
+  color: var(--ym-ribbon-ink);
+  border: 0;
+  border-bottom: 1px solid rgb(0 0 0 / .12);
+  border-radius: 0;
+  transform: none;
+  box-shadow: inset 0 1px rgb(255 255 255 / .1);
+}
+:root[data-palette] .ym-workspace .ym-studio-stripe.ym-editorial-ribbon::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgb(0 0 0 / .09), transparent 14%, transparent 86%, rgb(0 0 0 / .09));
+  z-index: 1;
+}
+.ym-workspace .ym-editorial-ribbon .ym-ribbon-track {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  width: max-content;
+  min-width: 200%;
+  height: 100%;
+  animation: ym-editorial-drift 60s linear infinite;
+  backface-visibility: hidden;
+  will-change: transform;
+}
+.ym-workspace .ym-editorial-ribbon .ym-ribbon-group {
+  display: flex;
+  flex: 0 0 50%;
+  align-items: center;
+  justify-content: space-around;
+  gap: clamp(28px, 3vw, 64px);
+  min-width: 50%;
+  padding-inline: clamp(20px, 3.5vw, 52px);
+  white-space: nowrap;
+}
+:root[data-palette] .ym-workspace .ym-studio-stripe.ym-editorial-ribbon .ym-ribbon-word {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 40px;
+  white-space: nowrap;
+  color: #fffdfd;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 12px !important;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: .135em !important;
+  text-transform: uppercase;
+  font-variant-ligatures: none;
+  transform: none !important;
+  text-shadow: none;
+}
+.ym-workspace .ym-editorial-ribbon .ym-ribbon-word + .ym-ribbon-word::before {
+  content: "•";
+  display: inline-block;
+  margin-inline: 0 28px;
+  color: rgb(255 255 255 / .58);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+}
+@keyframes ym-editorial-drift {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+@media (hover: hover) {
+  .ym-workspace .ym-editorial-ribbon:hover .ym-ribbon-track { animation-play-state: paused; }
+}
+.ym-workspace .ym-editorial-ribbon:focus-within .ym-ribbon-track { animation-play-state: paused; }
+
+/* Restore a composed typographic rhythm — headings should not feel zoomed in.
+   Preserve >=44px interaction targets from the accessibility pass. */
+.ym-workspace {
+  --ym-reading-size: .875rem;
+  --ym-support-size: .8125rem;
+}
+[data-workspace-page] .ym-page-heading {
+  min-height: 136px;
+  margin-bottom: 20px;
+}
+[data-workspace-page] .ym-page-heading-main {
+  min-height: 136px;
+  padding: 22px 26px;
+  gap: 10px;
+}
+[data-workspace-page] .ym-page-heading-copy h1 {
+  font-size: clamp(1.5rem, 2.1vw, 2rem);
+  letter-spacing: -.032em;
+  line-height: 1.18;
+}
+[data-workspace-page] .ym-page-heading-copy > p.mt-2 {
+  font-size: .8125rem;
+  line-height: 1.58;
+}
+.ym-workspace .ym-dashboard .ym-dash-heading--illustrated {
+  min-height: 148px;
+  padding: 21px 25px;
+  margin-bottom: 19px;
+}
+.ym-workspace .ym-dashboard .ym-dash-heading h1 {
+  font-size: clamp(1.6rem, 2.25vw, 2.15rem);
+  line-height: 1.19;
+  letter-spacing: -.035em;
+  margin: 9px 0 10px;
+}
+.ym-workspace .ym-dashboard .ym-dash-heading-copy > p:last-child {
+  font-size: .8125rem;
+  line-height: 1.55;
+}
+.ym-workspace .ym-dashboard .ym-dash-focus-description {
+  font-size: .8125rem;
+  line-height: 1.58;
+  margin-bottom: 16px;
+}
+.ym-workspace .ym-dashboard .ym-dash-controls {
+  padding: 14px 17px;
+  gap: 13px;
+  margin-bottom: 16px;
+}
+.ym-workspace .ym-dashboard .ym-dash-balance {
+  margin-bottom: 23px;
+}
+.ym-workspace .ym-dashboard .ym-dash-balance-main {
+  padding: 23px 25px 18px;
+}
+.ym-workspace .ym-dashboard .ym-dash-result {
+  padding: 23px 23px 19px;
+}
+.ym-workspace .ym-dashboard .ym-dash-balance h2 {
+  font-size: clamp(1.05rem, 1.75vw, 1.35rem);
+  margin-bottom: 18px;
+}
+.ym-workspace .ym-dashboard .ym-dash-balance-number {
+  font-size: clamp(1.55rem, 2.35vw, 2.05rem);
+  letter-spacing: -.04em;
+}
+.ym-workspace .ym-dashboard .ym-dash-result-value {
+  font-size: clamp(1.48rem, 2vw, 1.85rem);
+  letter-spacing: -.04em;
+}
+.ym-workspace .ym-dashboard .ym-dash-section-title h2 {
+  font-size: clamp(1.07rem, 1.65vw, 1.27rem);
+  line-height: 1.3;
+}
+.ym-workspace .ym-dashboard .ym-dash-metric-grid {
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.ym-workspace .ym-dashboard .ym-dash-metric-grid .ym-stat-card {
+  min-height: 133px;
+  padding: 15px;
+}
+.ym-workspace .ym-dashboard .ym-dash-metric-grid .ym-stat-value {
+  font-size: clamp(1.1rem, 1.75vw, 1.48rem);
+  letter-spacing: -.025em;
+}
+.ym-workspace .ym-dashboard .ym-dash-jump button {
+  font-size: .8125rem;
+  min-height: 44px;
+  padding: 9px 12px;
+}
+.ym-workspace .ym-dashboard .ym-dash-heading-actions {
+  gap: 9px;
+}
+@media (max-width: 767px) {
+  :root[data-palette] .ym-workspace .ym-studio-stripe.ym-editorial-ribbon {
+    height: 36px !important;
+    min-height: 36px !important;
+  }
+  :root[data-palette] .ym-workspace .ym-studio-stripe.ym-editorial-ribbon .ym-ribbon-word {
+    min-height: 36px;
+    font-size: 11px !important;
+    letter-spacing: .105em !important;
+  }
+  .ym-workspace .ym-editorial-ribbon .ym-ribbon-group { gap: 24px; padding-inline: 18px; }
+  .ym-workspace .ym-editorial-ribbon .ym-ribbon-word + .ym-ribbon-word::before { margin-inline: 0 19px; }
+  [data-workspace-page] .ym-page-heading-main { padding: 20px; min-height: 0; }
+  [data-workspace-page] .ym-page-heading-copy h1 { font-size: clamp(1.45rem, 5.7vw, 1.9rem); }
+  .ym-workspace .ym-dashboard .ym-dash-heading--illustrated { padding: 19px; min-height: 0; }
+  .ym-workspace .ym-dashboard .ym-dash-heading h1 { font-size: clamp(1.55rem, 5.8vw, 1.9rem); }
+  .ym-workspace .ym-dashboard .ym-dash-balance-main { padding: 20px 19px 17px; min-height: 0; }
+  .ym-workspace .ym-dashboard .ym-dash-result { padding: 20px 19px; }
+  .ym-workspace .ym-dashboard .ym-dash-balance-number { font-size: clamp(1.47rem, 5.8vw, 1.8rem); }
+  .ym-workspace .ym-dashboard .ym-dash-result-value { font-size: clamp(1.4rem, 5.5vw, 1.75rem); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ym-workspace .ym-editorial-ribbon { overflow-x: auto !important; scrollbar-width: none; }
+  .ym-workspace .ym-editorial-ribbon::-webkit-scrollbar { display: none; }
+  .ym-workspace .ym-editorial-ribbon .ym-ribbon-track {
+    animation: none !important;
+    transform: none !important;
+    will-change: auto;
+    min-width: max-content;
+  }
+  .ym-workspace .ym-editorial-ribbon .ym-ribbon-group {
+    flex-basis: auto;
+    min-width: max-content;
+    gap: 16px;
+  }
+  .ym-workspace .ym-editorial-ribbon .ym-ribbon-group:nth-child(2) { display: none; }
 }
