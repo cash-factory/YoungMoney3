@@ -95,8 +95,15 @@ test('CraftyLabs Studio is a distinct black, red and white editorial trading the
   assert.ok(css.includes('--bg-primary:#080809'),'Dark surfaces should be near-black');
   assert.ok(css.includes('--brand:#ff2145'),'Dark accent should be vivid signal red');
   assert.ok(css.includes('--text-primary:#fafafa'),'Dark headings should remain legible');
-  assert.ok(!layout.includes('className="ym-studio-stripe" aria-hidden="true"'),
-    'The signed-in trading workspace should prioritize account data over a repeated slogan');
+  const refined=read('src/human-interface.css');
+  assert.ok(layout.includes('className="ym-studio-stripe ym-editorial-ribbon"'),
+    'Signed-in trader pages must retain their slim signature red ribbon');
+  assert.ok(layout.includes("['PROCESS', 'PRECISION', 'DISCIPLINE', 'CONSISTENCY', 'GROWTH']"),
+    'Signature words must be readable real text, not embedded artwork');
+  assert.ok(layout.includes('aria-label="Process. Precision. Discipline. Consistency. Growth."'),
+    'Animated wording needs one stable accessible description');
+  assert.ok(refined.includes('ym-editorial-drift') && refined.includes('prefers-reduced-motion: reduce'),
+    'The ribbon needs restrained motion with an accessible stationary alternative');
   assert.ok(css.includes('.ym-studio-landing-ticker'),'Welcome page should gain angled editorial banner only for this palette');
   assert.ok(landing.includes('className="ym-studio-landing '));
   assert.ok(css.includes('prefers-reduced-motion'),'Respect motion sensitivity');
