@@ -32,6 +32,7 @@ from studio_ui import AnimatedButton, ResponsiveActions, ConnectionPath, StudioA
 from version import VERSION
 from enterprise_theme import COLORS, EnterpriseHeroArt, label_color
 from copy_execution import prepare_database as prepare_copy_database, set_consent as update_copy_consent
+from classic_guide_ui import ClassicGuidePanel
 
 STAGING_URL = "https://ym-fx-staging.ethical-hacker263.workers.dev"
 ROOT = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "YMFX" / "staging-gui"
@@ -215,6 +216,8 @@ class ConnectorApp:
 
     def _cleanup_ui(self, event):
         if event.widget is self.root:
+            if hasattr(self, "guide_panel"):
+                self.guide_panel.destroy()
             for attribute in ("_poll_job", "_layout_job"):
                 job = getattr(self, attribute, None)
                 if job is not None:
@@ -631,29 +634,15 @@ class ConnectorApp:
 
     def _build_help(self):
         page = self._scrollable_page("help")
-        self._stack_heading(page, "Help & Guides",
-                            "Everything needed to prepare isolated broker terminals for capture.")
-        for title, desc in [
-            ("Pair this PC once",
-             "In the dashboard, choose MT5 Connections and Pair a PC. Paste the code in this app. "
-             "The PC stays paired when you close and reopen the connector."),
-            ("Add a broker account",
-             "Choose Add account. Enter the broker server, account number and MT5 password in your dashboard. "
-             "The connector finds MetaTrader and prepares a separate workspace for each login."),
-            ("If MetaTrader is missing",
-             "Choose Add account to open the official installer. Finish installing and leave the connector open. "
-             "It checks again automatically."),
-            ("Understand the status",
-             "PC online confirms the connection to your dashboard. Broker verified confirms the login. "
-             "Journal synced means the dashboard received a capture from MT5."),
-            ("Manage accounts",
-             "Open your dashboard to see each login, pause or resume monitoring, retry a sync, or review earlier trades.")
-        ]:
-            card = self._card(page, 14)
-            card.pack(fill="x", pady=(0, 8))
-            self._label(card, title, bold=True, size=11).pack(anchor="w")
-            self._label(card, desc, color=MUTED, size=9,
-                        wrap=790).pack(anchor="w", pady=(5, 0))
+        self._stack_heading(
+            page, "Help & Guides",
+            "Choose a task, follow practical steps, or search for an answer. "
+            "The manual never changes broker settings.",
+        )
+        self.guide_panel = ClassicGuidePanel(
+            self, page, ROOT / "guide-progress.json",
+            STAGING_URL + "/#copy-studio",
+        )
 
     def show_page(self, key):
         self.current_page = key
@@ -665,6 +654,8 @@ class ConnectorApp:
             button.configure(fg="#FFFFFF" if selected else COLORS["muted_dark"])
         if key == "sessions":
             self.refresh_sessions()
+        elif key == "help":
+            self.guide_panel.refresh_status()
         titles = {"overview": "Trading Operations Hub", "sessions": "My Accounts",
                   "pair": "Connect this PC", "activity": "Recent Activity",
                   "help": "Help & Guides"}

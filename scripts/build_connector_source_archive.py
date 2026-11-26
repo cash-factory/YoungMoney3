@@ -21,6 +21,8 @@ FILES = {
     "cash_history.py": "connector/cash_history.py",
     "lifecycle.py": "connector/lifecycle.py",
     "connector_gui.py": "connector/connector_gui.py",
+    "help_guide.py": "connector/help_guide.py",
+    "classic_guide_ui.py": "connector/classic_guide_ui.py",
     "studio_ui.py": "connector/studio_ui.py",
     "enterprise_theme.py": "connector/enterprise_theme.py",
     "managed_accounts.py": "connector/managed_accounts.py",

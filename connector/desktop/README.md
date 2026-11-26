@@ -14,6 +14,14 @@ This implementation adapts the user-approved Signal Desk V4 interface into a Win
 - Copy trading execution, fleet arming and account authorization are **not** callable through the new shell pending separate real Windows/broker acceptance. Existing connector remains available.
 - Visual QA at 1600x940, 1366x768, 1024x768 and 900x700 for all six native screens; a standalone design-preview mode continues to show explicitly fictional data in an ordinary browser.
 
+## Interactive Help & Guides
+
+Open **Help** in the Windows connector for four task-based guides: **Get connected**, **Monitor accounts**, **Fix a disconnection**, and **Understand copying**. Every guide has four selectable steps and links to real screens, plus a searchable FAQ, lightweight step transitions and optional local progress. The manual uses the connector's current verified session state and does not fabricate broker records.
+
+No tutorial action starts monitoring, opens an MT5 login without user intent, authorizes copying or places an order. Reduced-motion preferences disable decorative transitions. Detailed user instructions and release checks: [User guides](../../docs/USER_GUIDES.md).
+
+From this directory, run `npm run test:static` to check the native guide module and its interaction smoke tests in addition to the existing packaging contracts.
+
 ## Build and test on Windows
 
 1. Use Windows 11 with Python 3.13, Rust, Node 22+, MSVC Build Tools and WebView2. Tauri documentation: https://v2.tauri.app/start/prerequisites/

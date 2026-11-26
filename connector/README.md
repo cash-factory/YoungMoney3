@@ -1,5 +1,11 @@
 # Windows MT5 connector
 
+## Interactive user manual
+
+Choose **Help & Guides** inside the released classic Windows connector. The updated manual offers four short guided routes: **Get connected**, **Monitor accounts**, **Fix a disconnection**, and **Understand trade copying**. Each has four steps with direct links to existing screens, plus searchable questions, subtle text transitions, and local progress. Every help action only opens a screen or documentation; it cannot pair a PC, start monitoring, retry capture, or authorize or arm copying.
+
+**Which connector are you using?** The classic Windows application exposes explicitly confirmed DEMO/LIVE copier authorization for a selected verified account. The separately built **Signal Desk / Tauri preview** has its own upgraded interactive Help interface but **does not** enable live order authorization. Do not mistake guide features for release-level execution capability. See [Complete user guides](../docs/USER_GUIDES.md) and [native preview details](desktop/README.md).
+
 ## Windows app
 
 **Latest verified Windows connector:** use the [GitHub staging releases](https://github.com/cash-factory/YoungMoney3/releases) and verify the published SHA-256 checksum. The enterprise V1 interface is prepared for **v0.6.3-rc1** and must pass the immutable release workflow before users download it. Do not replace an installed connector with an unpublished preview.

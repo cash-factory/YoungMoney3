@@ -16,6 +16,15 @@ For each of Chrome/Edge desktop, mobile Safari/Chrome (or browser automation of 
 
 Record tested commit, staging URL, viewport, platform, palette, test user ID and defect links. Do not claim visual/browser acceptance based on static CI alone.
 
+## Guides and manuals acceptance
+
+1. Dashboard: the Field Guide shows 22 destinations, four learning paths, a 9-stop overview, valid spotlight targets, task instructions, directory search and a manual exit.
+2. Confirm reopening after skipping, per-user visited state, keyboard Tab/Shift+Tab/Escape handling, mobile layout and all active palettes.
+3. Connector: open all four Help topics, switch directly to any of the four steps, expand FAQ answers and filter them using the search field.
+4. Verify that guide links open the intended native screen or dashboard **without** executing monitoring/copy commands. Confirm no tokens, broker passwords or trade evidence enter guide progress storage.
+5. Repeat in connected, disconnected and partially verified modes and confirm correct factual language. Enable OS reduced motion; no rotating or sliding interface should be required for understanding.
+6. Run `node scripts/test-guide-browser.mjs` against the local dashboard preview and `npm run test:static` in `connector/desktop`. Record actual browser/Windows observations separately from these automated checks.
+
 ## Color and contrast regression
 
 CraftyLabs uses signal red for accents and a vivid red control fill with readable white labels. Hover states use an explicit darker fill. Decorative accent colors and text colors have separate tokens.

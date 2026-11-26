@@ -10,6 +10,7 @@
   <a href="https://ym-fx-staging.ethical-hacker263.workers.dev/"><strong>Explore staging ↗</strong></a> &nbsp; · &nbsp;
   <a href="https://github.com/cash-factory/YoungMoney3/tree/feat/rich-capture-staging-20261110">Current app source</a> &nbsp; · &nbsp;
   <a href="docs/ASSETS.md">Brand &amp; assets</a> &nbsp; · &nbsp;
+  <a href="docs/USER_GUIDES.md">Interactive guides</a> &nbsp; · &nbsp;
   <a href="#run-locally">Run locally</a>
 </p>
 
