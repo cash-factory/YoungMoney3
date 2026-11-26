@@ -303,6 +303,21 @@ export function Layout({ current, onNavigate, onQuickAdd, onOpenGuide, children 
           </div>
         </div>
 
+        {/* A signature editorial ribbon, distinct from financial signals and notifications.
+            The duplicated visual track is intentionally hidden from accessibility APIs. */}
+        <div className="ym-studio-stripe ym-editorial-ribbon" role="img"
+          aria-label="Process. Precision. Discipline. Consistency. Growth.">
+          <div className="ym-ribbon-track" aria-hidden="true">
+            {[0, 1].map(repeat => (
+              <div className="ym-ribbon-group" key={repeat}>
+                {['PROCESS', 'PRECISION', 'DISCIPLINE', 'CONSISTENCY', 'GROWTH'].map(word => (
+                  <span className="ym-ribbon-word" key={word}>{word}</span>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+
         <main tabIndex={-1} id="workspace-content" className="ym-main-content p-4 sm:p-6 lg:p-8 xl:px-10 max-w-[1480px] mx-auto animate-fade-in pb-32 lg:pb-12">
           {isSample && <section role="status" aria-label="Fictional demo account"
             className="mb-5 rounded-xl border border-themed bg-secondary p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
