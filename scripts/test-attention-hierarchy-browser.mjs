@@ -67,6 +67,10 @@ try {
           ribbonHeight:ribbon?.getBoundingClientRect().height||0,
           ribbonWords:[...document.querySelectorAll('.ym-ribbon-group:first-child .ym-ribbon-word')].map(node=>node.textContent),
           ribbonCopyCount:document.querySelectorAll('.ym-ribbon-group').length,
+          ribbonGeometry:[...document.querySelectorAll('.ym-ribbon-group')].map(group=>{
+            const rect=group.getBoundingClientRect();
+            return {left:rect.left,right:rect.right,width:rect.width,contentWidth:group.scrollWidth};
+          }),
           ribbonTextSize:parseFloat(getComputedStyle(document.querySelector('.ym-ribbon-word')).fontSize),
           ribbonMotion:getComputedStyle(document.querySelector('.ym-ribbon-track')).animationName,
           headingSize:parseFloat(getComputedStyle(document.querySelector('.ym-dash-heading h1')).fontSize),
@@ -86,6 +90,10 @@ try {
       assert.ok(sample.ribbonHeight>=35 && sample.ribbonHeight<=41,'Keep the ribbon slim, never a second hero');
       assert.deepEqual(sample.ribbonWords,['PROCESS','PRECISION','DISCIPLINE','CONSISTENCY','GROWTH']);
       assert.equal(sample.ribbonCopyCount,2,'Seamless scroll uses two identical visual tracks');
+      assert.ok(sample.ribbonGeometry.every(group=>group.width>=group.contentWidth-1),
+        'Each ribbon loop must contain all its words without overlapping the next: '+JSON.stringify(sample.ribbonGeometry));
+      assert.ok(Math.abs(sample.ribbonGeometry[0].width-sample.ribbonGeometry[1].width)<=1,
+        'A marquee can only loop smoothly when both word tracks match in width');
       assert.ok(sample.ribbonTextSize>=10.5 && sample.ribbonTextSize<=12.5,'Premium ribbon words stay proportionate');
       assert.equal(sample.ribbonMotion,'none','Reduced motion must stop the moving words');
       assert.ok(sample.headingSize<=35,'Page heading must not feel enlarged: '+JSON.stringify(sample));
