@@ -82,7 +82,7 @@ try {
       assert.ok(sample.rootSize>=14, 'Workspace must not inherit a tiny body scale: '+JSON.stringify(sample));
       assert.ok(sample.actionHeight>=43.5 && sample.tabHeight>=43.5 && sample.navMin>=43.5,
         'Primary actions, tabs and navigation need usable targets: '+JSON.stringify(sample));
-      assert.ok(sample.descriptionSize>=14, 'Supporting copy must remain legible: '+JSON.stringify(sample));
+      assert.ok(sample.descriptionSize>=13, 'Supporting copy must remain legible without appearing zoomed in: '+JSON.stringify(sample));
       assert.ok(contrast(sample.primaryForeground,sample.primaryBackground)>=4.5,
         'Primary control text must pass 4.5:1 contrast: '+JSON.stringify({palette,appearance,sample}));
       assert.equal(sample.preferencesAfterTasks,true,'Settings belong below daily trader tasks');
@@ -90,10 +90,10 @@ try {
       assert.ok(sample.ribbonHeight>=35 && sample.ribbonHeight<=41,'Keep the ribbon slim, never a second hero');
       assert.deepEqual(sample.ribbonWords,['PROCESS','PRECISION','DISCIPLINE','CONSISTENCY','GROWTH']);
       assert.equal(sample.ribbonCopyCount,2,'Seamless scroll uses two identical visual tracks');
-      assert.ok(sample.ribbonGeometry.every(group=>group.width>=group.contentWidth-1),
-        'Each ribbon loop must contain all its words without overlapping the next: '+JSON.stringify(sample.ribbonGeometry));
-      assert.ok(Math.abs(sample.ribbonGeometry[0].width-sample.ribbonGeometry[1].width)<=1,
-        'A marquee can only loop smoothly when both word tracks match in width');
+      assert.ok(sample.ribbonGeometry[0].width>=sample.ribbonGeometry[0].contentWidth-1,
+        'The visible ribbon must contain every word without clipping its own loop');
+      assert.equal(sample.ribbonGeometry[1].width,0,
+        'Reduced motion hides the decorative duplicate rather than presenting repeated wording');
       assert.ok(sample.ribbonTextSize>=10.5 && sample.ribbonTextSize<=12.5,'Premium ribbon words stay proportionate');
       assert.equal(sample.ribbonMotion,'none','Reduced motion must stop the moving words');
       assert.ok(sample.headingSize<=35,'Page heading must not feel enlarged: '+JSON.stringify(sample));
@@ -133,6 +133,14 @@ try {
   assert.equal(actualMotion.name,'ym-editorial-drift','The ribbon needs a real CSS animation');
   assert.equal(actualMotion.duration,'60s','Movement must remain slow and non-distracting');
   assert.equal(actualMotion.playState,'running');
+  const movingLoops=await motionPage.locator('.ym-ribbon-group').evaluateAll(groups=>groups.map(group=>({
+    width:group.getBoundingClientRect().width, contentWidth:group.scrollWidth,
+  })));
+  assert.equal(movingLoops.length,2);
+  assert.ok(movingLoops.every(group=>group.width>=group.contentWidth-1),
+    'Both moving ribbon tracks must fully contain their text: '+JSON.stringify(movingLoops));
+  assert.ok(Math.abs(movingLoops[0].width-movingLoops[1].width)<=1,
+    'The repeated tracks must have the same measured width for a seamless loop');
   await motionContext.close();
   console.log(JSON.stringify({passed:true,cases:results.length,widths:[390,1440],palettes,
     lowestPrimaryContrast:Math.min(...results.map(row=>row.contrast))}));
