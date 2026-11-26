@@ -283,11 +283,12 @@
 }
 .ym-workspace .ym-editorial-ribbon .ym-ribbon-group {
   display: flex;
-  flex: 0 0 50%;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-around;
   gap: clamp(28px, 3vw, 64px);
-  min-width: 50%;
+  min-width: 100vw;
+  width: max-content;
   padding-inline: clamp(20px, 3.5vw, 52px);
   white-space: nowrap;
 }
