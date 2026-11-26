@@ -235,7 +235,10 @@ class ClassicGuidePanel:
                              COLORS["red_hover"] if self.topic_id == topic["id"] else "#E9EAED")
             button.configure(fg="#FFFFFF" if self.topic_id == topic["id"] else TEXT)
         for index, button in enumerate(self.jump_buttons):
-            button.configure(text=f"0{index + 1}  {current['steps'][index][0]}",
+            jump_title = current["steps"][index][0]
+            if len(jump_title) > 23:
+                jump_title = jump_title[:22].rstrip() + "…"
+            button.configure(text=f"0{index + 1}  {jump_title}",
                              fg=ACCENT if self.position == index else TEXT)
         self._animate_title()
 
