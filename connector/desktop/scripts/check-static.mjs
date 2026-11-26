@@ -15,6 +15,18 @@ assert(!bridge.includes('authorize_live_copy'), 'The new bridge must not unlock 
 assert(bridge.includes("x.status==='monitoring'"),'An online PC must not masquerade as verified broker capture');
 assert(!bridge.includes('demo: true'));
 assert(conf.bundle.externalBin.includes('binaries/ymfx-bridge'));
+const guideScript=read('desktop-ui/assets/native-guide.js');
+const guideCss=read('desktop-ui/assets/native-guide.css');
+assert.match(html,/assets\/native-guide\.js/);
+assert.match(html,/assets\/native-guide\.css/);
+assert(bridge.includes('YMFXNativeGuide?.render(') && bridge.includes('YMFXNativeGuide?.handleClick('),
+  'Native help must use the interactive guide without bypassing the local bridge');
+assert(bridge.includes('data-native-guide-frame'), 'A step change may animate, but polling must preserve the current step');
+assert(guideScript.includes('data-native-guide-topic') && guideScript.includes('data-native-guide-faq') &&
+  guideScript.includes('data-native-guide-search'), 'Guides must offer topic navigation and searchable answers');
+assert(guideScript.includes('never change a broker setting') && guideScript.includes('cannot arm a fleet'),
+  'Guide must explain safety and copy-authorization limits');
+assert(guideCss.includes('prefers-reduced-motion:reduce'), 'Manual motion must respect OS accessibility settings');
 const shell=permission.permissions.find(p=>typeof p==='object'&&p.identifier==='shell:allow-spawn');
 assert(shell&&shell.allow.length===1&&shell.allow[0].name==='binaries/ymfx-bridge'&&shell.allow[0].args===false);
 for(const method of ['snapshot','scan_terminals','pair_pc','add_account','open_account_terminal','stop_monitoring','start_monitoring','retry_session','rename_session','remove_session'])
