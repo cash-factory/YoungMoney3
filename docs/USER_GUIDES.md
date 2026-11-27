@@ -53,13 +53,11 @@ Each topic contains four steps. Use the numbered step selector or **Previous / N
 
 Guide controls only switch documentation topics, reveal answers or open named screens. Starting or stopping monitoring, creating a terminal login, requesting reconciliation, and any copying-related authorization remain separate explicit user actions.
 
-## Classic Windows connector: Help & Guides
+## Classic Windows connector (owner recovery only)
 
-The currently released Tk desktop connector also has a refreshed **Help & Guides** screen. It offers the same four trader-first topics and 16 steps. Choose a topic, jump to a numbered step, use **Previous / Next**, read a practical caution, and choose an action that opens a real connector screen or the authenticated web dashboard. Search or expand the eight common questions. A subtle change of heading colour gives step-change feedback when the app's **Motion** option is on; motion can be switched off.
+The older Tk/PyInstaller connector does **not** include the new native Signal Desk guide. It is retained for owner recovery and compatibility, not member onboarding. Its previously published public installers remain accessible until the repository owner removes or privately archives those release assets.
 
-Exploration progress stores only known topic/step identifiers in `guide-progress.json` in the Windows connector's existing preferences directory. The file contains no account IDs, broker passwords, pairing secrets or journal records.
-
-**Important difference:** the classic connector has separately confirmed, account-bound **DEMO and LIVE copier authorization** controls. The *guide* never presses these controls. The newer Tauri preview has no live-copy execution authority in its shell. See the app's version and consent screen before assessing copying capability.
+Only Signal Desk 0.4.0 and later include the redesigned 16-step native guide. Do not assume guide progress or tutorials transfer from the classic application. The classic connector may expose separately confirmed DEMO/LIVE copier authorization, whereas the new Signal Desk shell does not enable order execution.
 
 ## Quality and release acceptance
 
