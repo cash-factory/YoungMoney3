@@ -110,7 +110,10 @@ export function RiskGuardian({ trades, settings, account, plan, onConfigure }: R
           <p className="text-xs text-secondary mt-1">{riskData.statusReason}</p>
           <p className="text-xs text-secondary mt-1">
             {riskData.riskEvidenceMissingCount} entry/entries missing risk percent ·
-            {' '}{riskData.realizedPnlMissingCount} closed trade(s) missing realized P&amp;L.
+            {' '}{riskData.realizedPnlMissingCount} today’s closed trade(s) missing P&amp;L ·
+            {' '}{riskData.historicalPnlMissingCount} closed trade(s) missing historical P&amp;L ·
+            {' '}{riskData.invalidEntryTimestampCount} invalid entry timestamp(s).
+            {!riskData.timeZoneVerified && ' Account reset timezone is not valid.'}
             Unknown risk is not zero risk.
           </p>
         </div>
