@@ -100,7 +100,10 @@
     try {
       // We require a verified idle snapshot. Shut down only our bundled local
       // sidecar, then let Tauri check/signature-verify the update again.
-      if (deps.hasBridge()) await deps.request('shutdown');
+      if (deps.hasBridge()) {
+        try { await deps.request('shutdown'); } catch { /* May exit before replying. */ }
+        await deps.waitForBridgeStop(15000);
+      }
       await invoke('install_connector_update', { expectedVersion: state.version });
     } catch {
       state.installing = false;
