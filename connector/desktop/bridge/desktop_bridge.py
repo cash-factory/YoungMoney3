@@ -378,7 +378,8 @@ class Bridge:
                              all_slots=self._store.all_terminals,
                              active_slots=self._store.active_terminals,
                              armed_slot=self._store.armed_terminal,
-                             parallel_capture=True, managed_accounts=manager)
+                             parallel_capture=True, managed_accounts=manager,
+                              copy_execution_enabled=False)
         except BaseException as error:
             # Broker, HTTP or pairing errors may contain credentials. Expose type only.
             self.last_error = type(error).__name__[:50]
