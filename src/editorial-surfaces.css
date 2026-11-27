@@ -6,6 +6,13 @@
   --ym-tone-wash-soft: color-mix(in srgb,var(--brand) 4%,var(--bg-card));
   --ym-tone-heading: color-mix(in srgb,var(--brand) 58%,var(--text-primary));
   --ym-tone-support: color-mix(in srgb,var(--accent) 30%,var(--text-secondary));
+  /* Inner surfaces recede from the outer gradient without flattening palettes. */
+  --ym-tone-tile-surface: color-mix(in srgb,var(--bg-card) 88%,var(--text-primary));
+  --ym-tone-tile-border: color-mix(in srgb,var(--brand) 23%,var(--border));
+  --ym-trade-card-bg: #0b0d11;
+}
+:root.dark[data-palette] .ym-workspace {
+  --ym-tone-tile-surface: color-mix(in srgb,var(--bg-card) 72%,#030407);
 }
 :root[data-palette] .ym-workspace .ym-tone-panel,
 :root[data-palette] .ym-workspace .card.ym-tone-panel {
@@ -18,10 +25,19 @@
   border-color:color-mix(in srgb,var(--brand) 20%,var(--border));
   transition:background-color .19s ease,border-color .19s ease,box-shadow .19s ease,transform .19s ease;
 }
+/* Metrics nested in tonal panels need a distinct, darker reading surface.
+   Standalone strategy and broker cards retain their original gradients. */
+:root[data-palette] .ym-workspace .ym-tone-panel .ym-tone-tile {
+  background:var(--ym-tone-tile-surface);
+  border-color:var(--ym-tone-tile-border);
+}
 :root[data-palette] .ym-workspace .ym-tone-tile[data-selected="true"] {
   background:linear-gradient(115deg,color-mix(in srgb,var(--brand) 17%,var(--bg-card)),color-mix(in srgb,var(--brand) 7%,var(--bg-card)) 100%);
   border-color:color-mix(in srgb,var(--brand) 53%,var(--border));
   box-shadow:inset 3px 0 0 var(--brand);
+}
+:root[data-palette] .ym-workspace .ym-tone-panel .ym-tone-tile[data-selected="true"] {
+  background:color-mix(in srgb,var(--brand) 11%,var(--ym-tone-tile-surface));
 }
 @media (hover:hover) {
   :root[data-palette] .ym-workspace .ym-tone-tile:is(:hover,:focus-within) {
@@ -96,8 +112,15 @@
 
 /* 6 / Journal evidence: separate the broker identifier from the trade label. */
 :root[data-palette] .ym-workspace .ym-trade-evidence-card{
-  background:linear-gradient(125deg,color-mix(in srgb,var(--brand) 12%,var(--bg-card)),var(--ym-tone-wash-soft) 62%,var(--bg-card));
-  border-color:var(--ym-tone-border);
+  background:var(--ym-trade-card-bg);
+  color:#f3f5f8;
+  border-color:color-mix(in srgb,var(--brand) 25%,#39404c);
+  transition:border-color .18s ease;
+}
+@media(hover:hover) {
+  :root[data-palette] .ym-workspace .ym-trade-evidence-card:hover {
+    border-color:color-mix(in srgb,var(--brand) 44%,#4c5664);
+  }
 }
 .ym-workspace .ym-trade-evidence-card summary{
   gap:10px;
@@ -107,11 +130,11 @@
 .ym-workspace .ym-trade-evidence-card[open] summary{
   padding-bottom:10px;margin-bottom:2px;border-bottom:1px solid var(--ym-tone-border);
 }
-.ym-workspace .ym-trade-evidence-card .ym-evidence-title{color:var(--text-primary);font-weight:750;line-height:1.45}
-.ym-workspace .ym-trade-evidence-card .ym-evidence-ticket{color:var(--brand-text);font-weight:650;letter-spacing:.015em}
-.ym-workspace .ym-trade-evidence-card dt{color:var(--text-secondary)}
-.ym-workspace .ym-trade-evidence-card dd{color:var(--text-primary);overflow-wrap:anywhere}
-.ym-workspace .ym-trade-evidence-card .ym-evidence-id{color:var(--accent-text)}
+.ym-workspace .ym-trade-evidence-card .ym-evidence-title{color:#f6f7f9;font-weight:750;line-height:1.45}
+.ym-workspace .ym-trade-evidence-card .ym-evidence-ticket{color:color-mix(in srgb,var(--brand) 60%,#fff);font-weight:650;letter-spacing:.015em}
+.ym-workspace .ym-trade-evidence-card dt{color:#adb5c1}
+.ym-workspace .ym-trade-evidence-card dd{color:#f3f5f8;overflow-wrap:anywhere}
+.ym-workspace .ym-trade-evidence-card .ym-evidence-id{color:color-mix(in srgb,var(--accent) 50%,#fff)}
 
 /* 7 / Calendar evidence: important topic vs explanatory subtitle. */
 :root[data-palette] .ym-workspace .ym-calendar-evidence-title {
@@ -123,7 +146,7 @@
 }
 :root[data-palette] .ym-workspace .ym-calendar-stat{
   border:1px solid color-mix(in srgb,var(--brand) 17%,var(--border));
-  background:linear-gradient(130deg,color-mix(in srgb,var(--brand) 9%,var(--bg-card)),var(--bg-card) 95%);
+  background:var(--ym-tone-tile-surface);
   min-width:108px;
 }
 :root[data-palette] .ym-workspace .ym-calendar-stat strong{color:var(--text-primary)}
