@@ -15,7 +15,12 @@ def history_window(linked_at,cursor,end):
     return previous_since,next_until,next_until<int(end)-60000
 
 def due_positions(db,link,currently_open,now,limit=16):
-    """Prioritize disappeared positions; also recovers records old clients retired."""
+    """Recover *all* missing positions over successive bounded batches.
+
+    The batch size is a per-poll work budget, never a position/account cap.
+    Positions not selected in this poll remain unresolved and eligible next poll.
+    Verified broker closures remain final, even across restarts.
+    """
     open_ids={str(value) for value in currently_open}
     rows=db.execute("""
       SELECT o.position_id,MAX(o.at_ms),r.status,r.checked_ms
