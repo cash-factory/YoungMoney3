@@ -4,15 +4,17 @@
  */
 export const WORKSPACE_ARCHIVE_SCOPE = 'workspace-and-media-only' as const;
 export const EXCLUDED_BROKER_EVIDENCE = [
-  'mt5_raw_events',
+  'mt5_raw_evidence',
+  'mt5_evidence_corrections',
   'mt5_evidence_conflicts',
   'mt5_conflict_classifications',
   'mt5_recovery_status',
   'mt5_links',
-  'mt5_lifecycle_revisions',
-  'mt5_position_lifecycles',
-  'mt5_position_specs',
+  'mt5_position_versions',
+  'mt5_events',
   'mt5_cash_movements',
+  'mt5_cash_reviews',
+  'mt5_cash_review_events',
   'trade_audit',
 ] as const;
 
