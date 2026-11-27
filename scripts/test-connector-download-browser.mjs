@@ -1,65 +1,64 @@
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
-import { chromium } from 'playwright';
+import {mkdir} from 'node:fs/promises';
+import {chromium} from 'playwright';
 
-const base=(process.env.YM3_PREVIEW_URL || 'http://127.0.0.1:4173/').replace(/\/$/,'');
-const api='https://api.github.com/repos/cash-factory/YoungMoney3/releases?per_page=30';
-const tag='staging-connector-v0.5.7-rc1';
+const base=(process.env.YM3_PREVIEW_URL||'http://127.0.0.1:4173/').replace(/\/$/,'');
+const api='https://api.github.com/repos/cash-factory/YoungMoney3/releases?per_page=40';
+const tag='staging-signaldesk-v0.4.0-preview.1';
 const root='https://github.com/cash-factory/YoungMoney3/releases/download/'+tag+'/';
-const exe=root+'YoungMoney3.Connector.exe';
-const checksum=exe+'.sha256';
-const digest='4fe6ca4278f608ebb876d327f1672e694fe7b916e854a2b21a276bd2f0d4e4fb';
+const installer=root+'YoungMoney3.Signal.Desk_0.4.0_x64-setup.exe';
+const checksum=installer+'.sha256';
+const digest='a'.repeat(64); // Synthetic digest only inside mock GitHub API.
+const legacy='https://github.com/cash-factory/YoungMoney3/releases/download/staging-connector-v0.6.4-rc1/YoungMoney3.Connector.exe';
 const verified=[{
-  tag_name:tag,prerelease:true,draft:false,published_at:'2026-11-23T06:29:29Z',
+  tag_name:tag,prerelease:true,draft:false,
   assets:[
-    {name:'YoungMoney3.Connector.exe',browser_download_url:exe,digest:'sha256:'+digest,size:36360932},
-    {name:'YoungMoney3.Connector.exe.sha256',browser_download_url:checksum,size:93},
+    {name:'YoungMoney3.Signal.Desk_0.4.0_x64-setup.exe',browser_download_url:installer,digest:'sha256:'+digest,size:35000000},
+    {name:'YoungMoney3.Signal.Desk_0.4.0_x64-setup.exe.sha256',browser_download_url:checksum,size:66},
   ],
 }];
+const old=[{tag_name:'staging-connector-v0.6.4-rc1',prerelease:true,draft:false,
+  assets:[{name:'YoungMoney3.Connector.exe',browser_download_url:legacy,size:36000000,digest:'sha256:'+digest}]}];
 const browser=await chromium.launch({headless:true});
 await mkdir('artifacts/adaptive',{recursive:true});
 try{
   for(const width of [390,1440]){
-    const context=await browser.newContext({viewport:{width,height:880},reducedMotion:'reduce'});
-    const page=await context.newPage();
-    const exceptions=[];
-    page.on('pageerror',err=>exceptions.push(err.message));
-    await page.route(api,route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(verified)}));
-    const response=await page.goto(base+'/connector-download.html',{waitUntil:'domcontentloaded'});
-    assert.equal(response?.status(),200,'The compiled site must serve its connector download page.');
-    await page.getByRole('status').filter({hasText:/Staging prerelease is available/}).waitFor();
-    const button=page.getByRole('link',{name:'Download Connector v0.5.7-rc1'});
-    assert.equal(await button.getAttribute('href'),exe,
-      'One-click install must target the verified official release executable.');
-    assert.equal(await page.getByRole('link',{name:'Download SHA-256 checksum'}).getAttribute('href'),checksum);
+    const ctx=await browser.newContext({viewport:{width,height:870},reducedMotion:'reduce'});
+    const page=await ctx.newPage();
+    const errors=[];page.on('pageerror',e=>errors.push(e.message));
+    await page.route(api,route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify([...old,...verified])}));
+    const r=await page.goto(base+'/connector-download.html',{waitUntil:'domcontentloaded'});
+    assert.equal(r?.status(),200);
+    await page.getByRole('status').filter({hasText:'Verified official staging installer available.'}).waitFor();
+    assert.equal(await page.locator('#download').getAttribute('href'),installer);
+    assert.equal(await page.locator('#checksum').getAttribute('href'),checksum);
     assert.equal((await page.locator('#digest').textContent()).trim(),digest);
+    assert.match((await page.title()),/Signal Desk/);
+    assert.equal(await page.getByRole('link',{name:/Download Signal Desk for Windows/}).count(),1);
+    assert.ok(!await page.content().then(c=>c.includes(legacy)),
+      'The primary download page may not advertise the owner-only classic executable.');
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),
-      'Release page must fit narrow viewports.');
-    assert.deepEqual(exceptions,[]);
-    await page.screenshot({path:'artifacts/adaptive/connector-release-'+width+'.png',fullPage:true});
+      'Download page must fit a narrow Windows/browser viewport.');
+    assert.deepEqual(errors,[]);
+    await page.screenshot({path:'artifacts/adaptive/signaldesk-download-'+width+'.png',fullPage:true});
 
-    // A failed GitHub API lookup may not invent a newer build or strip the
-    // last independently published checksum from the static fallback.
     await page.unroute(api);
     await page.route(api,route=>route.fulfill({status:429,contentType:'application/json',body:'{}'}));
     await page.reload({waitUntil:'domcontentloaded'});
-    await page.getByRole('status').filter({hasText:/Automatic release check unavailable/}).waitFor();
-    assert.equal(await page.getByRole('link',{name:'Download Connector v0.5.7-rc1'}).getAttribute('href'),exe);
-    assert.equal((await page.locator('#digest').textContent()).trim(),digest);
+    await page.getByRole('status').filter({hasText:/Could not check for newer releases/}).waitFor();
+    assert.match(await page.locator('#download').getAttribute('href'),/staging-signaldesk-v0\.3\.0-preview\.1/);
+    assert.match((await page.locator('#digest').textContent()).trim(),/^[a-f0-9]{64}$/);
 
-    // A draft or URL from an unrelated host must never replace trusted links.
     await page.unroute(api);
-    await page.route(api,route=>route.fulfill({status:200,contentType:'application/json',
-      body:JSON.stringify([
-        {...verified[0],assets:[{...verified[0].assets[0],browser_download_url:'https://untrusted.invalid/connector.exe'},verified[0].assets[1]]},
-      ])}));
+    await page.route(api,route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify([{
+      ...verified[0],assets:[{...verified[0].assets[0],browser_download_url:'https://untrusted.invalid/payload.exe'},verified[0].assets[1]]
+    }])}));
     await page.reload({waitUntil:'domcontentloaded'});
-    await page.getByRole('status').filter({hasText:/Latest release could not be verified automatically/}).waitFor();
-    assert.equal(await page.getByRole('link',{name:'Download Connector v0.5.7-rc1'}).getAttribute('href'),exe);
-    assert.deepEqual(exceptions,[]);
-    await context.close();
+    await page.getByRole('status').filter({hasText:/latest installer could not be verified/i}).waitFor();
+    assert.match(await page.locator('#download').getAttribute('href'),/staging-signaldesk-v0\.3\.0-preview\.1/);
+    assert.deepEqual(errors,[]);
+    await ctx.close();
   }
-  console.log(JSON.stringify({passed:true,widths:[390,1440],verifiedVersion:tag,untrustedUrlsRejected:true,offlineFallback:true}));
-}finally{
-  await browser.close();
-}
+  console.log(JSON.stringify({passed:true,primary:'Signal Desk',widths:[390,1440],
+    untrustedUrlsRejected:true,legacyNotAdvertised:true,offlineVerifiedFallback:true}));
+}finally{await browser.close()}
