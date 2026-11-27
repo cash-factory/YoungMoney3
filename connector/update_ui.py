@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import subprocess
 import sqlite3
+from contextlib import closing
 import sys
 import threading
 import tkinter as tk
@@ -186,7 +187,7 @@ class ConnectorUpdateUI:
             filename = self._copy_database_path()
             if not filename.exists():
                 return True
-            with sqlite3.connect(f"file:{filename.as_posix()}?mode=ro", uri=True, timeout=3) as db:
+            with closing(sqlite3.connect(f"file:{filename.as_posix()}?mode=ro", uri=True, timeout=3)) as db:
                 table = db.execute(
                     "SELECT 1 FROM sqlite_master WHERE type='table' "
                     "AND name='copy_local_permissions'"
