@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { RESTORE_ORDER, WORKSPACE_TABLES } from '@/lib/workspaceTables';
 import { encryptBackup, decryptBackup, isEncryptedBackup, type EncryptedBackup } from '@/lib/backupEncryption';
 import { personalBackupCoverage, brokerDerivedTradeCount, type BackupCoverage } from '@/lib/backupCoverage';
+import { assertExistingBrokerProjections, restorableWorkspaceRows } from '@/lib/backupRestoreSafety';
 
 const BACKUP_FORMAT = 'trade-journal-pro-backup';
 const BACKUP_VERSION = 1;
@@ -236,20 +237,15 @@ export function DataBackupModal({ open, onClose }: DataBackupModalProps) {
       // a personal archive cannot recreate immutable MT5 source trade evidence.
       // All broker-derived projections must already exist in this same authenticated
       // database and remain untouched during the workspace-only restore.
-      const brokerTrades = (backup.data.trades || []).filter(row => row.trade_source === 'mt5');
-      for (let offset = 0; offset < brokerTrades.length; offset += 100) {
-        const group = brokerTrades.slice(offset,offset+100);
-        const ids = group.map(row => row.id);
-        if (ids.some(id => typeof id !== 'string' || id.length === 0))
-          throw new Error('Backup contains broker-derived records with invalid identities. No data was changed.');
-        const {data: existing, error: readError} = await supabase.from('trades')
-          .select('id,trade_source').in('id', ids);
-        if (readError) throw new Error('Cannot verify existing MT5 history before restore. No data was changed.');
-        const present = new Set((existing || [])
-          .filter(row => row.trade_source === 'mt5').map(row => String(row.id)));
-        if (ids.some(id => !present.has(String(id))))
-          throw new Error('Broker-derived trades are missing from this database. Restore the original MT5 evidence with an authorized provider-level recovery first. Workspace restore was stopped before modifying data.');
-      }
+      const brokerTradeCount = await assertExistingBrokerProjections(
+        backup.data.trades || [],
+        async ids => {
+          const { data: existing, error: readError } = await supabase.from('trades')
+            .select('id,trade_source').in('id', ids);
+          if (readError) throw new Error('Cannot verify existing MT5 history before restore. No data was changed.');
+          return (existing || []) as { id: string; trade_source?: string | null }[];
+        },
+      );
 
       for (let index = 0; index < backup.media.length; index += 1) {
         const item = backup.media[index];
@@ -268,9 +264,7 @@ export function DataBackupModal({ open, onClose }: DataBackupModalProps) {
         const table = availableTables[index];
         // Preserve server-owned broker projections byte-for-byte: the Worker
         // provides their immutable evidence, never a browser JSON file.
-        const rows = table === 'trades'
-          ? backup.data[table].filter(row => row.trade_source !== 'mt5')
-          : backup.data[table];
+        const rows = restorableWorkspaceRows(table,backup.data[table]);
         if (rows.some(row => row.user_id !== undefined && row.user_id !== backup.ownerId)) throw new Error(`Backup ownership validation failed for ${table}.`);
         setProgress(`Restoring ${table.replace(/_/g, ' ')} (${index + 1}/${availableTables.length})…`);
         const conflictKey = table === 'instrument_favorites' ? 'user_id,instrument_id' : 'id';
@@ -300,7 +294,7 @@ export function DataBackupModal({ open, onClose }: DataBackupModalProps) {
       }
 
       const partial = backup.unavailableTables.length ? ` The original backup lacked tables: ${backup.unavailableTables.join(', ')}.` : '';
-      setMessage(`Workspace-only restore finished: ${restoredRows} record rows added, ${skippedRows} already existed, ${restoredMedia} attachments restored, and ${skippedMedia} already existed. ${brokerTrades.length} existing MT5 trade projections were verified and left unchanged. Immutable MT5 broker evidence was NOT restored; use separately verified D1/provider recovery and broker reconciliation.${partial}`);
+      setMessage(`Workspace-only restore finished: ${restoredRows} record rows added, ${skippedRows} already existed, ${restoredMedia} attachments restored, and ${skippedMedia} already existed. ${brokerTradeCount} existing MT5 trade projections were verified and left unchanged. Immutable MT5 broker evidence was NOT restored; use separately verified D1/provider recovery and broker reconciliation.${partial}`);
       setProgress('');
     } catch (restoreError) {
       setError(`${restoreError instanceof Error ? restoreError.message : 'Restore could not be completed.'} You can retry this file; existing rows are skipped, so the restore is resumable.`);
