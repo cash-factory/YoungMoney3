@@ -41,6 +41,14 @@ Open the Windows connector's **Help** page. The current native app contains four
 
 Each topic contains four steps. Use the numbered step selector or **Previous / Next step**; the action inside each step navigates to the corresponding **real connector screen**. It does **not** execute that screen's action. The help page also provides a searchable FAQ and a small exploration progress bar. Progress stores only guide step IDs in this Windows user's local webview storage; it contains no broker credentials, pairing codes or trades.
 
+### Connection state and copying readiness
+
+The Dashboard's **MT5 Connections** page now provides an expandable connection checklist and account-specific explanations. Open a linked account to see what its current state means and the recommended next action. **Monitoring** means the PC is online and the account has fresh capture evidence; it is not a guarantee that every broker fill has been received. Other states identify intentional pause, stale capture, interrupted recovery or evidence conflicts separately.
+
+Copy Studio's **Copy Fleet** section explains the four-stage route: select source/followers, configure risk and view a planning estimate, secure independent Windows follower authorization, then explicitly arm and supervise. Its readiness checklist highlights missing prerequisites before the Arm button becomes available. This checklist is **advisory**: the server and local connector must still reject a noncompliant order, and Signal Desk 0.4.0 cannot grant consent or execute copying.
+
+The detailed operator and test checklist is in [Connection and Copy Studio acceptance](CONNECTION_AND_COPY_UX_ACCEPTANCE.md). These improvements do not constitute completed Windows or broker acceptance.
+
 ### Critical operational distinctions
 
 - **PC paired** means the Windows connector has a saved connection; it is not proof of a successful broker login.
