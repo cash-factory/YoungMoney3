@@ -20,9 +20,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-STAGING = 'https://ym-fx-staging.ethical-hacker263.workers.dev'
+from service_channel import SERVICE_ORIGIN, SESSION_NAMESPACE
 APP_ROOT = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'YMFX'
-SESSIONS = APP_ROOT / 'staging-gui' / 'preferences.json'
+SESSIONS = APP_ROOT / SESSION_NAMESPACE / 'preferences.json'
 HEX_CODE = re.compile(r'[0-9a-fA-F]{32}\Z')
 ALLOWED = frozenset({'snapshot', 'scan_terminals', 'pair_pc', 'start_monitoring',
                      'stop_monitoring', 'set_session_enabled', 'rename_session',
@@ -86,7 +86,7 @@ class Bridge:
             import keyring
             from keyring.backends.Windows import WinVaultKeyring
             keyring.set_keyring(WinVaultKeyring())
-            name = 'YMFX MT5 ' + hashlib.sha256(STAGING.encode()).hexdigest()[:16]
+            name = 'YMFX MT5 ' + hashlib.sha256(SERVICE_ORIGIN.encode()).hexdigest()[:16]
             return bool(keyring.get_password(name, 'token'))
         except (ImportError, OSError, RuntimeError, ValueError):
             return False
@@ -364,7 +364,7 @@ class Bridge:
                     self.pairing(pair_code, self._report)
                 else:
                     import connect
-                    connect.main([STAGING, '--pair', '--pair-only'], pairing_code=pair_code,
+                    connect.main([SERVICE_ORIGIN, '--pair', '--pair-only'], pairing_code=pair_code,
                                  stop_event=self.stop, pause_event=self.pause,
                                  report=self._report)
                 self.paired = self._read_pairing()
@@ -379,7 +379,7 @@ class Bridge:
                 import connect
                 from managed_accounts import ManagedAccounts
                 manager = ManagedAccounts(self._store, self.settings.parent.parent / 'terminals')
-                connect.main([STAGING, *self._store.all_terminals()], stop_event=self.stop,
+                connect.main([SERVICE_ORIGIN, *self._store.all_terminals()], stop_event=self.stop,
                              pause_event=self.pause, report=self._report,
                              retry_queue=self.retry_queue,
                              all_slots=self._store.all_terminals,
@@ -521,7 +521,7 @@ class Bridge:
             return {'stop_requested': True, 'outbox_preserved': True}
         if method in ('open_dashboard', 'open_copy_studio'):
             import webbrowser
-            target = STAGING + ('/#copy-studio' if method == 'open_copy_studio' else '/#mt5')
+            target = SERVICE_ORIGIN + ('/#copy-studio' if method == 'open_copy_studio' else '/#mt5')
             return {'opened': bool(webbrowser.open(target))}
         if method == 'shutdown':
             self._setup_cancel.set()
