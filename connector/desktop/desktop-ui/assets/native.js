@@ -16,7 +16,8 @@
     if (oldNode.nodeType !== nextNode.nodeType || oldNode.nodeName !== nextNode.nodeName ||
         (oldNode.nodeType === 1 &&
          ((oldNode.hasAttribute('data-native-select') && oldNode.getAttribute('data-native-select') !== nextNode.getAttribute('data-native-select')) ||
-          (oldNode.hasAttribute('data-page') && oldNode.getAttribute('data-page') !== nextNode.getAttribute('data-page'))))) {
+          (oldNode.hasAttribute('data-page') && oldNode.getAttribute('data-page') !== nextNode.getAttribute('data-page')) ||
+          (oldNode.hasAttribute('data-native-guide-frame') && oldNode.getAttribute('data-native-guide-frame') !== nextNode.getAttribute('data-native-guide-frame'))))) {
       oldNode.replaceWith(nextNode.cloneNode(true));
       return;
     }
@@ -250,7 +251,7 @@
       `<div class="native-help-bubble">Logs contain sanitized operational events only. They are not proof of individual order execution or broker fills. For trade evidence, use the journal's immutable broker records.</div>`;
   }
 
-  function viewHelp(){return intro('Help & Guides','Guidance for the redesigned native desktop connector.')+
+  function viewHelp(){return window.YMFXNativeGuide?.render({intro,action,safe,screen,model}) || intro('Help & Guides','Guidance for the redesigned native desktop connector.')+
      `<div class="native-operations">${card(cardHead('Getting started','help')+`<div class="native-pad"><p>1. Pair the Windows computer with the code from YoungMoney3.</p><p>2. Choose Add Account here, select an installed MT5 program and log in inside the private terminal window.</p><p>3. On your dashboard, scan paired devices and choose which verified accounts to monitor.</p><p>4. Start read-only monitoring only after the dashboard confirms the exact broker login.</p><p>5. Review any reconciliation issues before trusting journal metrics.</p></div>`)}${card(cardHead('Copying safely','shield-check')+`<div class="native-pad"><p>Trade copying is separate from monitoring. Followers require verified account identity, risk settings and explicit local approval. The new interface cannot arm or execute trades.</p><div class="native-inline-actions">${action('Open Copy Studio','open_copy_studio')}</div></div>`)}</div>`}
   function nativeSidebar(){return `<aside class="sidebar"><div class="brand-box"><img src="assets/ymfx-brand.svg" alt="YoungMoney3"><div class="brand-label"><strong>YOUNGMONEY3</strong><span>MT5 CONNECTOR</span></div></div><div class="brand-caption">Your trading companion.</div><nav class="side-nav" aria-label="Connector sections">${screen.NAV.map(([id,label,ic])=>`<button type="button" data-page="${id}" class="${screen.state.page===id?'active':''}" aria-current="${screen.state.page===id?'page':'false'}">${screen.icon(ic)}<span class="nav-label">${label}</span></button>`).join('')}</nav><div class="side-bottom"><div class="side-overline">YOUNGMONEY3 USER</div><div class="side-workspace">${safe(model.user||'Pair to identify user')}</div><div class="side-overline" style="margin-top:12px">TRADING ACCOUNT</div><div class="side-workspace">${safe(selectedAccount()?.login?`${selectedAccount().account_name||selectedAccount().name} · ${selectedAccount().login}`:'No broker login verified')}</div><div class="side-version">Staging · Native Desktop<br>Read-only monitoring / Copying separate</div></div></aside>`}
   function nativeTopbar(){return `<div class="topbar"><div class="toolbar-left"><strong style="font-size:13px">MT5 Connections</strong>${badge(model.paired?statusLabel():'Pairing required',statusTone())}</div><div class="toolbar-right" style="font-size:12px;color:#67717d">${window.YMFXUpdates?.topbar() || ''}<span>Copying requires approval</span></div></div>`}
@@ -341,6 +342,7 @@
     // Override shell slots through functions passed into the original UI renderer.
     // The source page's brand/safety elements remain visible while account data is real.
     document.addEventListener('click',evt=>{
+      if(window.YMFXNativeGuide?.handleClick(evt,{screen,refreshView,nativeCommand})){evt.stopImmediatePropagation();evt.preventDefault();return;}
       if(window.YMFXUpdates?.handleClick(evt)){evt.stopImmediatePropagation();evt.preventDefault();return;}
       const action=evt.target.closest('[data-native-action]');
       if(action){evt.stopImmediatePropagation();evt.preventDefault();nativeCommand(action.dataset.nativeAction);return;}
@@ -349,6 +351,7 @@
       const filter=evt.target.closest('[data-native-filter]');
       if(filter){evt.stopImmediatePropagation();evt.preventDefault();activityFilter=filter.dataset.nativeFilter;refreshView();return;}
     },true);
+    document.addEventListener('input',evt=>{window.YMFXNativeGuide?.handleInput(evt,refreshView);},true);
     window.addEventListener('beforeunload',()=>{if(bridge?.child)bridge.child.write(JSON.stringify({id:++seq,method:'shutdown'})+'\n').catch(()=>{});});
     // Do not poll a hidden/minimized desktop window; resume on activation.
     // A visible window polls at a steady cadence, but only changed evidence is painted.
