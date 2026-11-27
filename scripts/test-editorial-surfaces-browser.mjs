@@ -91,6 +91,12 @@ try{
     const journal=page.getByRole('region',{name:'Broker execution context for journaling'});
     await journal.waitFor();
     assert.match(await journal.evaluate(el=>getComputedStyle(el).backgroundImage),/gradient/);
+    await page.goto(base+'/#weekly-reviews',{waitUntil:'domcontentloaded'});
+    const weekly=page.getByRole('region',{name:'Current week broker lifecycle reconciliation'});
+    await weekly.waitFor();
+    assert.equal(await weekly.locator('.ym-tone-tile').count()>=3,true,
+      'Weekly evidence statistics should use the same restrained tinted tiles');
+    assert.match(await weekly.evaluate(el=>getComputedStyle(el).backgroundImage),/gradient/);
     await page.goto(base+'/#account-settings',{waitUntil:'domcontentloaded'});
     await page.locator('#settings-username').waitFor();
     assert.equal(await page.locator('#settings-username-feedback').count(),0,
