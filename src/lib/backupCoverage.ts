@@ -30,13 +30,6 @@ export function personalBackupCoverage(): BackupCoverage {
   };
 }
 
-export function includesBrokerEvidenceRestore(value: unknown): boolean {
-  // Do not trust a client-supplied or historical JSON field claiming full recovery.
-  // No safe broker-evidence restoration endpoint exists in this archive format.
-  void value;
-  return false;
-}
-
 export function brokerDerivedTradeCount(data: Record<string, Record<string, unknown>[]>): number {
   return (data.trades ?? []).filter(trade => trade.trade_source === 'mt5').length;
 }
