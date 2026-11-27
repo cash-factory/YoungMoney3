@@ -167,7 +167,9 @@ export function RiskManagementPage() {
         {(metrics.riskEvidenceMissingCount > 0 || metrics.historicalPnlMissingCount > 0 || metrics.invalidEntryTimestampCount > 0 || !metrics.timeZoneVerified) &&
           <p className="mt-1 text-xs text-secondary">
             {metrics.riskEvidenceMissingCount} entries lack verified initial-risk percentages;
-            {' '}{metrics.realizedPnlMissingCount} closed trades lack realized P&amp;L.
+            {' '}{metrics.historicalPnlMissingCount} historical closed trades lack realized P&amp;L;
+            {' '}{metrics.invalidEntryTimestampCount} entry timestamps are invalid.
+            {!metrics.timeZoneVerified && ' Account reset timezone needs correction.'}
             Unobserved evidence is not zero exposure.
           </p>}
       </div>}
