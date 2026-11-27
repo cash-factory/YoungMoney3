@@ -42,6 +42,8 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          # A rejected checksum MUST return nonzero; inspect that expected exit ourselves.
+          $PSNativeCommandUseErrorActionPreference = $false
           $dir = Join-Path $env:RUNNER_TEMP 'updater-integration'
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
           $target = Join-Path $dir 'YoungMoney3.Connector.exe'
