@@ -60,6 +60,8 @@ jobs:
           python -m pip install -r connector/requirements.txt 'pyinstaller==6.16.0'
           python -m unittest discover -s connector/desktop/tests -p 'test_desktop_bridge.py' -v
           python -m unittest discover -s connector/desktop/tests -p 'test_account_setup.py' -v
+          python -m unittest discover -s connector/desktop/tests -p 'test_update_safety.py' -v
+          python -m unittest discover -s connector/desktop/tests -p 'test_service_channel.py' -v
       - name: Build only the isolated Python bridge
         shell: pwsh
         run: |
