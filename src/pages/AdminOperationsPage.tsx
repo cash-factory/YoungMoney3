@@ -25,6 +25,16 @@ export function AdminOperationsPage(){
   const [busy,setBusy]=useState<string|null>(null);
   const [loading,setLoading]=useState(true);
   const [feedback,setFeedback]=useState<{error?:string;success?:string}>({});
+  const [classicArchive,setClassicArchive]=useState<{owner:boolean;available:boolean}|null>(null);
+  useEffect(()=>{
+    if(profile?.role!=='admin'||profile.account_status!=='active')return;
+    let active=true;
+    void fetch('/api/owner/classic/info',{credentials:'same-origin',cache:'no-store'})
+      .then(async response=>response.ok?response.json():null)
+      .then(value=>{if(active && value?.owner===true)setClassicArchive({owner:true,available:value.available===true});})
+      .catch(()=>{if(active)setClassicArchive(null);});
+    return ()=>{active=false;};
+  },[profile?.role,profile?.account_status]);
   const load=useCallback(async()=>{
     setLoading(true);
     try{
@@ -70,6 +80,13 @@ export function AdminOperationsPage(){
     </div>
     {feedback.error&&<p role="alert" className="card p-3 text-sm text-error-500">{feedback.error}</p>}
     {feedback.success&&<p role="status" className="card p-3 text-sm text-secondary">{feedback.success}</p>}
+    {classicArchive?.owner && <section className="card p-5 space-y-3" aria-label="Private owner connector archive">
+      <h2 className="font-semibold flex items-center gap-2"><LockKeyhole size={18}/> Classic connector · owner archive</h2>
+      <p className="text-xs text-secondary">Signal Desk is the standard Windows connector for every member. The legacy executable is reserved for the verified owner and is served only from a private archive.</p>
+      {classicArchive.available
+        ? <a className="btn-secondary inline-flex items-center gap-2" href="/api/owner/classic/download"><LockKeyhole size={15}/> Download private classic connector</a>
+        : <p className="text-xs text-muted" role="status">Private owner archive is not configured yet. Public classic releases are no longer promoted here.</p>}
+    </section>}
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {[
         ['Members',overview?.users?.members??'—'],
