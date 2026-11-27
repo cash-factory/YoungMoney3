@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 320" fill="none">
+ <g stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M150 242 221 194 284 215 347 113 426 152" stroke-width="8" opacity=".76"/>
+  <path d="M221 194 233 107 347 113M233 107 301 53l46 60M284 215 426 152M347 113 393 78" stroke-width="4" opacity=".31"/>
+  <circle cx="150" cy="242" r="13" fill="#000" stroke="none" opacity=".58"/>
+  <circle cx="221" cy="194" r="13" fill="#000" stroke="none" opacity=".9"/>
+  <circle cx="284" cy="215" r="13" fill="#000" stroke="none" opacity=".65"/>
+  <circle cx="347" cy="113" r="16" fill="#000" stroke="none" opacity=".92"/>
+  <circle cx="426" cy="152" r="12" fill="#000" stroke="none" opacity=".7"/>
+  <circle cx="233" cy="107" r="9" fill="#000" stroke="none" opacity=".46"/>
+  <circle cx="301" cy="53" r="7" fill="#000" stroke="none" opacity=".4"/>
+  <circle cx="393" cy="78" r="7" fill="#000" stroke="none" opacity=".42"/>
+  <circle cx="347" cy="113" r="48" stroke-width="3" opacity=".25"/>
+  <circle cx="347" cy="113" r="73" stroke-width="3" opacity=".16"/>
+  <path d="M81 244h35M94 218h22M94 191h22" stroke-width="5" opacity=".18"/>
+ </g>
+</svg>
