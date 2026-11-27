@@ -53,6 +53,17 @@ def inspect(path: Path) -> dict:
         violations = db.execute("PRAGMA foreign_key_check").fetchmany(1)
         if violations:
             raise EvidenceAuditError("Restored snapshot has broken foreign key references")
+        # The audit trail also depends on constraints, indexes and no-update
+        # triggers. Equal row data with missing immutability enforcement is NOT
+        # a valid restoration; fingerprint the full non-internal schema as well.
+        schema_rows=db.execute("""
+            SELECT type,name,tbl_name,sql FROM sqlite_master
+            WHERE type IN ('table','index','trigger','view')
+              AND name NOT LIKE 'sqlite_%'
+            ORDER BY type,name
+        """).fetchall()
+        schema_json=json.dumps(schema_rows,ensure_ascii=True,separators=(",",":")).encode("utf-8")
+        schema_sha256=hashlib.sha256(schema_json).hexdigest()
         report={}
         for table in EVIDENCE_TABLES:
             columns=[entry[1] for entry in db.execute('PRAGMA table_info("'+table+'")')]
@@ -73,12 +84,14 @@ def inspect(path: Path) -> dict:
                 count+=1
             report[table]={"rows":count,"sha256":digest.hexdigest()}
         return {"format":"ymfx-restored-d1-evidence-fingerprint",
-                "version":MANIFEST_VERSION,"tables":report}
+                "version":MANIFEST_VERSION,"schema_sha256":schema_sha256,"tables":report}
 
 
 def compare_reports(expected: dict, actual: dict) -> None:
     if expected.get("format") != actual.get("format") or expected.get("version") != actual.get("version"):
         raise EvidenceAuditError("Snapshot manifest format is not compatible")
+    if expected.get("schema_sha256") != actual.get("schema_sha256"):
+        raise EvidenceAuditError("Restored D1 schema, indexes or immutability triggers differ")
     if expected.get("tables") != actual.get("tables"):
         raise EvidenceAuditError("Restored D1 evidence differs from the trusted baseline")
 
