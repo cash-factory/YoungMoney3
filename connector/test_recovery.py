@@ -80,7 +80,7 @@ class SpecAndRecoveryTests(unittest.TestCase):
                 self.assertEqual(self.db.execute(
                     "SELECT COUNT(*) FROM position_observations").fetchone()[0],count)
                 # Confirm a nontrivial subset with broker-deal evidence.
-                for pid in list(observed)[::5]:
+                for pid in sorted(observed)[::5]:
                     mark_checked(self.db,'link',pid,now,True)
                 due,unresolved=due_positions(self.db,'link',set(),now+65000)
                 self.assertEqual(unresolved,count-len(list(observed)[::5]))
