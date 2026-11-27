@@ -40,5 +40,9 @@ def due_positions(db,link,currently_open,now,limit=16):
 def mark_checked(db,link,pid,when,closed):
     db.execute("""INSERT INTO position_recovery(link,position_id,status,checked_ms)
        VALUES(?,?,?,?) ON CONFLICT(link,position_id)
-       DO UPDATE SET status=excluded.status,checked_ms=excluded.checked_ms""",
+       DO UPDATE SET
+         status=CASE WHEN position_recovery.status='broker_closure_verified'
+                     THEN position_recovery.status ELSE excluded.status END,
+         checked_ms=CASE WHEN position_recovery.status='broker_closure_verified'
+                         THEN position_recovery.checked_ms ELSE excluded.checked_ms END""",
        (link,str(pid),"broker_closure_verified" if closed else "awaiting_broker_closure",int(when)))
