@@ -155,3 +155,27 @@ test('invalid entry capital makes percentage-loss compliance unknown', () => {
   const metrics=calculateRiskMetrics([], {...options, accountBalance:0});
   assert.equal(metrics.status,'unknown');
 });
+
+test('missing historical P&L prevents a verified maximum-drawdown verdict', () => {
+  const missingPriorLoss=makeTrade({
+    id:'old-unknown',
+    entry_time:'2026-10-18T12:00:00.000Z',
+    exit_time:'2026-10-18T14:00:00.000Z',
+    risk_percent:0.2,
+    pnl:NaN,
+  });
+  const metrics=calculateRiskMetrics([missingPriorLoss],options);
+  assert.equal(metrics.realizedPnlMissingCount,0);
+  assert.equal(metrics.historicalPnlMissingCount,1);
+  assert.equal(metrics.status,'unknown');
+});
+
+test('bad timestamps and unsupported timezone must not give a safe verdict', () => {
+  const badEntry=makeTrade({id:'invalid-entry',entry_time:'not-a-date',pnl:25});
+  const metrics=calculateRiskMetrics([badEntry],options);
+  assert.equal(metrics.invalidEntryTimestampCount,1);
+  assert.equal(metrics.status,'unknown');
+  const invalidZone=calculateRiskMetrics([], {...options,timeZone:'Invalid/Zone'});
+  assert.equal(invalidZone.timeZoneVerified,false);
+  assert.equal(invalidZone.status,'unknown');
+});
