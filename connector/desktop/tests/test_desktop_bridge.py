@@ -135,6 +135,18 @@ class BridgeTests(unittest.TestCase):
             self.assertEqual([s['status'] for s in self.bridge.snapshot()['sessions']],
                              ['not-verified','not-verified'])
 
+    def test_more_than_one_hundred_verified_links_and_pauses_are_not_truncated(self):
+        links=[{'slot':f'C:/YMFX/account-{index}/terminal64.exe',
+                'login':str(100000+index),'server':'Broker-Demo',
+                'link':f'link-{index}'} for index in range(130)]
+        self.bridge._report({'state':'known-links','links':links})
+        self.bridge._report({'state':'monitoring-policy',
+                             'paused':[f'link-{index}' for index in range(130)]})
+        self.assertEqual(len(self.bridge.links),130)
+        self.assertEqual(len(self.bridge.remote_paused_links),130)
+        self.assertIn(links[-1]['slot'],self.bridge.links)
+        self.assertIn('link-129',self.bridge.remote_paused_links)
+
     def test_account_discovery_pages_all_130_sessions_without_truncation(self):
         reports=[]
         def send(action,payload):
