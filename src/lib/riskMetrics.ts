@@ -24,12 +24,16 @@ export interface RiskMetrics {
   dailyLossPctUsed: number;
   maxRiskPerTradePct: number;
   maxRiskUsedToday: number;
+  riskEvidenceMissingCount: number;
+  realizedPnlMissingCount: number;
+  riskBreaches: string[];
+  statusReason: string;
   maxDrawdown: number;
   maxDrawdownPct: number;
   currentDrawdown: number;
   currentDrawdownPct: number;
   maxDrawdownPctLimit: number;
-  status: 'safe' | 'warning' | 'danger';
+  status: 'safe' | 'warning' | 'danger' | 'unknown';
   balance: number;
   timeZone: string;
 }
@@ -66,6 +70,8 @@ export function calculateRiskMetrics(trades: Trade[], options: RiskMetricOptions
     && trade.exit_time
     && dateKeyInTimeZone(trade.exit_time, options.timeZone) === todayKey,
   );
+  const realizedPnlMissingCount = closedToday.filter(trade => !Number.isFinite(trade.pnl)).length;
+  // The known subtotal is NOT equivalent to the full daily P&L if rows are missing.
   const todayPnl = closedToday.reduce((sum, trade) => sum + (Number.isFinite(trade.pnl) ? trade.pnl : 0), 0);
   const balance = Number.isFinite(options.accountBalance) && options.accountBalance > 0 ? options.accountBalance : 0;
   const percentageLimit = balance * Math.max(0, options.maxDailyLossPct) / 100;
@@ -91,20 +97,45 @@ export function calculateRiskMetrics(trades: Trade[], options: RiskMetricOptions
   const currentDrawdown = peakPnl - runningPnl;
   const maxDrawdownPct = balance > 0 ? maxDrawdown / balance * 100 : 0;
   const currentDrawdownPct = balance > 0 ? currentDrawdown / balance * 100 : 0;
-  const riskPcts = enteredToday.filter(trade => trade.risk_percent != null && Number.isFinite(trade.risk_percent)).map(trade => trade.risk_percent!);
+  const riskPcts = enteredToday
+    .filter(trade => trade.risk_percent != null &&
+      Number.isFinite(trade.risk_percent) && trade.risk_percent > 0)
+    .map(trade => trade.risk_percent!);
+  const riskEvidenceMissingCount = enteredToday.length - riskPcts.length;
   const maxRiskUsedToday = riskPcts.length ? Math.max(...riskPcts) : 0;
   const todayTradeCount = enteredToday.length;
   const maxDailyTrades = Math.max(1, options.maxDailyTrades);
   const maxDrawdownPctLimit = Math.max(0, options.maxDrawdownPct);
 
-  let status: RiskMetrics['status'] = 'safe';
-  if ((dailyLossLimitAmount > 0 && dailyLossPctUsed >= 100)
-    || todayTradeCount >= maxDailyTrades
-    || (maxDrawdownPctLimit > 0 && currentDrawdownPct >= maxDrawdownPctLimit)) {
-    status = 'danger';
-  } else if (dailyLossPctUsed >= 70 || (maxDailyTrades > 1 && todayTradeCount >= maxDailyTrades - 1) || (maxDrawdownPctLimit > 0 && currentDrawdownPct >= maxDrawdownPctLimit * 0.8)) {
-    status = 'warning';
-  }
+  const riskBreaches: string[] = [];
+  if (dailyLossLimitAmount > 0 && dailyLossPctUsed >= 100)
+    riskBreaches.push('Daily loss limit reached');
+  if (todayTradeCount >= maxDailyTrades)
+    riskBreaches.push('Daily entry limit reached');
+  if (maxRiskUsedToday > 0 && options.maxRiskPerTradePct > 0 &&
+      maxRiskUsedToday > options.maxRiskPerTradePct)
+    riskBreaches.push('Per-trade risk limit exceeded');
+  if (maxDrawdownPctLimit > 0 && currentDrawdownPct >= maxDrawdownPctLimit)
+    riskBreaches.push('Maximum drawdown reached');
+
+  // A missing risk percentage, broker/entry balance, or closed-trade P&L
+  // prevents a reliable "Within Limits" verdict. Never treat unknown as 0%.
+  const incomplete = riskEvidenceMissingCount > 0 ||
+    realizedPnlMissingCount > 0 ||
+    accountTrades.some(trade => trade.status === 'closed' && !trade.exit_time) ||
+    (balance <= 0 && options.maxDailyLossPct > 0);
+  const approaching = dailyLossPctUsed >= 70 ||
+    (maxDailyTrades > 1 && todayTradeCount >= maxDailyTrades - 1) ||
+    (maxDrawdownPctLimit > 0 && currentDrawdownPct >= maxDrawdownPctLimit * 0.8) ||
+    (options.maxRiskPerTradePct > 0 && maxRiskUsedToday >= options.maxRiskPerTradePct * 0.8);
+  const status: RiskMetrics['status'] = riskBreaches.length ? 'danger'
+    : incomplete ? 'unknown'
+    : approaching ? 'warning'
+    : 'safe';
+  const statusReason = riskBreaches.length ? riskBreaches.join('; ')
+    : incomplete ? 'Some trades have unverified risk, realized P&L or account balance evidence.'
+    : approaching ? 'At least one configured risk limit is approaching.'
+    : 'No breaches found in the available recorded evidence.';
 
   return {
     todayPnl,
@@ -118,6 +149,10 @@ export function calculateRiskMetrics(trades: Trade[], options: RiskMetricOptions
     dailyLossPctUsed,
     maxRiskPerTradePct: options.maxRiskPerTradePct,
     maxRiskUsedToday,
+    riskEvidenceMissingCount,
+    realizedPnlMissingCount,
+    riskBreaches,
+    statusReason,
     maxDrawdown,
     maxDrawdownPct,
     currentDrawdown,
