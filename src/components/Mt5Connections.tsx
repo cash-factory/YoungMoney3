@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useTrades } from '@/hooks/useData';
 
-import { mt5Action as action, monitoringStatus, pcOnline, pairedPcName, type Device, type Link } from '@/lib/mt5Monitor';
+import { mt5Action as action, monitoringGuidance, monitoringStatus, pcOnline, pairedPcName, type Device, type Link } from '@/lib/mt5Monitor';
 
 type PositionSummary = {
   lifecycle_id:string;position_id:string;symbol:string;direction:string;status:string;
@@ -181,6 +181,16 @@ export function Mt5Connections() {
     {setupHint && <div className="ym-action-feedback" data-kind="info" role="status"><CircleHelp size={17}/><span>{setupHint}</span><button type="button" aria-label="Dismiss" onClick={()=>setSetupHint('')}><X size={16}/></button></div>}
     {error && !feedback && <div className="ym-action-feedback" data-kind="error" role="alert"><AlertTriangle size={16}/>{error}</div>}
     {capturePaused && <div className="ym-action-feedback" data-kind="warning" role="alert"><AlertTriangle size={17}/>Capture paused by your staging administrator.</div>}
+    <details className="ym-connection-path">
+      <summary><CircleHelp size={16} aria-hidden="true"/> How to confirm a working connection</summary>
+      <ol>
+        <li><strong>Pair PC</strong><span>The Windows connector is identified, not necessarily capturing trades.</span></li>
+        <li><strong>Verify broker</strong><span>Match the MT5 login and server shown in Signal Desk.</span></li>
+        <li><strong>Enable monitoring</strong><span>Choose which linked accounts you want recorded.</span></li>
+        <li><strong>Confirm capture</strong><span>Check recent account-level sync evidence; review any recovery gaps separately.</span></li>
+      </ol>
+      <p>Copying requires separate account-specific consent. Pairing or monitoring never enables order execution.</p>
+    </details>
     <section className="ym-signal-launch" aria-label="Windows connector download">
       <div className="ym-signal-launch-copy">
         <span className="ym-signal-launch-kicker">SIGNAL DESK / THE WINDOWS CONNECTOR</span>
@@ -262,6 +272,7 @@ export function Mt5Connections() {
               <ChevronDown className="ym-selectable-chevron" size={18} aria-hidden="true"/>
             </button>
             {expanded && <div className="ym-selection-details" id={'ym-pc-details-'+d.id}>
+               {!online && <p className="ym-context-short" role="status">This PC has not checked in within 90 seconds. Linked accounts remain saved; reopen Signal Desk before scanning or retrying.</p>}
               <div className="ym-detail-grid">
                 <div><span>Connector</span><strong>{d.connector_version||'Version unknown'}</strong></div>
                 <div><span>Last check-in</span><strong>{d.last_seen?new Date(d.last_seen).toLocaleString():'Never'}</strong></div>
@@ -289,7 +300,7 @@ export function Mt5Connections() {
                     <span className="ym-connection-badge" data-tone={accountStatus==='Monitoring'?'success':accountStatus.includes('attention')?'danger':'warning'}>{accountStatus}</span>
                     <ArrowRight size={15} className="text-muted"/>
                   </button>;
-                }):<p className="ym-pc-accounts-empty">No linked accounts yet. Use Add broker account to connect a demo login.</p>}
+                }):<p className="ym-pc-accounts-empty">No linked accounts yet. Add a dedicated MT5 terminal in Signal Desk, sign in, then scan this PC here.</p>}
               </div>
               {count>0 && <button type="button" className="ym-select-account-jump" onClick={()=>document.getElementById('ym-linked-accounts')?.scrollIntoView({behavior:'smooth',block:'start'})}>Open account manager <ArrowRight size={15}/></button>}
             </div>}
@@ -316,6 +327,7 @@ export function Mt5Connections() {
         {visibleLinks.map(l=>{
           const pc=devices.find(d=>d.id===l.device),expanded=selectedAccountId===l.id;
           const status=monitoringStatus(l,pc,capturePaused),isGood=status==='Monitoring';
+           const guidance=monitoringGuidance(l,pc,capturePaused);
           return <div key={l.id} role="listitem" className="ym-selectable-card" data-selected={expanded}>
             <button type="button" className="ym-selectable-trigger" aria-expanded={expanded} aria-controls={'ym-account-details-'+l.id} onClick={()=>{setSelectedAccountId(expanded?null:l.id);setAccountPanel('overview');}}>
               <span className="ym-selection-icon"><Wallet size={20}/></span>
@@ -324,6 +336,11 @@ export function Mt5Connections() {
               <ChevronDown className="ym-selectable-chevron" size={18}/>
             </button>
             {expanded && <div className="ym-selection-details" id={'ym-account-details-'+l.id}>
+               <div className="ym-account-state-guide" data-tone={guidance.tone}>
+                 <strong>{status}</strong>
+                 <p>{guidance.meaning}</p>
+                 <p><b>Next step:</b> {guidance.nextStep}</p>
+               </div>
               {l.status==='connected' ? <>
                 <div className="ym-account-overview-figures">
                   <div><small>Broker balance</small><strong>{l.broker_balance==null?'—':l.broker_balance.toLocaleString()} <span>{l.currency}</span></strong></div>
