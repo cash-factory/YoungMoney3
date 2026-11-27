@@ -73,7 +73,7 @@ try{
     });
     assert.notEqual(typography.title,typography.support,'Title and supporting text need distinctive accents');
     assert.match(typography.background,/gradient/);
-    const today=page.getByRole('button',{name:'Today',exact:true});
+    const today=page.locator('#workspace-content .ym-calendar-today');
     const todayStyle=await today.evaluate(el=>({color:getComputedStyle(el).color,background:getComputedStyle(el).backgroundImage}));
     assert.match(todayStyle.background,/linear-gradient/,'Today has the requested bright gradient');
     assert.match(todayStyle.color,/rgb\(155, 35, 68\)/,'Today label remains a readable wine red');
