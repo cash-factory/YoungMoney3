@@ -24,6 +24,18 @@ assert(updateClient.includes('queued_updates === 0') && updateClient.includes('c
 assert(updateClient.includes('waitForBridgeStop'), 'Updater must close its local bridge before calling Windows installer');
 assert(rust.includes('tauri_plugin_updater') && rust.includes('option_env!'), 'Installer must verify signatures and omit unsigned updater when not configured');
 assert(updateCss.includes('prefers-reduced-motion:reduce'), 'Update UI must honor reduced motion');
+const guideScript=read('desktop-ui/assets/native-guide.js');
+const guideCss=read('desktop-ui/assets/native-guide.css');
+assert.match(html,/assets\/native-guide\.js/);
+assert.match(html,/assets\/native-guide\.css/);
+assert(bridge.includes('YMFXNativeGuide?.render(') && bridge.includes('YMFXNativeGuide?.handleClick('),
+  'Native Help must use real navigable guided tasks');
+assert(bridge.includes('data-native-guide-frame'), 'Guide step changes must not cause flicker during polling');
+assert(guideScript.includes('data-native-guide-topic') && guideScript.includes('data-native-guide-faq') &&
+  guideScript.includes('data-native-guide-search'), 'Searchable guide FAQ and paths required');
+assert(guideScript.includes('never change a broker setting') && guideScript.includes('cannot arm a fleet'),
+  'Help cannot imply trading or copying authorization');
+assert(guideCss.includes('prefers-reduced-motion:reduce'), 'Help must honor reduced motion');
 const shell=permission.permissions.find(p=>typeof p==='object'&&p.identifier==='shell:allow-spawn');
 assert(shell&&shell.allow.length===1&&shell.allow[0].name==='binaries/ymfx-bridge'&&shell.allow[0].args===false);
 for(const method of ['snapshot','scan_terminals','pair_pc','add_account','open_account_terminal','stop_monitoring','start_monitoring','retry_session','rename_session','remove_session'])
