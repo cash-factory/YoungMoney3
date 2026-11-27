@@ -53,7 +53,7 @@ jobs:
           [IO.File]::WriteAllText($data, 'IMMUTABLE_BROKER_DATA')
           $hash = (Get-FileHash $candidate -Algorithm SHA256).Hash.ToLowerInvariant()
           & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'connector/update_apply.ps1' -ParentPid 2147483647 -Target $target -Candidate $candidate -ExpectedHash $hash -Version 0.7.0-rc1 -ResultFile $result -NoRestart
-          if ($LASTEXITCODE -ne 0) { throw 'Safe offline update simulation failed' }
+          if ($LASTEXITCODE -ne 0) { Get-Content $result -Raw -ErrorAction SilentlyContinue; throw 'Safe offline update simulation failed' }
           if ((Get-Content $target -Raw) -ne 'VERIFIED_NEW_CONNECTOR') { throw 'New executable missing' }
           if ((Get-Content "$target.previous" -Raw) -ne 'ORIGINAL_CONNECTOR') { throw 'Rollback backup missing' }
           if ((Get-Content $data -Raw) -ne 'IMMUTABLE_BROKER_DATA') { throw 'Broker state modified by updater' }
