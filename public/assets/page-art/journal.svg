@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="Journal execution reflection and annotation"><defs>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540" role="img" aria-labelledby="title desc"><title id="title">Journal execution reflection and annotation</title><desc id="desc">Transparent editorial trading illustration; decorative when placed beside workspace headings.</desc><defs>
  <pattern id="fine" width="72" height="72" patternUnits="userSpaceOnUse"><path d="M72 0H0V72" fill="none" stroke="#A1A8B5" stroke-width=".7" opacity=".24"/></pattern>
  <linearGradient id="mist" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#9FA5B0" stop-opacity="0"/><stop offset=".65" stop-color="#B0B3BE" stop-opacity=".12"/><stop offset="1" stop-color="#BDC1CC" stop-opacity="0"/></linearGradient>
  <linearGradient id="fade" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#9399A8" stop-opacity="0"/><stop offset=".32" stop-color="#9399A8" stop-opacity=".15"/><stop offset="1" stop-color="#BBC1CD" stop-opacity=".75"/></linearGradient>
- <linearGradient id="ribbon" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#969CA8" stop-opacity="0"/><stop offset=".65" stop-color="#BBC1CD" stop-opacity=".16"/><stop offset="1" stop-color="#BBC1CD" stop-opacity="0"/></linearGradient></defs>
+ <linearGradient id="ribbon" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#969CA8" stop-opacity="0"/><stop offset=".65" stop-color="#BBC1CD" stop-opacity=".16"/><stop offset="1" stop-color="#BBC1CD" stop-opacity="0"/></linearGradient></defs><g transform="scale(.75)">
  <rect width="1280" height="720" fill="url(#fine)" opacity=".25"/>
  
  <path d="M230 685C450 600 550 685 715 535S985 398 1280 435L1280 720H230Z" fill="url(#ribbon)"/>
@@ -15,4 +15,4 @@
  <g fill="#A4ACBA" opacity=".32"><rect x="354" y="410" width="20" height="27" rx="2"/><rect x="419" y="370" width="20" height="28" rx="2"/><rect x="484" y="388" width="20" height="38" rx="2"/><rect x="549" y="334" width="20" height="35" rx="2"/><rect x="614" y="347" width="20" height="30" rx="2"/></g>
  <circle cx="892" cy="268" r="8" fill="#CDD4DD" opacity=".6"/><circle cx="892" cy="268" r="24" fill="none" stroke="#BCC6D1" opacity=".18"/>
  <path d="M1074 500l74-125 11-19-11 23-16 6" fill="none" stroke="#CAD1DA" opacity=".38" stroke-width="4" stroke-linecap="round"/>
-</svg>
+</g></svg>
