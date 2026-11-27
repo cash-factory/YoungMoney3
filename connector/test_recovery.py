@@ -83,7 +83,7 @@ class SpecAndRecoveryTests(unittest.TestCase):
                 for pid in sorted(observed)[::5]:
                     mark_checked(self.db,'link',pid,now,True)
                 due,unresolved=due_positions(self.db,'link',set(),now+65000)
-                self.assertEqual(unresolved,count-len(list(observed)[::5]))
+                self.assertEqual(unresolved,count-len(sorted(observed)[::5]))
                 self.assertLessEqual(len(due),16)
                 self.assertEqual(len(due),len(set(due)))
 
