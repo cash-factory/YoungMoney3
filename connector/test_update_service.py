@@ -143,10 +143,12 @@ class UpdateServiceTests(unittest.TestCase):
                 connection.execute(
                     "INSERT INTO copy_local_permissions VALUES ('live-follower', 1)"
                 )
+                connection.commit()
             self.assertFalse(ConnectorUpdateUI._update_is_safe(ctx),
                              "Persisted LIVE follower consent must block auto-install even after app restart")
             with sqlite3.connect(database) as connection:
                 connection.execute("UPDATE copy_local_permissions SET approved=0")
+                connection.commit()
             self.assertTrue(ConnectorUpdateUI._update_is_safe(ctx))
             ctx._copy_database_path = lambda: (_ for _ in ()).throw(OSError("locked credential store"))
             self.assertFalse(ConnectorUpdateUI._update_is_safe(ctx),
