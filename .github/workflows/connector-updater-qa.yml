@@ -54,14 +54,27 @@ jobs:
           [IO.File]::WriteAllText($candidate, 'VERIFIED_NEW_CONNECTOR')
           [IO.File]::WriteAllText($data, 'IMMUTABLE_BROKER_DATA')
           $hash = (Get-FileHash $candidate -Algorithm SHA256).Hash.ToLowerInvariant()
-          & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'connector/update_apply.ps1' -ParentPid 2147483647 -Target $target -Candidate $candidate -ExpectedHash $hash -Version 0.7.0-rc1 -ResultFile $result -NoRestart
-          if ($LASTEXITCODE -ne 0) { Get-Content $result -Raw -ErrorAction SilentlyContinue; throw 'Safe offline update simulation failed' }
+          function Invoke-Swap([string]$digest, [string]$version) {
+            $script = (Resolve-Path 'connector/update_apply.ps1').Path
+            $arguments = @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',
+              '-File', ('"' + $script + '"'), '-ParentPid','2147483647',
+              '-Target', ('"' + $target + '"'), '-Candidate', ('"' + $candidate + '"'),
+              '-ExpectedHash',$digest,'-Version',$version,
+              '-ResultFile', ('"' + $result + '"'), '-NoRestart')
+            $process = Start-Process -FilePath powershell.exe -ArgumentList $arguments -Wait -PassThru -NoNewWindow
+            return $process.ExitCode
+          }
+          $code = Invoke-Swap $hash '0.7.0-rc1'
+          Write-Output "Verified replacement exit code: $code"
+          if (Test-Path $result) { Get-Content $result -Raw }
+          if ($code -ne 0) { throw 'Safe offline update simulation failed' }
           if ((Get-Content $target -Raw) -ne 'VERIFIED_NEW_CONNECTOR') { throw 'New executable missing' }
           if ((Get-Content "$target.previous" -Raw) -ne 'ORIGINAL_CONNECTOR') { throw 'Rollback backup missing' }
           if ((Get-Content $data -Raw) -ne 'IMMUTABLE_BROKER_DATA') { throw 'Broker state modified by updater' }
           if ((Get-Content $result -Raw | ConvertFrom-Json).status -ne 'installed') { throw 'Update receipt missing' }
           $wrongHash = ('0' * 64)
-          & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File 'connector/update_apply.ps1' -ParentPid 2147483647 -Target $target -Candidate $candidate -ExpectedHash $wrongHash -Version 0.7.1-rc1 -ResultFile $result -NoRestart
-          if ($LASTEXITCODE -eq 0) { throw 'Tampered update was accepted' }
+          $badCode = Invoke-Swap $wrongHash '0.7.1-rc1'
+          Write-Output "Tampered release rejection exit code: $badCode"
+          if ($badCode -eq 0) { throw 'Tampered update was accepted' }
           if ((Get-Content $target -Raw) -ne 'VERIFIED_NEW_CONNECTOR') { throw 'Rejected update changed installed version' }
           if ((Get-Content $data -Raw) -ne 'IMMUTABLE_BROKER_DATA') { throw 'Rejected update changed broker evidence' }
