@@ -29,6 +29,7 @@ def main():
         "--runtime-hook", "connector/startup_diagnostics.py",
         "--add-data", f"{tcl};_tcl_data",
         "--add-data", f"{tk_data};_tk_data",
+        "--add-data", "connector/update_apply.ps1;.",
         "--collect-all", "MetaTrader5", "--collect-all", "keyring",
         # MetaTrader5's compiled extension imports NumPy through the C API;
         # static Python import analysis cannot discover that dependency.
