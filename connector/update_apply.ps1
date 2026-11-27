@@ -94,29 +94,7 @@ try {
   Write-Outcome 'installed' 'restart-launched'
   exit 0
 } catch {
-  $code = if ($_.Exception.Message -match '^[a-z-]{3,40}
-  try {
-    if ($swapped -and (Test-Path -LiteralPath $backup -PathType Leaf)) {
-      if (Test-Path -LiteralPath $Target -PathType Leaf) {
-        Remove-Item -LiteralPath $Target -Force
-      }
-      Move-Item -LiteralPath $backup -Destination $Target
-      if (!$NoRestart) {
-        Start-Process -FilePath $Target -WorkingDirectory (Split-Path -Parent $Target) | Out-Null
-      }
-      Write-Outcome 'rolled-back' $code
-    } else {
-      Write-Outcome 'failed' $code
-    }
-  } catch {
-    # Keep any .previous file intact for manual recovery; do not touch user data.
-    try { Write-Outcome 'failed' 'recovery-needs-attention' } catch {}
-  }
-  exit 1
-} finally {
-  try { if (Test-Path -LiteralPath $incoming -PathType Leaf) { Remove-Item -LiteralPath $incoming -Force } } catch { }
-}
-) { $_.Exception.Message } else { 'failed-' + $phase }
+  $code = if ($_.Exception.Message -match '^[a-z-]{3,40}$') { $_.Exception.Message } else { 'failed-' + $phase }
   if ($env:CI -eq 'true') { Write-Output ('Updater test phase: ' + $phase + ', error type: ' + $_.Exception.GetType().Name) }
   try {
     if ($swapped -and (Test-Path -LiteralPath $backup -PathType Leaf)) {
