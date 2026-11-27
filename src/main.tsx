@@ -5,6 +5,7 @@ import './index.css';
 import './platform-studio.css';
 import './surface-composition.css';
 import './human-interface.css';
+import './editorial-surfaces.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

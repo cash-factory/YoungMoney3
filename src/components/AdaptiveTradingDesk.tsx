@@ -93,7 +93,7 @@ export function AdaptiveTradingDesk({
         const Icon = item.icon;
         const selected = mode === item.id;
         return <button type="button" key={item.id} className="ym-adaptive-mode"
-          aria-pressed={selected} data-selected={selected}
+          aria-pressed={selected} data-selected={selected} data-mode={item.id}
           aria-label={item.title + ' trading desk mode'}
           onClick={() => onSelect(item.id)} aria-describedby={descriptionRoot + '-' + item.id}>
           <span className="ym-adaptive-mode-icon"><Icon size={19} aria-hidden="true"/></span>

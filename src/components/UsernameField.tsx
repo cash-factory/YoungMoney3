@@ -9,11 +9,17 @@ interface UsernameFieldProps {
   onChange:(value:string)=>void;
   id:string;
   label?:string;
+  /** Availability notices and suggestions are reserved for signup. */
+  liveAvailability?:boolean;
 }
-export function UsernameField({value,onChange,id,label='Username'}:UsernameFieldProps){
+export function UsernameField({value,onChange,id,label='Username',liveAvailability=true}:UsernameFieldProps){
   const normalized=normalizeUsername(value);
   const [result,setResult]=useState<State>({status:'idle',suggestions:[],message:''});
   useEffect(()=>{
+    if(!liveAvailability){
+      setResult({status:'idle',message:'',suggestions:[]});
+      return;
+    }
     if(!normalized){setResult({status:'idle',message:'',suggestions:[]});return;}
     if(!validUsername(normalized)){
       setResult({status:'invalid',message:'Use 3–32 lowercase letters, numbers or underscores.',suggestions:[]});
@@ -40,21 +46,21 @@ export function UsernameField({value,onChange,id,label='Username'}:UsernameField
       }
     },380);
     return()=>{window.clearTimeout(handle);controller.abort();};
-  },[normalized]);
+  },[normalized,liveAvailability]);
   return <div className="ym-username-field">
     <label htmlFor={id} className="block text-xs font-semibold text-secondary mb-1.5">{label}</label>
     <div className="ym-username-input">
       <AtSign size={16} aria-hidden="true"/>
       <input id={id} className="input-field" value={value} onChange={event=>onChange(event.target.value)}
         autoComplete="username" spellCheck={false} maxLength={32} required placeholder="your_unique_username"
-        aria-describedby={id+'-feedback'} />
+        aria-describedby={liveAvailability?id+'-feedback':undefined} />
     </div>
-    <p className="ym-username-result" data-status={result.status} id={id+'-feedback'} aria-live="polite" role="status">
+    {liveAvailability && <p className="ym-username-result" data-status={result.status} id={id+'-feedback'} aria-live="polite" role="status">
       {result.status==='checking'?<LoaderCircle size={14} className="animate-spin" aria-hidden="true"/>:result.status==='available'?<CheckCircle2 size={14} aria-hidden="true"/>:
         result.status==='taken'||result.status==='invalid'?<AlertCircle size={14} aria-hidden="true"/>:null}
       {result.message||'Your username appears on Signal Desk and can be changed here later.'}
-    </p>
-    {result.status==='taken'&&result.suggestions.length>0&&
+    </p>}
+    {liveAvailability && result.status==='taken'&&result.suggestions.length>0&&
       <div className="ym-username-suggestions" aria-label="Available alternative usernames">
         <span>Try an available alternative:</span>
         {result.suggestions.map(name=><button type="button" key={name} onClick={()=>onChange(name)}>@{name}</button>)}

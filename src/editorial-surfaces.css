@@ -1,0 +1,181 @@
+/* Editorial depth v1 — reusable theme-aware surfaces, not a hard-coded red skin.
+   Dynamic broker metrics and risk status keep their own semantic color codes. */
+:root[data-palette] .ym-workspace {
+  --ym-tone-border: color-mix(in srgb,var(--brand) 25%,var(--border));
+  --ym-tone-wash: color-mix(in srgb,var(--brand) 10%,var(--bg-card));
+  --ym-tone-wash-soft: color-mix(in srgb,var(--brand) 4%,var(--bg-card));
+  --ym-tone-heading: color-mix(in srgb,var(--brand) 58%,var(--text-primary));
+  --ym-tone-support: color-mix(in srgb,var(--accent) 30%,var(--text-secondary));
+}
+:root[data-palette] .ym-workspace .ym-tone-panel,
+:root[data-palette] .ym-workspace .card.ym-tone-panel {
+  background:linear-gradient(122deg,var(--ym-tone-wash) 0%,var(--ym-tone-wash-soft) 48%,var(--bg-card) 100%);
+  border-color:var(--ym-tone-border);
+}
+:root[data-palette] .ym-workspace .ym-tone-tile,
+:root[data-palette] .ym-workspace .card.ym-tone-tile {
+  background:linear-gradient(118deg,color-mix(in srgb,var(--brand) 11%,var(--bg-card)),var(--ym-tone-wash-soft) 60%,var(--bg-card) 100%);
+  border-color:color-mix(in srgb,var(--brand) 20%,var(--border));
+  transition:background-color .19s ease,border-color .19s ease,box-shadow .19s ease,transform .19s ease;
+}
+:root[data-palette] .ym-workspace .ym-tone-tile[data-selected="true"] {
+  background:linear-gradient(115deg,color-mix(in srgb,var(--brand) 17%,var(--bg-card)),color-mix(in srgb,var(--brand) 7%,var(--bg-card)) 100%);
+  border-color:color-mix(in srgb,var(--brand) 53%,var(--border));
+  box-shadow:inset 3px 0 0 var(--brand);
+}
+@media (hover:hover) {
+  :root[data-palette] .ym-workspace .ym-tone-tile:is(:hover,:focus-within) {
+    border-color:color-mix(in srgb,var(--brand) 42%,var(--border));
+  }
+}
+
+/* 1 / Chequered flag motif: a quiet repeated signature behind the moving text. */
+:root[data-palette] .ym-workspace .ym-studio-stripe.ym-editorial-ribbon::before {
+  content:"";
+  position:absolute;inset:0;pointer-events:none;z-index:0;
+  background-image:conic-gradient(from 90deg,var(--text-primary) 25%,transparent 0 50%,var(--text-primary) 0 75%,transparent 0);
+  background-size:34px 34px;
+  opacity:.075;
+  mask-image:linear-gradient(90deg,transparent 0%,black 24%,black 87%,transparent 100%);
+  -webkit-mask-image:linear-gradient(90deg,transparent 0%,black 24%,black 87%,transparent 100%);
+}
+:root[data-palette] .ym-workspace .ym-editorial-ribbon .ym-ribbon-track {
+  position:relative;
+  z-index:2;
+}
+
+/* 2–5 / Four original vector stories. Artwork is decorative, responsive and
+   tinted by the active theme. It never intercepts actions or competes with text. */
+:root[data-palette] .ym-workspace .ym-adaptive-mode {
+  isolation:isolate;
+  overflow:hidden;
+  background:
+    radial-gradient(ellipse 90% 150% at 110% 30%,color-mix(in srgb,var(--brand) 11%,transparent) 0%,transparent 70%),
+    linear-gradient(118deg,var(--bg-card),color-mix(in srgb,var(--brand) 3%,var(--bg-card)));
+}
+:root[data-palette] .ym-workspace .ym-adaptive-mode::before {
+  content:"";
+  position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:linear-gradient(90deg,var(--bg-card) 0%,transparent 66%);
+  opacity:.19;
+}
+:root[data-palette] .ym-workspace .ym-adaptive-mode::after {
+  content:"";
+  position:absolute;right:-31px;top:50%;z-index:0;pointer-events:none;
+  width:min(87%,228px);height:150px;
+  background:var(--brand);
+  opacity:.18;
+  transform:translateY(-50%);
+  mask-image:var(--ym-desk-mask);
+  -webkit-mask-image:var(--ym-desk-mask);
+  mask-position:center right;mask-repeat:no-repeat;mask-size:contain;
+  -webkit-mask-position:center right;-webkit-mask-repeat:no-repeat;-webkit-mask-size:contain;
+  transition:opacity .22s ease,transform .32s cubic-bezier(.21,.75,.3,1);
+}
+:root[data-palette] .ym-workspace .ym-adaptive-mode[data-mode="prepare"] {--ym-desk-mask:url('/assets/desk-art/prepare.svg');}
+:root[data-palette] .ym-workspace .ym-adaptive-mode[data-mode="capture"] {--ym-desk-mask:url('/assets/desk-art/capture.svg');}
+:root[data-palette] .ym-workspace .ym-adaptive-mode[data-mode="review"] {--ym-desk-mask:url('/assets/desk-art/review.svg');}
+:root[data-palette] .ym-workspace .ym-adaptive-mode[data-mode="analyze"] {--ym-desk-mask:url('/assets/desk-art/understand.svg');}
+:root[data-palette] .ym-workspace .ym-adaptive-mode>span:not(.ym-adaptive-active-marker) {position:relative;z-index:1}
+:root[data-palette] .ym-workspace .ym-adaptive-mode .ym-adaptive-active-marker {position:absolute;z-index:2}
+:root[data-palette] .ym-workspace .ym-adaptive-mode[data-selected="true"] {
+  background:
+    radial-gradient(ellipse 93% 150% at 109% 25%,color-mix(in srgb,var(--brand) 14%,transparent),transparent 69%),
+    linear-gradient(118deg,var(--ym-tone-wash),var(--bg-card));
+}
+:root[data-palette] .ym-workspace .ym-adaptive-mode[data-selected="true"]::after{opacity:.26}
+@media(hover:hover){
+  :root[data-palette] .ym-workspace .ym-adaptive-mode:hover::after {
+    opacity:.27;transform:translate(-4px,-51%) scale(1.035);
+  }
+}
+@media(max-width:640px){
+  :root[data-palette] .ym-workspace .ym-adaptive-mode::after{width:125px;height:115px;right:-26px;opacity:.13}
+  :root[data-palette] .ym-workspace .ym-adaptive-mode[data-selected="true"]::after{opacity:.18}
+}
+
+/* 6 / Journal evidence: separate the broker identifier from the trade label. */
+:root[data-palette] .ym-workspace .ym-trade-evidence-card{
+  background:linear-gradient(125deg,color-mix(in srgb,var(--brand) 12%,var(--bg-card)),var(--ym-tone-wash-soft) 62%,var(--bg-card));
+  border-color:var(--ym-tone-border);
+}
+.ym-workspace .ym-trade-evidence-card summary{
+  gap:10px;
+  border-radius:6px;
+}
+.ym-workspace .ym-trade-evidence-card summary:focus-visible{outline:2px solid var(--brand);outline-offset:4px}
+.ym-workspace .ym-trade-evidence-card[open] summary{
+  padding-bottom:10px;margin-bottom:2px;border-bottom:1px solid var(--ym-tone-border);
+}
+.ym-workspace .ym-trade-evidence-card .ym-evidence-title{color:var(--text-primary);font-weight:750;line-height:1.45}
+.ym-workspace .ym-trade-evidence-card .ym-evidence-ticket{color:var(--brand-text);font-weight:650;letter-spacing:.015em}
+.ym-workspace .ym-trade-evidence-card dt{color:var(--text-secondary)}
+.ym-workspace .ym-trade-evidence-card dd{color:var(--text-primary);overflow-wrap:anywhere}
+.ym-workspace .ym-trade-evidence-card .ym-evidence-id{color:var(--accent-text)}
+
+/* 7 / Calendar evidence: important topic vs explanatory subtitle. */
+:root[data-palette] .ym-workspace .ym-calendar-evidence-title {
+  color:var(--ym-tone-heading);font-weight:800;letter-spacing:-.015em;
+}
+:root[data-palette] .ym-workspace .ym-calendar-evidence-kicker {color:var(--brand-text)}
+:root[data-palette] .ym-workspace .ym-calendar-evidence-support {
+  color:var(--ym-tone-support);line-height:1.65;
+}
+:root[data-palette] .ym-workspace .ym-calendar-stat{
+  border:1px solid color-mix(in srgb,var(--brand) 17%,var(--border));
+  background:linear-gradient(130deg,color-mix(in srgb,var(--brand) 9%,var(--bg-card)),var(--bg-card) 95%);
+  min-width:108px;
+}
+:root[data-palette] .ym-workspace .ym-calendar-stat strong{color:var(--text-primary)}
+
+/* 8 / Today: warm white gradient and restrained red foreground in all themes. */
+:root[data-palette] .ym-workspace .ym-calendar-today {
+  color:#9b2344 !important;
+  background:linear-gradient(125deg,#fffefd 0%,#fff1f4 54%,#fbe1e7 100%) !important;
+  border:1px solid #edbcca !important;
+  box-shadow:0 3px 12px rgb(115 35 57 / .08);
+  font-weight:800;
+}
+:root[data-palette] .ym-workspace .ym-calendar-today:hover{
+  background:linear-gradient(125deg,#ffffff,#fbd8e2) !important;
+  box-shadow:0 4px 16px rgb(115 35 57 / .13);
+}
+
+/* 9–10 / The same small tonal cue for strategy and linked account cards. */
+.ym-workspace .ym-strategy-record .ym-strategy-title,
+.ym-workspace .ym-broker-account-card .ym-account-card-title{
+  color:var(--text-primary);
+  font-weight:790;
+}
+.ym-workspace .ym-strategy-record label{color:var(--accent-text)}
+.ym-workspace .ym-broker-account-card .ym-account-balance{
+  color:var(--brand-text);
+  font-weight:800;
+}
+.ym-workspace .ym-broker-account-card .ym-account-card-details{
+  color:var(--text-secondary);
+}
+.ym-workspace .ym-broker-account-card .ym-account-card-risk{
+  border-top:1px solid color-mix(in srgb,var(--brand) 17%,var(--border));
+  padding-top:9px;
+}
+
+/* Editorial depth should never appear as animated or live financial evidence. */
+@media(prefers-reduced-motion:reduce){
+  :root[data-palette] .ym-workspace .ym-adaptive-mode::after,
+  :root[data-palette] .ym-workspace .ym-tone-tile{transition:none!important}
+  :root[data-palette] .ym-workspace .ym-adaptive-mode:hover::after{transform:translateY(-50%) scale(1)}
+}
+
+/* The same broker-evidence hierarchy follows the trader into weekly review. */
+:root[data-palette] .ym-workspace .ym-weekly-evidence > div:first-child > p:first-child {
+  color:var(--brand-text);
+}
+:root[data-palette] .ym-workspace .ym-weekly-evidence > div:first-child > h2 {
+  color:var(--ym-tone-heading);
+  font-weight:800;
+}
+:root[data-palette] .ym-workspace .ym-weekly-evidence > div:first-child > p:last-child {
+  color:var(--ym-tone-support);
+  line-height:1.65;
+}

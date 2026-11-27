@@ -104,7 +104,7 @@ export function JournalPage() {
           <ReplayButton target={targetsByReference.get(review.reference)!}/>
         </li>)}</ul>
       </section>}
-      {source !== 'manual' && <section className="card p-4 sm:p-5 mb-5 space-y-3" aria-label="Broker execution context for journaling">
+      {source !== 'manual' && <section className="card ym-tone-panel p-4 sm:p-5 mb-5 space-y-3" aria-label="Broker execution context for journaling">
         <div>
           <p className="text-[10px] uppercase font-bold tracking-wider text-muted">CAPTURED EXECUTION CONTEXT</p>
           <h2 className="text-base font-bold mt-1">Broker position lifecycles</h2>
@@ -115,10 +115,10 @@ export function JournalPage() {
           <div className="grid gap-2 sm:grid-cols-2">
             {journalLifecycles.map(row => {
               const item = row.summary;
-              return <details key={row.link + ':' + row.lifecycle_id} className="rounded-lg border border-themed bg-secondary p-3 text-xs">
+              return <details key={row.link + ':' + row.lifecycle_id} className="ym-trade-evidence-card rounded-lg border p-3 text-xs">
                 <summary className="cursor-pointer flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-semibold">{[item.symbol, accountNames.get(row.account_id), item.direction, item.status].filter(Boolean).join(' · ')}</span>
-                  <span className="font-mono text-muted">#{item.position_id}</span>
+                  <span className="ym-evidence-title font-semibold">{[item.symbol, accountNames.get(row.account_id), item.direction, item.status].filter(Boolean).join(' · ')}</span>
+                  <span className="ym-evidence-ticket font-mono">#{item.position_id}</span>
                 </summary>
                 <dl className="mt-3 grid grid-cols-2 gap-2">
                   <div><dt className="text-muted">Entry</dt><dd className="font-mono">{item.first_entry_at}</dd></div>
@@ -128,7 +128,7 @@ export function JournalPage() {
                   <div><dt className="text-muted">Net realized R</dt><dd className="font-mono">{item.realized_r == null ? 'Unavailable' : item.realized_r + 'R'}</dd></div>
                   <div><dt className="text-muted">Movement</dt><dd className="font-mono">{item.movement == null ? 'Unknown' : item.movement + ' ' + item.movement_unit}</dd></div>
                 </dl>
-                <p className="text-muted my-3">Execution ID {row.lifecycle_id}</p><ReplayButton target={{kind:'position', position:row}}/>
+                <p className="ym-evidence-id my-3">Execution ID {row.lifecycle_id}</p><ReplayButton target={{kind:'position', position:row}}/>
               </details>;
             })}
           </div>}
