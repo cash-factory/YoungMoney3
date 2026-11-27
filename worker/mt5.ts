@@ -541,13 +541,13 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
     await q('UPDATE mt5_devices SET last_seen=? WHERE id=?',unix,device.id).run();
     const scan=await q('SELECT request_id,requested_at,completed_at FROM mt5_device_scans WHERE device=? AND owner=?',device.id,device.owner)
       .first<{request_id:string;requested_at:number;completed_at:number|null}>();
-    const ownerProfile=await q('SELECT display_name FROM users WHERE id=?',device.owner).first<{display_name:string}>();
+    const ownerProfile=await q('SELECT username FROM users WHERE id=?',device.owner).first<{username:string}>();
     const approvals=await q(`SELECT a.link,a.slot,a.login,a.server FROM mt5_discovery_approvals a
       JOIN mt5_links l ON l.id=a.link AND l.device=a.device
       WHERE a.device=? AND a.owner=? AND a.verified_at IS NULL
       AND l.status='verifying' AND l.expires>? ORDER BY a.requested_at ASC LIMIT 20`,
       device.id,device.owner,unix).all();
-    return json({owner:ownerProfile?.display_name||null,
+    return json({owner:ownerProfile?.username||null,
       scan:scan && !scan.completed_at && scan.requested_at>unix-10*60*1000
         ?{request:scan.request_id}:null,approvals:approvals.results});
   }

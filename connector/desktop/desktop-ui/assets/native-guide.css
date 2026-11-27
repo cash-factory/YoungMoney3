@@ -80,3 +80,58 @@
 @media(max-width:680px){.ym-native .native-guide-hero{grid-template-columns:1fr;padding:21px}.ym-native .native-guide-hero-media{display:none}.ym-native .native-guide-status{gap:6px;margin-top:18px}.ym-native .native-guide-status span{padding:7px 8px;font-size:10px}.ym-native .native-guide-progress-summary{flex-wrap:wrap;gap:9px}.ym-native .native-guide-progress-summary>div{flex-basis:100%;order:3}.ym-native .native-guide-topics{grid-template-columns:1fr;padding:13px}.ym-native .native-guide-workspace{padding:16px}.ym-native .native-guide-step-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}.ym-native .native-guide-step-frame{min-height:0}.ym-native .native-guide-faq{padding:17px}.ym-native .native-guide-faq-head{align-items:stretch;flex-direction:column}.ym-native .native-guide-search{width:100%}}
 @media(prefers-reduced-motion:reduce){.ym-native .native-guide *, .ym-native .native-guide *::before,.ym-native .native-guide *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important;transform:none!important}}
 @media(forced-colors:active){.ym-native .native-guide :is(.native-guide-hero,.native-guide-topics,.native-guide-workspace,.native-guide-faq){border:2px solid CanvasText}.ym-native .native-guide-topics>button.selected{outline:2px solid Highlight}}
+
+
+/* Field Guide — restrained editorial motion and interaction clarity. */
+.ym-native .native-guide{
+  --native-guide-rose:#ad365c;--native-guide-ink:#202532;
+  --native-guide-lilac:#7968aa;
+}
+.ym-native .native-guide-hero{
+  background:linear-gradient(125deg,#191b21 0%,#28242f 75%,#2a2631 100%);
+  box-shadow:0 12px 34px #18152017;
+}
+.ym-native .native-guide-hero:after{
+  content:"";position:absolute;right:-60px;top:-85px;width:280px;height:280px;
+  border:1px solid #bca4d630;border-radius:50%;pointer-events:none;
+  animation:native-guide-drift 11s ease-in-out infinite alternate;
+}
+.ym-native .native-guide-hero-media{position:relative;z-index:1;animation:native-guide-rise 6s ease-in-out infinite alternate}
+.ym-native .native-guide-topics>button,
+.ym-native .native-guide-step-tabs button,
+.ym-native .native-guide-controls button,
+.ym-native .native-guide-open,
+.ym-native .native-guide-faq-item>button {
+  transition:background-color .18s,border-color .18s,transform .15s,box-shadow .18s,color .18s;
+}
+.ym-native .native-guide-topics>button:hover,
+.ym-native .native-guide-step-tabs button:hover,
+.ym-native .native-guide-faq-item>button:hover{
+  transform:translateX(2px);
+  border-color:#c9b2c5;
+}
+.ym-native .native-guide button:active:not(:disabled){transform:scale(.986)}
+.ym-native .native-guide button:focus-visible{outline:2px solid var(--native-guide-rose);outline-offset:3px}
+.ym-native .native-guide-step-frame{
+  animation:native-guide-enter .29s cubic-bezier(.22,.81,.25,1) both;
+}
+.ym-native .native-guide-progress-summary>div span{
+  background:linear-gradient(90deg,var(--native-guide-rose),var(--native-guide-lilac));
+}
+.ym-native .native-guide-current-top .native-guide-eyebrow,
+.ym-native .native-guide-step-number {color:var(--native-guide-rose)}
+.ym-native .native-guide-open{
+  box-shadow:0 4px 14px #a44b5a16;
+}
+.ym-native .native-guide-open:hover{box-shadow:0 6px 18px #a44b5a26}
+@keyframes native-guide-drift{to{transform:translate(-15px,10px) scale(1.06)}}
+@keyframes native-guide-rise{to{transform:translateY(-6px)}}
+@keyframes native-guide-enter{
+  from{opacity:0;transform:translateY(9px)}
+  to{opacity:1;transform:translateY(0)}
+}
+@media(prefers-reduced-motion:reduce){
+  .ym-native .native-guide-hero:after,.ym-native .native-guide-hero-media,.ym-native .native-guide-step-frame{animation:none!important}
+  .ym-native .native-guide button{transition:none!important}
+  .ym-native .native-guide button:hover,.ym-native .native-guide button:active{transform:none!important}
+}

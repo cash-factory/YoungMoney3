@@ -23,7 +23,7 @@ interface AuthContextValue {
   profile: TraderProfile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, displayName: string, inviteCode: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, displayName: string, inviteCode: string, username: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<TraderProfile>) => Promise<{ error: string | null }>;
   refreshProfile: () => Promise<void>;

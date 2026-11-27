@@ -4,7 +4,7 @@
   const KEY = 'ymfx:signaldesk:auto-updates';
   const PERIOD = 4 * 60 * 60 * 1000;
   const state = {
-    configured: null, checking: false, version: '', notes: [],
+    configured: null, checking: false, version: '', notes: [], lastCheck: 'idle',
     installing: false, detail: 'Check for updates to see the newest version.',
     auto: (() => {try { return localStorage.getItem(KEY) !== 'off'; } catch { return true; }})(),
   };
@@ -31,7 +31,7 @@
       : '<li>Release notes are brief and contain no private account details.</li>';
     const controls = '<div class="native-update-actions">' +
       '<button type="button" class="btn" data-native-update="check" ' +
-      (state.checking || state.installing ? 'disabled' : '') + '>Check for updates</button>' +
+      (state.checking || state.installing ? 'disabled aria-busy="true"' : '') + '>' + (state.checking ? 'Checking securely…' : 'Check for updates') + '</button>' +
       (release ? '<button type="button" class="btn red" data-native-update="install" ' +
       (state.installing || !canInstall() ? 'disabled' : '') + '>Install & restart</button>' : '') +
       '</div>';
@@ -48,8 +48,16 @@
       '</div></section>';
   }
   function topbar() {
-    return '<button type="button" class="native-update-toolbar" data-native-update="check">' +
-       (state.version ? 'Update ' + safe(state.version) : 'Check updates') + '</button>';
+    const label=state.checking?'Checking updates…'
+      :state.version?'Update '+state.version
+      :state.lastCheck==='current'?'Up to date ✓'
+      :state.lastCheck==='failed'?'Retry update check'
+      :state.lastCheck==='unconfigured'?'Updates not configured':'Check updates';
+    return '<button type="button" class="native-update-toolbar" data-native-update="check" data-update-state="' +
+      safe(state.checking?'checking':state.lastCheck) + '" ' +
+      (state.checking||state.installing?'disabled aria-busy="true"':'') + '>' +
+      (state.checking?'<span class="native-update-spinner" aria-hidden="true"></span>':'') +
+      safe(label) + '</button>';
   }
   async function check(manual = false) {
     if (!deps || state.checking || state.installing) return;
@@ -60,7 +68,9 @@
       return;
     }
     state.checking = true;
-    if (manual) state.detail = 'Checking the signed update channel…';
+    state.lastCheck='checking';
+    state.detail = 'Checking for verified Signal Desk updates…';
+    if(manual)deps.notify?.('Checking for verified updates…');
     deps.refreshView();
     try {
       const response = await invoke('check_connector_update');
@@ -68,7 +78,8 @@
       if (!state.configured) {
         state.version = '';
         state.notes = [];
-        state.detail = 'Signed updates have not been enabled for this preview build.';
+        state.detail = 'Signed updates are not configured for this build. No download or installation was attempted.';
+        state.lastCheck='unconfigured';
       } else if (response.available === true &&
                  /^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][a-zA-Z0-9.]+)?$/.test(response.version)) {
         state.version = response.version;
@@ -76,16 +87,20 @@
           ? response.notes.slice(0,4).filter(x => typeof x === 'string' && x.length <= 130)
           : [];
         state.detail = 'A verified update is available. It can install when this connector is idle.';
+        state.lastCheck='available';
       } else {
         state.version = '';
         state.notes = [];
-        state.detail = 'You are using the latest version on this channel.';
+        state.detail = 'No update available — Signal Desk is current on this configured release channel.';
+        state.lastCheck='current';
       }
     } catch {
-      state.detail = 'Could not check for updates. The connector can continue operating.';
+      state.detail = 'Update check could not complete. Check connectivity and retry; broker monitoring is unaffected.';
+      state.lastCheck='failed';
     } finally {
       state.checking = false;
       deps.refreshView();
+      if(manual)deps.notify?.(state.detail);
       if (!manual && state.auto && state.version && canInstall()) void install();
     }
   }
@@ -146,6 +161,7 @@
     }, PERIOD);
   }
   window.YMFXUpdates = {attach, panel, topbar, handleClick, onSnapshot,
+    statusText:()=>state.lastCheck==='idle'?'Update status not checked yet':state.detail,
     isInstalling: () => state.installing,
     debug: () => ({...state,canInstall:canInstall()})};
 })();

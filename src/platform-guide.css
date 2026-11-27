@@ -254,3 +254,48 @@
 .ym-guide-directory-heading,.ym-guide-journey-heading,.ym-guide-journeys,.ym-guide-category-tabs{flex-shrink:0}
 .ym-guide-destinations{overflow:visible;min-height:0;flex:none}
 .ym-guide-hub-footer{position:relative;z-index:2;background:var(--guide-surface)}
+
+/* The guide is a small viewport-safe dialog, not a scroller hiding its action bar.
+   Header, progress and navigation stay visible on a short desktop or mobile. */
+.ym-guide-layer[data-guide-view="tour"] .ym-guide-tour-card {
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  /* Clamp even before React processes the next resize frame. */
+  top:clamp(8px,var(--ym-guide-placement-top,8vh),10vh)!important;
+  max-height:calc(100dvh - clamp(8px,var(--ym-guide-placement-top,8vh),10vh) - 12px);
+  min-height:0;
+  padding-block-end:calc(12px + env(safe-area-inset-bottom, 0px));
+}
+.ym-guide-tour-card .ym-guide-step-top,
+.ym-guide-tour-card .ym-guide-progress-track,
+.ym-guide-tour-card .ym-guide-step-controls,
+.ym-guide-tour-card .ym-guide-step-footer {flex:none}
+.ym-guide-step-scroll {
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  scrollbar-width:thin;
+  overscroll-behavior:contain;
+  padding:4px 5px 0 0;
+}
+.ym-guide-step-scroll:focus-visible {outline:2px solid var(--guide-accent);outline-offset:-2px}
+.ym-guide-tour-card .ym-guide-step-controls {
+  position:relative;
+  margin-top:12px;
+  padding-top:12px;
+  border-top:1px solid var(--border);
+  background:var(--guide-surface);
+  z-index:3;
+}
+.ym-guide-tour-card .ym-guide-step-navigation .ym-guide-primary {min-width:126px}
+@media(max-width:680px){
+  .ym-guide-layer[data-guide-view="tour"] .ym-guide-tour-card {
+    top:auto!important;
+    max-height:min(88dvh,620px);
+    bottom:calc(8px + env(safe-area-inset-bottom,0px));
+  }
+  .ym-guide-tour-card .ym-guide-step-controls {gap:6px}
+  .ym-guide-tour-card .ym-guide-step-navigation .ym-guide-primary {min-width:108px}
+}
+@media(prefers-reduced-motion:reduce){.ym-guide-step-scroll{scroll-behavior:auto}}
