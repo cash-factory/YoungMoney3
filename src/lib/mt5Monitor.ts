@@ -25,6 +25,45 @@ export function monitoringStatus(link: Link, pc?: Device, capturePaused = false)
   return 'Monitoring';
 }
 
+
+export type MonitorGuidance = { meaning: string; nextStep: string; tone: 'success' | 'warning' | 'danger' | 'neutral' };
+
+/** Explain verified account capture without inferring broker fills or permission to trade. */
+export function monitoringGuidance(link: Link, pc?: Device, capturePaused = false): MonitorGuidance {
+  const state = monitoringStatus(link, pc, capturePaused);
+  switch (state) {
+    case 'Monitoring':
+      return { meaning: 'This account has a recent confirmed capture and its paired PC is online. This does not prove every broker fill was received.', nextStep: 'Review the latest broker trades and any outstanding integrity reviews.', tone: 'success' };
+    case 'Preparing MetaTrader':
+      return { meaning: 'An MT5 setup request is pending; the broker login is not verified yet.', nextStep: 'Open the dedicated MT5 terminal in Signal Desk and complete its broker login.', tone: 'neutral' };
+    case 'Checking broker login':
+      return { meaning: 'The connector is checking the exact broker login and server.', nextStep: 'Leave the dedicated MT5 terminal signed in, then refresh this page.', tone: 'neutral' };
+    case 'Login needs attention':
+    case 'Login request expired':
+      return { meaning: 'The login attempt did not complete; monitoring has not been confirmed.', nextStep: 'Open Signal Desk, check the broker login and server, then start a fresh verification.', tone: 'danger' };
+    case 'Staging capture paused':
+      return { meaning: 'Capture is paused for staging regardless of account or PC state.', nextStep: 'Do not assume new trades are being recorded. Contact the staging administrator.', tone: 'warning' };
+    case 'Monitoring paused':
+      return { meaning: 'This linked account is intentionally excluded from active capture.', nextStep: 'Choose Resume monitoring only if you want this account recorded.', tone: 'neutral' };
+    case 'Waiting for PC':
+      return { meaning: 'The paired PC has not checked in recently; no fresh account capture is confirmed.', nextStep: 'Open Signal Desk on that PC, restore the connection and check this account again.', tone: 'warning' };
+    case 'Evidence review required':
+      return { meaning: 'Broker evidence requires integrity review. Original records are preserved.', nextStep: 'Inspect the evidence conflict report before trusting affected statistics.', tone: 'danger' };
+    case 'Recovering trade history':
+      return { meaning: 'The connector is scanning broker history after an interruption. Completion is not confirmed.', nextStep: 'Monitor the recovery checkpoint and review positions still awaiting broker records.', tone: 'warning' };
+    case 'Awaiting broker history':
+      return { meaning: 'Some previously observed positions cannot yet be reconciled with broker history.', nextStep: 'Keep MT5 connected, request a history recheck if appropriate and inspect unresolved positions.', tone: 'warning' };
+    case 'Capture needs attention':
+      return { meaning: 'Capture reported a problem even though the account remains linked.', nextStep: 'Inspect the account error and Signal Desk activity; retry after resolving the cause.', tone: 'danger' };
+    case 'Waiting for first sync':
+      return { meaning: 'The account is linked but no successful capture has been confirmed.', nextStep: 'Enable monitoring for this account and wait for a verified broker capture.', tone: 'warning' };
+    case 'Waiting for fresh data':
+      return { meaning: 'The last confirmed capture is too old to treat the account as currently monitored.', nextStep: 'Inspect connector health, then refresh after a completed broker capture.', tone: 'warning' };
+    default:
+      return { meaning: 'The broker connection is not in a confirmed monitoring state.', nextStep: 'Check the paired PC and MT5 broker login in Signal Desk.', tone: 'warning' };
+  }
+}
+
 export async function mt5Action(name: string, payload: unknown = {}, signal?: AbortSignal) {
   const result = await fetch('/api/mt5/' + name, {method:'POST', headers:{'content-type':'application/json'},body:JSON.stringify(payload),signal});
   const data = await result.json();
