@@ -115,8 +115,8 @@ export function CalendarPage() {
           const knownR = matching.flatMap(([,rows])=>rows.map(row=>row.summary.final_realized_r).filter((value):value is string=>value!=null));
           return <div className="flex flex-wrap gap-3 text-sm">
             <div className="ym-calendar-stat rounded-lg p-3"><p className="text-xs text-muted">Closed lifecycles</p><strong className="font-mono text-lg">{count}</strong></div>
-            <div className="rounded-lg bg-secondary p-3"><p className="text-xs text-muted">Known final R</p><strong className="font-mono text-lg">{knownR.length} / {count}</strong></div>
-            <div className="rounded-lg bg-secondary p-3"><p className="text-xs text-muted">Close-date coverage</p><strong className="font-mono text-lg">{matching.length} UTC days</strong></div>
+            <div className="ym-calendar-stat rounded-lg p-3"><p className="text-xs text-muted">Known final R</p><strong className="font-mono text-lg">{knownR.length} / {count}</strong></div>
+            <div className="ym-calendar-stat rounded-lg p-3"><p className="text-xs text-muted">Close-date coverage</p><strong className="font-mono text-lg">{matching.length} UTC days</strong></div>
           </div>;
         })()}
       </section>
