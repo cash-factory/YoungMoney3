@@ -44,6 +44,29 @@ try {
   assert.match(signup.headers.get('set-cookie'),/SameSite=Strict/);
   // Consume the response while its Miniflare request context is still live.
   const subject=(await signup.json()).user.id;
+  // Username availability must be checked against the authoritative unique
+  // database constraint; suggestions must be available, not arbitrary guesses.
+  const anonymousUsername=(candidate)=>mf.dispatchFetch('https://journal.example/api/auth/username-availability',{
+    method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({username:candidate}),
+  });
+  const takenResult=await anonymousUsername('MEMBER');
+  assert.equal(takenResult.status,200);
+  const taken=await takenResult.json();
+  assert.equal(taken.available,false);
+  assert.equal(taken.username,'member');
+  assert.ok(taken.suggestions.length>=1);
+  for(const candidate of taken.suggestions){
+    assert.equal((await (await anonymousUsername(candidate)).json()).available,true);
+  }
+  assert.equal((await (await call('auth/username-availability',{username:'member'})).json()).available,true,
+    'Existing account may keep its own username');
+  assert.equal((await anonymousUsername('bad name')).status,400);
+  assert.equal((await (await anonymousUsername('available_handle')).json()).available,true);
+  assert.equal((await call('auth/signup',{
+    email:'collision@example.test',username:'MeMbEr',password:'local-test-pass',invite_code:'integration',
+  })).status,409,'Case-insensitive duplicate usernames must not create another account');
+
   const ownerOnly=await mf.dispatchFetch('https://journal.example/api/owner/classic/info',{
     method:'GET',headers:{cookie}});
   assert.equal(ownerOnly.status,404,
@@ -149,6 +172,17 @@ try {
   assert.equal(foreign.status,409,'A valid token cannot silently switch installations');
   assert.equal((await foreign.json()).code,'pc_identity_mismatch');
   const presence=async(setup='ready')=>(await device('presence',{setup,version:'0.5.1-rc1',installationId:installation})).json();
+  const initialOwner=await device('discovery-poll',{installationId:installation});
+  assert.equal(initialOwner.status,200);
+  assert.equal((await initialOwner.json()).owner,'member',
+    'Connector must show unique signed-in username, not a non-unique display name');
+  assert.equal((await call('auth/profile',{username:'member_fx',display_name:'Another friendly label'})).status,200);
+  const renamedOwner=await device('discovery-poll',{installationId:installation});
+  assert.equal((await renamedOwner.json()).owner,'member_fx',
+    'Connector receives changed username using the existing authenticated device token');
+  assert.equal((await (await anonymousUsername('member_fx')).json()).available,false);
+  assert.equal((await (await anonymousUsername('member')).json()).available,true);
+
   await db.prepare('UPDATE mt5_devices SET last_seen=0 WHERE id=?').bind(devices[0].id).run();
   const firstCheckin=await presence('install');
   assert.equal(firstCheckin.device,devices[0].id);
