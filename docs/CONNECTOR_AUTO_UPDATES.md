@@ -32,6 +32,12 @@ Source: `connector/update_service.py`, `connector/update_ui.py`, `connector/upda
 
 Each new release must bump `connector/version.py`, the prerelease workflow's `VERSION`, and `connector/update-notes.json` **together**. Every published release must pass code/unit tests, frozen Windows startup smoke and staging validation, and must include `update-notes.json` as a release asset. The workflow does not publish from a PR. Staging publication is distinct from production promotion.
 
+## Signal Desk idle evidence gate
+
+The staging native updater additionally needs `update_safe=true` from the local bridge. When monitoring is stopped, the bridge independently opens every saved connector `capture.db` **read-only** and audits queued journal outbox items, unfinished copier tasks and previously approved Classic copier permissions. An unreadable store, unknown state, active copier consent or pending broker upload must block installation; an old in-memory counter is not sufficient. The interface requests a **fresh** bridge snapshot immediately before stopping the bundled sidecar. This does not replace signed installer validation, real Windows upgrade testing, or local copier supervision.
+
+See [High-priority capture/release acceptance](HIGH_PRIORITY_CAPTURE_ACCEPTANCE.md).
+
 ## Signal Desk signing and channel activation
 
 The new preview's signed updater is **intentionally inactive** until an owner configures signing. This protects users against silent installation of unsigned preview builds. Per the [official Tauri v2 updater guide](https://v2.tauri.app/plugin/updater/), create a private/public signing key pair using the Tauri CLI. Protect the private key and its passphrase in GitHub Actions secrets or a suitably restricted signing service. **Never commit or display the private key**.

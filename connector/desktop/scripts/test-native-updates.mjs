@@ -18,13 +18,23 @@ assert.equal(typeof updates.attach,'function');
 const operations=[];
 let refreshes=0;
 const model={source:'local-connector',demo:false,capture_active:true,
-  copying_armed:false,copy_permission_available:false,queued_updates:0,
+  copying_armed:false,copy_permission_available:false,queued_updates:0,update_safe:true,
   sessions:[{status:'monitoring'}]};
 let bridge=false;
+let refuseFreshProof=true;
 updates.attach({
   getModel:()=>model,
   refreshView:()=>refreshes++,
-  request:async(name)=>{operations.push(name);bridge=false;return {}},
+  request:async(name)=>{
+     operations.push(name);
+     if(name==='snapshot' && refuseFreshProof){
+       refuseFreshProof=false;
+       return {...model, update_safe:false,queued_updates:1};
+     }
+     if(name==='snapshot')return {...model};
+     if(name==='shutdown')bridge=false;
+     return {};
+   },
   hasBridge:()=>bridge,
   waitForBridgeStop:async()=>{},
   isBusy:()=>false,
@@ -53,11 +63,21 @@ updates.onSnapshot();
 await new Promise(resolve=>setTimeout(resolve,10));
 assert.equal(operations.length,0,'Copy permission blocks installation');
 model.copy_permission_available=false;
+model.update_safe=false;
 bridge=true;
+updates.onSnapshot();
+await new Promise(resolve=>setTimeout(resolve,10));
+assert.equal(operations.length,0,'Missing durable idle proof blocks installation');
+model.update_safe=true;
 window.__TAURI__.core.invoke=async(name)=>{operations.push(name);return {}};
 updates.onSnapshot();
 await new Promise(resolve=>setTimeout(resolve,20));
-assert.deepEqual(operations,['shutdown','install_connector_update'],
-  'Stop local sidecar before requesting signature-verified Windows installation');
+assert.deepEqual(operations,['snapshot'],
+  'A newly queued broker record must cancel update before sidecar shutdown');
+assert.equal(updates.debug().installing,false);
+updates.onSnapshot();
+await new Promise(resolve=>setTimeout(resolve,20));
+assert.deepEqual(operations,['snapshot','snapshot','shutdown','install_connector_update'],
+  'Fresh durable idle proof must precede shutdown and signed installer invocation');
 assert.ok(refreshes>0);
 console.log('Signal Desk signed-updater safety checks passed');

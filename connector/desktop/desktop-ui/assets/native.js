@@ -168,7 +168,7 @@
   function action(label,method,primary=false,disabled=false){return `<button type="button" class="btn ${primary?'red':''}" data-native-action="${safe(method)}" ${disabled||commandBusy?'disabled':''}><span>${safe(label)}</span></button>`}
   function showNotice(message){actionNotice=String(message||'').slice(0,160);refreshView();}
   const statusMap={
-    'monitoring':['Monitoring','online'],'recovering':['Reconnecting','working'],
+    'monitoring':['Monitoring','online'],'stale':['Waiting for fresh scan','working'],'recovering':['Reconnecting','working'],
     'needs-attention':['Needs attention','danger'],'terminal-missing':['MT5 missing','danger'],
     'paused':['Paused',''],'paused-by-dashboard':['Paused remotely','working'],
     'offline':['Offline',''],'not-verified':['Awaiting capture','']};
@@ -180,6 +180,7 @@
      if(!s.enabled)return 'This session is paused. Resume it only when you want capture.';
      if(!model.capture_active)return 'Start monitoring and wait for confirmed broker capture.';
      if(s.status==='recovering')return 'Keep MT5 logged in and inspect broker-history recovery on the dashboard.';
+     if(s.status==='stale')return 'Capture evidence is older than two minutes. Check Recent Activity, MT5 connectivity and the next completed scan.';
      if(s.status==='needs-attention'||s.status==='terminal-missing')return 'Review Recent Activity and correct the MT5 terminal issue.';
      if(s.status==='monitoring')return 'Review the latest broker records and any unresolved integrity checks.';
      return 'Check the selected broker login and wait for a completed capture cycle.';

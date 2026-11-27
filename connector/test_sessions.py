@@ -35,6 +35,29 @@ class SessionStoreTests(unittest.TestCase):
         self.assertEqual(reloaded.active_terminals(), [str(self.b.resolve())])
         self.assertIsNone(reloaded.armed_terminal(), "Never resume an implicit account claim after restart.")
 
+    def test_thirty_two_sessions_remain_independent_across_restart(self):
+        store=SessionStore(self.settings)
+        session_ids=[]
+        for index in range(32):
+            terminal=self.folder / f'account-{index:02d}' / 'terminal64.exe'
+            terminal.parent.mkdir(parents=True)
+            terminal.touch()
+            session=store.add(str(terminal),f'Broker login {index}',enabled=True)
+            session_ids.append(session["id"])
+        self.assertEqual(len(store.snapshot()),32)
+        self.assertEqual(len(store.active_terminals()),32)
+        # Independent pause/resume must not toggle unrelated sessions.
+        for index in range(0,32,4):
+            store.set_enabled(session_ids[index],False)
+        reloaded=SessionStore(self.settings)
+        self.assertEqual(len(reloaded.snapshot()),32)
+        self.assertEqual(len(reloaded.active_terminals()),24)
+        self.assertEqual(len({row["terminal"] for row in reloaded.snapshot()}),32)
+        self.assertEqual(len({row["id"] for row in reloaded.snapshot()}),32)
+        self.assertEqual({row["enabled"] for i,row in enumerate(reloaded.snapshot())
+                          if i%4==0},{False})
+        self.assertIsNone(reloaded.armed_terminal())
+
     def test_legacy_terminal_list_migrates_without_deleting_credentials(self):
         self.settings.write_text(json.dumps({"terminals": [str(self.a), str(self.b)]}))
         legacy = SessionStore(self.settings)

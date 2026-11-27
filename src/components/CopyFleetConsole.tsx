@@ -89,6 +89,7 @@ export function CopyFleetConsole(){
   const consent=new Map(status?.consents.map(x=>[x.follower_link,x]));
   const armed=status?.fleets.filter(x=>x.state==='demo_armed'||x.state==='live_armed')||[];
   const armIssues=copyArmIssues(picked,accounts,status?.consents||[],Boolean(status?.liveExecutionEnabled));
+  const maxFollowers=status?.maxFollowersPerFleet??24;
   const expectedTradeMode=draft.executionMode==='live'?2:0;
   const sourceAllowed=(a:Account)=>a.trade_mode===0||(draft.executionMode==='live'&&a.trade_mode===2);
   const riskPass=useMemo(()=>draft.targets.every(t=>t.value>0&&t.maxLots>0&&t.maxDailyLossPct>0&&
@@ -97,7 +98,7 @@ export function CopyFleetConsole(){
     (t.mode!=='lot_multiplier'||t.value<=5)&&
     (draft.executionMode!=='live'||(t.maxDailyLossPct<=5&&
       (t.mode!=='risk_pct_equity'||t.value<=2)))),[draft.targets,draft.executionMode]);
-  const canSave=draft.name.trim().length>=2&&Boolean(source)&&sourceAllowed(source!)&&draft.targets.length>0&&riskPass&&
+  const canSave=draft.name.trim().length>=2&&draft.targets.length<=maxFollowers&&Boolean(source)&&sourceAllowed(source!)&&draft.targets.length>0&&riskPass&&
     draft.targets.every(t=>accounts.some(a=>a.id===t.link&&a.trade_mode===expectedTradeMode)&&t.link!==draft.sourceLink &&
       parseSymbolMapText(mappingInputs[t.link]??symbolMapText(t.symbolMap))!==null);
   const edit=(item:Fleet)=>{
@@ -153,7 +154,7 @@ export function CopyFleetConsole(){
       <div>
         <span className="ym-cf-overline">COPY STUDIO / EXECUTION ROUTING</span>
         <h2>Copy Fleet</h2>
-        <p>One verified MT5 source, up to 24 independently configured followers. Demo and live execution are separate, opt-in modes with account-bound permissions and broker-native sizing.</p>
+        <p>One verified MT5 source, up to {maxFollowers} independently configured followers. Demo and live execution are separate, opt-in modes with account-bound permissions and broker-native sizing.</p>
       </div>
       <div className="ym-cf-head-actions">
         <button type="button" className="btn-secondary" disabled={!!busy} onClick={()=>void refresh()}><RefreshCw size={15}/>Refresh</button>
@@ -203,7 +204,7 @@ export function CopyFleetConsole(){
             {accounts.filter(sourceAllowed).map(a=><option key={a.id} value={a.id}>{title(a)} · {a.trade_mode===2?"LIVE":"DEMO"}</option>)}
           </select></label>
         </div>
-        <div className="ym-cf-smallhead ym-cf-target-header"><strong>FOLLOWER ALLOCATIONS</strong><span>{draft.targets.length} / 24</span></div>
+        <div className="ym-cf-smallhead ym-cf-target-header"><strong>FOLLOWER ALLOCATIONS</strong><span>{draft.targets.length} / {maxFollowers}</span></div>
         {draft.executionMode==='live'&&status&&!status.liveExecutionEnabled&&<p className="ym-cf-note" role="status"><strong>LIVE EXECUTION NOT ACTIVE:</strong> live-account configurations can be saved, but arming is disabled until a broker-tested release is explicitly enabled by the operator.</p>}
         {draft.executionMode==='live'&&<p className="ym-cf-note" role="note"><strong>REAL MONEY MODE:</strong> account-specific Windows authorization and broker verification are mandatory. Per-entry stop risk is capped at 2% of follower equity and configured daily loss at 5%. Markets can gap beyond stops, and costs may exceed estimates.</p>}
         {draft.targets.map((target,i)=>{
@@ -249,7 +250,7 @@ export function CopyFleetConsole(){
           </div>;
         })}
         {draft.targets.length===0&&<div className="ym-cf-empty">Add a follower to set independent allocation, risk and order behaviour.</div>}
-        <div className="ym-cf-target-add"><select aria-label="Add follower account" value="" disabled={!!busy||!draft.sourceLink||draft.targets.length>=24||(picked&&picked.state!=='paused')} onChange={e=>{
+        <div className="ym-cf-target-add"><select aria-label="Add follower account" value="" disabled={!!busy||!draft.sourceLink||draft.targets.length>=maxFollowers||(picked&&picked.state!=='paused')} onChange={e=>{
           if(!e.target.value)return;
           setDraft(d=>({...d,targets:[...d.targets,defaultTarget(e.target.value)]}));setPreview(null);
         }}><option value="">+ Add another follower</option>{remaining.filter(a=>a.trade_mode===expectedTradeMode).map(a=><option key={a.id} value={a.id}>{title(a)} · {draft.executionMode.toUpperCase()}</option>)}</select></div>

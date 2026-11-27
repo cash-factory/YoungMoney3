@@ -20,9 +20,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-STAGING = 'https://ym-fx-staging.ethical-hacker263.workers.dev'
+from service_channel import SERVICE_ORIGIN, SESSION_NAMESPACE
 APP_ROOT = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'YMFX'
-SESSIONS = APP_ROOT / 'staging-gui' / 'preferences.json'
+SESSIONS = APP_ROOT / SESSION_NAMESPACE / 'preferences.json'
 HEX_CODE = re.compile(r'[0-9a-fA-F]{32}\Z')
 ALLOWED = frozenset({'snapshot', 'scan_terminals', 'pair_pc', 'start_monitoring',
                      'stop_monitoring', 'set_session_enabled', 'rename_session',
@@ -86,7 +86,7 @@ class Bridge:
             import keyring
             from keyring.backends.Windows import WinVaultKeyring
             keyring.set_keyring(WinVaultKeyring())
-            name = 'YMFX MT5 ' + hashlib.sha256(STAGING.encode()).hexdigest()[:16]
+            name = 'YMFX MT5 ' + hashlib.sha256(SERVICE_ORIGIN.encode()).hexdigest()[:16]
             return bool(keyring.get_password(name, 'token'))
         except (ImportError, OSError, RuntimeError, ValueError):
             return False
@@ -141,12 +141,12 @@ class Bridge:
                     'server': sanitized(item.get('server'), 72),
                     'login': sanitized(item.get('login'), 24),
                     'link': sanitized(item.get('link'), 96)}
-                    for item in event['links'][:100]
+                    for item in event['links'][:512]
                     if isinstance(item, dict) and isinstance(item.get('slot'), str)}
             elif kind == 'monitoring-policy':
                 ids = event.get('paused')
                 if isinstance(ids, list):
-                    self.remote_paused_links = {str(v) for v in ids[:200] if isinstance(v, str)}
+                    self.remote_paused_links = {str(v) for v in ids[:512] if isinstance(v, str)}
             if kind == 'pc-online':
                 self.state = 'connected'
             elif kind in ('pc-reconnecting', 'retrying'):
@@ -167,7 +167,9 @@ class Bridge:
             if isinstance(slot, str) and kind in ('session-synced', 'session-error', 'session-starting', 'verifying', 'account-error'):
                 previous = self.session_health.get(slot, {})
                 if kind == 'session-synced':
-                    previous = {'state':'synced', 'last_sync':now, 'capture_started':self.worker_started}
+                    previous = {'state':'synced', 'last_sync':now,
+                                'last_sync_clock':time.monotonic(),
+                                'capture_started':self.worker_started}
                 elif kind in ('session-error','account-error'):
                     previous = {**previous, 'state':'error'}
                 else:
@@ -180,14 +182,27 @@ class Bridge:
                 self.reports = self.reports[-100:]
 
     def snapshot(self):
+        from update_safety import inspect_idle_stores
         with self._lock:
             capture_active = bool(self.worker_mode == 'capture' and self.worker and self.worker.is_alive())
+            now_clock = time.monotonic()
+            # Only a standard, build-locked profile may report an update-safe
+            # state. Custom/unknown profile locations fail closed.
+            standard_profile = self.settings.parent.name == SESSION_NAMESPACE
+            audit = (inspect_idle_stores(self.settings.parent.parent)
+                     if not capture_active and standard_profile else None)
+            update_safe = bool(audit and audit['verified'] and
+                               audit['queued'] == 0 and not audit['copy_permission'] and
+                               audit['copy_tasks'] == 0)
             rows=[]
             for entry in self._store.snapshot():
                 terminal = str(entry['terminal'])
                 link = self.links.get(terminal, {})
                 health = self.session_health.get(terminal, {})
                 present = Path(terminal).is_file()
+                last_capture_clock = health.get('last_sync_clock')
+                age = now_clock - last_capture_clock if type(last_capture_clock) in (int,float) else None
+                fresh = age is not None and 0 <= age <= 120
                 if not entry['enabled']:
                     status = 'paused'
                 elif not present:
@@ -203,7 +218,7 @@ class Bridge:
                 elif (self.state == 'connected' and link and
                       health.get('state') == 'synced' and
                       health.get('capture_started') == self.worker_started):
-                    status = 'monitoring'
+                    status = 'monitoring' if fresh else 'stale'
                 else:
                     status = 'not-verified'
                 rows.append({
@@ -213,6 +228,7 @@ class Bridge:
                     'login':link.get('login') or self._discovered.get(entry['id'],{}).get('login') or None,
                     'account_name':self._discovered.get(entry['id'],{}).get('account_name') or None,
                     'status':status, 'last_sync':health.get('last_sync'),
+                    'last_sync_age_seconds':round(age) if age is not None and age >= 0 else None,
                     'verified_link':bool(link.get('link')),
                     'copy_authorized':None,
                 })
@@ -222,7 +238,9 @@ class Bridge:
                     'sessions':rows, 'user':self.dashboard_user,
                     'discovered_accounts':len(self._discovered), 'setup':dict(self.setup_state),
                     'events':list(self.reports[-30:]),
-                    'queued_updates':self.queue_count,
+                    'queued_updates':self.queue_count if capture_active else
+                     (audit['queued'] if audit else None),
+                    'update_safe':update_safe,
                     'active_capture_workers':self.active_worker_count if capture_active else 0,
                     'copying_armed':False, 'copying_armed_verified':False,
                     'copy_permission_available':False,
@@ -264,29 +282,42 @@ class Bridge:
             name='SignalDesk-dashboard-discovery',daemon=True)
         self._discovery_thread.start()
 
+    # Each scan may discover more than 64 accounts; reporting pages are separate.
+    # The probe pool limits concurrent MetaTrader IPC child processes and prevents
+    # a few timed-out terminals from serially delaying every healthy account.
     def _scan_local_accounts(self):
+        from concurrent.futures import ThreadPoolExecutor
         from account_discovery import probe_terminal
-        verified=[]
+        candidates=[]
         for entry in self._store.snapshot():
             if self._service_stop.is_set():break
             slot=str(entry['terminal'])
             if not Path(slot).is_file() or not (Path(slot).parent/'.ym-managed.json').is_file():continue
-            # Active linked capture already owns its own MT5 process. Never attach
-            # a second inspector to that terminal while it is being monitored.
+            # Never start an inspector on a terminal already held by capture.
             if self.worker and self.worker.is_alive() and slot in self.links:continue
+            candidates.append((str(entry['id']),slot))
+
+        def inspect(candidate):
+            if self._service_stop.is_set():return None
+            ident,slot=candidate
             broker=probe_terminal(slot)
-            if broker.get('status')!='verified':continue
-            if not re.fullmatch(r'[0-9]{1,24}',str(broker.get('login',''))):continue
-            if not broker.get('server') or broker.get('mode') not in (0,1,2):continue
-            row={'slot':entry['id'],'login':broker['login'],
-                 'server':sanitized(broker['server'],128),
-                 'account_name':sanitized(broker.get('account_name'),96),
-                 'company':sanitized(broker.get('company'),128),
-                 'currency':sanitized(broker.get('currency'),12),
-                 'mode':int(broker['mode'])}
-            verified.append(row)
-            with self._lock:self._discovered[entry['id']] = row
-        return verified[:24]
+            if not isinstance(broker,dict) or broker.get('status')!='verified':return None
+            if not re.fullmatch(r'[0-9]{1,24}',str(broker.get('login',''))):return None
+            if not broker.get('server') or broker.get('mode') not in (0,1,2):return None
+            return {'slot':ident,'login':broker['login'],
+                    'server':sanitized(broker['server'],128),
+                    'account_name':sanitized(broker.get('account_name'),96),
+                    'company':sanitized(broker.get('company'),128),
+                    'currency':sanitized(broker.get('currency'),12),
+                    'mode':int(broker['mode'])}
+
+        verified=[]
+        with ThreadPoolExecutor(max_workers=4,thread_name_prefix='YMFX-MT5-discover') as pool:
+            for row in pool.map(inspect,candidates):
+                if row is None:continue
+                verified.append(row)
+                with self._lock:self._discovered[row['slot']] = row
+        return verified
 
     def _accept_discovered_monitor(self, approval):
         # Adopt an explicitly selected verified login, never a remote path.
@@ -322,6 +353,30 @@ class Bridge:
             self.links[slot]={'link':link,'server':info['server'],'login':info['login']}
         self._report({'state':'discovery-link'})
 
+    @staticmethod
+    def _publish_discovery_report(request_id, found, send):
+        """Transmit every verified account in bounded, retryable pages.
+
+        An acknowledged intermediate page must not close the scan request.
+        Rerunning a failed report is idempotent: the Worker upserts by device+slot.
+        """
+        page_size = 64  # network batch budget, not account-management limit
+        if not found:
+            response = send('discovery-report',
+                            {'request':request_id,'accounts':[],'more':False})
+            if not response.get('ok'):
+                raise RuntimeError('Broker discovery report was not accepted')
+            return
+        for start in range(0,len(found),page_size):
+            end=start+page_size
+            response=send('discovery-report',{
+                'request':request_id,
+                'accounts':found[start:end],
+                'more':end<len(found),
+            })
+            if not isinstance(response,dict) or response.get('ok') is not True:
+                raise RuntimeError('Broker discovery page was not accepted')
+
     def _discovery_loop(self):
         from account_discovery import request_device
         while not self._service_stop.is_set():
@@ -339,7 +394,7 @@ class Bridge:
                             # Only acknowledge locally after the authenticated device
                             # endpoint commits the report. A network interruption must
                             # leave the scan retryable, never silently marked finished.
-                            request_device('discovery-report',{'request':request_id,'accounts':found})
+                            self._publish_discovery_report(request_id,found,request_device)
                             self._last_scan_request=request_id
                             self._report({'state':'discovery-complete' if found else 'discovery-attention'})
                     for approval in reply.get('approvals',[])[:20]:
@@ -357,7 +412,7 @@ class Bridge:
                     self.pairing(pair_code, self._report)
                 else:
                     import connect
-                    connect.main([STAGING, '--pair', '--pair-only'], pairing_code=pair_code,
+                    connect.main([SERVICE_ORIGIN, '--pair', '--pair-only'], pairing_code=pair_code,
                                  stop_event=self.stop, pause_event=self.pause,
                                  report=self._report)
                 self.paired = self._read_pairing()
@@ -372,13 +427,14 @@ class Bridge:
                 import connect
                 from managed_accounts import ManagedAccounts
                 manager = ManagedAccounts(self._store, self.settings.parent.parent / 'terminals')
-                connect.main([STAGING, *self._store.all_terminals()], stop_event=self.stop,
+                connect.main([SERVICE_ORIGIN, *self._store.all_terminals()], stop_event=self.stop,
                              pause_event=self.pause, report=self._report,
                              retry_queue=self.retry_queue,
                              all_slots=self._store.all_terminals,
                              active_slots=self._store.active_terminals,
                              armed_slot=self._store.armed_terminal,
-                             parallel_capture=True, managed_accounts=manager)
+                             parallel_capture=True, managed_accounts=manager,
+                              copy_execution_enabled=False)
         except BaseException as error:
             # Broker, HTTP or pairing errors may contain credentials. Expose type only.
             self.last_error = type(error).__name__[:50]
@@ -398,7 +454,7 @@ class Bridge:
             found = discover_installations()
             with self._lock:
                 self._sources = {uuid.uuid4().hex: (str(exe), str(servers) if servers else None)
-                                 for exe, servers in found[:24]}
+                                 for exe, servers in found[:64]}
                 return {'count':len(self._sources), 'terminals':[
                     {'id':ident, 'name':sanitized(Path(path).parent.name, 70)}
                     for ident, (path, _servers) in self._sources.items()]}
@@ -513,7 +569,7 @@ class Bridge:
             return {'stop_requested': True, 'outbox_preserved': True}
         if method in ('open_dashboard', 'open_copy_studio'):
             import webbrowser
-            target = STAGING + ('/#copy-studio' if method == 'open_copy_studio' else '/#mt5')
+            target = SERVICE_ORIGIN + ('/#copy-studio' if method == 'open_copy_studio' else '/#mt5')
             return {'opened': bool(webbrowser.open(target))}
         if method == 'shutdown':
             self._setup_cancel.set()

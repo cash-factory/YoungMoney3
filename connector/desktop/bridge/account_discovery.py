@@ -16,7 +16,7 @@ import sqlite3
 import urllib.request
 from pathlib import Path
 
-ORIGIN = 'https://ym-fx-staging.ethical-hacker263.workers.dev'
+from service_channel import SERVICE_ORIGIN as ORIGIN
 
 
 class DiscoveryError(ValueError):

@@ -97,7 +97,7 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         JOIN mt5_devices d ON d.id=a.device AND d.owner=a.owner AND d.revoked=0
         LEFT JOIN mt5_discovery_approvals v ON v.device=a.device AND v.slot=a.slot AND v.link=(SELECT a2.link FROM mt5_discovery_approvals a2 WHERE a2.device=a.device AND a2.slot=a.slot ORDER BY a2.requested_at DESC LIMIT 1)
         LEFT JOIN mt5_links l ON l.id=v.link AND l.owner=a.owner
-        WHERE a.owner=? ORDER BY a.last_seen DESC LIMIT 100`, owner).all();
+        WHERE a.owner=? ORDER BY a.last_seen DESC LIMIT 256`, owner).all();
       const scans=await q('SELECT device,requested_at,completed_at,request_id FROM mt5_device_scans WHERE owner=?',owner).all();
       return json({ accounts:accounts.results, devices: devices.results, links: states,
         discoveries:discoveries.results, scans:scans.results,
@@ -552,7 +552,9 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         ?{request:scan.request_id}:null,approvals:approvals.results});
   }
   if (action === 'device/discovery-report') {
-    if (!limited(input.request,64)||!Array.isArray(input.accounts)||input.accounts.length>24)
+    if (!limited(input.request,64)||!Array.isArray(input.accounts)||input.accounts.length>64||
+        (input.more!==undefined&&typeof input.more!=='boolean')||
+        (input.more===true&&input.accounts.length===0))
       return fail('Invalid local account scan.');
     const task=await q('SELECT request_id,requested_at,completed_at FROM mt5_device_scans WHERE device=? AND owner=?',device.id,device.owner)
       .first<{request_id:string;requested_at:number;completed_at:number|null}>();
@@ -579,10 +581,12 @@ export async function mt5Route(request: Request, env: Bindings, owner: string | 
         device.id,device.owner,item.slot,item.login,item.server,item.account_name,item.company,
         item.currency,item.mode,unix));
     }
-    records.push(q(`UPDATE mt5_device_scans SET completed_at=? WHERE device=? AND owner=? AND request_id=? AND completed_at IS NULL`,
+    // Only the final acknowledged page completes the user's scan. Older
+    // one-shot connectors omit 'more' and remain backward compatible.
+    if(input.more!==true) records.push(q(`UPDATE mt5_device_scans SET completed_at=? WHERE device=? AND owner=? AND request_id=? AND completed_at IS NULL`,
       unix,device.id,device.owner,input.request));
     await db.batch(records);
-    return json({ok:true,verified:seen.size});
+    return json({ok:true,verified:seen.size,more:input.more===true});
   }
   if (action === 'device/rename') {
     const name=pcLabel(input.name);

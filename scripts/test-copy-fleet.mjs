@@ -226,6 +226,26 @@ try{
     db.prepare("UPDATE copy_execution_audit SET event='rewritten' WHERE fleet_id=?").bind(fleet).run(),
     /immutable|not authorized|constraint|error/i,
     'Copy Fleet audit may not be rewritten.');
+  // Scalability: eight configured followers (not three) are independently
+  // described and previewed without arming or sending broker orders.
+  const extraFollowers=[];
+  for(let index=0;index<5;index++){
+    const follower=id(100+index);
+    await db.prepare("INSERT INTO mt5_links(id,device,owner,account_id,status,server,login,company,currency,trade_mode,access_level,last_sync,broker_balance,broker_equity,expires,monitoring_paused) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)")
+      .bind(follower,device1,owner.id,id(200+index),'connected','DemoServer',
+        String(6000+index),'Demo broker','USD',0,'trading-enabled',
+        new Date().toISOString(),1200,1200,now+86400000).run();
+    extraFollowers.push({...targets[0],link:follower,enabled:false});
+  }
+  const eight=await call('copy/fleet-save',{name:'Eight follower planning fixture',
+    sourceLink:source,targets:[...targets,...extraFollowers]},owner.cookie);
+  assert.equal(eight.status,200,JSON.stringify(eight.result));
+  const eightPreview=await call('copy/fleet-preview',{id:eight.result.id,
+    sourceLots:0.2,sourceEquity:1000,entry:1.1,stop:1.095,direction:'buy'},owner.cookie);
+  assert.equal(eightPreview.status,200,JSON.stringify(eightPreview.result));
+  assert.equal(eightPreview.result.previews.length,8);
+  assert.equal((await call('copy/fleet-status',{},owner.cookie)).result.fleets
+    .find(x=>x.id===eight.result.id).targets.length,8);
   assert.equal((await call('copy/fleet-status',{},'')).status,401);
-  console.log('Copy Fleet: 3 follower demo policies, per-account authorization, fresh source fan-out, no stale/false closes, at-most-once dispatch, audit and global stop verified.');
+  console.log('Copy Fleet: 3 authorized demo followers plus 8-account planning fixture, per-account authorization, fresh source fan-out, no stale/false closes, at-most-once dispatch, audit and global stop verified.');
 }finally{await mf.dispose();}

@@ -153,6 +153,35 @@ try {
   const firstCheckin=await presence('install');
   assert.equal(firstCheckin.device,devices[0].id);
   assert.equal(firstCheckin.name,'Trading Laptop - Main');
+  // Account discovery is page-bounded, not limited to three or 64 total accounts.
+  const scanRequest=(await (await call('mt5/scan-local-accounts',
+    {device:devices[0].id})).json()).request;
+  assert.ok(scanRequest,'A verified paired PC can request local account discovery');
+  const discovered=Array.from({length:65},(_,index)=>({
+    slot:String(index).padStart(12,'0'),login:String(900000+index),
+    server:'Example-Demo',account_name:'Synthetic '+index,
+    company:'Fixtures',currency:'USD',mode:0,
+  }));
+  assert.equal((await device('discovery-report',{request:scanRequest,accounts:discovered.slice(0,64),
+    more:true,installationId:installation})).status,200);
+  const stillScanning=await db.prepare(
+    'SELECT completed_at FROM mt5_device_scans WHERE device=?').bind(devices[0].id).first();
+  assert.equal(stillScanning.completed_at,null,
+    'First 64-account page may not complete discovery or discard later accounts');
+  assert.equal((await device('discovery-report',{request:scanRequest,accounts:discovered.slice(64),
+    more:false,installationId:installation})).status,200);
+  const allDiscovered=(await (await call('mt5/status',{})).json()).discoveries;
+  assert.equal(allDiscovered.filter(a=>a.device===devices[0].id).length,65);
+  assert.equal(new Set(allDiscovered.map(a=>a.slot)).size,65);
+  assert.ok((await db.prepare('SELECT completed_at FROM mt5_device_scans WHERE device=?')
+    .bind(devices[0].id).first()).completed_at);
+  assert.equal((await device('discovery-report',{request:scanRequest,accounts:[],
+    more:true,installationId:installation})).status,400,
+    'Non-final empty pages cannot leave a discovery job permanently unfinished');
+  assert.equal((await device('discovery-report',{request:scanRequest,accounts:discovered,
+    more:false,installationId:installation})).status,400,
+    'Each discovery message has a bounded payload');
+
   const loginRequest={device:devices[0].id,server:'Demo',envelope:{wrapped:'a',iv:'b',data:'c'}};
   assert.equal((await call('mt5/connect',loginRequest)).status,409);
   assert.equal((await presence()).pending,null);

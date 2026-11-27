@@ -35,6 +35,22 @@ See [Primary connector and owner archive](../../docs/SIGNAL_DESK_PRIMARY.md), [U
 
 `connector-signaldesk-native.yml` builds an isolated preview installer only. It does **not** deploy the main website, publish a production release, or authorize live trades.
 
+## Multiple accounts and position recovery
+
+There is **no three-account limit** in the saved session store. Each broker login has its own dedicated terminal and capture worker; more than three accounts can be monitored where the machine has sufficient resources. Discovery sends every verified account in **64-account pages**, completing the scan only after the last page is acknowledged. A page-size boundary is not a total account limit.
+
+Position reconciliation is likewise **not limited to seven trades**. Disappeared positions are checked in bounded 16-position batches over successive scans, preserving unknown closures and the durable broker outbox across reconnects. Regression cases cover 20, 40 and 100 missing positions; these are simulations, not proof of real MT5 load capacity.
+
+Classic Connector source and support tools remain in the repository, with its owner-only distribution handled separately.
+
+## Capture-only execution boundary and channel isolation
+
+Signal Desk's Python bridge explicitly disables the legacy copier cycle for each concurrent MT5 capture worker. The old Classic application retains its separately authorized copier path; **Signal Desk does not route orders even when a prior Classic copier consent exists**. This is an implementation boundary, not a claim of live Windows/broker verification.
+
+This staged build is locked to the staging origin and independent staging profile. Runtime environment requests cannot redirect it to production. A future production release needs a separately reviewed connector build, app identifier, updater channel and Windows acceptance. The signed updater now audits durable SQLite outbox and legacy consent state before stopping the sidecar; unknown state blocks installation.
+
+See [High-priority technical acceptance](../../docs/HIGH_PRIORITY_CAPTURE_ACCEPTANCE.md).
+
 ## Critical acceptance still outstanding
 
 - Verify that PyInstaller and Tauri sidecar spawn cooperate in a real Windows user session, including window shutdown, process cleanup, WebView2 availability, OS permissions and an unsigned installer warning.

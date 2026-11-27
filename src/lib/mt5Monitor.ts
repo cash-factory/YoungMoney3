@@ -4,7 +4,12 @@ export type MonitorStatus = { devices: Device[]; links: Link[]; accounts: {id:st
 
 export const pairedPcName = (pc?: Device) => pc?.pc_name?.trim() || (pc ? 'PC '+pc.id.slice(0,8) : 'Unknown PC');
 
-export const pcOnline = (pc?: Device) => Boolean(pc && Date.now() - pc.last_seen < 90_000);
+export const pcOnline = (pc?: Device) => {
+  if (!pc || !Number.isFinite(pc.last_seen)) return false;
+  const age = Date.now() - pc.last_seen;
+  // A badly clock-skewed or invalid heartbeat cannot prove a PC is online.
+  return age >= -5_000 && age < 90_000;
+};
 
 export function monitoringStatus(link: Link, pc?: Device, capturePaused = false) {
   if (['pending','verifying'].includes(link.status) && link.expires <= Date.now()) return 'Login request expired';
@@ -21,7 +26,10 @@ export function monitoringStatus(link: Link, pc?: Device, capturePaused = false)
   if (link.recovery?.state==='awaiting_broker_history') return 'Awaiting broker history';
   if (link.capture_health === 'needs_attention') return 'Capture needs attention';
   if (!link.last_sync) return 'Waiting for first sync';
-  if (Date.now() - Date.parse(link.last_sync) > 120000) return 'Waiting for fresh data';
+  const captureTime = Date.parse(link.last_sync);
+  const captureAge = Date.now() - captureTime;
+  if (!Number.isFinite(captureTime) || captureAge < -5_000 || captureAge > 120_000)
+    return 'Waiting for fresh data';
   return 'Monitoring';
 }
 

@@ -15,7 +15,12 @@ def history_window(linked_at,cursor,end):
     return previous_since,next_until,next_until<int(end)-60000
 
 def due_positions(db,link,currently_open,now,limit=16):
-    """Prioritize disappeared positions; also recovers records old clients retired."""
+    """Recover *all* missing positions over successive bounded batches.
+
+    The batch size is a per-poll work budget, never a position/account cap.
+    Positions not selected in this poll remain unresolved and eligible next poll.
+    Verified broker closures remain final, even across restarts.
+    """
     open_ids={str(value) for value in currently_open}
     rows=db.execute("""
       SELECT o.position_id,MAX(o.at_ms),r.status,r.checked_ms
@@ -23,7 +28,7 @@ def due_positions(db,link,currently_open,now,limit=16):
       LEFT JOIN position_recovery r ON r.link=o.link AND r.position_id=o.position_id
       WHERE o.link=?
       GROUP BY o.position_id
-      ORDER BY MAX(o.at_ms) DESC
+      ORDER BY MAX(o.at_ms) DESC,o.position_id ASC
     """,(link,)).fetchall()
     due=[]
     unresolved=0
@@ -40,5 +45,9 @@ def due_positions(db,link,currently_open,now,limit=16):
 def mark_checked(db,link,pid,when,closed):
     db.execute("""INSERT INTO position_recovery(link,position_id,status,checked_ms)
        VALUES(?,?,?,?) ON CONFLICT(link,position_id)
-       DO UPDATE SET status=excluded.status,checked_ms=excluded.checked_ms""",
+       DO UPDATE SET
+         status=CASE WHEN position_recovery.status='broker_closure_verified'
+                     THEN position_recovery.status ELSE excluded.status END,
+         checked_ms=CASE WHEN position_recovery.status='broker_closure_verified'
+                         THEN position_recovery.checked_ms ELSE excluded.checked_ms END""",
        (link,str(pid),"broker_closure_verified" if closed else "awaiting_broker_closure",int(when)))

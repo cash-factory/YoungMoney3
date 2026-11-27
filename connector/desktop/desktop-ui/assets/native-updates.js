@@ -11,14 +11,18 @@
   let deps = null;
   const safe = value => String(value ?? '').replace(/[&<>"']/g, c =>
     ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  function canInstall() {
-    if (!deps) return false;
-    const model = deps.getModel();
-    // Missing evidence is NOT proof the account is idle.
-    return deps.hasBridge() && model.source === 'local-connector' && model.demo === false &&
+  function verifiedIdle(model) {
+    // Cached counters are insufficient: the bridge independently audits the
+    // durable SQLite outbox, unresolved copier tasks and older local approvals.
+    return !!model && model.update_safe === true &&
+      model.source === 'local-connector' && model.demo === false &&
       model.capture_active === false && model.copying_armed === false &&
       model.copy_permission_available === false && model.queued_updates === 0 &&
-      !deps.isBusy() && !model.sessions.some(s => s.status === 'monitoring');
+      Array.isArray(model.sessions) &&
+      !model.sessions.some(s => s.status === 'monitoring' || s.status === 'recovering');
+  }
+  function canInstall() {
+    return !!deps && deps.hasBridge() && !deps.isBusy() && verifiedIdle(deps.getModel());
   }
   function panel(icon) {
     const release = state.version;
@@ -100,10 +104,14 @@
     try {
       // We require a verified idle snapshot. Shut down only our bundled local
       // sidecar, then let Tauri check/signature-verify the update again.
-      if (deps.hasBridge()) {
-        try { await deps.request('shutdown'); } catch { /* May exit before replying. */ }
-        await deps.waitForBridgeStop(15000);
-      }
+      // Even if the sidecar exits between the first check and this call,
+      // never bypass an independent last-second idle proof.
+      if (!deps.hasBridge()) throw new Error('Local connector stopped unexpectedly');
+      const proof = await deps.request('snapshot');
+      if (!verifiedIdle(proof) || deps.isBusy() || !deps.hasBridge())
+        throw new Error('New broker capture or copier work is pending');
+      try { await deps.request('shutdown'); } catch { /* May exit before replying. */ }
+      await deps.waitForBridgeStop(15000);
       await invoke('install_connector_update', { expectedVersion: state.version });
     } catch {
       state.installing = false;

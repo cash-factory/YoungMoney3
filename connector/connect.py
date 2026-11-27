@@ -324,7 +324,7 @@ def verify(job, slot_override=None, report=None):
                 "message": "Staging accepted the broker login; journal sync is next."
                 if acknowledged else "Broker login verified locally; awaiting staging acknowledgement."})
 
-def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
+def scan(link,slot,login,server,start,cursor,last,verified,gap_pending, *, copy_execution_enabled=True):
     if verified:
         try:
             post("verified",json.loads(verified),token)
@@ -573,16 +573,17 @@ def scan(link,slot,login,server,start,cursor,last,verified,gap_pending):
     # The copy bridge is independent of journal capture. A broker preflight or
     # copy-control network error cannot discard evidence or unpair this account.
     # Only locally approved, verified demo follower accounts may place orders.
-    try:
-        from copy_bridge import cycle as copy_cycle
-        copy_cycle(mt5,db,link,account,post,token,now_ms=end)
-    except Exception as error:
-        print("Copy Fleet needs attention ("+type(error).__name__+"). Journal evidence remains safe.",flush=True)
+    if copy_execution_enabled:
+        try:
+            from copy_bridge import cycle as copy_cycle
+            copy_cycle(mt5,db,link,account,post,token,now_ms=end)
+        except Exception as error:
+            print("Copy Fleet needs attention ("+type(error).__name__+"). Journal evidence remains safe.",flush=True)
     return True
 
 def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
          report=None, active_slots=None, armed_slot=None, all_slots=None,
-         parallel_capture=False, retry_queue=None, managed_accounts=None):
+         parallel_capture=False, retry_queue=None, managed_accounts=None, copy_execution_enabled=True):
     """CLI and GUI entrypoint; MT5 and SQLite run on this one worker thread."""
     global origin, slots, opener, service, token, db, heartbeats, timezone_cache
     parser=argparse.ArgumentParser()
@@ -653,7 +654,8 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
         from concurrent_capture import run_supervisor
         try:
             return run_supervisor(origin, db, folder/"capture.db", slots, token, report,
-                                  stop_event, armed_slot, active_slots, all_slots, retry_queue, managed_accounts)
+                                  stop_event, armed_slot, active_slots, all_slots, retry_queue, managed_accounts,
+                                   copy_execution_enabled=copy_execution_enabled)
         finally:
             db.close()
     next_poll=0
@@ -703,7 +705,7 @@ def main(argv=None, *, pairing_code=None, stop_event=None, pause_event=None,
                 if active_slots is not None and row[1] not in active_slots():
                     continue
                 try:
-                    accepted = scan(*row)
+                    accepted = scan(*row, copy_execution_enabled=copy_execution_enabled)
                     if report and accepted is not False:
                         report({"state":"session-synced", "slot": row[1],
                                 "link": row[0], "login": row[2], "server": row[3],

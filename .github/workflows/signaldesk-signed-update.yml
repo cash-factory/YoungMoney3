@@ -58,6 +58,10 @@ jobs:
           python -m pip install -r connector/requirements.txt 'pyinstaller==6.16.0'
           python -m unittest discover -s connector/desktop/tests -p 'test_desktop_bridge.py'
           if ($LASTEXITCODE -ne 0) { throw 'Bridge tests failed' }
+          python -m unittest discover -s connector/desktop/tests -p 'test_update_safety.py'
+          if ($LASTEXITCODE -ne 0) { throw 'Idle updater audit failed' }
+          python -m unittest discover -s connector/desktop/tests -p 'test_service_channel.py'
+          if ($LASTEXITCODE -ne 0) { throw 'Channel isolation tests failed' }
           python -m PyInstaller --noconfirm --clean --onefile --console --name ymfx-bridge --paths connector --collect-all MetaTrader5 --collect-all keyring --collect-all numpy --collect-all tzdata connector/desktop/bridge/desktop_bridge.py
           if ($LASTEXITCODE -ne 0) { throw 'Bridge build failed' }
           New-Item -ItemType Directory -Force connector/desktop/src-tauri/binaries | Out-Null

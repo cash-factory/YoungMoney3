@@ -37,6 +37,56 @@ class SpecAndRecoveryTests(unittest.TestCase):
         self.assertEqual(len(self.events),7,'Polling must not append quote-driven specification evidence.')
         self.assertEqual(self.db.execute('SELECT COUNT(*) FROM position_specs').fetchone()[0],7)
 
+    def test_same_symbol_specifications_scale_to_64_positions_without_collisions(self):
+        # Stress fixture: identical symbols on multiple independently tracked positions.
+        lookup=lambda:{"symbol":"XAUUSD","trade_calc_mode":0,
+                       "trade_tick_size":0.01,"trade_tick_value":1.0,"bid":2467.0}
+        for index in range(64):
+            first_position_spec(self.db,"link",200000+index,200000,lookup,self.enqueue)
+        self.assertEqual(len(self.events),64)
+        self.assertEqual(len({event[2] for event in self.events}),64)
+        self.assertEqual(self.db.execute(
+            "SELECT COUNT(*) FROM position_specs WHERE link='link'").fetchone()[0],64)
+        for index in range(64):
+            first_position_spec(self.db,"link",200000+index,350000,
+                                lambda:{"symbol":"XAUUSD","trade_tick_value":7.0},
+                                self.enqueue)
+        self.assertEqual(len(self.events),64,
+            'Repeated polling never overwrites original risk/specification provenance')
+
+    def test_recover_20_40_100_missing_positions_in_successive_batches(self):
+        # 16 is an MT5 request budget per polling cycle, NOT a user position cap.
+        for count in (20,40,100):
+            with self.subTest(positions=count):
+                self.db.execute('DELETE FROM position_observations')
+                self.db.execute('DELETE FROM position_recovery')
+                for index in range(count):
+                    self.db.execute("INSERT INTO position_observations VALUES(?,?,?,?,?)",
+                                    ('link',str(index),10000,'1.0','2.0'))
+                observed=set()
+                now=100000
+                while len(observed)<count:
+                    due,unresolved=due_positions(self.db,'link',set(),now)
+                    self.assertLessEqual(len(due),16,'bounded per-cycle broker request budget')
+                    self.assertEqual(unresolved,count,'nothing closes without broker deals')
+                    self.assertTrue(due,'recovery work must make progress beyond first page')
+                    self.assertTrue(set(due).isdisjoint(observed),
+                        'unresolved positions must not starve behind recently checked ones')
+                    observed.update(due)
+                    for pid in due:
+                        mark_checked(self.db,'link',pid,now,False)
+                    now+=1
+                self.assertEqual(len(observed),count)
+                self.assertEqual(self.db.execute(
+                    "SELECT COUNT(*) FROM position_observations").fetchone()[0],count)
+                # Confirm a nontrivial subset with broker-deal evidence.
+                for pid in sorted(observed)[::5]:
+                    mark_checked(self.db,'link',pid,now,True)
+                due,unresolved=due_positions(self.db,'link',set(),now+65000)
+                self.assertEqual(unresolved,count-len(sorted(observed)[::5]))
+                self.assertLessEqual(len(due),16)
+                self.assertEqual(len(due),len(set(due)))
+
     def test_snapshot_key_and_payload_survive_sqlite_restart(self):
         spec={"symbol":"XAUUSD","trade_tick_size":0.01,"trade_tick_value":1}
         value=first_position_spec(self.db,"a",999,1000,lambda:spec,self.enqueue)
@@ -46,6 +96,37 @@ class SpecAndRecoveryTests(unittest.TestCase):
         first_position_spec(self.db,"a",999,9999,lambda:{"symbol":"UNKNOWN"},self.enqueue)
         self.assertEqual(self.db.execute('SELECT payload FROM position_specs').fetchone()[0],raw)
         self.assertEqual(len(self.events),1)
+
+    def test_verified_closure_is_monotonic_when_broker_history_later_disappears(self):
+        self.db.execute('INSERT INTO position_observations VALUES(?,?,?,?,?)',
+                        ('link','open-then-closed',10000,'1.2000',None))
+        due,unresolved=due_positions(self.db,'link',set(),90000)
+        self.assertEqual((due,unresolved),(['open-then-closed'],1))
+        mark_checked(self.db,'link','open-then-closed',90000,True)
+        self.assertEqual(due_positions(self.db,'link',set(),120000),([],0))
+        # A transient empty broker response must not retract the proven close.
+        mark_checked(self.db,'link','open-then-closed',121000,False)
+        self.assertEqual(due_positions(self.db,'link',set(),190000),([],0))
+        self.assertEqual(self.db.execute(
+            'SELECT status,checked_ms FROM position_recovery WHERE position_id=?',
+            ('open-then-closed',)).fetchone(),('broker_closure_verified',90000))
+
+    def test_repeated_recovery_checks_preserve_unproven_positions(self):
+        for pid in range(7):
+            self.db.execute('INSERT INTO position_observations VALUES(?,?,?,?,?)',
+                            ('link',str(pid),10000,'1.1000','1.2000'))
+        for attempt in (100000,161000):
+            due,unresolved=due_positions(self.db,'link',set(),attempt)
+            self.assertEqual((len(due),unresolved),(7,7))
+            for pid in due:
+                mark_checked(self.db,'link',pid,attempt,False)
+        due,unresolved=due_positions(self.db,'link',{'1','3'},161500)
+        self.assertEqual((len(due),unresolved),(0,5))
+        due,unresolved=due_positions(self.db,'link',{'1','3'},222001)
+        self.assertEqual((len(due),unresolved),(5,5))
+        self.assertEqual(self.db.execute(
+            'SELECT COUNT(*) FROM position_observations').fetchone()[0],7,
+            'Recovery does not invent, erase or duplicate first observations.')
 
     def test_recovery_uses_bounded_overlapping_history(self):
         day=86400000

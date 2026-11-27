@@ -126,7 +126,8 @@ def safe_capture_error(error):
     return "Broker capture error (" + type(error).__name__ + ")."
 
 
-def capture_account(origin, database_path, slot, link, stop_event, event_queue, wake_event=None):
+def capture_account(origin, database_path, slot, link, stop_event, event_queue, wake_event=None,
+                    copy_execution_enabled=True):
     """Spawned process. MT5's native module is strictly process-local."""
     # Import inside child after multiprocessing.freeze_support dispatch.
     import connect
@@ -159,7 +160,7 @@ def capture_account(origin, database_path, slot, link, stop_event, event_queue, 
                                    "message": "Broker account is no longer linked."})
                 break
             try:
-                outcome = connect.scan(*record)
+                outcome = connect.scan(*record, copy_execution_enabled=copy_execution_enabled)
                 if outcome is False:
                     _put(event_queue, {"state": "session-unlinked", "slot": slot,
                                        "message": "Broker verification was rejected by staging."})
@@ -240,7 +241,8 @@ def run_parallel_smoke():
 
 
 def run_supervisor(origin, db, database_path, slots, token, report,
-                   stop_event, armed_slot, active_slots, all_slots, retry_queue=None, managed_accounts=None):
+                   stop_event, armed_slot, active_slots, all_slots, retry_queue=None, managed_accounts=None,
+                   copy_execution_enabled=True):
     """Runs in the GUI's non-Tk coordinator thread; worker processes own MT5."""
     import connect
 
@@ -325,7 +327,8 @@ def run_supervisor(origin, db, database_path, slots, token, report,
                 halt = ctx.Event()
                 wake_events[link] = ctx.Event()
                 proc = ctx.Process(target=capture_account,
-                                   args=(origin, str(database_path), row[1], link, halt, events, wake_events[link]),
+                                   args=(origin, str(database_path), row[1], link, halt, events, wake_events[link],
+                                          copy_execution_enabled),
                                    name="YMFX-MT5-" + hashlib.sha256(link.encode()).hexdigest()[:9],
                                    daemon=True)
                 proc.start()

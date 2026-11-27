@@ -101,6 +101,138 @@ class BridgeTests(unittest.TestCase):
             self.assertEqual(self.bridge.snapshot()['sessions'][0]['status'],'needs-attention')
             self.assertNotIn('password=stolen',json.dumps(self.bridge.snapshot()))
 
+    def test_two_accounts_never_inherit_false_green_or_stale_capture(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as temp:
+            paths=[Path(temp)/('account'+str(i))/'terminal64.exe' for i in range(2)]
+            for slot in paths:
+                slot.parent.mkdir(parents=True,exist_ok=True)
+                slot.touch()
+            self.bridge._store.items=[
+                {'id':str(i),'name':'Test '+str(i),'terminal':str(slot),'enabled':True}
+                for i,slot in enumerate(paths)]
+            self.bridge.worker=types.SimpleNamespace(is_alive=lambda:True)
+            self.bridge.worker_mode='capture'
+            self.bridge.worker_started=9080
+            self.bridge._report({'state':'known-links','links':[
+                {'slot':str(slot),'login':str(i+100),'server':'Broker-Demo','link':'link-'+str(i)}
+                for i,slot in enumerate(paths)]})
+            self.bridge._report({'state':'pc-online'})
+            self.bridge._report({'state':'session-synced','slot':str(paths[0])})
+            statuses=[s['status'] for s in self.bridge.snapshot()['sessions']]
+            self.assertEqual(statuses,['monitoring','not-verified'])
+            # A formerly green account may be stale while the worker lives.
+            self.bridge.session_health[str(paths[0])]['last_sync_clock']=time.monotonic()-121
+            rows=self.bridge.snapshot()['sessions']
+            self.assertEqual(rows[0]['status'],'stale')
+            self.assertGreaterEqual(rows[0]['last_sync_age_seconds'],120)
+            self.assertEqual(rows[1]['status'],'not-verified')
+            self.bridge._report({'state':'session-synced','slot':str(paths[1])})
+            self.assertEqual([s['status'] for s in self.bridge.snapshot()['sessions']],
+                             ['stale','monitoring'])
+            # An observation from a previous worker lifetime is not current.
+            self.bridge.worker_started+=1
+            self.assertEqual([s['status'] for s in self.bridge.snapshot()['sessions']],
+                             ['not-verified','not-verified'])
+
+    def test_thirty_two_local_discovery_probes_are_bounded_and_isolated(self):
+        import tempfile
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as temp:
+            items=[]
+            for index in range(32):
+                folder=Path(temp)/f'account-{index:02d}'
+                folder.mkdir()
+                (folder/'.ym-managed.json').write_text('{}',encoding='utf-8')
+                terminal=folder/'terminal64.exe'
+                terminal.touch()
+                items.append({'id':str(index).zfill(12),'name':'Test',
+                              'terminal':str(terminal),'enabled':True})
+            self.bridge._store.items=items
+            lock=threading.Lock()
+            active=[0]
+            peak=[0]
+            def fake_probe(path):
+                with lock:
+                    active[0]+=1
+                    peak[0]=max(peak[0],active[0])
+                try:
+                    time.sleep(0.01)
+                    index=int(Path(path).parent.name.rsplit('-',1)[-1])
+                    return {'status':'verified','login':str(10000+index),
+                            'server':'Demo-'+str(index),'mode':0,
+                            'account_name':'Account '+str(index),
+                            'company':'Test Broker','currency':'USD'}
+                finally:
+                    with lock:active[0]-=1
+            with patch('account_discovery.probe_terminal',side_effect=fake_probe):
+                result=self.bridge._scan_local_accounts()
+            self.assertEqual(len(result),32)
+            self.assertLessEqual(peak[0],4)
+            self.assertGreaterEqual(peak[0],2)
+            self.assertEqual(len({row['slot'] for row in result}),32)
+            self.assertEqual(len({row['login'] for row in result}),32)
+            self.assertEqual(result[-1]['login'],'10031')
+
+    def test_more_than_one_hundred_verified_links_and_pauses_are_not_truncated(self):
+        links=[{'slot':f'C:/YMFX/account-{index}/terminal64.exe',
+                'login':str(100000+index),'server':'Broker-Demo',
+                'link':f'link-{index}'} for index in range(130)]
+        self.bridge._report({'state':'known-links','links':links})
+        self.bridge._report({'state':'monitoring-policy',
+                             'paused':[f'link-{index}' for index in range(130)]})
+        self.assertEqual(len(self.bridge.links),130)
+        self.assertEqual(len(self.bridge.remote_paused_links),130)
+        self.assertIn(links[-1]['slot'],self.bridge.links)
+        self.assertIn('link-129',self.bridge.remote_paused_links)
+
+    def test_account_discovery_pages_all_130_sessions_without_truncation(self):
+        reports=[]
+        def send(action,payload):
+            self.assertEqual(action,'discovery-report')
+            reports.append(payload)
+            return {'ok':True}
+        found=[{'slot':str(index).zfill(12),'login':str(90000+index)}
+               for index in range(130)]
+        self.bridge._publish_discovery_report('synthetic-scan',found,send)
+        self.assertEqual([len(page['accounts']) for page in reports],[64,64,2])
+        self.assertEqual([page['more'] for page in reports],[True,True,False])
+        self.assertEqual([page['accounts'][0]['slot'] for page in reports],
+                         [str(0).zfill(12),str(64).zfill(12),str(128).zfill(12)])
+        self.assertEqual(len({row['slot'] for page in reports for row in page['accounts']}),130)
+
+    def test_discovery_page_failure_never_marks_scan_finished(self):
+        calls=[]
+        def send(action,payload):
+            calls.append(payload)
+            if len(calls)==2:
+                return {'ok':False}
+            return {'ok':True}
+        with self.assertRaisesRegex(RuntimeError,'not accepted'):
+            self.bridge._publish_discovery_report('pending',[
+                {'slot':str(index)} for index in range(65)],send)
+        self.assertTrue(calls[0]['more'])
+        self.assertFalse(calls[-1]['more'])
+        empty=[]
+        self.bridge._publish_discovery_report('empty',[],lambda action,payload:
+            empty.append(payload) or {'ok':True})
+        self.assertEqual(empty,[{'request':'empty','accounts':[],'more':False}])
+
+    def test_signal_desk_capture_explicitly_disables_copier_cycle(self):
+        from unittest.mock import patch
+        from service_channel import SERVICE_ORIGIN
+        calls=[]
+        fake_connect=types.SimpleNamespace(main=lambda argv,**kwargs:calls.append((argv,kwargs)))
+        fake_manager=types.SimpleNamespace(ManagedAccounts=lambda *args:object())
+        with patch.dict(sys.modules,{'connect':fake_connect,'managed_accounts':fake_manager}):
+            self.bridge._worker_main()
+        self.assertEqual(len(calls),1)
+        args,params=calls[0]
+        self.assertEqual(args[0],SERVICE_ORIGIN)
+        self.assertTrue(params['parallel_capture'])
+        self.assertIs(params['copy_execution_enabled'],False,
+            'The new native connector may capture broker records but must never place copied orders.')
+
     def test_retry_requests_verified_slot_from_existing_supervisor(self):
         import tempfile
         with tempfile.TemporaryDirectory() as temp:
