@@ -166,7 +166,8 @@ export function RiskManagementPage() {
         <p className="mt-1 text-xs text-secondary">{metrics.statusReason}</p>
         {(metrics.riskEvidenceMissingCount > 0 || metrics.openRiskEvidenceMissingCount > 0 || metrics.historicalPnlMissingCount > 0 || metrics.invalidEntryTimestampCount > 0 || !metrics.timeZoneVerified) &&
           <p className="mt-1 text-xs text-secondary">
-            {metrics.riskEvidenceMissingCount} entries lack verified initial-risk percentages;
+            {metrics.riskEvidenceMissingCount} today’s entries lack verified initial-risk percentages;
+            {' '}{metrics.openRiskEvidenceMissingCount} open positions have unknown initial risk;
             {' '}{metrics.historicalPnlMissingCount} historical closed trades lack realized P&amp;L;
             {' '}{metrics.invalidEntryTimestampCount} entry timestamps are invalid.
             {!metrics.timeZoneVerified && ' Account reset timezone needs correction.'}
