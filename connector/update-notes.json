@@ -1,9 +1,10 @@
 {
-  "version": "0.6.3-rc1",
-  "headline": "Connector improvements",
+  "version": "0.6.4-rc1",
+  "headline": "Easier connector updates",
   "changes": [
-    "Clearer account connection and monitoring information.",
-    "Improvements to Windows connector reliability.",
-    "Refinements to the desktop experience."
+    "Check for updates directly in the Windows connector.",
+    "See clear, concise information about improvements.",
+    "Download verified updates and install them after a safe shutdown.",
+    "Keep your existing account settings and journal records in place."
   ]
 }
