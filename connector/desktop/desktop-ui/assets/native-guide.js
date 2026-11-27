@@ -53,6 +53,9 @@
     ['Why does each account need its own MT5 terminal?', 'Separate sessions allow accounts with different broker logins and servers to be monitored simultaneously without confusing their histories.'],
     ['How do I know whether a command succeeded?', 'An accepted button press is not proof of broker capture. Confirm each session’s verified state and the last completed scan.'],
     ['Where do I manage the PC name or monitoring choices?', 'Use your authenticated YoungMoney3 dashboard. The Windows app manages local MT5 sessions and shows their capture state.'],
+    ['What does a green Monitoring status prove?', 'It means recent account-level capture was confirmed while the paired PC is online. Review the actual broker fills and any evidence conflicts before assuming every execution is present.'],
+    ['Why is Arm blocked in Copy Studio?', 'At least one enabled follower, a current source connection, matching broker modes, an eligible follower and unexpired account-bound Windows consent are required. The new Signal Desk does not grant copying consent. Check the readiness details on the Dashboard; do not bypass them.'],
+    ['Where do I go when recovery is incomplete?', 'Open the affected account on the Dashboard. Review its broker-history checkpoint, unresolved positions and integrity conflicts. A recheck request is not proof that all missing executions have been recovered.'],
   ];
   const seen = (() => {
     try {

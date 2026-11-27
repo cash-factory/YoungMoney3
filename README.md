@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://ym-fx-staging.ethical-hacker263.workers.dev/"><strong>Explore staging ↗</strong></a> &nbsp; · &nbsp;
   <a href="https://ym-fx-staging.ethical-hacker263.workers.dev/connector-download.html"><strong>Get Signal Desk ↗</strong></a> &nbsp; · &nbsp;
-  <a href="https://github.com/cash-factory/YoungMoney3/tree/feat/rich-capture-staging-20261110">Current app source</a> &nbsp; · &nbsp;
+  <a href="https://github.com/cash-factory/YoungMoney3/tree/main">Current app source</a> &nbsp; · &nbsp;
   <a href="docs/ASSETS.md">Brand &amp; assets</a> &nbsp; · &nbsp;
   <a href="#run-locally">Run locally</a>
 </p>
@@ -41,13 +41,13 @@ The **CraftyLabs-inspired** visual system brings editorial typography, clean pag
 
 ## Run locally
 
-Use **Node.js 22+**. The latest interface lives on the staging branch:
+Use **Node.js 22+**. The current checked-in application lives on the default `main` branch. Staging is a deployment environment, not a separate source-of-truth branch:
 
 <details>
 <summary><strong>Open the API + frontend setup</strong></summary>
 
 ```sh
-git clone --branch feat/rich-capture-staging-20261110 https://github.com/cash-factory/YoungMoney3.git
+git clone --branch main https://github.com/cash-factory/YoungMoney3.git
 cd YoungMoney3
 npm ci
 npm run build
@@ -64,7 +64,7 @@ npm run cf:dev -- --local --var PILOT_INVITE_CODE:local-demo-invite
 npm run dev
 ```
 
-Private uploads need storage configuration; the Windows connector has its own [setup guide](https://github.com/cash-factory/YoungMoney3/blob/feat/rich-capture-staging-20261110/connector/README.md). See [Operations](docs/OPERATIONS.md) for environment setup and [Staging release](docs/STAGING_RELEASE.md) for deployment.
+Private uploads need storage configuration; the Windows connector has its own [setup guide](https://github.com/cash-factory/YoungMoney3/blob/main/connector/README.md). See [Operations](docs/OPERATIONS.md) for environment setup and [Staging release](docs/STAGING_RELEASE.md) for deployment.
 
 </details>
 
@@ -96,13 +96,13 @@ npm run build
 | `docs/assets/` | README banner, brand exports and demo screenshots |
 | `docs/` | Architecture, operations, release and recovery guides |
 
-The staging UI is covered by page/theme checks and dashboard, dropdown, media and motion regressions. [Browse CI runs](https://github.com/cash-factory/YoungMoney3/actions).
+Automated UI, domain, and connector tests are available, but passing a mock or preview test does **not** establish real Windows/MT5 compatibility, broker-history reconciliation, copier safety, or production deployment. [Inspect actual CI runs](https://github.com/cash-factory/YoungMoney3/actions) and the [release acceptance checklist](docs/USER_GUIDES.md) before promoting any build.
 
 </details>
 
 ## Go deeper
 
-[Windows connector updates](docs/CONNECTOR_AUTO_UPDATES.md) · [Architecture](docs/ARCHITECTURE.md) · [Operations](docs/OPERATIONS.md) · [Backup & recovery](docs/BACKUP_RECOVERY.md) · [Release readiness](docs/PRODUCTION_READINESS.md) · [Asset catalogue & credits](docs/ASSETS.md) · [Logo directions](docs/LOGO_DIRECTIONS.md)
+[Connection and Copy Studio guides](docs/USER_GUIDES.md) · [Native Signal Desk setup](connector/desktop/README.md) · [Windows connector updates](docs/CONNECTOR_AUTO_UPDATES.md) · [Architecture](docs/ARCHITECTURE.md) · [Operations](docs/OPERATIONS.md) · [Backup & recovery](docs/BACKUP_RECOVERY.md) · [Release readiness](docs/PRODUCTION_READINESS.md) · [Asset catalogue & credits](docs/ASSETS.md) · [Logo directions](docs/LOGO_DIRECTIONS.md)
 
 Implementation references: [React](https://react.dev/) · [TypeScript](https://www.typescriptlang.org/docs/) · [Vite](https://vite.dev/) · [Cloudflare Workers](https://developers.cloudflare.com/workers/) / [D1](https://developers.cloudflare.com/d1/) · [Supabase Storage](https://supabase.com/docs/guides/storage) · [MT5 Python API](https://www.mql5.com/en/docs/python_metatrader5)
 
