@@ -5,9 +5,10 @@ from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/'previews';OUT.mkdir(exist_ok=True)
 HTML=(ROOT/'desktop-ui'/'index.html').read_text()
-CSS=(ROOT/'desktop-ui'/'assets'/'signal-desk.css').read_text() + '\n' + (ROOT/'desktop-ui'/'native.css').read_text() + '\n' + (ROOT/'desktop-ui'/'assets'/'native-updates.css').read_text()
+CSS=(ROOT/'desktop-ui'/'assets'/'signal-desk.css').read_text() + '\n' + (ROOT/'desktop-ui'/'native.css').read_text() + '\n' + (ROOT/'desktop-ui'/'assets'/'native-updates.css').read_text() + '\n' + (ROOT/'desktop-ui'/'assets'/'native-guide.css').read_text()
 NATIVE=(ROOT/'desktop-ui'/'assets'/'native.js').read_text()
 UPDATES=(ROOT/'desktop-ui'/'assets'/'native-updates.js').read_text()
+GUIDE=(ROOT/'desktop-ui'/'assets'/'native-guide.js').read_text()
 APP=(ROOT/'desktop-ui'/'assets'/'signal-desk.js').read_text()
 LOGO_DATA="data:image/svg+xml,"+quote((ROOT/'desktop-ui'/'assets'/'ymfx-brand.svg').read_text())
 
@@ -18,6 +19,7 @@ def load_app(page,native=False):
     if native:page.evaluate(MOCK)
     page.add_script_tag(content=NATIVE)
     page.add_script_tag(content=UPDATES)
+    page.add_script_tag(content=GUIDE)
     page.add_script_tag(content=APP)
 
 MOCK=r'''(() => {
