@@ -6,6 +6,7 @@ legacy copier approval even though Signal Desk itself is capture-only.
 """
 from __future__ import annotations
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 
@@ -25,8 +26,8 @@ def inspect_idle_stores(root: Path, *, limit: int = 64) -> dict:
                 raise ValueError('Capture database is inaccessible')
             # Use URI read-only mode. No default writable sqlite connection,
             # implicit schema creation, or checkpoint mutation is permitted.
-            with sqlite3.connect(path.resolve().as_uri() + '?mode=ro',
-                                 uri=True, timeout=1) as db:
+            with closing(sqlite3.connect(path.resolve().as_uri() + '?mode=ro',
+                                         uri=True, timeout=1)) as db:
                 db.execute('PRAGMA query_only=ON')
                 queued += int(db.execute('SELECT COUNT(*) FROM outbox').fetchone()[0])
                 tables = {row[0] for row in db.execute(
