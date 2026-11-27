@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sqlite3
 import sys
 import threading
 import tkinter as tk
@@ -171,11 +172,33 @@ class ConnectorUpdateUI:
         threading.Thread(target=worker, name="YMFX-update-download", daemon=True).start()
 
     def _update_is_safe(self):
-        # Even if no copy thread currently exists, an authorized follower may be
-        # armed remotely. Fail closed whenever *any* local copy consent exists.
+        # A persisted follower authorization can outlive a restart, so the
+        # in-memory copy state alone is not authoritative. Fail closed on any
+        # database error instead of assuming the follower was disarmed.
         if any(bool(value) for value in self.copy_authorization_by_slot.values()):
             return False
-        return not (self.copy_worker and self.copy_worker.is_alive())
+        if self.copy_worker and self.copy_worker.is_alive():
+            return False
+        if not hasattr(self, "_copy_database_path"):
+            # Isolated unit-test hosts have no broker database.
+            return True
+        try:
+            filename = self._copy_database_path()
+            if not filename.exists():
+                return True
+            with sqlite3.connect(f"file:{filename.as_posix()}?mode=ro", uri=True, timeout=3) as db:
+                table = db.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' "
+                    "AND name='copy_local_permissions'"
+                ).fetchone()
+                if not table:
+                    return True
+                active = db.execute(
+                    "SELECT 1 FROM copy_local_permissions WHERE approved=1 LIMIT 1"
+                ).fetchone()
+                return active is None
+        except Exception:
+            return False
 
     def install_update_now(self):
         if self._update_staged is None or self._update_release is None:
