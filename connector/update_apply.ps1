@@ -17,6 +17,22 @@ $swapped = $false
 $launched = $false
 $phase = 'validate'
 
+function Get-VerifiedSha256([string]$path) {
+  # .NET hashing works on stripped-down Windows installations that lack the
+  # Get-FileHash cmdlet; the digest is compared in constant-time-neutral text.
+  $stream = [IO.File]::OpenRead($path)
+  try {
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+      return ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+    } finally {
+      $sha.Dispose()
+    }
+  } finally {
+    $stream.Dispose()
+  }
+}
+
 function Write-Outcome([string]$status, [string]$code) {
   $record = @{
     version = $Version
@@ -46,7 +62,7 @@ try {
   if ((Get-Item -LiteralPath $Candidate).Attributes -band [IO.FileAttributes]::ReparsePoint) {
     throw 'linked-candidate'
   }
-  if ((Get-FileHash -LiteralPath $Candidate -Algorithm SHA256).Hash.ToLowerInvariant() -ne $ExpectedHash.ToLowerInvariant()) {
+  if ((Get-VerifiedSha256 $Candidate) -ne $ExpectedHash.ToLowerInvariant()) {
     throw 'checksum-mismatch'
   }
 
@@ -57,7 +73,7 @@ try {
   # A second integrity check closes the window between a download and process exit.
   $phase = 'prepare'
   Copy-Item -LiteralPath $Candidate -Destination $incoming -Force
-  if ((Get-FileHash -LiteralPath $incoming -Algorithm SHA256).Hash.ToLowerInvariant() -ne $ExpectedHash.ToLowerInvariant()) {
+  if ((Get-VerifiedSha256 $incoming) -ne $ExpectedHash.ToLowerInvariant()) {
     throw 'checksum-mismatch'
   }
 
