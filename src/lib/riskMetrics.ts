@@ -26,6 +26,9 @@ export interface RiskMetrics {
   maxRiskUsedToday: number;
   riskEvidenceMissingCount: number;
   realizedPnlMissingCount: number;
+  historicalPnlMissingCount: number;
+  invalidEntryTimestampCount: number;
+  timeZoneVerified: boolean;
   riskBreaches: string[];
   statusReason: string;
   maxDrawdown: number;
@@ -64,6 +67,13 @@ export function calculateRiskMetrics(trades: Trade[], options: RiskMetricOptions
   const now = options.now || new Date();
   const todayKey = dateKeyInTimeZone(now, options.timeZone) || dateKeyInTimeZone(now, 'UTC')!;
   const accountTrades = trades.filter(trade => trade.account_id === options.accountId);
+  const historicalPnlMissingCount = accountTrades.filter(trade =>
+    trade.status === 'closed' && !Number.isFinite(trade.pnl)).length;
+  const invalidEntryTimestampCount = accountTrades.filter(trade =>
+    dateKeyInTimeZone(trade.entry_time,options.timeZone) === null).length;
+  let timeZoneVerified = true;
+  try { new Intl.DateTimeFormat('en-CA',{timeZone:options.timeZone || 'UTC'}); }
+  catch { timeZoneVerified = false; }
   const enteredToday = accountTrades.filter(trade => dateKeyInTimeZone(trade.entry_time, options.timeZone) === todayKey);
   const closedToday = accountTrades.filter(trade =>
     trade.status === 'closed'
@@ -122,6 +132,9 @@ export function calculateRiskMetrics(trades: Trade[], options: RiskMetricOptions
   // A missing risk percentage, broker/entry balance, or closed-trade P&L
   // prevents a reliable "Within Limits" verdict. Never treat unknown as 0%.
   const incomplete = riskEvidenceMissingCount > 0 ||
+    historicalPnlMissingCount > 0 ||
+    invalidEntryTimestampCount > 0 ||
+    !timeZoneVerified ||
     realizedPnlMissingCount > 0 ||
     accountTrades.some(trade => trade.status === 'closed' && !trade.exit_time) ||
     (balance <= 0 && options.maxDailyLossPct > 0);
@@ -134,7 +147,7 @@ export function calculateRiskMetrics(trades: Trade[], options: RiskMetricOptions
     : approaching ? 'warning'
     : 'safe';
   const statusReason = riskBreaches.length ? riskBreaches.join('; ')
-    : incomplete ? 'Some trades have unverified risk, realized P&L or account balance evidence.'
+    : incomplete ? 'Risk evidence is incomplete: initial risk, broker P&L, entry timestamps, account balance or reset timezone needs verification.'
     : approaching ? 'At least one configured risk limit is approaching.'
     : 'No breaches found in the available recorded evidence.';
 
@@ -152,6 +165,9 @@ export function calculateRiskMetrics(trades: Trade[], options: RiskMetricOptions
     maxRiskUsedToday,
     riskEvidenceMissingCount,
     realizedPnlMissingCount,
+    historicalPnlMissingCount,
+    invalidEntryTimestampCount,
+    timeZoneVerified,
     riskBreaches,
     statusReason,
     maxDrawdown,
