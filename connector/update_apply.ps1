@@ -33,7 +33,7 @@ try {
   $Target = [IO.Path]::GetFullPath($Target)
   $Candidate = [IO.Path]::GetFullPath($Candidate)
   $ResultFile = [IO.Path]::GetFullPath($ResultFile)
-  if (![IO.Path]::IsPathRooted($Target) -or [IO.Path]::GetExtension($Target).ToLowerInvariant() -ne '.exe') {
+  if (-not [IO.Path]::IsPathRooted($Target) -or [IO.Path]::GetExtension($Target).ToLowerInvariant() -ne '.exe') {
     throw 'invalid-target'
   }
   if (!(Test-Path -LiteralPath $Target -PathType Leaf) -or !(Test-Path -LiteralPath $Candidate -PathType Leaf)) {
