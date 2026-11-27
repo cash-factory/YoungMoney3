@@ -35,6 +35,14 @@ See [Primary connector and owner archive](../../docs/SIGNAL_DESK_PRIMARY.md), [U
 
 `connector-signaldesk-native.yml` builds an isolated preview installer only. It does **not** deploy the main website, publish a production release, or authorize live trades.
 
+## Capture-only execution boundary and channel isolation
+
+Signal Desk's Python bridge explicitly disables the legacy copier cycle for each concurrent MT5 capture worker. The old Classic application retains its separately authorized copier path; **Signal Desk does not route orders even when a prior Classic copier consent exists**. This is an implementation boundary, not a claim of live Windows/broker verification.
+
+This staged build is locked to the staging origin and independent staging profile. Runtime environment requests cannot redirect it to production. A future production release needs a separately reviewed connector build, app identifier, updater channel and Windows acceptance. The signed updater now audits durable SQLite outbox and legacy consent state before stopping the sidecar; unknown state blocks installation.
+
+See [High-priority technical acceptance](../../docs/HIGH_PRIORITY_CAPTURE_ACCEPTANCE.md).
+
 ## Critical acceptance still outstanding
 
 - Verify that PyInstaller and Tauri sidecar spawn cooperate in a real Windows user session, including window shutdown, process cleanup, WebView2 availability, OS permissions and an unsigned installer warning.
