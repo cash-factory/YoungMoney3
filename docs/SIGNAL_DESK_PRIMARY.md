@@ -12,6 +12,14 @@ Signal Desk includes the actual local MT5 bridge, dedicated account sessions, th
 
 The read-only GitHub release inventory on 27 November 2026 contained **21 public** `YoungMoney3.Connector.exe` assets. No assets have been deleted. Run `node scripts/audit-classic-public-releases.mjs` to check the current count; `--strict` fails while public binaries remain. Complete private owner recovery and obtain explicit approval before deleting any legacy assets. See [High-priority acceptance](HIGH_PRIORITY_CAPTURE_ACCEPTANCE.md).
 
+## Classic Connector stays in the repository
+
+**Keep Classic Connector source code and its supporting tests, release tools and documentation in YoungMoney3.** It is a retained owner-recovery and compatibility implementation, not a feature to delete. Member-facing installs still default to Signal Desk. Repository retention and **public binary downloads** are separate decisions; the latter must not be represented as owner-only while public GitHub releases remain downloadable.
+
+## Multi-account operation
+
+Signal Desk is not limited to three managed accounts. It stores separate MT5 sessions and uses isolated per-account capture processes. Account discovery supports **64 identities per authenticated API page** with multiple pages per scan and no total-three-account cutoff. Recovery similarly runs through repeated bounded batches for 20+ positions. Physical simultaneous-account capacity depends on Windows hardware, broker limits and verified MT5 interoperability.
+
 ## Owner-only classic distribution
 
 A public repository cannot make an ordinary GitHub Releases EXE owner-only. Previously published classic releases are **still publicly addressable until removed or moved by the repository owner**. Removing links or disabling future publication does not revoke old downloads. Do not promise complete exclusivity before those assets have been removed.
