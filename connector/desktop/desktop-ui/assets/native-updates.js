@@ -104,15 +104,14 @@
     try {
       // We require a verified idle snapshot. Shut down only our bundled local
       // sidecar, then let Tauri check/signature-verify the update again.
-      if (deps.hasBridge()) {
-        // Recheck the exact local SQLite state immediately before stopping it.
-        // A fresh broker upload or legacy copier consent cancels installation.
-        const proof = await deps.request('snapshot');
-        if (!verifiedIdle(proof) || deps.isBusy())
-          throw new Error('New broker capture or copier work is pending');
-        try { await deps.request('shutdown'); } catch { /* May exit before replying. */ }
-        await deps.waitForBridgeStop(15000);
-      }
+      // Even if the sidecar exits between the first check and this call,
+      // never bypass an independent last-second idle proof.
+      if (!deps.hasBridge()) throw new Error('Local connector stopped unexpectedly');
+      const proof = await deps.request('snapshot');
+      if (!verifiedIdle(proof) || deps.isBusy() || !deps.hasBridge())
+        throw new Error('New broker capture or copier work is pending');
+      try { await deps.request('shutdown'); } catch { /* May exit before replying. */ }
+      await deps.waitForBridgeStop(15000);
       await invoke('install_connector_update', { expectedVersion: state.version });
     } catch {
       state.installing = false;
