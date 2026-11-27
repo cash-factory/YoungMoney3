@@ -137,3 +137,21 @@ test('verified risk approaching configured per-trade maximum is warning', () => 
   })],{...options,maxRiskPerTradePct:1});
   assert.equal(actual.status,'warning');
 });
+
+test('MT5 initial-risk provenance overrides a numeric journal-derived percentage', () => {
+  const metrics=calculateRiskMetrics([makeTrade({
+    id:'connector-with-unknown-entry-stop',
+    trade_source:'mt5',
+    broker_details:{position_id:'8811',initial_risk_known:false},
+    entry_time:'2026-10-20T12:00:00.000Z',
+    risk_percent:0.3,
+    pnl:0,
+  })],options);
+  assert.equal(metrics.riskEvidenceMissingCount,1);
+  assert.equal(metrics.status,'unknown');
+});
+
+test('invalid entry capital makes percentage-loss compliance unknown', () => {
+  const metrics=calculateRiskMetrics([], {...options, accountBalance:0});
+  assert.equal(metrics.status,'unknown');
+});
