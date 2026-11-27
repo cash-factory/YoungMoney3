@@ -47,6 +47,37 @@ class SpecAndRecoveryTests(unittest.TestCase):
         self.assertEqual(self.db.execute('SELECT payload FROM position_specs').fetchone()[0],raw)
         self.assertEqual(len(self.events),1)
 
+    def test_verified_closure_is_monotonic_when_broker_history_later_disappears(self):
+        self.db.execute('INSERT INTO position_observations VALUES(?,?,?,?,?)',
+                        ('link','open-then-closed',10000,'1.2000',None))
+        due,unresolved=due_positions(self.db,'link',set(),90000)
+        self.assertEqual((due,unresolved),(['open-then-closed'],1))
+        mark_checked(self.db,'link','open-then-closed',90000,True)
+        self.assertEqual(due_positions(self.db,'link',set(),120000),([],0))
+        # A transient empty broker response must not retract the proven close.
+        mark_checked(self.db,'link','open-then-closed',121000,False)
+        self.assertEqual(due_positions(self.db,'link',set(),190000),([],0))
+        self.assertEqual(self.db.execute(
+            'SELECT status,checked_ms FROM position_recovery WHERE position_id=?',
+            ('open-then-closed',)).fetchone(),('broker_closure_verified',90000))
+
+    def test_repeated_recovery_checks_preserve_unproven_positions(self):
+        for pid in range(7):
+            self.db.execute('INSERT INTO position_observations VALUES(?,?,?,?,?)',
+                            ('link',str(pid),10000,'1.1000','1.2000'))
+        for attempt in (100000,161000):
+            due,unresolved=due_positions(self.db,'link',set(),attempt)
+            self.assertEqual((len(due),unresolved),(7,7))
+            for pid in due:
+                mark_checked(self.db,'link',pid,attempt,False)
+        due,unresolved=due_positions(self.db,'link',{'1','3'},161500)
+        self.assertEqual((len(due),unresolved),(0,5))
+        due,unresolved=due_positions(self.db,'link',{'1','3'},222001)
+        self.assertEqual((len(due),unresolved),(5,5))
+        self.assertEqual(self.db.execute(
+            'SELECT COUNT(*) FROM position_observations').fetchone()[0],7,
+            'Recovery does not invent, erase or duplicate first observations.')
+
     def test_recovery_uses_bounded_overlapping_history(self):
         day=86400000
         self.assertEqual(history_window(1000,1000,5*day),(1000,1000+day,True))
