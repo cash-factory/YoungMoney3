@@ -269,3 +269,25 @@
 .ym-account-discovery .ym-discovery-safety{color:var(--text-secondary)}
 .ym-account-discovery .ym-discovery-account-actions button{min-height:42px}
 @media(prefers-reduced-motion:reduce){.ym-account-discovery *{transition:none!important}}
+
+
+/* Connection evidence and progressive disclosure: palette-aware, responsive, accessible. */
+.ym-connection-path{border:1px solid var(--border);border-radius:12px;background:var(--bg-card);padding:13px 17px}
+.ym-connection-path>summary{display:flex;align-items:center;gap:9px;cursor:pointer;color:var(--text-primary);font-size:12px;font-weight:750;outline-offset:5px}
+.ym-connection-path>summary svg{color:var(--brand-text);flex:none}
+.ym-connection-path>ol{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;list-style:none;margin:16px 0 10px;padding:0;counter-reset:ym-connection-stage}
+.ym-connection-path>ol li{counter-increment:ym-connection-stage;min-width:0;border:1px solid var(--border);border-radius:9px;padding:12px;background:var(--bg-secondary);font-size:11px;line-height:1.55}
+.ym-connection-path>ol li:before{content:counter(ym-connection-stage,decimal-leading-zero);font:700 10px 'JetBrains Mono',monospace;color:var(--brand-text);display:block;margin-bottom:7px}
+.ym-connection-path>ol strong{display:block;font-size:12px;color:var(--text-primary);margin-bottom:5px}
+.ym-connection-path>ol span,.ym-connection-path>p{color:var(--text-secondary);line-height:1.65}
+.ym-connection-path>p{font-size:11px;margin-top:10px}
+.ym-account-state-guide{border:1px solid var(--border);border-left:3px solid var(--brand-text);border-radius:9px;padding:13px 15px;background:var(--bg-card);display:grid;gap:6px;margin-bottom:15px}
+.ym-account-state-guide[data-tone="success"]{border-left-color:var(--success-text)}
+.ym-account-state-guide[data-tone="danger"]{border-left-color:var(--error-text)}
+.ym-account-state-guide[data-tone="warning"]{border-left-color:var(--warning-text)}
+.ym-account-state-guide>strong{font-size:12px;color:var(--text-primary)}
+.ym-account-state-guide p{font-size:11px;line-height:1.6;color:var(--text-secondary);margin:0}
+.ym-account-state-guide b{font-weight:750;color:var(--text-primary)}
+@media(max-width:900px){.ym-connection-path>ol{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:540px){.ym-connection-path>ol{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.ym-account-state-guide,.ym-connection-path{animation:none!important;transition:none!important}}
