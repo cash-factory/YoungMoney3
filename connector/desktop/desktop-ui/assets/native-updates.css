@@ -14,3 +14,32 @@
 .ym-native .native-update-panel :is(button,input):focus-visible{outline:2px solid #c81030;outline-offset:3px}
 @media(max-width:650px){.ym-native .native-update-panel .native-pad{padding:15px}.ym-native .native-update-toolbar{padding:6px 8px;font-size:10px}}
 @media(prefers-reduced-motion:reduce){.ym-native .native-update-panel *, .ym-native .native-update-toolbar{animation:none!important;transition:none!important}}
+
+
+/* Update checks must never appear inert, especially when no release is available. */
+.ym-native .native-update-toolbar {
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;
+  transition:background-color .2s,border-color .2s,transform .16s,box-shadow .2s;
+}
+.ym-native .native-update-toolbar[data-update-state="current"] {
+  background:#eaf6ee;color:#246448;border-color:#acd7be;
+}
+.ym-native .native-update-toolbar[data-update-state="failed"],
+.ym-native .native-update-toolbar[data-update-state="unconfigured"] {
+  background:#fff2df;color:#855a20;border-color:#efc88b;
+}
+.ym-native .native-update-toolbar[data-update-state="checking"] {
+  background:#fff4f6;color:#a21f47;border-color:#d9a7b7;cursor:progress;
+}
+.ym-native .native-update-toolbar:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 4px 10px #53243510}
+.ym-native .native-update-toolbar:active:not(:disabled){transform:scale(.98)}
+.ym-native .native-update-spinner{
+  width:12px;height:12px;display:inline-block;flex:none;border:2px solid currentColor;
+  border-right-color:transparent;border-radius:50%;animation:native-update-spin .7s linear infinite;
+}
+@keyframes native-update-spin{to{transform:rotate(360deg)}}
+.ym-native .native-update-panel .native-update-message{padding:10px 12px;border-radius:8px;background:#f5f7fa;border-left:3px solid #b25a78}
+@media(prefers-reduced-motion:reduce){
+  .ym-native .native-update-spinner{animation:none}
+  .ym-native .native-update-toolbar{transition:none}
+}
