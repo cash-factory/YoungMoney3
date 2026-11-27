@@ -364,32 +364,30 @@ test('failed MT5 login attempts are removable without affecting connected accoun
   assert.ok(mt5.includes("window.confirm("),'Removal must be confirmed');
 });
 
-test('staging MT5 Connections routes downloads through the verified latest-release page',()=>{
+test('Signal Desk is the only public Windows connector offered through the dashboard',()=>{
   const mt5=read('src/components/Mt5Connections.tsx');
   const page=read('public/connector-download.html');
-  const tag='staging-connector-v0.5.7-rc1';
-  const executable='https://github.com/cash-factory/YoungMoney3/releases/download/'+tag+'/YoungMoney3.Connector.exe';
-  const checksum=executable+'.sha256';
-  assert.ok(mt5.includes('href="/connector-download.html"'),'Connector downloads must go through the verified release details page');
-  assert.ok(mt5.includes('Download latest connector'),'Dashboard must advertise the dynamic latest verified connector');
-  assert.ok(!mt5.includes('href="'+executable+'"'),'Dashboard may not hardcode an older binary after a newer prerelease becomes available');
-  assert.ok(page.includes('href="'+executable+'"'),'Release page must provide a working link without GitHub API');
-  assert.ok(page.includes('href="'+checksum+'"'),'Show the published checksum next to the executable');
-  assert.ok(page.includes('id="digest"'),'The download page must show checksum verification instructions');
-  assert.ok(page.includes('4fe6ca4278f608ebb876d327f1672e694fe7b916e854a2b21a276bd2f0d4e4fb'),'Published Windows executable checksum must match the designated release');
-  assert.ok(!page.includes('92716f36a60318d37646e419f8e7f9fbdf554d0e5817445f47796673ea37fd46'),'Never reuse the old connector checksum for a new release');
-  assert.ok(page.includes('fetch(\'https://api.github.com/repos/cash-factory/YoungMoney3/releases?per_page=30\''),'Keep newer release discovery available');
+  const worker=read('worker/index.ts');
+  const tag='staging-signaldesk-v0.3.0-preview.1';
+  const executable='https://github.com/cash-factory/YoungMoney3/releases/download/'+tag+'/YoungMoney3.Signal.Desk_0.3.0_x64-setup.exe';
+  assert.ok(mt5.includes('href="/connector-download.html"'));
+  assert.ok(mt5.includes('Get Signal Desk'));
+  assert.ok(!mt5.includes('/mt5-connector.zip'));
+  assert.ok(page.includes('href="'+executable+'"'),'Pinned download must be an already-published Signal Desk installer');
+  assert.ok(page.includes('id="checksum"') && page.includes('id="digest"'));
+  assert.ok(page.includes('0c471f814a964898c08fbc49250bb5b6eb669526696d6249ff188a83f59a6f68'));
+  assert.ok(!page.includes('YoungMoney3.Connector.exe'),'Legacy binary must not appear on public download page');
+  assert.ok(page.includes("releases?per_page=40") && page.includes('staging-signaldesk-v'));
+  assert.ok(worker.includes('CLASSIC_OWNER_USER_ID') && worker.includes('CLASSIC_RELEASES'));
+  assert.ok(worker.includes("String(user.id)===env.CLASSIC_OWNER_USER_ID"),'Only exact server-verified owner may download legacy binary');
 });
-
-test('staging connector download accepts GitHub-sanitized asset filenames',()=>{
+test('Signal Desk download verifies official releases and keeps a genuine pinned fallback',()=>{
   const page=read('public/connector-download.html');
-  assert.ok(page.includes('YoungMoney3(?:[. -])Connector'), 'GitHub may replace whitespace in filenames');
-  assert.ok(page.includes('Connector\\.exe'), 'Both Windows exe and checksum must be detected');
-  assert.ok(page.includes('staging-connector-v'), 'Only staging prerelease tags should be eligible');
-  assert.ok(page.includes('row.prerelease && !row.draft'), 'Do not link unreviewed or production releases');
-  assert.ok(page.includes('row.browser_download_url.startsWith(base)'), 'Only official repo assets may be linked');
+  assert.ok(page.includes('x.prerelease') && page.includes('!x.draft'));
+  assert.ok(page.includes("a.browser_download_url===BASE+tag+'/'+a.name"));
+  assert.ok(page.includes('sha256:[a-f0-9]{64}'));
+  assert.ok(!page.includes('staging-connector-v'),'Public discovery may not consider classic builds');
 });
-
 
 test('Field Guide is a real skippable and replayable journey through platform features',()=>{
   const guide=read('src/components/PlatformGuide.tsx');
