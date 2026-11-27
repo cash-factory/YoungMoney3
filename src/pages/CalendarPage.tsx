@@ -103,10 +103,10 @@ export function CalendarPage() {
           {accounts.map(item=><option key={item.id} value={item.id}>{item.name} · {item.base_currency}</option>)}
         </Select>
       </label>
-      <section className="card p-4 sm:p-5 mb-5" aria-label="MT5 position lifecycle calendar summary">
-        <p className="text-xs font-bold uppercase tracking-wider text-muted">BROKER POSITION CALENDAR · UTC CLOSE DATES</p>
-        <h2 className="font-semibold text-base mt-1">Verified lifecycle counts</h2>
-        <p className="text-xs text-muted mt-1 mb-3">Each broker position lifecycle counts once, even after partial closes. These close dates use recorded UTC; broker-local dates are not inferred until the account's historical timezone conversion is verified. Existing manual/legacy calendar results below remain separate.</p>
+      <section className="card ym-tone-panel p-4 sm:p-5 mb-5" aria-label="MT5 position lifecycle calendar summary">
+        <p className="ym-calendar-evidence-kicker text-xs font-bold uppercase tracking-wider">BROKER POSITION CALENDAR · UTC CLOSE DATES</p>
+        <h2 className="ym-calendar-evidence-title text-base mt-1">Verified lifecycle counts</h2>
+        <p className="ym-calendar-evidence-support text-xs mt-1 mb-3">Each broker position lifecycle counts once, even after partial closes. These close dates use recorded UTC; broker-local dates are not inferred until the account's historical timezone conversion is verified. Existing manual/legacy calendar results below remain separate.</p>
         {positionError && <p role="status" className="text-xs text-muted">Broker position summaries are temporarily unavailable.</p>}
         {(()=> {
           const prefix = format(currentMonth,'yyyy-MM');
@@ -114,7 +114,7 @@ export function CalendarPage() {
           const count = matching.reduce((total,[,rows])=>total+rows.length,0);
           const knownR = matching.flatMap(([,rows])=>rows.map(row=>row.summary.final_realized_r).filter((value):value is string=>value!=null));
           return <div className="flex flex-wrap gap-3 text-sm">
-            <div className="rounded-lg bg-secondary p-3"><p className="text-xs text-muted">Closed lifecycles</p><strong className="font-mono text-lg">{count}</strong></div>
+            <div className="ym-calendar-stat rounded-lg p-3"><p className="text-xs text-muted">Closed lifecycles</p><strong className="font-mono text-lg">{count}</strong></div>
             <div className="rounded-lg bg-secondary p-3"><p className="text-xs text-muted">Known final R</p><strong className="font-mono text-lg">{knownR.length} / {count}</strong></div>
             <div className="rounded-lg bg-secondary p-3"><p className="text-xs text-muted">Close-date coverage</p><strong className="font-mono text-lg">{matching.length} UTC days</strong></div>
           </div>;
@@ -130,7 +130,7 @@ export function CalendarPage() {
           <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="btn-secondary p-2">
             <ChevronRight size={18} />
           </button>
-          <button onClick={() => setCurrentMonth(new Date())} className="btn-secondary text-xs">
+          <button onClick={() => setCurrentMonth(new Date())} className="btn-secondary text-xs ym-calendar-today">
             Today
           </button>
         </div>
