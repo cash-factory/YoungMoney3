@@ -191,10 +191,11 @@ export const supabase: any = {
       emit('SIGNED_IN', session);
       return { error: null, data: { session, user: result.data.user } };
     },
-    async signUp({ email, password, options }: { email: string; password: string; options?: { data?: { display_name?: string; pilot_invite_code?: string } } }) {
+    async signUp({ email, password, options }: { email: string; password: string; options?: { data?: { display_name?: string; pilot_invite_code?: string; username?: string } } }) {
       const display_name = options?.data?.display_name || email.split('@')[0];
-      const usernameBase = display_name.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '') || 'trader';
-      const username = `${usernameBase.slice(0, 23)}_${crypto.randomUUID().slice(0, 8)}`;
+      // Never silently assign a random handle. The user chooses an
+      // identity that is checked again against the database UNIQUE index.
+      const username = options?.data?.username?.trim().toLowerCase() || '';
       const result = await api('/api/auth/signup', { email, password, display_name, username, invite_code: options?.data?.pilot_invite_code });
       if (result.error || !result.data) return { error: result.error, data: { user: null } };
       const session = sessionFrom(result.data.user as Row);
