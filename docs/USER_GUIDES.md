@@ -1,5 +1,7 @@
 # YoungMoney3 | User guides and interactive manuals
 
+**Primary Windows connector:** Signal Desk. The older classic connector is now an owner-restricted recovery tool and is not part of regular member onboarding. The redesigned interface includes the sixteen-step guide described below. See [Signal Desk primary release](SIGNAL_DESK_PRIMARY.md) for rollout and signed update gates.
+
 This reference explains the **in-product guides** for the trading dashboard and the Windows MT5 connector. It describes the available controls; it does not grant account permissions or simulate broker results.
 
 ## Dashboard: Field Guide
