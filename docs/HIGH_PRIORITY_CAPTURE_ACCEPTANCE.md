@@ -2,6 +2,12 @@
 
 > Workstream opened on 27 November 2026. This is a **verification protocol**, not evidence of completed physical MT5 tests, active signed updates, private Classic distribution, or production readiness. No live broker order or destructive release change is authorized.
 
+## Capacity principle
+
+**No three-account limit and no seven-position limit.** The capture design models broker positions and connected accounts independently. Reconciliation uses a bounded **16-position per-poll work budget** and a durable cursor; work beyond that batch must remain eligible for later scans. Account discovery uses bounded **64-account transport pages** and continues until every available verified account is acknowledged. The saved session store has no three-account maximum. Actual simultaneously active accounts are constrained by available Windows processes, RAM, CPU, MT5 IPC and broker connectivity, requiring empirical load tests; no unlimited operational capacity is claimed.
+
+The Classic Tk/PyInstaller Connector **stays in the YoungMoney3 repository**, including its source code, tests and owner recovery tools. Keeping source control is separate from deciding whether old executable releases should remain publicly downloadable.
+
 ## 1. Technical controls proposed in this branch
 
 | Area | Mechanism | What it cannot prove |
@@ -41,10 +47,10 @@ Python imports and broker fixtures may need running from the repository root wit
 
 Use *disposable demo accounts*, signed-in isolated MT5 terminals, and a recorded broker history export. Record results for the exact commit SHA and Windows user/profile.
 
-### A. Seven positions disconnected before closure
+### A. Scalable position recovery — 7, 20, 40, 100+ positions
 
-1. With read-only monitoring active, open seven independent positions, including at least two on the same symbol. Record broker deal/order tickets, position IDs, entry time, initial order SL and first observed protective SL where applicable.
-2. Confirm the connector stored seven distinct first-observed specification evidence keys and frozen initial-risk provenance, with no redundant symbol-specification conflicts.
+1. Using disposable demo accounts, verify the original seven-position case and progressively larger scenarios of **20, 40 and 100+ independent positions**. Include multiple positions on the same symbol and partial closes, scale-ins and pending orders. The limits must derive from broker/account capacity, not a hardcoded journal position count. Record broker deal/order tickets, position IDs, entry time, initial order SL and first observed protective SL where applicable.
+2. Confirm **one distinct position-scoped evidence identity per broker position**, including for 20+ simultaneous positions on the same symbol, and immutable initial-risk provenance with no symbol-specification key collisions.
 3. Disconnect the connector **without stopping the brokers**. Close/partially close a known subset of positions while disconnected. Make a stop modification on another position if permitted.
 4. Reconnect with the same Windows user and authenticated account. Verify resumed broker history scans, durable outbox and accurate dashboard recovery checkpoints.
 5. Compare each open/closed position lifecycle, original risk, entry/exit fills, order identity, fee/swap/profit and session attribution with the broker statement. A position absent from `positions_get` must **never** be treated as closed without broker exit deals.
@@ -53,12 +59,14 @@ Use *disposable demo accounts*, signed-in isolated MT5 terminals, and a recorded
 
 **Pass condition:** All available broker executions reconcile by ticket and volume, original risk is not rewritten, genuine gaps remain marked as unknown, no false closure or duplicate event appears, and the UI never reports verified capture before a new successful scan.
 
-### B. Two independent brokers/accounts
+### B. Scalable multi-account monitoring — 2, 4, 8, 16, 32+ accounts
 
-- Install two *different* dedicated MT5 portable terminal profiles and verify two worker process IDs.
-- Confirm a separate server/login identity and database link for each. A failure or broker timeout in one must not change the other account's verified identity or capture state.
-- Pause one account independently and ensure the other continues. After retry, verify distinct capture timestamps and no cross-account copies or evidence.
+- Begin with **two** independent demo MT5 profiles, then exercise **4, 8, 16 and 32+ account sessions** where Windows hardware and broker availability allow. Each simultaneously monitored account requires its own dedicated MT5 terminal and isolated worker process. Test on one and multiple PCs, with documented CPU/memory use and broker IPC latency.
+- Confirm unique server/login identity, local slot and account link for **every** account. A failure or broker timeout in one must not change any other account's verified identity, capture state, outbox or original-risk evidence.
+- Pause and resume different accounts independently while the others continue. Verify distinct capture timestamps, no cross-account copied evidence, no lost queue receipts and no unexpected order execution from Signal Desk.
 - Simulate a still-running supervisor with an account whose last capture is more than 120 seconds old; that account must show **Waiting for fresh scan**, not Monitoring.
+
+- Verify account discovery using more than 64 broker sessions: requests are transmitted in **64-account bounded pages**, and the scan finishes only after the last page is acknowledged. The **page size is not a total account limit**. A failed intermediate page must remain retryable; the Dashboard must not silently omit later sessions.
 
 ### C. Signal Desk is capture-only
 
@@ -108,11 +116,11 @@ Do not erase `mt5_raw_events` or `mt5_evidence_conflicts`. Confirm that:
 
 - [ ] CI passes on the exact high-priority branch head.
 - [ ] Native Windows installer launches and paired MT5 sessions work in practice.
-- [ ] Seven-position outage acceptance is reconciled against broker history.
-- [ ] Two-account isolation is physically verified.
+- [ ] Position-recovery acceptance covers the original seven-position case **and** 20, 40 and 100+ positions, including multi-page catch-up and outage replay.
+- [ ] Multi-account isolation is physically verified at 2, 4, 8 and progressively higher simultaneous terminal counts, subject to documented hardware/resource limits.
 - [ ] Copier boundary and signed update idle/rollback checks pass on Windows.
 - [ ] Historical conflict classifications reviewed and genuine cases triaged.
-- [ ] Old Classic assets privately archived and publicly revoked, **after explicit approval**.
+- [ ] Classic Connector source, tests, owner recovery tooling and history remain in this repository; only **public downloadable legacy release assets** may be restricted or removed following separate explicit approval and private-backup verification.
 - [ ] Production channel separately configured, signed, tested and approved, if requested.
 - [ ] Owner approves any merge, staging release or production deployment.
 
