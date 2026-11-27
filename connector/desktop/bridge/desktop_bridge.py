@@ -167,7 +167,9 @@ class Bridge:
             if isinstance(slot, str) and kind in ('session-synced', 'session-error', 'session-starting', 'verifying', 'account-error'):
                 previous = self.session_health.get(slot, {})
                 if kind == 'session-synced':
-                    previous = {'state':'synced', 'last_sync':now, 'capture_started':self.worker_started}
+                    previous = {'state':'synced', 'last_sync':now,
+                                'last_sync_clock':time.monotonic(),
+                                'capture_started':self.worker_started}
                 elif kind in ('session-error','account-error'):
                     previous = {**previous, 'state':'error'}
                 else:
@@ -182,12 +184,16 @@ class Bridge:
     def snapshot(self):
         with self._lock:
             capture_active = bool(self.worker_mode == 'capture' and self.worker and self.worker.is_alive())
+            now_clock = time.monotonic()
             rows=[]
             for entry in self._store.snapshot():
                 terminal = str(entry['terminal'])
                 link = self.links.get(terminal, {})
                 health = self.session_health.get(terminal, {})
                 present = Path(terminal).is_file()
+                last_capture_clock = health.get('last_sync_clock')
+                age = now_clock - last_capture_clock if type(last_capture_clock) in (int,float) else None
+                fresh = age is not None and 0 <= age <= 120
                 if not entry['enabled']:
                     status = 'paused'
                 elif not present:
@@ -203,7 +209,7 @@ class Bridge:
                 elif (self.state == 'connected' and link and
                       health.get('state') == 'synced' and
                       health.get('capture_started') == self.worker_started):
-                    status = 'monitoring'
+                    status = 'monitoring' if fresh else 'stale'
                 else:
                     status = 'not-verified'
                 rows.append({
@@ -213,6 +219,7 @@ class Bridge:
                     'login':link.get('login') or self._discovered.get(entry['id'],{}).get('login') or None,
                     'account_name':self._discovered.get(entry['id'],{}).get('account_name') or None,
                     'status':status, 'last_sync':health.get('last_sync'),
+                    'last_sync_age_seconds':round(age) if age is not None and age >= 0 else None,
                     'verified_link':bool(link.get('link')),
                     'copy_authorized':None,
                 })
