@@ -34,7 +34,7 @@ export function RiskGuardian({ trades, settings, account, plan, onConfigure }: R
       border: 'border-success-500/20',
       barColor: 'bg-success-500',
       icon: Shield,
-      label: 'Within Limits',
+      label: 'No Recorded Breaches',
     },
     unknown: {
       color: 'text-warning-500',
@@ -75,7 +75,7 @@ export function RiskGuardian({ trades, settings, account, plan, onConfigure }: R
           </div>
           <div>
             <h3 className="text-sm font-semibold">Risk Guardian</h3>
-            <p className="text-[11px] text-muted">Daily loss limits & drawdown protection</p>
+            <p className="text-[11px] text-muted">Recorded limits, not live broker exposure</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
