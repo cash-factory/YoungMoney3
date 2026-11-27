@@ -22,6 +22,10 @@ export interface Env {
   DB: D1Database;
   AUTH_KDF?: DurableObjectNamespace;
   MEDIA?: R2Bucket;
+  /** Separate, non-public owner-controlled legacy release bucket. */
+  CLASSIC_RELEASES?: R2Bucket;
+  /** Exact owner user ID; admin alone is NOT sufficient. Fail closed when unset. */
+  CLASSIC_OWNER_USER_ID?: string;
   PILOT_INVITE_CODE?: string;
   MT5_ALLOW_LIVE?: string;
   MT5_ALLOW_LIVE_COPY?: string;
@@ -926,6 +930,34 @@ export default {
           (request.method==='POST' && pathname==='/api/data' &&
             (await jsonObject<{action?:string}>(request.clone())).action==='select');
         if (!readOnlyRoute) return response({error:'This is a read-only sample workspace. Sign in with your own account to save changes.'},403);
+      }
+      // Owner-only legacy distribution. Unlike the public GitHub releases this
+      // route checks the exact active owner identity on the SERVER before reading
+      // private R2 data. Never proxy or redirect to a public classic EXE.
+      if (request.method === 'GET' && pathname.startsWith('/api/owner/classic/')) {
+        const isOwner = typeof env.CLASSIC_OWNER_USER_ID==='string' &&
+          /^[0-9a-f-]{36}$/i.test(env.CLASSIC_OWNER_USER_ID) &&
+          user.role==='admin' && user.account_status==='active' &&
+          String(user.id)===env.CLASSIC_OWNER_USER_ID && user.id!==DEMO_MEMBER_ID;
+        if (!isOwner) return response({ error: 'Not found.' }, 404);
+        if (pathname === '/api/owner/classic/info') {
+          const object = env.CLASSIC_RELEASES
+            ? await env.CLASSIC_RELEASES.head('private/classic-connector/YoungMoney3.Connector.exe')
+            : null;
+          return response({ owner: true, available: Boolean(object) });
+        }
+        if (pathname !== '/api/owner/classic/download') return response({ error: 'Not found.' }, 404);
+        if (!env.CLASSIC_RELEASES) return response({ error: 'Owner archive has not been configured.' }, 503);
+        const file = await env.CLASSIC_RELEASES.get('private/classic-connector/YoungMoney3.Connector.exe');
+        if (!file) return response({ error: 'Owner archive is not yet available.' }, 503);
+        return new Response(file.body, { headers: {
+          'content-type': 'application/octet-stream',
+          'content-disposition': 'attachment; filename="YoungMoney3.Owner.Connector.exe"',
+          'cache-control': 'private, no-store, max-age=0',
+          'x-content-type-options': 'nosniff',
+          'referrer-policy': 'no-referrer',
+          'content-security-policy': "default-src 'none'",
+        } });
       }
       if(request.method==='POST' && pathname==='/api/decision/context') {
         const input=await jsonObject<Record<string,unknown>>(request);

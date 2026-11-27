@@ -181,6 +181,15 @@ export function Mt5Connections() {
     {setupHint && <div className="ym-action-feedback" data-kind="info" role="status"><CircleHelp size={17}/><span>{setupHint}</span><button type="button" aria-label="Dismiss" onClick={()=>setSetupHint('')}><X size={16}/></button></div>}
     {error && !feedback && <div className="ym-action-feedback" data-kind="error" role="alert"><AlertTriangle size={16}/>{error}</div>}
     {capturePaused && <div className="ym-action-feedback" data-kind="warning" role="alert"><AlertTriangle size={17}/>Capture paused by your staging administrator.</div>}
+    <section className="ym-signal-launch" aria-label="Windows connector download">
+      <div className="ym-signal-launch-copy">
+        <span className="ym-signal-launch-kicker">SIGNAL DESK / THE WINDOWS CONNECTOR</span>
+        <h2>A calmer way to connect your trading world.</h2>
+        <p>One place to add MT5 accounts, verify capture and recover after a disconnection. Guided steps and clear account status are built in.</p>
+        <div className="ym-signal-launch-features"><span>Guided setup</span><span>Account-level control</span><span>Verified capture</span></div>
+      </div>
+      <a className="ym-signal-launch-link" href="/connector-download.html"><Laptop size={17}/> Get Signal Desk <ArrowRight size={16}/></a>
+    </section>
     {outdatedCapturePc && <div className="ym-action-feedback" data-kind="warning" role="status"><AlertTriangle size={17}/><span>A newer connector may be available for your linked MT5 account. Check the latest published version and checksum before updating; retain the same Windows user to preserve pairing and pending capture records. Do not unpair or remove the account. <a href="/connector-download.html" rel="noopener noreferrer" className="underline font-semibold">View latest connector</a>.</span></div>}
 
     <section className="card ym-connection-section ym-account-discovery" aria-labelledby="mt5-discovery-title">
@@ -265,7 +274,7 @@ export function Mt5Connections() {
                   <button type="button" className="btn-secondary" onClick={()=>{setEditingPc(d.id);setPcNameDraft(pairedPcName(d));}}>Rename PC</button>
                   <button type="button" className="btn-secondary" onClick={()=>{if(window.confirm('Unpair '+pairedPcName(d)+'? This revokes its connected broker sessions. Do not unpair the PC currently capturing your trades.'))void run(()=>action('revoke',{device:d.id}),'PC unpaired. Historical trade evidence was retained.','revoke-pc');}}>Unpair PC</button>
                 </div>}
-              <details className="ym-context-help"><summary><CircleHelp size={15}/>Connection and safety details</summary><p>Use Add broker account to connect more logins without pairing again. Unpairing revokes monitoring for accounts on this PC. An offline PC retains its saved pairing; reopen the Windows connector on that computer.</p><div className="ym-connection-actions"><a href="/connector-download.html" rel="noopener noreferrer">Download latest connector</a><a href="https://github.com/cash-factory/YoungMoney3/releases" rel="noopener noreferrer">Published versions and checksums</a></div></details>
+              <details className="ym-context-help"><summary><CircleHelp size={15}/>Connection and safety details</summary><p>Use Add broker account to connect more logins without pairing again. Unpairing revokes monitoring for accounts on this PC. An offline PC retains its saved pairing; reopen the Windows connector on that computer.</p><div className="ym-connection-actions"><a href="/connector-download.html" rel="noopener noreferrer">Download Signal Desk</a><a href="/connector-download.html">Verified Signal Desk release &amp; checksum</a></div></details>
               <div className="ym-pc-accounts">
                 <div className="ym-pc-accounts-header"><strong>Accounts on this PC</strong><span className="ym-section-count">{deviceLinks.length}</span></div>
                 {deviceLinks.length?deviceLinks.map(link=>{
@@ -291,9 +300,8 @@ export function Mt5Connections() {
         <div className="ym-connection-actions">
           <a href="/connector-download.html" rel="noopener noreferrer">Download latest connector</a>
           <a href="/connector-download.html">Release details &amp; SHA-256</a>
-          <a href="/mt5-connector.zip" download>Python source fallback</a>
         </div>
-        <p>Use the Windows connector on the computer that runs MT5. Staging connector builds are unsigned. Trade copying requires account-specific authorization; real-money execution is independently disabled until the pilot is approved. Check the release checksum before opening the executable.</p>
+        <p>Install Signal Desk on the Windows PC that runs MT5. Verify the published installer checksum, then pair this computer. Monitoring never authorizes copying or order execution. The previous classic connector is no longer offered to members.</p>
       </details>
       {requestedPc && loaded && <p className="ym-context-short" role="status">{!devices.length?'Pair a PC once to continue.':requestedPc==='1'&&devices.length>1?'Select the PC to add this account to.':'Keep the connector open; the login will open when the selected PC is ready.'}</p>}
     </section>

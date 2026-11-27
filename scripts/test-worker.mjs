@@ -44,6 +44,14 @@ try {
   assert.match(signup.headers.get('set-cookie'),/SameSite=Strict/);
   // Consume the response while its Miniflare request context is still live.
   const subject=(await signup.json()).user.id;
+  const ownerOnly=await mf.dispatchFetch('https://journal.example/api/owner/classic/info',{
+    method:'GET',headers:{cookie}});
+  assert.equal(ownerOnly.status,404,
+    'An ordinary member must not discover the legacy owner-only connector archive');
+  const publicDownloadAttempt=await mf.dispatchFetch('https://journal.example/api/owner/classic/download',{
+    method:'GET',headers:{cookie}});
+  assert.equal(publicDownloadAttempt.status,404,
+    'An ordinary member must never download the classic Windows EXE from the Worker');
   const newCredential=await db.prepare('SELECT password_hash,password_salt FROM users WHERE id=?').bind(subject).first();
   assert.match(newCredential.password_hash,/^pbkdf2-sha256\$600000\$/,'New signups use versioned password derivation.');
   assert.equal((await call('auth/signin',{email:'member@example.test',password:'incorrect password'})).status,401);

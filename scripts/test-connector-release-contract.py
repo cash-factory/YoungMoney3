@@ -13,33 +13,14 @@ assert re.fullmatch(r"\d+\.\d+\.\d+-rc\d+",version), version
 
 workflow=(root/".github/workflows/connector-prerelease.yml").read_text(encoding="utf-8")
 for required in [
-    "workflows: [Validate]",
-    "github.event.workflow_run.conclusion == 'success'",
-    "github.event.workflow_run.event == 'push'",
-    "github.event.workflow_run.head_branch == 'main'",
-    "github.event.workflow_run.head_repository.full_name == github.repository",
-    "ref: "+chr(36)+"{{ env.SOURCE_SHA }}",
-    "github.ref == 'refs/heads/main'",
-    "inputs.confirmation == 'RELEASE-STAGING-CONNECTOR'",
-    "needs: [connector, startup-smoke]",
-    "contents: write",
-    "--prerelease --latest=false",
-    "YoungMoney3.Connector.exe.sha256",
-    "build-manifest.json",
-    "staging-release/YoungMoney3.Connector.exe",
-    "Copy-Item 'dist/YoungMoney3 Connector.exe' 'staging-release/YoungMoney3.Connector.exe'",
-    "$exe = Join-Path $dir 'YoungMoney3.Connector.exe'",
-    "YoungMoney3.Connector.exe.sha256",
-    "Staging did not pass deployment checks for this exact source SHA",
-    "Main moved during build; refusing stale release",
-    "Desktop version differs from immutable release tag",
+    "workflow_dispatch:",
+    "if: "+chr(36)+"{{ false }}",
+    "The classic app must never publish publicly again",
 ]:
-    assert required in workflow, "Missing release gate: "+required
-assert re.search(r"(?m)^\s*VERSION:\s*'"+re.escape(version)+r"'\s*$",workflow), "Release workflow and binary use different versions."
-assert "feat/rich-capture-staging" not in workflow, "Stale feature-branch release restriction."
-assert "pull_request:\n" not in workflow, "Release builder cannot build from a PR."
-assert re.search(r'\bVERSION = "'+re.escape(version)+r'"',version_path.read_text(encoding="utf-8"))
-
+    assert required in workflow, "Classic public distribution must be disabled: "+required
+assert re.search(r"(?m)^\s*VERSION:\s*'"+re.escape(version)+r"'\s*$",workflow)
+assert "workflows: [Validate]" not in workflow, "Classic must not auto-publish after a deployment"
+assert workflow.count("if: "+chr(36)+"{{ false }}") >= 2, "Classic build and publish jobs must both be disabled"
 presence=(root/"connector/presence.py").read_text(encoding="utf-8")
 gui=(root/"connector/connector_gui.py").read_text(encoding="utf-8")
 for name,source in [("presence",presence),("GUI",gui)]:
@@ -49,14 +30,16 @@ for name,source in [("presence",presence),("GUI",gui)]:
 source_archive=(root/"scripts/build_connector_source_archive.py").read_text(encoding="utf-8")
 assert '"version.py": "connector/version.py"' in source_archive
 dashboard=(root/"src/components/Mt5Connections.tsx").read_text(encoding="utf-8")
-assert 'href="/connector-download.html"' in dashboard, "Release details and checksum must be accessible."
-# Until the new executable has actually passed the release jobs, the direct
-# download remains the last published artifact; never link an unbuilt binary.
-# Always route dashboard downloads via the verified dynamic release page.
-# Never advertise a new executable before the prerelease artifact is published.
-assert dashboard.count('href="/connector-download.html"') >= 3
-assert "Download latest connector" in dashboard
+assert 'href="/connector-download.html"' in dashboard
+assert "Get Signal Desk" in dashboard
+assert "/mt5-connector.zip" not in dashboard
 downloads=(root/"public/connector-download.html").read_text(encoding="utf-8")
-assert "api.github.com/repos/cash-factory/YoungMoney3/releases" in downloads
-assert "YoungMoney3.Connector.exe" in downloads
-print("Connector release contract passed:",version,"on validated main with immutable assets and latest-download page.")
+assert "staging-signaldesk-v" in downloads and "Signal Desk" in downloads
+assert "YoungMoney3.Connector.exe" not in downloads
+assert "/mt5-connector.zip" not in downloads
+build=(root/"package.json").read_text(encoding="utf-8")
+assert '"build": "vite build"' in build
+worker=(root/"worker/index.ts").read_text(encoding="utf-8")
+assert "CLASSIC_OWNER_USER_ID" in worker and "CLASSIC_RELEASES" in worker
+assert "private/classic-connector/YoungMoney3.Connector.exe" in worker
+print("Signal Desk primary distribution and owner-only classic route contracts passed.")

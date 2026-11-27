@@ -1,3 +1,9 @@
+# Windows MT5 connector — owner-only classic implementation
+
+**Regular traders must install [Signal Desk](../docs/SIGNAL_DESK_PRIMARY.md), not this legacy Tk interface.** The classic connector remains in this repository for compatibility and owner recovery during the migration. Distribution to ordinary members is disabled in the dashboard and future public release automation. Prior GitHub release assets and public source still require separate owner-controlled archival/removal before classic can be called exclusively private.
+
+For the owner-only download, the authenticated workspace checks the exact owner UUID and serves a fixed executable from a private R2 bucket if configured. This legacy project directory is not the member-facing installer.
+
 # Windows MT5 connector
 
 ## Automatic updates (newly updater-enabled versions)

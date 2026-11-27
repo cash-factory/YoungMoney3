@@ -20,9 +20,8 @@ def verify(path):
 
 if "--check-dist" in sys.argv:
     built = ROOT / "dist" / "mt5-connector.zip"
-    assert built.is_file(), "Web build did not publish the connector source fallback"
-    verify(built)
-    print("Built web asset includes the exact current connector source ZIP.")
+    assert not built.exists(), "Owner-only classic connector source must never be served publicly"
+    print("Web build excludes the private classic connector source ZIP.")
 else:
     with tempfile.TemporaryDirectory() as temp:
         generated = generate_archive(Path(temp) / "mt5-connector.zip")

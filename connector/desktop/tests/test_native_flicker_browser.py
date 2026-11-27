@@ -11,12 +11,14 @@ with sync_playwright() as playwright:
     errors=[]
     page.on('pageerror',lambda e:errors.append(str(e)))
     # No real installed sidecar, no broker data and no external network.
-    from test_ui_browser import HTML,CSS,NATIVE,APP
+    from test_ui_browser import HTML,CSS,NATIVE,UPDATES,GUIDE,APP
     import re
     page.set_content(re.sub(r'<script[^>]*></script>','',re.sub(r'<link[^>]*>','',HTML)),wait_until='domcontentloaded')
     page.add_style_tag(content=CSS)
     page.evaluate(MOCK_STATE)
     page.add_script_tag(content=NATIVE)
+    page.add_script_tag(content=UPDATES)
+    page.add_script_tag(content=GUIDE)
     page.add_script_tag(content=APP)
     page.wait_for_function("() => window.YMFXNative.debug().modelKey !== null",timeout=5000)
     before=page.evaluate("""() => {

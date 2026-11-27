@@ -30,6 +30,14 @@ type Placement = { top: number; left: number };
 type View = 'hub' | 'tour';
 type CategoryFilter = GuideCategory | 'All areas';
 
+/** Short, task-based routes through the real product; no tour step performs a trading action. */
+const GUIDE_PATHS = [
+  { id: 'connect', title: 'Connect MetaTrader', subtitle: 'Pair · identify · verify capture', icon: Monitor, stops: ['mt5', 'accounts', 'filters'] },
+  { id: 'review', title: 'Review a trade', subtitle: 'Record · reflect · improve', icon: BookOpen, stops: ['capture', 'journal', 'calendar', 'reviews'] },
+  { id: 'process', title: 'Build your playbook', subtitle: 'Plan · manage risk · test', icon: Target, stops: ['plan', 'strategies', 'risk', 'testing'] },
+  { id: 'evidence', title: 'Read your results', subtitle: 'Filter · analyse · interpret', icon: BarChart3, stops: ['filters', 'analytics', 'insights'] },
+] as const;
+
 interface PlatformGuideProps {
   onSample:()=>void;
   open: boolean;
@@ -231,6 +239,21 @@ export function PlatformGuide({ open, userId, currentPage, onNavigate, onDismiss
                 <input aria-label="Search guide destinations" placeholder="Search a feature..." value={query} onChange={e => setQuery(e.target.value)} />
               </label>
             </div>
+            <div className="ym-guide-journey-heading">
+              <span className="ym-guide-kicker">LEARN BY DOING / CHOOSE A PATH</span>
+              <span>{visited.length} of {GUIDE_STOPS.length} areas explored</span>
+            </div>
+            <div className="ym-guide-journeys" role="group" aria-label="Choose a guided learning path">
+              {GUIDE_PATHS.map(path => {
+                const Icon = path.icon;
+                return <button type="button" key={path.id} aria-label={`Guided path: ${path.title}`}
+                  onClick={() => begin([...path.stops])}>
+                  <span className="ym-guide-journey-icon"><Icon size={17} /></span>
+                  <span><strong>{path.title}</strong><small>{path.subtitle}</small></span>
+                  <ArrowRight size={14} className="ym-guide-journey-arrow" />
+                </button>;
+              })}
+            </div>
             <div className="ym-guide-category-tabs" aria-label="Guide areas">
               {(['All areas',...GUIDE_CATEGORIES] as CategoryFilter[]).map(item => <button type="button" key={item}
                 aria-pressed={category === item} onClick={() => setCategory(item)}>{item}</button>)}
@@ -267,6 +290,13 @@ export function PlatformGuide({ open, userId, currentPage, onNavigate, onDismiss
           <h2 ref={titleRef} tabIndex={-1} id="ym-guide-step-title">{stop.title}</h2>
           <p id="ym-guide-step-description" className="ym-guide-step-description">{stop.detail}</p>
           <div className="ym-guide-takeaway"><Sparkles size={17} /><span>{stop.takeaway}</span></div>
+          {stop.steps && <div className="ym-guide-howto">
+            <strong>HOW TO USE THIS FEATURE</strong>
+            <ol>{stop.steps.map((instruction, stepNumber) => <li key={stepNumber}>{instruction}</li>)}</ol>
+          </div>}
+          <button type="button" className="ym-guide-try-feature" onClick={() => finish(false)}>
+            <CheckCircle2 size={15} /> Explore this page myself <ChevronRight size={14} />
+          </button>
           <div className="ym-guide-step-controls">
             <button type="button" className="ym-guide-secondary" onClick={() => setView('hub')}><Compass size={15} /> Skip to...</button>
             <div className="ym-guide-step-navigation">

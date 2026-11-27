@@ -1,9 +1,7 @@
 name: Build YoungMoney3 Connector (staging prerelease)
+# Owner-only legacy source: automated public release is intentionally disabled.
+# Use a privately provisioned R2 archive before enabling an owner-only build.
 on:
-  workflow_run:
-    workflows: [Validate]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       confirmation:
@@ -24,15 +22,7 @@ concurrency:
 
 jobs:
   candidate:
-    if: >-
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_branch == 'main' &&
-       github.event.workflow_run.head_repository.full_name == github.repository) ||
-      (github.event_name == 'workflow_dispatch' &&
-       github.ref == 'refs/heads/main' &&
-       inputs.confirmation == 'RELEASE-STAGING-CONNECTOR')
+    if: ${{ false }} # The classic app must never publish publicly again.
     runs-on: ubuntu-latest
     outputs:
       ready: ${{ steps.guard.outputs.ready }}
@@ -207,6 +197,7 @@ jobs:
           if-no-files-found: error
 
   publish:
+    if: ${{ false }} # Deprecated: public classic GitHub releases are forbidden.
     needs: [connector, startup-smoke]
     runs-on: windows-2022
     environment: staging

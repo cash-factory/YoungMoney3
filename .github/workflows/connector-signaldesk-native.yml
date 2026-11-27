@@ -16,7 +16,7 @@ concurrency:
   group: signaldesk-native-${{ github.ref }}
   cancel-in-progress: false
 env:
-  SIGNALDESK_VERSION: '0.3.0'
+  SIGNALDESK_VERSION: '0.4.0'
 jobs:
   browser-qa:
     runs-on: ubuntu-24.04
