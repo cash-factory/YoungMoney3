@@ -1,6 +1,7 @@
 """Offline, side-effect-limited tests of the classic connector updater."""
 import hashlib
 import io
+import sqlite3
 import json
 from pathlib import Path
 import tempfile
@@ -124,6 +125,31 @@ class UpdateServiceTests(unittest.TestCase):
                 stage_update(release, root, opener=network)
             self.assertFalse((root / "updates" / release.version / ASSET_NAME).exists())
             self.assertFalse((root / "updates" / release.version / (ASSET_NAME + ".partial")).exists())
+
+    def test_durable_local_copy_permission_blocks_update_after_restart(self):
+        class Context:
+            pass
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = Context()
+            database = Path(tmp) / "capture.db"
+            ctx.copy_authorization_by_slot = {}
+            ctx.copy_worker = None
+            ctx._copy_database_path = lambda: database
+            with sqlite3.connect(database) as connection:
+                connection.execute(
+                    "CREATE TABLE copy_local_permissions (link TEXT PRIMARY KEY, approved INTEGER NOT NULL)"
+                )
+                connection.execute(
+                    "INSERT INTO copy_local_permissions VALUES ('live-follower', 1)"
+                )
+            self.assertFalse(ConnectorUpdateUI._update_is_safe(ctx),
+                             "Persisted LIVE follower consent must block auto-install even after app restart")
+            with sqlite3.connect(database) as connection:
+                connection.execute("UPDATE copy_local_permissions SET approved=0")
+            self.assertTrue(ConnectorUpdateUI._update_is_safe(ctx))
+            ctx._copy_database_path = lambda: (_ for _ in ()).throw(OSError("locked credential store"))
+            self.assertFalse(ConnectorUpdateUI._update_is_safe(ctx),
+                             "Unknown broker permission state must block replacement")
 
     def test_copying_permission_blocks_auto_replacement(self):
         class Context: pass
