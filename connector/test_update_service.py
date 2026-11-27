@@ -2,6 +2,7 @@
 import hashlib
 import io
 import sqlite3
+from contextlib import closing
 import json
 from pathlib import Path
 import tempfile
@@ -135,7 +136,7 @@ class UpdateServiceTests(unittest.TestCase):
             ctx.copy_authorization_by_slot = {}
             ctx.copy_worker = None
             ctx._copy_database_path = lambda: database
-            with sqlite3.connect(database) as connection:
+            with closing(sqlite3.connect(database)) as connection:
                 connection.execute(
                     "CREATE TABLE copy_local_permissions (link TEXT PRIMARY KEY, approved INTEGER NOT NULL)"
                 )
