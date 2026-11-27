@@ -101,6 +101,55 @@ class BridgeTests(unittest.TestCase):
             self.assertEqual(self.bridge.snapshot()['sessions'][0]['status'],'needs-attention')
             self.assertNotIn('password=stolen',json.dumps(self.bridge.snapshot()))
 
+    def test_two_accounts_never_inherit_false_green_or_stale_capture(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as temp:
+            paths=[Path(temp)/('account'+str(i))/'terminal64.exe' for i in range(2)]
+            for slot in paths:
+                slot.parent.mkdir(parents=True,exist_ok=True)
+                slot.touch()
+            self.bridge._store.items=[
+                {'id':str(i),'name':'Test '+str(i),'terminal':str(slot),'enabled':True}
+                for i,slot in enumerate(paths)]
+            self.bridge.worker=types.SimpleNamespace(is_alive=lambda:True)
+            self.bridge.worker_mode='capture'
+            self.bridge.worker_started=9080
+            self.bridge._report({'state':'known-links','links':[
+                {'slot':str(slot),'login':str(i+100),'server':'Broker-Demo','link':'link-'+str(i)}
+                for i,slot in enumerate(paths)]})
+            self.bridge._report({'state':'pc-online'})
+            self.bridge._report({'state':'session-synced','slot':str(paths[0])})
+            statuses=[s['status'] for s in self.bridge.snapshot()['sessions']]
+            self.assertEqual(statuses,['monitoring','not-verified'])
+            # A formerly green account may be stale while the worker lives.
+            self.bridge.session_health[str(paths[0])]['last_sync_clock']=time.monotonic()-121
+            rows=self.bridge.snapshot()['sessions']
+            self.assertEqual(rows[0]['status'],'stale')
+            self.assertGreaterEqual(rows[0]['last_sync_age_seconds'],120)
+            self.assertEqual(rows[1]['status'],'not-verified')
+            self.bridge._report({'state':'session-synced','slot':str(paths[1])})
+            self.assertEqual([s['status'] for s in self.bridge.snapshot()['sessions']],
+                             ['stale','monitoring'])
+            # An observation from a previous worker lifetime is not current.
+            self.bridge.worker_started+=1
+            self.assertEqual([s['status'] for s in self.bridge.snapshot()['sessions']],
+                             ['not-verified','not-verified'])
+
+    def test_signal_desk_capture_explicitly_disables_copier_cycle(self):
+        from unittest.mock import patch
+        from service_channel import SERVICE_ORIGIN
+        calls=[]
+        fake_connect=types.SimpleNamespace(main=lambda argv,**kwargs:calls.append((argv,kwargs)))
+        fake_manager=types.SimpleNamespace(ManagedAccounts=lambda *args:object())
+        with patch.dict(sys.modules,{'connect':fake_connect,'managed_accounts':fake_manager}):
+            self.bridge._worker_main()
+        self.assertEqual(len(calls),1)
+        args,params=calls[0]
+        self.assertEqual(args[0],SERVICE_ORIGIN)
+        self.assertTrue(params['parallel_capture'])
+        self.assertIs(params['copy_execution_enabled'],False,
+            'The new native connector may capture broker records but must never place copied orders.')
+
     def test_retry_requests_verified_slot_from_existing_supervisor(self):
         import tempfile
         with tempfile.TemporaryDirectory() as temp:
