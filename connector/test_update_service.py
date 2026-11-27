@@ -146,7 +146,7 @@ class UpdateServiceTests(unittest.TestCase):
                 connection.commit()
             self.assertFalse(ConnectorUpdateUI._update_is_safe(ctx),
                              "Persisted LIVE follower consent must block auto-install even after app restart")
-            with sqlite3.connect(database) as connection:
+            with closing(sqlite3.connect(database)) as connection:
                 connection.execute("UPDATE copy_local_permissions SET approved=0")
                 connection.commit()
             self.assertTrue(ConnectorUpdateUI._update_is_safe(ctx))
