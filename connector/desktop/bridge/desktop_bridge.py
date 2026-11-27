@@ -282,30 +282,41 @@ class Bridge:
             name='SignalDesk-dashboard-discovery',daemon=True)
         self._discovery_thread.start()
 
-    # 64 accounts per discovery request is an API payload bound, not a user-account cap.
-    # All verified sessions remain in the local store and isolated capture workers.
+    # Each scan may discover more than 64 accounts; reporting pages are separate.
+    # The probe pool limits concurrent MetaTrader IPC child processes and prevents
+    # a few timed-out terminals from serially delaying every healthy account.
     def _scan_local_accounts(self):
+        from concurrent.futures import ThreadPoolExecutor
         from account_discovery import probe_terminal
-        verified=[]
+        candidates=[]
         for entry in self._store.snapshot():
             if self._service_stop.is_set():break
             slot=str(entry['terminal'])
             if not Path(slot).is_file() or not (Path(slot).parent/'.ym-managed.json').is_file():continue
-            # Active linked capture already owns its own MT5 process. Never attach
-            # a second inspector to that terminal while it is being monitored.
+            # Never start an inspector on a terminal already held by capture.
             if self.worker and self.worker.is_alive() and slot in self.links:continue
+            candidates.append((str(entry['id']),slot))
+
+        def inspect(candidate):
+            if self._service_stop.is_set():return None
+            ident,slot=candidate
             broker=probe_terminal(slot)
-            if broker.get('status')!='verified':continue
-            if not re.fullmatch(r'[0-9]{1,24}',str(broker.get('login',''))):continue
-            if not broker.get('server') or broker.get('mode') not in (0,1,2):continue
-            row={'slot':entry['id'],'login':broker['login'],
-                 'server':sanitized(broker['server'],128),
-                 'account_name':sanitized(broker.get('account_name'),96),
-                 'company':sanitized(broker.get('company'),128),
-                 'currency':sanitized(broker.get('currency'),12),
-                 'mode':int(broker['mode'])}
-            verified.append(row)
-            with self._lock:self._discovered[entry['id']] = row
+            if not isinstance(broker,dict) or broker.get('status')!='verified':return None
+            if not re.fullmatch(r'[0-9]{1,24}',str(broker.get('login',''))):return None
+            if not broker.get('server') or broker.get('mode') not in (0,1,2):return None
+            return {'slot':ident,'login':broker['login'],
+                    'server':sanitized(broker['server'],128),
+                    'account_name':sanitized(broker.get('account_name'),96),
+                    'company':sanitized(broker.get('company'),128),
+                    'currency':sanitized(broker.get('currency'),12),
+                    'mode':int(broker['mode'])}
+
+        verified=[]
+        with ThreadPoolExecutor(max_workers=4,thread_name_prefix='YMFX-MT5-discover') as pool:
+            for row in pool.map(inspect,candidates):
+                if row is None:continue
+                verified.append(row)
+                with self._lock:self._discovered[row['slot']] = row
         return verified
 
     def _accept_discovered_monitor(self, approval):
