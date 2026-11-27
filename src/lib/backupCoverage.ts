@@ -32,6 +32,12 @@ export function personalBackupCoverage(): BackupCoverage {
   };
 }
 
+export function assertCompleteWorkspaceExport(unavailableTables: string[]): void {
+  if (unavailableTables.length)
+    throw new Error('Workspace backup incomplete: could not read '+
+      unavailableTables.join(', ')+'. No file was downloaded. Retry after the service is restored.');
+}
+
 export function brokerDerivedTradeCount(data: Record<string, Record<string, unknown>[]>): number {
   return (data.trades ?? []).filter(trade => trade.trade_source === 'mt5').length;
 }
