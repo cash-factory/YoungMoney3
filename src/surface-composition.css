@@ -122,6 +122,8 @@
   opacity:.53;
 }
 :root:not(.dark)[data-palette] [data-workspace-page] .ym-page-art img {opacity:.32;}
+/* CraftyLabs previously bypassed grayscale; keep every palette neutral now. */
+:root.dark[data-palette="craftylabs-studio"] [data-workspace-page] .ym-page-art img {filter:grayscale(1) contrast(1.08);opacity:.53;}
 :root[data-palette] [data-workspace-page] .ym-page-art::after {
   background:var(--brand);
   mix-blend-mode:color;
