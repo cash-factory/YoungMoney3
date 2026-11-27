@@ -21,6 +21,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+      - run: node --test scripts/audit-classic-public-releases.test.mjs
       - run: npm run test:staging
       - run: node --test scripts/test-owner-recovery.mjs
       - run: npm run test:ui
