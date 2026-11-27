@@ -275,7 +275,7 @@ export function PlatformGuide({ open, userId, currentPage, onNavigate, onDismiss
           <div className="ym-guide-hub-footer"><span>01—22 / EXPLORE AT YOUR OWN PACE</span><span>Revisit anytime from the dashboard <RotateCcw size={13} /></span></div>
         </section>
       ) : stop ? (
-        <section className="ym-guide-tour-card" style={placement as CSSProperties} role="dialog"
+        <section className="ym-guide-tour-card" style={{...placement,'--ym-guide-placement-top':`${placement.top}px`} as CSSProperties} role="dialog"
           aria-modal="true" aria-labelledby="ym-guide-step-title" aria-describedby="ym-guide-step-description">
           <div className="ym-guide-step-top">
             <span className="ym-guide-kicker"><MapIcon size={15} /> GUIDED EXPLORATION <b>/{String(index + 1).padStart(2,'0')}</b></span>
