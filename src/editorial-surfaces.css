@@ -21,14 +21,23 @@
 }
 :root[data-palette] .ym-workspace .ym-tone-tile,
 :root[data-palette] .ym-workspace .card.ym-tone-tile {
-  background:var(--ym-tone-tile-surface);
-  border-color:var(--ym-tone-tile-border);
+  background:linear-gradient(118deg,color-mix(in srgb,var(--brand) 11%,var(--bg-card)),var(--ym-tone-wash-soft) 60%,var(--bg-card) 100%);
+  border-color:color-mix(in srgb,var(--brand) 20%,var(--border));
   transition:background-color .19s ease,border-color .19s ease,box-shadow .19s ease,transform .19s ease;
 }
+/* Metrics nested in tonal panels need a distinct, darker reading surface.
+   Standalone strategy and broker cards retain their original gradients. */
+:root[data-palette] .ym-workspace .ym-tone-panel .ym-tone-tile {
+  background:var(--ym-tone-tile-surface);
+  border-color:var(--ym-tone-tile-border);
+}
 :root[data-palette] .ym-workspace .ym-tone-tile[data-selected="true"] {
-  background:color-mix(in srgb,var(--brand) 11%,var(--ym-tone-tile-surface));
+  background:linear-gradient(115deg,color-mix(in srgb,var(--brand) 17%,var(--bg-card)),color-mix(in srgb,var(--brand) 7%,var(--bg-card)) 100%);
   border-color:color-mix(in srgb,var(--brand) 53%,var(--border));
   box-shadow:inset 3px 0 0 var(--brand);
+}
+:root[data-palette] .ym-workspace .ym-tone-panel .ym-tone-tile[data-selected="true"] {
+  background:color-mix(in srgb,var(--brand) 11%,var(--ym-tone-tile-surface));
 }
 @media (hover:hover) {
   :root[data-palette] .ym-workspace .ym-tone-tile:is(:hover,:focus-within) {
