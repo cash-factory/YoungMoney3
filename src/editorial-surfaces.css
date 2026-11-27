@@ -76,7 +76,8 @@
 :root[data-palette] .ym-workspace .ym-adaptive-mode[data-mode="capture"] {--ym-desk-mask:url('/assets/desk-art/capture.svg');}
 :root[data-palette] .ym-workspace .ym-adaptive-mode[data-mode="review"] {--ym-desk-mask:url('/assets/desk-art/review.svg');}
 :root[data-palette] .ym-workspace .ym-adaptive-mode[data-mode="analyze"] {--ym-desk-mask:url('/assets/desk-art/understand.svg');}
-:root[data-palette] .ym-workspace .ym-adaptive-mode>span {position:relative;z-index:1}
+:root[data-palette] .ym-workspace .ym-adaptive-mode>span:not(.ym-adaptive-active-marker) {position:relative;z-index:1}
+:root[data-palette] .ym-workspace .ym-adaptive-mode .ym-adaptive-active-marker {position:absolute;z-index:2}
 :root[data-palette] .ym-workspace .ym-adaptive-mode[data-selected="true"] {
   background:
     radial-gradient(ellipse 93% 150% at 109% 25%,color-mix(in srgb,var(--brand) 14%,transparent),transparent 69%),
