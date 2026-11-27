@@ -285,6 +285,7 @@ export function PlatformGuide({ open, userId, currentPage, onNavigate, onDismiss
             aria-valuemax={route.length} aria-valuenow={index + 1}>
             <div style={{ width: `${(index + 1) / route.length * 100}%` }} />
           </div>
+          <div className="ym-guide-step-scroll" tabIndex={0} aria-label="Current field guide instruction">
           <div className="ym-guide-step-icon">{(() => { const Icon = ICONS[stop.icon] || Compass; return <Icon size={26} strokeWidth={1.65} />; })()}</div>
           <p className="ym-guide-step-eyebrow">{stop.eyebrow}</p>
           <h2 ref={titleRef} tabIndex={-1} id="ym-guide-step-title">{stop.title}</h2>
@@ -297,6 +298,7 @@ export function PlatformGuide({ open, userId, currentPage, onNavigate, onDismiss
           <button type="button" className="ym-guide-try-feature" onClick={() => finish(false)}>
             <CheckCircle2 size={15} /> Explore this page myself <ChevronRight size={14} />
           </button>
+          </div>
           <div className="ym-guide-step-controls">
             <button type="button" className="ym-guide-secondary" onClick={() => setView('hub')}><Compass size={15} /> Skip to...</button>
             <div className="ym-guide-step-navigation">
