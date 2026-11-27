@@ -1,0 +1,9 @@
+{
+  "version": "0.6.3-rc1",
+  "headline": "Connector improvements",
+  "changes": [
+    "Clearer account connection and monitoring information.",
+    "Improvements to Windows connector reliability.",
+    "Refinements to the desktop experience."
+  ]
+}
