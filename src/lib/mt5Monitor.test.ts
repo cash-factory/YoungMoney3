@@ -45,10 +45,11 @@ test('login failure never receives a success tone',()=>{
 });
 
 test('invalid and future-dated broker evidence cannot become green',()=>{
-  for(const last_sync of ['not-a-timestamp','',new Date(now+86400000).toISOString()]){
+  for(const last_sync of ['not-a-timestamp',new Date(now+86400000).toISOString()]){
     assert.equal(monitoringStatus({...base,last_sync},online),'Waiting for fresh data');
     assert.equal(monitoringGuidance({...base,last_sync},online).tone,'warning');
   }
+  assert.equal(monitoringStatus({...base,last_sync:''},online),'Waiting for first sync');
   assert.equal(pcOnline({...online,last_seen:now+86400000}),false);
   assert.equal(pcOnline({...online,last_seen:Number.NaN}),false);
   assert.equal(pcOnline(offline),false);
