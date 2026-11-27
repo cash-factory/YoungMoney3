@@ -1,4 +1,4 @@
-# YoungMoney3 — Signal Desk · primary Windows connector (0.4.0)
+# YoungMoney3 — Signal Desk · primary Windows connector (0.4.1)
 
 Signal Desk is now the standard member-facing Windows connector. The dashboard download is routed exclusively to a verified Signal Desk NSIS installer. Broker evidence and account management remain tied to the existing authenticated YM-FX services.
 
