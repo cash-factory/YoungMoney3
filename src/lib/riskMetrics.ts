@@ -99,7 +99,8 @@ export function calculateRiskMetrics(trades: Trade[], options: RiskMetricOptions
   const currentDrawdownPct = balance > 0 ? currentDrawdown / balance * 100 : 0;
   const riskPcts = enteredToday
     .filter(trade => trade.risk_percent != null &&
-      Number.isFinite(trade.risk_percent) && trade.risk_percent > 0)
+      Number.isFinite(trade.risk_percent) && trade.risk_percent > 0 &&
+      !(trade.trade_source === 'mt5' && trade.broker_details?.initial_risk_known === false))
     .map(trade => trade.risk_percent!);
   const riskEvidenceMissingCount = enteredToday.length - riskPcts.length;
   const maxRiskUsedToday = riskPcts.length ? Math.max(...riskPcts) : 0;
