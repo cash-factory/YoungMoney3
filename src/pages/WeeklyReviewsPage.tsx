@@ -97,7 +97,7 @@ export function WeeklyReviewsPage() {
         }
       />
 
-      <section className="card p-4 sm:p-5 mb-6 space-y-3" aria-label="Current week broker lifecycle reconciliation">
+      <section className="card ym-tone-panel ym-weekly-evidence p-4 sm:p-5 mb-6 space-y-3" aria-label="Current week broker lifecycle reconciliation">
         <div>
           <p className="text-[10px] text-muted uppercase tracking-wider font-bold">BROKER RECONCILIATION / CURRENT UTC WEEK</p>
           <h2 className="font-semibold text-base mt-1">Position-based weekly results</h2>
@@ -110,13 +110,13 @@ export function WeeklyReviewsPage() {
           </Select>
         </label>
         <div className="grid gap-2 sm:grid-cols-3">
-          <div className="bg-secondary rounded-lg p-3"><p className="text-xs text-muted">Week beginning (UTC)</p><strong>{brokerWeek.weekStart}</strong></div>
-          <div className="bg-secondary rounded-lg p-3"><p className="text-xs text-muted">Closed positions</p><strong className="font-mono">{brokerWeek.rows.length}</strong></div>
-          <div className="bg-secondary rounded-lg p-3"><p className="text-xs text-muted">Known final R</p><strong className="font-mono">{brokerWeek.eligible} / {brokerWeek.rows.length}</strong></div>
+          <div className="ym-tone-tile rounded-lg p-3"><p className="text-xs text-muted">Week beginning (UTC)</p><strong>{brokerWeek.weekStart}</strong></div>
+          <div className="ym-tone-tile rounded-lg p-3"><p className="text-xs text-muted">Closed positions</p><strong className="font-mono">{brokerWeek.rows.length}</strong></div>
+          <div className="ym-tone-tile rounded-lg p-3"><p className="text-xs text-muted">Known final R</p><strong className="font-mono">{brokerWeek.eligible} / {brokerWeek.rows.length}</strong></div>
         </div>
         {positionError && <p role="status" className="text-xs text-muted">Broker lifecycle summaries are temporarily unavailable. Saved weekly reviews remain accessible.</p>}
         <div className="flex flex-wrap gap-3 text-xs">
-          {[...brokerWeek.currency].map(([code,group])=><span key={code} className="rounded-lg border border-themed px-3 py-2"><strong>{code}</strong> · {group.count} positions · {group.pnl.toFixed(2)} net</span>)}
+          {[...brokerWeek.currency].map(([code,group])=><span key={code} className="ym-tone-tile rounded-lg border px-3 py-2"><strong>{code}</strong> · {group.count} positions · {group.pnl.toFixed(2)} net</span>)}
           {!brokerWeek.currency.size && <p className="text-muted">No broker position lifecycles closed this UTC week.</p>}
         </div>
       </section>
