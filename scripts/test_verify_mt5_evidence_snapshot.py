@@ -48,6 +48,18 @@ class EvidenceSnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.EvidenceAuditError,'differs'):
             MODULE.compare_reports(baseline,MODULE.inspect(self.copy))
 
+    def test_missing_immutable_evidence_trigger_fails_schema_comparison(self):
+        with sqlite3.connect(self.source) as db:
+            db.execute("""CREATE TRIGGER evidence_lock BEFORE UPDATE ON mt5_raw_evidence
+                        BEGIN SELECT RAISE(ABORT,'Immutable broker evidence'); END""")
+        shutil.copy2(self.source,self.copy)
+        original=MODULE.inspect(self.source)
+        MODULE.compare_reports(original,MODULE.inspect(self.copy))
+        with sqlite3.connect(self.copy) as db:
+            db.execute('DROP TRIGGER evidence_lock')
+        with self.assertRaisesRegex(MODULE.EvidenceAuditError,'triggers differ'):
+            MODULE.compare_reports(original,MODULE.inspect(self.copy))
+
     def test_missing_broker_table_fails_closed(self):
         with sqlite3.connect(self.copy) as db:
             db.execute('DROP TABLE mt5_evidence_conflicts')
