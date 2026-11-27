@@ -179,3 +179,22 @@ test('bad timestamps and unsupported timezone must not give a safe verdict', () 
   assert.equal(invalidZone.timeZoneVerified,false);
   assert.equal(invalidZone.status,'unknown');
 });
+
+test('MT5 requires affirmative broker evidence for an otherwise numeric risk percent',()=>{
+  const record=makeTrade({
+    id:'unverified-legacy-mt5',
+    entry_time:'2026-10-20T10:00:00.000Z',
+    trade_source:'mt5',
+    risk_percent:0.25,
+    broker_details:{position_id:'9001'},
+    pnl:0,
+  });
+  const unknown=calculateRiskMetrics([record],options);
+  assert.equal(unknown.status,'unknown');
+  assert.equal(unknown.riskEvidenceMissingCount,1);
+  const confirmed=calculateRiskMetrics([{
+    ...record,broker_details:{position_id:'9001',initial_risk_known:true},
+  }],options);
+  assert.equal(confirmed.riskEvidenceMissingCount,0);
+  assert.equal(confirmed.status,'safe');
+});
