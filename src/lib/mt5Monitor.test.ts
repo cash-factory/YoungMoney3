@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { monitoringGuidance, monitoringStatus, type Device, type Link } from './mt5Monitor.ts';
+import { monitoringGuidance, monitoringStatus, pcOnline, type Device, type Link } from './mt5Monitor.ts';
 
 const now=Date.now();
 const online:Device={id:'test-pc',pc_name:'Test workstation',last_seen:now};
@@ -42,4 +42,14 @@ test('login failure never receives a success tone',()=>{
   const failed:Link={...base,status:'failed'};
   assert.equal(monitoringGuidance(failed,online).tone,'danger');
   assert.match(monitoringGuidance(failed,online).nextStep,/fresh verification/);
+});
+
+test('invalid and future-dated broker evidence cannot become green',()=>{
+  for(const last_sync of ['not-a-timestamp','',new Date(now+86400000).toISOString()]){
+    assert.equal(monitoringStatus({...base,last_sync},online),'Waiting for fresh data');
+    assert.equal(monitoringGuidance({...base,last_sync},online).tone,'warning');
+  }
+  assert.equal(pcOnline({...online,last_seen:now+86400000}),false);
+  assert.equal(pcOnline({...online,last_seen:Number.NaN}),false);
+  assert.equal(pcOnline(offline),false);
 });
