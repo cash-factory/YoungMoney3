@@ -179,9 +179,7 @@ export function DataBackupModal({ open, onClose }: DataBackupModalProps) {
 
       // A transient collection failure must never produce a misleading
       // "successful backup" missing user workspace records.
-      if (unavailableTables.length) {
-        throw new Error('Workspace backup incomplete: could not read '+unavailableTables.join(', ')+'. No file was downloaded. Retry after the service is restored.');
-      }
+      assertCompleteWorkspaceExport(unavailableTables);
       const payload: TradingBackup = {
         format: BACKUP_FORMAT,
         version: BACKUP_VERSION,
