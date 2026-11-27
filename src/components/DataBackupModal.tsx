@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { RESTORE_ORDER, WORKSPACE_TABLES } from '@/lib/workspaceTables';
 import { encryptBackup, decryptBackup, isEncryptedBackup, type EncryptedBackup } from '@/lib/backupEncryption';
-import { personalBackupCoverage, brokerDerivedTradeCount, type BackupCoverage } from '@/lib/backupCoverage';
+import { personalBackupCoverage, brokerDerivedTradeCount, assertCompleteWorkspaceExport, type BackupCoverage } from '@/lib/backupCoverage';
 import { assertExistingBrokerProjections, restorableWorkspaceRows } from '@/lib/backupRestoreSafety';
 
 const BACKUP_FORMAT = 'trade-journal-pro-backup';
