@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { RESTORE_ORDER, WORKSPACE_TABLES } from '@/lib/workspaceTables';
 import { encryptBackup, decryptBackup, isEncryptedBackup, type EncryptedBackup } from '@/lib/backupEncryption';
+import { personalBackupCoverage, brokerDerivedTradeCount, type BackupCoverage } from '@/lib/backupCoverage';
 
 const BACKUP_FORMAT = 'trade-journal-pro-backup';
 const BACKUP_VERSION = 1;
@@ -29,6 +30,8 @@ interface TradingBackup {
   data: Record<string, Record<string, unknown>[]>;
   media: BackupMedia[];
   unavailableTables: string[];
+  /** Optional for backward compatibility with older workspace-only archives. */
+  coverage?: BackupCoverage;
 }
 
 interface DataBackupModalProps { open: boolean; onClose: () => void }
@@ -182,11 +185,12 @@ export function DataBackupModal({ open, onClose }: DataBackupModalProps) {
         data,
         media,
         unavailableTables,
+        coverage: personalBackupCoverage(),
       };
       downloadJson(encryptExport ? await encryptBackup(JSON.stringify(payload),backupPassword) : payload,encryptExport);
       setBackupPassword(''); setConfirmPassword('');
       const records = Object.entries(data).filter(([table]) => table !== 'profiles').reduce((count, [, rows]) => count + rows.length, 0);
-      setMessage(`${encryptExport ? 'Encrypted' : 'Plaintext'} backup downloaded with ${records} records and ${media.length} private attachments.${unavailableTables.length ? ` Some tables were unavailable: ${unavailableTables.join(', ')}.` : ''}`);
+      setMessage(`${encryptExport ? 'Encrypted' : 'Plaintext'} WORKSPACE-ONLY archive downloaded with ${records} records and ${media.length} private attachments. It does NOT include immutable MT5 broker events, conflicts, account links, lifecycle revisions, or a broker-evidence restore path.${unavailableTables.length ? ` Some workspace tables were unavailable: ${unavailableTables.join(', ')}.` : ''}`);
       setProgress('');
     } catch (exportError) {
       setError(exportError instanceof Error ? exportError.message : 'Backup could not be completed.');
@@ -273,7 +277,7 @@ export function DataBackupModal({ open, onClose }: DataBackupModalProps) {
       }
 
       const partial = backup.unavailableTables.length ? ` The original backup lacked tables: ${backup.unavailableTables.join(', ')}.` : '';
-      setMessage(`Restore finished: ${restoredRows} record rows added, ${skippedRows} already existed, ${restoredMedia} attachments restored, and ${skippedMedia} already existed.${partial}`);
+      setMessage(`Workspace-only restore finished: ${restoredRows} record rows added, ${skippedRows} already existed, ${restoredMedia} attachments restored, and ${skippedMedia} already existed. Immutable MT5 broker evidence was NOT restored; use separately verified D1/provider recovery and broker reconciliation.${partial}`);
       setProgress('');
     } catch (restoreError) {
       setError(`${restoreError instanceof Error ? restoreError.message : 'Restore could not be completed.'} You can retry this file; existing rows are skipped, so the restore is resumable.`);
@@ -286,7 +290,7 @@ export function DataBackupModal({ open, onClose }: DataBackupModalProps) {
       <div className="space-y-5">
         <div className="flex gap-3 rounded-xl border border-themed bg-secondary/40 p-4">
           <ShieldCheck size={19} className="mt-0.5 shrink-0 text-emerald-500" />
-          <p className="text-xs leading-relaxed text-secondary">Backups stay on your device until you choose where to save them. They include your records and private image/voice attachments, but never your password or sign-in session. Restore works only for this same account and database and adds missing records without replacing existing records.</p>
+          <p className="text-xs leading-relaxed text-secondary">This downloads a <strong>workspace-only archive</strong>: manual journal data and private media, never passwords or sign-in sessions. <strong>It cannot independently restore immutable MT5 broker records, position lifecycles, evidence conflicts, or account connections.</strong> Complete disaster recovery requires a separately verified provider-level D1 backup and broker reconciliation.</p>
         </div>
 
         {error && <p role="alert" className="rounded-lg border border-error-500/25 bg-error-500/10 p-3 text-sm text-error-500">{error}</p>}
@@ -294,19 +298,19 @@ export function DataBackupModal({ open, onClose }: DataBackupModalProps) {
         {progress && <p role="status" className="flex items-center gap-2 text-xs text-secondary"><LoaderCircle size={14} className="animate-spin" />{progress}</p>}
 
         <section className="rounded-xl border border-themed p-4">
-          <h3 className="text-sm font-bold">Create a backup</h3>
-          <p className="mt-1 text-xs text-muted">Exports your plans, trades, accounts and private media. Encryption protects the downloaded archive with a passphrase known only to you.</p>
+          <h3 className="text-sm font-bold">Create a workspace backup</h3>
+          <p className="mt-1 text-xs text-muted">Exports the available workspace collections and private media. Encryption protects the downloaded archive with a passphrase known only to you. This is <strong>not</strong> a complete broker-evidence backup.</p>
           <label className="mt-3 flex items-start gap-2 text-xs text-secondary"><input type="checkbox" checked={encryptExport} onChange={e=>setEncryptExport(e.target.checked)}/><span>Encrypt the backup before downloading (recommended)</span></label>
           {encryptExport ? <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <label className="text-xs font-semibold">Backup passphrase<input type="password" className="input-field mt-1" autoComplete="new-password" value={backupPassword} onChange={e=>setBackupPassword(e.target.value)} placeholder="12 characters minimum"/></label>
             <label className="text-xs font-semibold">Confirm passphrase<input type="password" className="input-field mt-1" autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)}/></label>
           </div> : <p role="status" className="mt-2 text-xs text-amber-600">Warning: plaintext exports contain readable private notes, account details, and media.</p>}
           {encryptExport && <p className="mt-2 text-xs text-muted">Store the passphrase separately. It cannot be reset if lost.</p>}
-          <button type="button" onClick={handleExport} disabled={busy || !user} className="btn-primary mt-3"><Download size={15} /> Download backup</button>
+          <button type="button" onClick={handleExport} disabled={busy || !user} className="btn-primary mt-3"><Download size={15} /> Download workspace archive</button>
         </section>
 
         <section className="rounded-xl border border-themed p-4">
-          <h3 className="text-sm font-bold">Restore a backup</h3>
+          <h3 className="text-sm font-bold">Restore workspace records</h3>
           <p className="mt-1 text-xs text-muted">Choose a backup file to inspect its account, database, record count, and included attachments before restoring.</p>
           <label className="btn-secondary mt-3 inline-flex cursor-pointer"><FileUp size={15} /> Choose backup file<input type="file" accept="application/json,.json" className="sr-only" onChange={event => { void handleFile(event.target.files?.[0]); event.currentTarget.value = ''; }} /></label>
           {lockedBackup && <div className="mt-3 space-y-3 rounded-lg bg-secondary/50 p-3">
@@ -316,15 +320,17 @@ export function DataBackupModal({ open, onClose }: DataBackupModalProps) {
           </div>}
           {backup && <div className="mt-4 rounded-lg bg-secondary/50 p-3 text-xs">
             <p className="font-semibold">Backup from {new Date(backup.exportedAt).toLocaleString()}</p>
-            <p className="mt-1 text-secondary">{recordCount} records · {backup.media.length} private attachments</p>
+            <p className="mt-1 text-secondary">{recordCount} workspace records · {backup.media.length} private attachments</p>
+            <p role="alert" className="mt-2 font-semibold text-amber-600">Workspace-only: immutable MT5 fills, broker orders, lifecycle revisions, conflicts, capture checkpoints and links are NOT restored. Older archive versions have the same limitation.</p>
+            {brokerDerivedTradeCount(backup.data) > 0 && <p role="alert" className="mt-2 text-amber-600">{brokerDerivedTradeCount(backup.data)} MT5-derived trade(s) appear in the workspace export. These records are not substitute broker evidence; a fresh database may reject their restoration until the original broker capture and audit history have been recovered.</p>}
             {!sameOwner && <p className="mt-2 text-amber-600">This backup belongs to a different sign-in. Sign into its original account to restore it.</p>}
             {!sameProject && <p className="mt-1 text-amber-600">This backup came from a different database and cannot safely restore linked records here.</p>}
             {!!backup.unavailableTables.length && <div className="mt-2 space-y-2 text-amber-600"><p>Partial backup: unavailable collections will remain missing after restore.</p><label className="flex items-start gap-2 text-xs"><input type="checkbox" checked={acceptPartialRestore} onChange={event => setAcceptPartialRestore(event.target.checked)} /><span>I understand this backup is incomplete and want to restore its available data.</span></label></div>}
-            {canRestore && <button type="button" onClick={handleRestore} className="btn-primary mt-3" disabled={busy}><Archive size={15} /> Restore missing records</button>}
+            {canRestore && <button type="button" onClick={handleRestore} className="btn-primary mt-3" disabled={busy}><Archive size={15} /> Restore available workspace records</button>}
           </div>}
         </section>
 
-        <p className="flex items-start gap-2 text-[11px] leading-relaxed text-muted"><CheckCircle2 size={14} className="mt-0.5 shrink-0" />Keep a copy somewhere separate from this computer. Backups can contain private journal notes, account identifiers, and media.</p>
+        <p className="flex items-start gap-2 text-[11px] leading-relaxed text-muted"><CheckCircle2 size={14} className="mt-0.5 shrink-0" />Store this encrypted workspace archive separately from your PC, alongside a verified operator-controlled D1/media disaster-recovery backup. Workspace archives alone do not preserve the MT5 audit trail.</p>
       </div>
     </Modal>
   );
