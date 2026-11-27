@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ArrowDownUp, CheckCircle2, CircleHelp, PauseCircle, Play, Plus, RefreshCw, Save, ShieldCheck, Square, X } from 'lucide-react';
 import { copyAction } from '@/lib/copyStudio';
+import { copyArmIssues, hasLocalCopyEligibility } from '@/lib/copyArmReadiness';
 import { announceAction } from '@/lib/actionFeedback';
 import './copy-fleet-console.css';
 
@@ -62,8 +63,7 @@ const parseSymbolMapText=(text:string):Record<string,string>|null=>{
   }
   return map;
 };
-const permission=(a:Account,mode:ExecutionMode)=>a.trade_mode===(mode==='live'?2:0)&&a.access_level==='trading-enabled'&&
-  a.monitoring_paused===0&&Number(a.last_seen)>Date.now()-45000;
+const permission=(a:Account,mode:ExecutionMode)=>hasLocalCopyEligibility(a,mode);
 export function CopyFleetConsole(){
   const [status,setStatus]=useState<Status|null>(null);
   const [selected,setSelected]=useState<string|null>(null);
@@ -88,29 +88,7 @@ export function CopyFleetConsole(){
   const reports=new Map(status?.reports.map(x=>[x.link,x]));
   const consent=new Map(status?.consents.map(x=>[x.follower_link,x]));
   const armed=status?.fleets.filter(x=>x.state==='demo_armed'||x.state==='live_armed')||[];
-  // Dashboard indicators are advisory only. The server and each Windows follower still
-  // revalidate identity, consent, broker mode, risk and order execution independently.
-  const armIssues:string[]=[];
-  if(picked?.state==='paused'){
-    const mode=picked.execution_mode;
-    const sourceAccount=accounts.find(a=>a.id===picked.source_link);
-    if(mode==='live'&&!status?.liveExecutionEnabled)armIssues.push('Live execution is disabled for this environment.');
-    if(!sourceAccount||sourceAccount.trade_mode!==(mode==='live'?2:0)||
-      sourceAccount.monitoring_paused!==0||Number(sourceAccount.last_seen)<=Date.now()-45000)
-      armIssues.push('Source account needs a current MT5 connection and active monitoring in the selected broker mode.');
-    const enabledTargets=picked.targets.filter(t=>t.enabled);
-    if(!enabledTargets.length)armIssues.push('Enable at least one follower in the saved fleet.');
-    const unavailable=enabledTargets.filter(t=>{
-      const a=accounts.find(x=>x.id===t.follower_link);
-      return !a||!permission(a,mode);
-    });
-    const noConsent=enabledTargets.filter(t=>{
-      const grant=consent.get(t.follower_link);
-      return !grant||grant.demo_authorized!==1||grant.authorization_mode!==mode||Number(grant.expires_at)<=Date.now();
-    });
-    if(unavailable.length)armIssues.push(unavailable.length+' enabled follower(s) lack a current, trading-enabled Windows MT5 connection with the correct broker mode.');
-    if(noConsent.length)armIssues.push(noConsent.length+' enabled follower(s) need unexpired, account-bound local consent in the established connector.');
-  }
+  const armIssues=copyArmIssues(picked,accounts,status?.consents||[],Boolean(status?.liveExecutionEnabled));
   const expectedTradeMode=draft.executionMode==='live'?2:0;
   const sourceAllowed=(a:Account)=>a.trade_mode===0||(draft.executionMode==='live'&&a.trade_mode===2);
   const riskPass=useMemo(()=>draft.targets.every(t=>t.value>0&&t.maxLots>0&&t.maxDailyLossPct>0&&
