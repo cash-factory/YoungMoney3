@@ -88,6 +88,29 @@ export function CopyFleetConsole(){
   const reports=new Map(status?.reports.map(x=>[x.link,x]));
   const consent=new Map(status?.consents.map(x=>[x.follower_link,x]));
   const armed=status?.fleets.filter(x=>x.state==='demo_armed'||x.state==='live_armed')||[];
+  // Dashboard indicators are advisory only. The server and each Windows follower still
+  // revalidate identity, consent, broker mode, risk and order execution independently.
+  const armIssues:string[]=[];
+  if(picked?.state==='paused'){
+    const mode=picked.execution_mode;
+    const sourceAccount=accounts.find(a=>a.id===picked.source_link);
+    if(mode==='live'&&!status?.liveExecutionEnabled)armIssues.push('Live execution is disabled for this environment.');
+    if(!sourceAccount||sourceAccount.trade_mode!==(mode==='live'?2:0)||
+      sourceAccount.monitoring_paused!==0||Number(sourceAccount.last_seen)<=Date.now()-45000)
+      armIssues.push('Source account needs a current MT5 connection and active monitoring in the selected broker mode.');
+    const enabledTargets=picked.targets.filter(t=>t.enabled);
+    if(!enabledTargets.length)armIssues.push('Enable at least one follower in the saved fleet.');
+    const unavailable=enabledTargets.filter(t=>{
+      const a=accounts.find(x=>x.id===t.follower_link);
+      return !a||!permission(a,mode);
+    });
+    const noConsent=enabledTargets.filter(t=>{
+      const grant=consent.get(t.follower_link);
+      return !grant||grant.demo_authorized!==1||grant.authorization_mode!==mode||Number(grant.expires_at)<=Date.now();
+    });
+    if(unavailable.length)armIssues.push(unavailable.length+' enabled follower(s) lack a current, trading-enabled Windows MT5 connection with the correct broker mode.');
+    if(noConsent.length)armIssues.push(noConsent.length+' enabled follower(s) need unexpired, account-bound local consent in the established connector.');
+  }
   const expectedTradeMode=draft.executionMode==='live'?2:0;
   const sourceAllowed=(a:Account)=>a.trade_mode===0||(draft.executionMode==='live'&&a.trade_mode===2);
   const riskPass=useMemo(()=>draft.targets.every(t=>t.value>0&&t.maxLots>0&&t.maxDailyLossPct>0&&
@@ -169,6 +192,12 @@ export function CopyFleetConsole(){
       <div><small>Unresolved dispatches</small><strong>{status?.tasks.filter(t=>t.status==='dispatched'||t.status==='unknown').length||0}</strong><span>Never silently retried</span></div>
     </div>
     <div className="ym-cf-safety"><ShieldCheck size={18}/><span><strong>Execution is disabled by default.</strong> LIVE followers can place real broker orders and incur real losses. Every follower requires a matching Windows consent, fresh verification and MT5 preflight. Emergency pause cannot undo orders already sent; execution outcomes must be reconciled with the broker.</span></div>
+    <ol className="ym-cf-workflow" aria-label="Safe copying process">
+      <li><strong>1 · Configure</strong><span>Choose the broker source and enabled followers.</span></li>
+      <li><strong>2 · Plan risk</strong><span>Set allocation and limits. Calculate a non-executing preview.</span></li>
+      <li><strong>3 · Approve locally</strong><span>Each follower needs separate Windows consent; Signal Desk cannot grant it yet.</span></li>
+      <li><strong>4 · Arm and supervise</strong><span>Arming allows fresh signals, not immediate orders. Pause stops new work, not dispatched orders.</span></li>
+    </ol>
     {alert&&<div className="ym-cs-feedback" data-kind="error" role="alert"><AlertTriangle size={16}/><span>{alert}</span><button type="button" onClick={()=>setAlert('')}>Dismiss</button></div>}
     {notice&&<div className="ym-cs-feedback" data-kind="success" role="status"><CheckCircle2 size={16}/><span>{notice}</span><button type="button" onClick={()=>setNotice('')}>Dismiss</button></div>}
     <div className="ym-cf-layout">
@@ -246,16 +275,22 @@ export function CopyFleetConsole(){
           if(!e.target.value)return;
           setDraft(d=>({...d,targets:[...d.targets,defaultTarget(e.target.value)]}));setPreview(null);
         }}><option value="">+ Add another follower</option>{remaining.filter(a=>a.trade_mode===expectedTradeMode).map(a=><option key={a.id} value={a.id}>{title(a)} · {draft.executionMode.toUpperCase()}</option>)}</select></div>
+        {picked?.state==='paused' && <div className="ym-cf-readiness" role="status" aria-live="polite">
+          <strong>{armIssues.length?'Not ready to arm':'Dashboard prerequisites currently satisfied'}</strong>
+          {armIssues.length?<ul>{armIssues.map(message=><li key={message}>{message}</li>)}</ul>:
+            <p>This is not a broker execution guarantee. The local connector and server perform their own checks at dispatch.</p>}
+          <p>Arming can enable future copied orders, including real-money orders in LIVE mode. The redesigned Signal Desk cannot authorize followers yet.</p>
+        </div>}
         <div className="ym-cf-actions">
           <button type="button" className="btn-primary" disabled={!!busy||!canSave||(picked&&picked.state!=='paused')} onClick={()=>void act('fleet-save',{
             ...draft, ...(picked?{id:picked.id,version:picked.version}:{})
           },'Fleet saved in paused state.')}><Save size={16}/>Save fleet</button>
-          {picked?.state==='paused'&&<button type="button" className="btn-secondary" disabled={!!busy||!picked||(picked.execution_mode==='live'&&!status?.liveExecutionEnabled)} onClick={()=>{
+          {picked?.state==='paused'&&<button type="button" className="btn-secondary" disabled={!!busy||!picked||armIssues.length>0} onClick={()=>{
             if(picked.execution_mode==='live'){
               const phrase='ARM LIVE '+picked.id.slice(0,8);
               const typed=window.prompt('REAL MONEY: live broker orders may be placed across all enabled followers. All accounts require separate local Windows authorization. A pause cannot undo already dispatched trades.\nType '+phrase+' to arm this fleet:', '');
               if(typed===phrase)void act('fleet-arm',{id:picked.id,version:picked.version,confirm:true,liveConfirmation:typed},'LIVE fleet armed. Monitor real broker executions.');
-            }else if(window.confirm('Arm DEMO fleet? Only locally authorized demo followers will execute broker orders.')){
+            }else if(window.confirm('Arm DEMO fleet? Future new source signals can create broker orders on locally authorized demo followers. This does not replay old signals.')){
               void act('fleet-arm',{id:picked.id,version:picked.version,confirm:true},'Demo fleet armed.');
             }
           }}><Play size={16}/>Arm {picked.execution_mode==='live'?'LIVE · REAL MONEY':'demo'} fleet</button>}
