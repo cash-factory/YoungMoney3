@@ -15,6 +15,7 @@ $backup = $Target + '.previous'
 $incoming = $Target + '.incoming'
 $swapped = $false
 $launched = $false
+$phase = 'validate'
 
 function Write-Outcome([string]$status, [string]$code) {
   $record = @{
@@ -49,16 +50,19 @@ try {
     throw 'checksum-mismatch'
   }
 
+  $phase = 'wait-parent'
   # Do not replace a running executable; it would interrupt capture or copy consent.
   try { Wait-Process -Id $ParentPid -Timeout 90 -ErrorAction SilentlyContinue } catch { }
   if (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue) { throw 'connector-still-running' }
   # A second integrity check closes the window between a download and process exit.
+  $phase = 'prepare'
   Copy-Item -LiteralPath $Candidate -Destination $incoming -Force
   if ((Get-FileHash -LiteralPath $incoming -Algorithm SHA256).Hash.ToLowerInvariant() -ne $ExpectedHash.ToLowerInvariant()) {
     throw 'checksum-mismatch'
   }
 
   # These two renames happen on the same volume. Keep the old EXE for rollback.
+  $phase = 'backup'
   if (Test-Path -LiteralPath $backup -PathType Leaf) {
     Remove-Item -LiteralPath $backup -Force
   }
@@ -71,10 +75,12 @@ try {
     throw 'replacement-failed'
   }
 
+  $phase = 'receipt'
   if ($NoRestart) {
     Write-Outcome 'installed' 'manual-restart'
     exit 0
   }
+  $phase = 'relaunch'
   try {
     $child = Start-Process -FilePath $Target -WorkingDirectory (Split-Path -Parent $Target) -PassThru
     $launched = $true
@@ -88,7 +94,30 @@ try {
   Write-Outcome 'installed' 'restart-launched'
   exit 0
 } catch {
-  $code = if ($_.Exception.Message -match '^[a-z-]{3,40}$') { $_.Exception.Message } else { 'installation-failed' }
+  $code = if ($_.Exception.Message -match '^[a-z-]{3,40}
+  try {
+    if ($swapped -and (Test-Path -LiteralPath $backup -PathType Leaf)) {
+      if (Test-Path -LiteralPath $Target -PathType Leaf) {
+        Remove-Item -LiteralPath $Target -Force
+      }
+      Move-Item -LiteralPath $backup -Destination $Target
+      if (!$NoRestart) {
+        Start-Process -FilePath $Target -WorkingDirectory (Split-Path -Parent $Target) | Out-Null
+      }
+      Write-Outcome 'rolled-back' $code
+    } else {
+      Write-Outcome 'failed' $code
+    }
+  } catch {
+    # Keep any .previous file intact for manual recovery; do not touch user data.
+    try { Write-Outcome 'failed' 'recovery-needs-attention' } catch {}
+  }
+  exit 1
+} finally {
+  try { if (Test-Path -LiteralPath $incoming -PathType Leaf) { Remove-Item -LiteralPath $incoming -Force } } catch { }
+}
+) { $_.Exception.Message } else { 'failed-' + $phase }
+  if ($env:CI -eq 'true') { Write-Output ('Updater test phase: ' + $phase + ', error type: ' + $_.Exception.GetType().Name) }
   try {
     if ($swapped -and (Test-Path -LiteralPath $backup -PathType Leaf)) {
       if (Test-Path -LiteralPath $Target -PathType Leaf) {
