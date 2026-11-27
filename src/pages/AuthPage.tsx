@@ -3,6 +3,8 @@ import { TrendingUp, Mail, Lock, User, Eye, EyeOff, AlertCircle, Loader2, BarCha
 import { BrandLogo } from '@/components/BrandLogo';
 import { useAuth } from '@/context/AuthContext';
 import { ColorPaletteControl } from '@/components/ColorPaletteControl';
+import { UsernameField } from '@/components/UsernameField';
+import {validUsername} from '@/lib/username';
 
 export function AuthPage({ onBack }: { onBack?: () => void }) {
   const { signIn, signUp } = useAuth();
@@ -10,6 +12,7 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [username,setUsername] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [recoveryCode,setRecoveryCode]=useState('');
   const [confirmPassword,setConfirmPassword]=useState('');
@@ -42,12 +45,17 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
         setLoading(false);
         return;
       }
+      if(!validUsername(username)){
+        setError('Choose a username of 3–32 lowercase letters, numbers or underscores.');
+        setLoading(false);
+        return;
+      }
       if (password.length < 8) {
         setError('Password must be at least 8 characters.');
         setLoading(false);
         return;
       }
-      const { error } = await signUp(email.trim(), password, displayName.trim(), inviteCode.trim());
+      const { error } = await signUp(email.trim(), password, displayName.trim(), inviteCode.trim(), username.trim().toLowerCase());
       if (error) {
         setError(error);
         setLoading(false);
@@ -183,6 +191,8 @@ export function AuthPage({ onBack }: { onBack?: () => void }) {
                 </div>
               </div>
             )}
+
+            {mode === 'signup' && <UsernameField id="signup-username" value={username} onChange={setUsername} label="Unique username" />}
 
             {mode === 'signup' && (
               <div>
