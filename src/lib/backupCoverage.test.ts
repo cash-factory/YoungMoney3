@@ -1,7 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {brokerDerivedTradeCount, EXCLUDED_BROKER_EVIDENCE,
-  personalBackupCoverage, WORKSPACE_ARCHIVE_SCOPE} from './backupCoverage.ts';
+  personalBackupCoverage, WORKSPACE_ARCHIVE_SCOPE,
+  assertCompleteWorkspaceExport} from './backupCoverage.ts';
 
 test('personal archive documents no immutable broker evidence recovery path',()=>{
   const coverage=personalBackupCoverage();
@@ -22,4 +23,10 @@ test('broker-derived workspace trade records are not evidence of restored execut
   ]};
   assert.equal(brokerDerivedTradeCount(data),2);
   assert.equal(brokerDerivedTradeCount({}),0);
+});
+
+test('partial workspace export cannot masquerade as a successful archive',()=>{
+  assert.doesNotThrow(()=>assertCompleteWorkspaceExport([]));
+  assert.throws(()=>assertCompleteWorkspaceExport(['risk_settings','trades']),
+    /Workspace backup incomplete: could not read risk_settings, trades\. No file was downloaded/);
 });
