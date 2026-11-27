@@ -153,13 +153,16 @@
   }
   function statusLabel(){
     if(!model.paired)return 'Not paired';
-    if(model.connection_state==='connected')return model.sessions.some(x=>x.status==='monitoring')?'Connected and monitoring':'PC connected · awaiting MT5 account capture';
+    if(model.connection_state==='connected'){
+       const count=model.sessions.filter(x=>x.status==='monitoring').length;
+       return count?count+' of '+model.sessions.length+' MT5 account(s) monitoring':'PC connected · no confirmed account capture';
+     }
     if(model.connection_state==='recovering')return 'Checking connection and broker history';
     if(model.connection_state==='stopping')return 'Stopping capture safely';
     if(model.connection_state==='attention')return 'Connection needs attention';
     return 'Monitoring is stopped';
   }
-  const statusTone=()=>model.connection_state==='connected'?'online':model.connection_state==='recovering'||model.connection_state==='stopping'?'working':model.connection_state==='attention'?'danger':'';
+  const statusTone=()=>model.connection_state==='connected'?(model.sessions.some(x=>x.status==='monitoring')?'online':'working'):model.connection_state==='recovering'||model.connection_state==='stopping'?'working':model.connection_state==='attention'?'danger':'';
   const badge=(value,tone='')=>`<span class="native-status ${tone}">${safe(value)}</span>`;
   function intro(title,detail){return `<div class="page-intro"><div class="crumb">YOUNGMONEY3 <span class="slash">/</span><span class="current">${safe(title.toUpperCase())}</span></div><h1>${safe(title)}</h1><p class="native-subtitle">${safe(detail)}</p></div>`}
   function action(label,method,primary=false,disabled=false){return `<button type="button" class="btn ${primary?'red':''}" data-native-action="${safe(method)}" ${disabled||commandBusy?'disabled':''}><span>${safe(label)}</span></button>`}
@@ -170,7 +173,18 @@
     'paused':['Paused',''],'paused-by-dashboard':['Paused remotely','working'],
     'offline':['Offline',''],'not-verified':['Awaiting capture','']};
   const sessionStatus=x=>statusMap[x.status]||['Not verified',''];
-  function editableSession(s){
+  function sessionNextStep(s){
+     if(!model.paired)return 'Pair this computer with your YoungMoney3 dashboard.';
+     if(!s.terminal_present)return 'Open the saved MT5 terminal and verify the broker login.';
+     if(!s.verified_link)return 'Scan this PC from the dashboard and select the matching broker account.';
+     if(!s.enabled)return 'This session is paused. Resume it only when you want capture.';
+     if(!model.capture_active)return 'Start monitoring and wait for confirmed broker capture.';
+     if(s.status==='recovering')return 'Keep MT5 logged in and inspect broker-history recovery on the dashboard.';
+     if(s.status==='needs-attention'||s.status==='terminal-missing')return 'Review Recent Activity and correct the MT5 terminal issue.';
+     if(s.status==='monitoring')return 'Review the latest broker records and any unresolved integrity checks.';
+     return 'Check the selected broker login and wait for a completed capture cycle.';
+   }
+   function editableSession(s){
     if(!editingSession)return '';
     return `<div class="native-edit-box"><label class="native-field-label" for="native-session-name">Session display name</label><input id="native-session-name" class="native-text-input" maxlength="48" value="${safe(s.name)}" aria-label="Session display name"><div class="native-inline-actions">${action('Save new name','save-session-name',true)}${action('Cancel','cancel-session-name')}</div></div>`;
   }
@@ -231,14 +245,14 @@
         const [state,tone]=sessionStatus(x);
         return `<div class="native-account ${x.id===selected?'native-selected-account':''}"><div><button type="button" data-native-select="${safe(x.id)}" aria-pressed="${x.id===selected}">${safe(x.account_name||x.name)}</button><small>${safe([x.server,x.login?'#'+x.login:'Broker login not verified'].filter(Boolean).join(' · '))}</small></div>${badge(state,tone)}</div>`;
       }).join(''):`<div class="native-pad"><p>No local MT5 account sessions. Choose Add account to open a dedicated terminal login.</p></div>`}</div><div class="native-pad">${action('Add an MT5 account','prepare-account-setup',true)}</div>`)}
-       ${card(cardHead('Account inspector','shield-check')+`<div class="native-pad native-inspector">${s?`<div class="native-inspector-heading"><h2>${safe(s.account_name||s.name)}</h2>${badge(sessionStatus(s)[0],sessionStatus(s)[1])}</div>${infoRow('Local session',s.name)}${infoRow('Broker server',s.server)}${infoRow('Account login',s.login)}${infoRow('Session',s.enabled?'Enabled':'Paused')}${infoRow('MT5 terminal',s.terminal_present?'Found':'Missing')}${infoRow('Verified broker link',s.verified_link?'Yes':'Not verified')}${infoRow('Capture evidence',sessionStatus(s)[0])}${infoRow('Last completed scan',s.last_sync?s.last_sync.replace('T',' ').replace('+00:00',' UTC'):'No confirmed scan yet')}${infoRow('Copy authorization','Not verified by this shell')}<div class="native-inline-actions">${s.verified_link?action(s.enabled?'Pause this session':'Resume this session',s.enabled?'pause-session':'resume-session',!s.enabled):'<span class="native-not-yet-linked">Select this MT5 account for monitoring on the dashboard.</span>'}${action('Recheck broker history','retry-session',false,!canRetry)}${action('Rename session','edit-session-name')}</div><div class="native-inline-actions">${action('Open MT5 login','open_account_terminal')}${action('Manage on dashboard','open_dashboard')}${action('Remove local shortcut','remove-session',false,model.capture_active)}</div>${editableSession(s)}${removalPrompt()}`:`<p>Select a saved MT5 session to inspect its verified broker and capture information.</p>`}<div class="native-help-bubble">Recovery and integrity: the existing MT5 engine reconciles broker history after disconnections. A successful PC connection does not prove individual trade capture. Broker fills, original stops and risk evidence are not editable here.</div></div>`)}</div>`;
+       ${card(cardHead('Account inspector','shield-check')+`<div class="native-pad native-inspector">${s?`<div class="native-inspector-heading"><h2>${safe(s.account_name||s.name)}</h2>${badge(sessionStatus(s)[0],sessionStatus(s)[1])}</div>${infoRow('Local session',s.name)}${infoRow('Broker server',s.server)}${infoRow('Account login',s.login)}${infoRow('Session',s.enabled?'Enabled':'Paused')}${infoRow('MT5 terminal',s.terminal_present?'Found':'Missing')}${infoRow('Verified broker link',s.verified_link?'Yes':'Not verified')}${infoRow('Capture evidence',sessionStatus(s)[0])}${infoRow('Last completed scan',s.last_sync?s.last_sync.replace('T',' ').replace('+00:00',' UTC'):'No confirmed scan yet')}${infoRow('Copy authorization','Not verified by this shell')}${infoRow('Recommended next action',sessionNextStep(s))}<div class="native-inline-actions">${s.verified_link?action(s.enabled?'Pause this session':'Resume this session',s.enabled?'pause-session':'resume-session',!s.enabled):'<span class="native-not-yet-linked">Select this MT5 account for monitoring on the dashboard.</span>'}${action('Recheck broker history','retry-session',false,!canRetry)}${action('Rename session','edit-session-name')}</div><div class="native-inline-actions">${action('Open MT5 login','open_account_terminal')}${action('Manage on dashboard','open_dashboard')}${action('Remove local shortcut','remove-session',false,model.capture_active)}</div>${editableSession(s)}${removalPrompt()}`:`<p>Select a saved MT5 session to inspect its verified broker and capture information.</p>`}<div class="native-help-bubble">Recovery and integrity: the existing MT5 engine reconciles broker history after disconnections. A successful PC connection does not prove individual trade capture. Use the recommended next action above, and verify the last completed broker scan. Broker fills, original stops and risk evidence are not editable here.</div></div>`)}</div>`;
   }
 
   function viewCopy(){
     return intro('Trade Copying','Inspect the higher-risk copying workflow separately from read-only monitoring.')+
       `<div class="native-shell-grid">${card(`${cardHead('Copy Fleet safety','shield-check',badge('Not armed','danger'))}<div class="native-health"><div class="native-health-copy"><div class="native-overline">ACCOUNT-BOUND LOCAL APPROVAL REQUIRED</div><h2>Execution remains protected</h2><p>The new desktop interface has not yet implemented verified follower consent or fleet arming. No order submission is available here.</p><div class="native-step-row"><span class="is-unverified">${screen.icon('lock')} Followers must be authorized per account</span><span class="is-unverified">${screen.icon('lock')} Broker mode and risk must be checked</span></div></div><div class="native-overview-art">${screen.media('copy')}</div></div>`)}
-       ${card(cardHead('Controls','layers')+`<div class="native-action-row">${action('Open Copy Studio','open_copy_studio',true)}${action('Review account sessions','accounts')}<p>All live order authorization remains in the established connector until the new implementation passes supervised broker-side acceptance.</p></div>`)}</div>
-       <div class="native-kpi">${[['Fleet state','Disarmed'],['Execution authority','None in new shell'],['Risk basis','Broker-verified'],['Order transmission','Disabled']].map(([l,v])=>card(`<div class="native-stat"><div class="native-overline">${safe(l)}</div><strong style="font-size:19px">${safe(v)}</strong></div>`)).join('')}</div>`;
+       ${card(cardHead('Controls','layers')+`<div class="native-action-row">${action('Open Copy Studio','open_copy_studio',true)}${action('Review account sessions','accounts')}<p>Copying steps: select source and followers on the Dashboard; configure allocation and risk; review the non-executing preview; obtain separate local consent in the established connector; arm only after every prerequisite is verified. Signal Desk cannot grant consent or arm fleets yet. Arming can route future signals but does not immediately place an order. Emergency pause cannot undo orders already dispatched.</p></div>`)}</div>
+       <div class="native-kpi">${[['Fleet authorization','Not available in this shell'],['Execution authority','None in new shell'],['Risk basis','Broker-verified'],['Order transmission','Disabled']].map(([l,v])=>card(`<div class="native-stat"><div class="native-overline">${safe(l)}</div><strong style="font-size:19px">${safe(v)}</strong></div>`)).join('')}</div>`;
   }
   function viewPair(){
     return intro('Connect this PC','Pair securely, then manage your device name and linked accounts from the dashboard.')+
