@@ -1,8 +1,14 @@
-# YoungMoney3 — Signal Desk V0.2 native connector migration
+# YoungMoney3 — Signal Desk · primary Windows connector (0.4.0)
 
-**Connector-only development.** The non-connector journal, website, Worker and broker ledger have **not** been redesigned or altered here.
+Signal Desk is now the standard member-facing Windows connector. The dashboard download is routed exclusively to a verified Signal Desk NSIS installer. Broker evidence and account management remain tied to the existing authenticated YM-FX services.
 
 This implementation adapts the user-approved Signal Desk V4 interface into a Windows desktop shell using **Tauri 2 (Rust/WebView2)** with a bundled **Python MT5 bridge**. It preserves the trading engine in `connector/connect.py` and uses the real `SessionStore` instead of imaginary broker accounts when installed natively.
+
+## New in the primary Signal Desk release
+
+The Help & Guides workspace has four guided routes with 16 steps, searchable FAQs, local learning progress, genuine screen navigation, practical cautions and accessible reduced-motion-safe transitions. The native updater checks a pinned signed channel periodically and on demand, displays curated public notes, and refuses installation while capture, pending uploads or copy permissions could be active. Signed automatic installation is **disabled** until a trusted owner signing key and channel have been configured. This installer is a separately verified staging preview; **do not claim unattended upgrades are live for unsigned builds**.
+
+See [Primary connector and owner archive](../../docs/SIGNAL_DESK_PRIMARY.md), [User Guides](../../docs/USER_GUIDES.md), and [Auto-update security](../../docs/CONNECTOR_AUTO_UPDATES.md).
 
 ## Already implemented
 
