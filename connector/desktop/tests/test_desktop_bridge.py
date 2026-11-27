@@ -135,6 +135,38 @@ class BridgeTests(unittest.TestCase):
             self.assertEqual([s['status'] for s in self.bridge.snapshot()['sessions']],
                              ['not-verified','not-verified'])
 
+    def test_account_discovery_pages_all_130_sessions_without_truncation(self):
+        reports=[]
+        def send(action,payload):
+            self.assertEqual(action,'discovery-report')
+            reports.append(payload)
+            return {'ok':True}
+        found=[{'slot':str(index).zfill(12),'login':str(90000+index)}
+               for index in range(130)]
+        self.bridge._publish_discovery_report('synthetic-scan',found,send)
+        self.assertEqual([len(page['accounts']) for page in reports],[64,64,2])
+        self.assertEqual([page['more'] for page in reports],[True,True,False])
+        self.assertEqual([page['accounts'][0]['slot'] for page in reports],
+                         [str(0).zfill(12),str(64).zfill(12),str(128).zfill(12)])
+        self.assertEqual(len({row['slot'] for page in reports for row in page['accounts']}),130)
+
+    def test_discovery_page_failure_never_marks_scan_finished(self):
+        calls=[]
+        def send(action,payload):
+            calls.append(payload)
+            if len(calls)==2:
+                return {'ok':False}
+            return {'ok':True}
+        with self.assertRaisesRegex(RuntimeError,'not accepted'):
+            self.bridge._publish_discovery_report('pending',[
+                {'slot':str(index)} for index in range(65)],send)
+        self.assertTrue(calls[0]['more'])
+        self.assertFalse(calls[-1]['more'])
+        empty=[]
+        self.bridge._publish_discovery_report('empty',[],lambda action,payload:
+            empty.append(payload) or {'ok':True})
+        self.assertEqual(empty,[{'request':'empty','accounts':[],'more':False}])
+
     def test_signal_desk_capture_explicitly_disables_copier_cycle(self):
         from unittest.mock import patch
         from service_channel import SERVICE_ORIGIN
