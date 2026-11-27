@@ -141,12 +141,12 @@ class Bridge:
                     'server': sanitized(item.get('server'), 72),
                     'login': sanitized(item.get('login'), 24),
                     'link': sanitized(item.get('link'), 96)}
-                    for item in event['links'][:100]
+                    for item in event['links'][:512]
                     if isinstance(item, dict) and isinstance(item.get('slot'), str)}
             elif kind == 'monitoring-policy':
                 ids = event.get('paused')
                 if isinstance(ids, list):
-                    self.remote_paused_links = {str(v) for v in ids[:200] if isinstance(v, str)}
+                    self.remote_paused_links = {str(v) for v in ids[:512] if isinstance(v, str)}
             if kind == 'pc-online':
                 self.state = 'connected'
             elif kind in ('pc-reconnecting', 'retrying'):
