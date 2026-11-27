@@ -15,6 +15,7 @@ import { copyStudioRoute } from './copyStudio';
 /// <reference types="@cloudflare/workers-types" />
 import { WORKSPACE_TABLES } from '../src/lib/workspaceTables';
 import { deleteOwnedMedia } from '../src/lib/mediaCleanup';
+import {normalizeUsername, validUsername, usernameSuggestions} from '../src/lib/username';
 
 export { AuthKdf } from './auth-kdf';
 
@@ -101,6 +102,21 @@ async function authRoute(request: Request, env: Env, path: string) {
   const input = await stringFields(request);
   const ip = request.headers.get('CF-Connecting-IP') || 'local';
   if (!await withinAuthBudget(env.DB, 'ip:' + ip, 80)) return throttled();
+  if (path === '/api/auth/username-availability') {
+    if (!await withinAuthBudget(env.DB,'username-lookup:'+ip,40)) return throttled();
+    const handle=normalizeUsername(input.username||'');
+    if(!validUsername(handle)) return response({error:'Use 3–32 letters, numbers, or underscores.'},400);
+    const viewer=await currentUser(request,env.DB);
+    const prior=await env.DB.prepare('SELECT id FROM users WHERE username=?').bind(handle).first<{id:string}>();
+    const available=!prior || prior.id===viewer?.id;
+    const candidates=available?[]:usernameSuggestions(handle);
+    const availableSuggestions:string[]=[];
+    for(const suggestion of candidates){
+      const collision=await env.DB.prepare('SELECT id FROM users WHERE username=?').bind(suggestion).first();
+      if(!collision)availableSuggestions.push(suggestion);
+    }
+    return response({username:handle,available,suggestions:availableSuggestions});
+  }
   const emailKey = input.email?.trim().toLowerCase();
   if (!emailKey || emailKey.length > 254) return response({ error: 'Valid email required.' }, 400);
   if (!await withinAuthBudget(env.DB, 'email:' + emailKey, 15)) return throttled();
@@ -137,8 +153,8 @@ async function authRoute(request: Request, env: Env, path: string) {
     const accountCount = await env.DB.prepare('SELECT COUNT(*) AS total FROM users WHERE id<>?').bind(DEMO_MEMBER_ID).first<{ total: number }>();
     if ((accountCount?.total || 0) >= 10) return response({ error: 'This pilot has reached its 10-account limit.' }, 403);
     const email = input.email?.trim().toLowerCase(); const username = input.username?.trim().toLowerCase(); const password = input.password || ''; const displayName = input.display_name?.trim() || username;
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !username || !/^[a-z0-9_]{3,32}$/.test(username) || password.length < 8 || password.length > 256) return response({ error: 'Use a valid email, 3â€“32 character username, and password of at least 8 characters.' }, 400);
-    const existing = await env.DB.prepare('SELECT id FROM users WHERE email=? OR username=?').bind(email, username).first(); if (existing) return response({ error: 'Email or username is already in use.' }, 409);
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !username || !validUsername(username) || password.length < 8 || password.length > 256) return response({ error: 'Use a valid email, 3â€“32 character username, and password of at least 8 characters.' }, 400);
+    const existing = await env.DB.prepare('SELECT id,email,username FROM users WHERE email=? OR username=?').bind(email, username).first<{id:string;email:string;username:string}>(); if (existing) return response({ error: existing.username===username ? 'This username is taken. Choose one of the suggestions or try another.' : 'Email is already in use.' }, 409);
     const secured = await hashPasswordForEnv(env,password,email); const userId = id(); const timestamp = now(); const created = await env.DB.prepare('INSERT OR IGNORE INTO users (id,email,username,display_name,password_hash,password_salt,created_at,updated_at) SELECT ?,?,?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM users WHERE id<>?)<10').bind(userId, email, username, displayName, secured.hash, secured.salt, timestamp, timestamp,DEMO_MEMBER_ID).run(); if (!created.meta.changes) return response({ error: 'Account unavailable or pilot full.' }, 409); const user = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(userId).first<Record<string, unknown>>(); return issueSession(env.DB, user!);
   }
   if (path === '/api/auth/signin') {
@@ -171,10 +187,11 @@ async function sessionRoute(request: Request, env: Env, user: Record<string, unk
   if (path === '/api/auth/signout') { const token = cookieToken(request); if (token) await env.DB.prepare('DELETE FROM sessions WHERE token_hash=?').bind(await sha(token)).run(); return sessionResponse({ ok: true }); }
   const input = await stringFields(request);
   if (path === '/api/auth/profile') {
-    const username = input.username?.trim().toLowerCase();
-    if (username && !/^[a-z0-9_]{3,32}$/.test(username)) return response({ error: 'Username must be 3â€“32 letters, numbers, or underscores.' }, 400);
+    const username = input.username ? normalizeUsername(input.username) : null;
+    if (username && !validUsername(username)) return response({ error: 'Username must be 3â€“32 letters, numbers, or underscores.' }, 400);
     if (username) { const existing = await env.DB.prepare('SELECT id FROM users WHERE username=? AND id<>?').bind(username, user.id).first(); if (existing) return response({ error: 'Username is already in use.' }, 409); }
-    await env.DB.prepare('UPDATE users SET username=COALESCE(?,username),display_name=COALESCE(?,display_name),bio=COALESCE(?,bio),trading_style=COALESCE(?,trading_style),updated_at=? WHERE id=?').bind(username || null, input.display_name?.trim() || null, input.bio?.trim() || null, input.trading_style?.trim() || null, now(), user.id).run();
+    const updatedResult=await env.DB.prepare('UPDATE OR IGNORE users SET username=COALESCE(?,username),display_name=COALESCE(?,display_name),bio=COALESCE(?,bio),trading_style=COALESCE(?,trading_style),updated_at=? WHERE id=?').bind(username || null, input.display_name?.trim() || null, input.bio?.trim() || null, input.trading_style?.trim() || null, now(), user.id).run();
+    if(!updatedResult.meta.changes)return response({error:'Username was claimed by another member. Choose an available suggestion.'},409);
     const updated = await env.DB.prepare('SELECT * FROM users WHERE id=?').bind(user.id).first<Record<string, unknown>>(); return response({ user: profile(updated!) });
   }
   if (path === '/api/auth/password') {
@@ -915,7 +932,7 @@ export default {
         return sample ? issueSession(env.DB,sample) : response({error:'Demo workspace has not been seeded on staging.'},503);
       }
       if (request.method === 'POST' && pathname.startsWith('/api/mt5/device/')) return await mt5Route(request, env, null);
-      if (request.method === 'POST' && ['/api/auth/signup', '/api/auth/signin', '/api/auth/recover'].includes(pathname)) return await authRoute(request, env, pathname);
+      if (request.method === 'POST' && ['/api/auth/signup', '/api/auth/signin', '/api/auth/recover', '/api/auth/username-availability'].includes(pathname)) return await authRoute(request, env, pathname);
       const user = await currentUser(request, env.DB);
       if (!user) return response({ error: 'Authentication required.' }, 401);
       if (user.id===DEMO_MEMBER_ID) {
