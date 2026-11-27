@@ -109,7 +109,8 @@ export function RiskGuardian({ trades, settings, account, plan, onConfigure }: R
           <p className="text-sm font-semibold text-warning-500">Not enough verified evidence to confirm compliance</p>
           <p className="text-xs text-secondary mt-1">{riskData.statusReason}</p>
           <p className="text-xs text-secondary mt-1">
-            {riskData.riskEvidenceMissingCount} entry/entries missing risk percent ·
+            {riskData.riskEvidenceMissingCount} today’s entries missing verified risk ·
+            {' '}{riskData.openRiskEvidenceMissingCount} open position(s) with unverified initial risk ·
             {' '}{riskData.realizedPnlMissingCount} today’s closed trade(s) missing P&amp;L ·
             {' '}{riskData.historicalPnlMissingCount} closed trade(s) missing historical P&amp;L ·
             {' '}{riskData.invalidEntryTimestampCount} invalid entry timestamp(s).
