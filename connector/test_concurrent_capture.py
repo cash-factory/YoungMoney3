@@ -22,6 +22,20 @@ class ParallelCaptureTests(unittest.TestCase):
                          {"one", "two"})
         self.assertEqual(wanted_link_rows(rows, []), {})
 
+    def test_eight_independent_account_workers_have_no_three_account_cap(self):
+        # Planning-only test: real MT5 processes require separate Windows acceptance.
+        rows=[row(f'link-{index}',f'C:/MT5/Account{index}/terminal64.exe')
+              for index in range(8)]
+        enabled=wanted_link_rows(rows,[item[1] for item in rows])
+        self.assertEqual(len(enabled),8)
+        self.assertEqual(set(enabled),{item[0] for item in rows})
+        self.assertEqual(len({item[1] for item in enabled.values()}),8)
+        for paused_index in (1,6):
+            remaining=[item[1] for i,item in enumerate(rows) if i!=paused_index]
+            selected=wanted_link_rows(rows,remaining)
+            self.assertEqual(len(selected),7)
+            self.assertNotIn(f'link-{paused_index}',selected)
+
     def test_error_summary_identifies_connector_line_without_leaking_values(self):
         from cash_history import backfill
         def synthetic_cash_failure():
