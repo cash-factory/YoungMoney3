@@ -17,6 +17,7 @@ const updates=window.YMFXUpdates;
 assert.equal(typeof updates.attach,'function');
 const operations=[];
 let refreshes=0;
+const notices=[];
 const model={source:'local-connector',demo:false,capture_active:true,
   copying_armed:false,copy_permission_available:false,queued_updates:0,update_safe:true,
   sessions:[{status:'monitoring'}]};
@@ -25,6 +26,7 @@ let refuseFreshProof=true;
 updates.attach({
   getModel:()=>model,
   refreshView:()=>refreshes++,
+  notify:message=>notices.push(message),
   request:async(name)=>{
      operations.push(name);
      if(name==='snapshot' && refuseFreshProof){
@@ -80,4 +82,26 @@ await new Promise(resolve=>setTimeout(resolve,20));
 assert.deepEqual(operations,['snapshot','snapshot','shutdown','install_connector_update'],
   'Fresh durable idle proof must precede shutdown and signed installer invocation');
 assert.ok(refreshes>0);
+
+// Every manual update check must show a durable outcome even if there is no
+// release and even when the user is on another connector screen.
+window.__TAURI__.core.invoke=async()=>({configured:true,available:false});
+updates.handleClick(evt('check'));
+await new Promise(resolve=>setTimeout(resolve,20));
+assert.equal(updates.debug().lastCheck,'current');
+assert.match(updates.topbar(),/Up to date/);
+assert.match(notices.at(-1),/No update available/);
+assert.match(updates.panel(x=>x),/No update available/);
+window.__TAURI__.core.invoke=async()=>({configured:false,available:false});
+updates.handleClick(evt('check'));
+await new Promise(resolve=>setTimeout(resolve,20));
+assert.equal(updates.debug().lastCheck,'unconfigured');
+assert.match(updates.topbar(),/Updates not configured/);
+window.__TAURI__.core.invoke=async()=>{throw Error('test channel unavailable')};
+updates.handleClick(evt('check'));
+await new Promise(resolve=>setTimeout(resolve,20));
+assert.equal(updates.debug().lastCheck,'failed');
+assert.match(updates.topbar(),/Retry update check/);
+assert.match(notices.at(-1),/could not complete/);
+assert.equal(updates.debug().checking,false);
 console.log('Signal Desk signed-updater safety checks passed');
