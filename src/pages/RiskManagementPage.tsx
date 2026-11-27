@@ -164,7 +164,7 @@ export function RiskManagementPage() {
               : 'Approaching a configured risk limit'}
         </p>
         <p className="mt-1 text-xs text-secondary">{metrics.statusReason}</p>
-        {(metrics.riskEvidenceMissingCount > 0 || metrics.historicalPnlMissingCount > 0 || metrics.invalidEntryTimestampCount > 0 || !metrics.timeZoneVerified) &&
+        {(metrics.riskEvidenceMissingCount > 0 || metrics.openRiskEvidenceMissingCount > 0 || metrics.historicalPnlMissingCount > 0 || metrics.invalidEntryTimestampCount > 0 || !metrics.timeZoneVerified) &&
           <p className="mt-1 text-xs text-secondary">
             {metrics.riskEvidenceMissingCount} entries lack verified initial-risk percentages;
             {' '}{metrics.historicalPnlMissingCount} historical closed trades lack realized P&amp;L;
