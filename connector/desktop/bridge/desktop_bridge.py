@@ -182,9 +182,18 @@ class Bridge:
                 self.reports = self.reports[-100:]
 
     def snapshot(self):
+        from update_safety import inspect_idle_stores
         with self._lock:
             capture_active = bool(self.worker_mode == 'capture' and self.worker and self.worker.is_alive())
             now_clock = time.monotonic()
+            # Only a standard, build-locked profile may report an update-safe
+            # state. Custom/unknown profile locations fail closed.
+            standard_profile = self.settings.parent.name == SESSION_NAMESPACE
+            audit = (inspect_idle_stores(self.settings.parent.parent)
+                     if not capture_active and standard_profile else None)
+            update_safe = bool(audit and audit['verified'] and
+                               audit['queued'] == 0 and not audit['copy_permission'] and
+                               audit['copy_tasks'] == 0)
             rows=[]
             for entry in self._store.snapshot():
                 terminal = str(entry['terminal'])
@@ -229,7 +238,9 @@ class Bridge:
                     'sessions':rows, 'user':self.dashboard_user,
                     'discovered_accounts':len(self._discovered), 'setup':dict(self.setup_state),
                     'events':list(self.reports[-30:]),
-                    'queued_updates':self.queue_count,
+                    'queued_updates':self.queue_count if capture_active else
+                     (audit['queued'] if audit else None),
+                    'update_safe':update_safe,
                     'active_capture_workers':self.active_worker_count if capture_active else 0,
                     'copying_armed':False, 'copying_armed_verified':False,
                     'copy_permission_available':False,
