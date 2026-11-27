@@ -36,7 +36,7 @@ try {
   if (-not [IO.Path]::IsPathRooted($Target) -or [IO.Path]::GetExtension($Target).ToLowerInvariant() -ne '.exe') {
     throw 'invalid-target'
   }
-  if (!(Test-Path -LiteralPath $Target -PathType Leaf) -or !(Test-Path -LiteralPath $Candidate -PathType Leaf)) {
+  if (-not (Test-Path -LiteralPath $Target -PathType Leaf) -or -not (Test-Path -LiteralPath $Candidate -PathType Leaf)) {
     throw 'missing-executable'
   }
   if ($Target -eq $Candidate) { throw 'invalid-candidate' }
@@ -95,7 +95,7 @@ try {
   exit 0
 } catch {
   $code = if ($_.Exception.Message -match '^[a-z-]{3,40}$') { $_.Exception.Message } else { 'failed-' + $phase }
-  if ($env:CI -eq 'true') { Write-Output ('Updater test phase: ' + $phase + ', error type: ' + $_.Exception.GetType().Name) }
+  if ($env:CI -eq 'true') { Write-Output ('Updater test phase: ' + $phase + ', error type: ' + $_.Exception.GetType().Name + ', detail: ' + $_.Exception.Message) }
   try {
     if ($swapped -and (Test-Path -LiteralPath $backup -PathType Leaf)) {
       if (Test-Path -LiteralPath $Target -PathType Leaf) {
