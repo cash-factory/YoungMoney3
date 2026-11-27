@@ -28,7 +28,7 @@ def due_positions(db,link,currently_open,now,limit=16):
       LEFT JOIN position_recovery r ON r.link=o.link AND r.position_id=o.position_id
       WHERE o.link=?
       GROUP BY o.position_id
-      ORDER BY MAX(o.at_ms) DESC
+      ORDER BY MAX(o.at_ms) DESC,o.position_id ASC
     """,(link,)).fetchall()
     due=[]
     unresolved=0
