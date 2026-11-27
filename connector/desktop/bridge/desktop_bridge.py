@@ -306,7 +306,7 @@ class Bridge:
                  'mode':int(broker['mode'])}
             verified.append(row)
             with self._lock:self._discovered[entry['id']] = row
-        return verified[:64]
+        return verified
 
     def _accept_discovered_monitor(self, approval):
         # Adopt an explicitly selected verified login, never a remote path.
@@ -342,6 +342,30 @@ class Bridge:
             self.links[slot]={'link':link,'server':info['server'],'login':info['login']}
         self._report({'state':'discovery-link'})
 
+    @staticmethod
+    def _publish_discovery_report(request_id, found, send):
+        """Transmit every verified account in bounded, retryable pages.
+
+        An acknowledged intermediate page must not close the scan request.
+        Rerunning a failed report is idempotent: the Worker upserts by device+slot.
+        """
+        page_size = 64  # network batch budget, not account-management limit
+        if not found:
+            response = send('discovery-report',
+                            {'request':request_id,'accounts':[],'more':False})
+            if not response.get('ok'):
+                raise RuntimeError('Broker discovery report was not accepted')
+            return
+        for start in range(0,len(found),page_size):
+            end=start+page_size
+            response=send('discovery-report',{
+                'request':request_id,
+                'accounts':found[start:end],
+                'more':end<len(found),
+            })
+            if not isinstance(response,dict) or response.get('ok') is not True:
+                raise RuntimeError('Broker discovery page was not accepted')
+
     def _discovery_loop(self):
         from account_discovery import request_device
         while not self._service_stop.is_set():
@@ -359,7 +383,7 @@ class Bridge:
                             # Only acknowledge locally after the authenticated device
                             # endpoint commits the report. A network interruption must
                             # leave the scan retryable, never silently marked finished.
-                            request_device('discovery-report',{'request':request_id,'accounts':found})
+                            self._publish_discovery_report(request_id,found,request_device)
                             self._last_scan_request=request_id
                             self._report({'state':'discovery-complete' if found else 'discovery-attention'})
                     for approval in reply.get('approvals',[])[:20]:
