@@ -52,7 +52,7 @@ export function AccountSettingsPage() {
     <div className="grid gap-6 xl:grid-cols-2">
       <form className="card space-y-4 p-5" onSubmit={saveProfile}>
         <h2 className="font-bold">Profile</h2>
-        <UsernameField id="settings-username" value={username} onChange={setUsername} label="Unique username / Signal Desk identity" />
+        <UsernameField id="settings-username" value={username} onChange={setUsername} liveAvailability={false} label="Unique username / Signal Desk identity" />
         <label className="block text-sm font-medium">Display name<input className="input-field mt-1.5" value={displayName} onChange={event => setDisplayName(event.target.value)} autoComplete="name" /></label>
         <label className="block text-sm font-medium">Trading style<input className="input-field mt-1.5" value={tradingStyle} onChange={event => setTradingStyle(event.target.value)} placeholder="e.g. Intraday FX" /></label>
         <label className="block text-sm font-medium">Bio<textarea className="input-field mt-1.5 min-h-24" value={bio} onChange={event => setBio(event.target.value)} /></label>
