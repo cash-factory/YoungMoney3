@@ -65,6 +65,21 @@ try {
       geometry.left >= 0 && geometry.right <= width + 2,
       'Step panel remains usable: ' + JSON.stringify(geometry));
 
+    // A long how-to must never push Next below the bottom on a short
+    // Windows screen, browser zoom or mobile viewport.
+    for(const height of [440,520,700]){
+      await page.setViewportSize({width,height});
+      await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(resolve)));
+      const nextButton=tour.getByRole('button',{name:'Next stop'});
+      const rect=await nextButton.boundingBox();
+      assert.ok(rect && rect.y>=0 && rect.y+rect.height<=height-2,
+        'Guide Next button is visible without scrolling the dialog: '+JSON.stringify({width,height,rect}));
+      assert.equal(await nextButton.isEnabled(),true);
+      assert.ok(await tour.locator('.ym-guide-step-scroll').count()===1,
+        'Long instructions live in an independent scroll container');
+    }
+    await page.setViewportSize({width,height:900});
+
     // Esc dismisses without touching the user's trades and persists the choice.
     await page.keyboard.press('Escape');
     await page.getByRole('dialog').waitFor({ state: 'detached' });
