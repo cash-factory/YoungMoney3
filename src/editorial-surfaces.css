@@ -166,3 +166,16 @@
   :root[data-palette] .ym-workspace .ym-tone-tile{transition:none!important}
   :root[data-palette] .ym-workspace .ym-adaptive-mode:hover::after{transform:translateY(-50%) scale(1)}
 }
+
+/* The same broker-evidence hierarchy follows the trader into weekly review. */
+:root[data-palette] .ym-workspace .ym-weekly-evidence > div:first-child > p:first-child {
+  color:var(--brand-text);
+}
+:root[data-palette] .ym-workspace .ym-weekly-evidence > div:first-child > h2 {
+  color:var(--ym-tone-heading);
+  font-weight:800;
+}
+:root[data-palette] .ym-workspace .ym-weekly-evidence > div:first-child > p:last-child {
+  color:var(--ym-tone-support);
+  line-height:1.65;
+}
