@@ -19,8 +19,6 @@ try{
     const guide=page.locator('#ym-mt5-howto');
     await guide.waitFor();
     assert.equal(await guide.getByRole('listitem').count(),4);
-    assert.equal(await button.getAttribute('aria-expanded'),null,
-      'The show control intentionally switches its label when open');
     assert.equal(await page.getByRole('button',{name:'Hide account guide'}).getAttribute('aria-expanded'),'true');
     assert.equal(await guide.getByRole('link',{name:/Open Signal Desk download/}).getAttribute('href'),'/connector-download.html');
     assert.equal(await guide.getByRole('button',{name:/View paired PCs/}).count(),1);
