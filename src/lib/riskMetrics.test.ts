@@ -81,3 +81,154 @@ test('an absolute-only daily limit is honored when no percentage cap is configur
   assert.equal(metrics.dailyLossLimitAmount, 75);
   assert.equal(metrics.dailyLossRemaining, 25);
 });
+
+
+test('3% observed trade risk against a 1% maximum is DANGER, never Within Limits', () => {
+  const record = makeTrade({
+    id:'breach', entry_time:'2026-10-20T12:00:00.000Z',
+    risk_percent:3, pnl:25, status:'closed',
+    exit_time:'2026-10-20T14:00:00.000Z'
+  });
+  const actual=calculateRiskMetrics([record],{...options,maxRiskPerTradePct:1});
+  assert.equal(actual.status,'danger');
+  assert.deepEqual(actual.riskBreaches,['Per-trade risk limit exceeded']);
+  assert.equal(actual.maxRiskUsedToday,3);
+  assert.equal(actual.riskEvidenceMissingCount,0);
+});
+
+test('unknown stop risk cannot be interpreted as 0% verified compliance', () => {
+  const noRisk=makeTrade({id:'missing-risk',entry_time:'2026-10-20T12:00:00.000Z',
+    risk_percent:null,pnl:0});
+  const negativeRisk=makeTrade({id:'invalid-risk',entry_time:'2026-10-20T13:00:00.000Z',
+    risk_percent:-2,pnl:0});
+  const actual=calculateRiskMetrics([noRisk,negativeRisk],options);
+  assert.equal(actual.status,'unknown');
+  assert.equal(actual.maxRiskUsedToday,0);
+  assert.equal(actual.riskEvidenceMissingCount,2);
+  assert.equal(actual.riskBreaches.length,0);
+});
+
+test('missing realized broker P&L is unknown, not a zero-loss clean bill', () => {
+  const actual=calculateRiskMetrics([makeTrade({
+    id:'missing-pnl',entry_time:'2026-10-20T10:00:00.000Z',
+    exit_time:'2026-10-20T11:00:00.000Z',
+    risk_percent:0.25,pnl:NaN,
+  })],options);
+  assert.equal(actual.realizedPnlMissingCount,1);
+  assert.equal(actual.status,'unknown');
+  assert.equal(actual.todayPnl,0,'Known subtotal may be zero, but must be marked incomplete');
+});
+
+test('known breach remains danger even with other unverified entries', () => {
+  const actual=calculateRiskMetrics([
+    makeTrade({id:'known-breach',entry_time:'2026-10-20T12:00:00.000Z',
+      risk_percent:1.3,pnl:50}),
+    makeTrade({id:'unknown-risk',entry_time:'2026-10-20T13:00:00.000Z',
+      risk_percent:null,pnl:50}),
+  ],{...options,maxRiskPerTradePct:1});
+  assert.equal(actual.status,'danger');
+  assert.equal(actual.riskEvidenceMissingCount,1);
+  assert.ok(actual.riskBreaches.includes('Per-trade risk limit exceeded'));
+});
+
+test('verified risk approaching configured per-trade maximum is warning', () => {
+  const actual=calculateRiskMetrics([makeTrade({
+    entry_time:'2026-10-20T13:00:00.000Z',risk_percent:0.85,pnl:0,
+  })],{...options,maxRiskPerTradePct:1});
+  assert.equal(actual.status,'warning');
+});
+
+test('MT5 initial-risk provenance overrides a numeric journal-derived percentage', () => {
+  const metrics=calculateRiskMetrics([makeTrade({
+    id:'connector-with-unknown-entry-stop',
+    trade_source:'mt5',
+    broker_details:{position_id:'8811',initial_risk_known:false},
+    entry_time:'2026-10-20T12:00:00.000Z',
+    risk_percent:0.3,
+    pnl:0,
+  })],options);
+  assert.equal(metrics.riskEvidenceMissingCount,1);
+  assert.equal(metrics.status,'unknown');
+});
+
+test('invalid entry capital makes percentage-loss compliance unknown', () => {
+  const metrics=calculateRiskMetrics([], {...options, accountBalance:0});
+  assert.equal(metrics.status,'unknown');
+});
+
+test('missing historical P&L prevents a verified maximum-drawdown verdict', () => {
+  const missingPriorLoss=makeTrade({
+    id:'old-unknown',
+    entry_time:'2026-10-18T12:00:00.000Z',
+    exit_time:'2026-10-18T14:00:00.000Z',
+    risk_percent:0.2,
+    pnl:NaN,
+  });
+  const metrics=calculateRiskMetrics([missingPriorLoss],options);
+  assert.equal(metrics.realizedPnlMissingCount,0);
+  assert.equal(metrics.historicalPnlMissingCount,1);
+  assert.equal(metrics.status,'unknown');
+});
+
+test('bad timestamps and unsupported timezone must not give a safe verdict', () => {
+  const badEntry=makeTrade({id:'invalid-entry',entry_time:'not-a-date',pnl:25});
+  const metrics=calculateRiskMetrics([badEntry],options);
+  assert.equal(metrics.invalidEntryTimestampCount,1);
+  assert.equal(metrics.status,'unknown');
+  const invalidZone=calculateRiskMetrics([], {...options,timeZone:'Invalid/Zone'});
+  assert.equal(invalidZone.timeZoneVerified,false);
+  assert.equal(invalidZone.status,'unknown');
+});
+
+test('MT5 requires affirmative broker evidence for an otherwise numeric risk percent',()=>{
+  const record=makeTrade({
+    id:'unverified-legacy-mt5',
+    entry_time:'2026-10-20T10:00:00.000Z',
+    trade_source:'mt5',
+    risk_percent:0.25,
+    broker_details:{position_id:'9001'},
+    pnl:0,
+  });
+  const unknown=calculateRiskMetrics([record],options);
+  assert.equal(unknown.status,'unknown');
+  assert.equal(unknown.riskEvidenceMissingCount,1);
+  const confirmed=calculateRiskMetrics([{
+    ...record,broker_details:{position_id:'9001',initial_risk_known:true},
+  }],options);
+  assert.equal(confirmed.riskEvidenceMissingCount,0);
+  assert.equal(confirmed.status,'safe');
+});
+
+test('overnight open 3% risk remains a recorded breach under a 1% limit',()=>{
+  const overnight=makeTrade({
+    id:'overnight-open',
+    status:'open',
+    entry_time:'2026-10-18T10:00:00.000Z',
+    exit_time:null,
+    pnl:0,
+    risk_percent:3,
+  });
+  const result=calculateRiskMetrics([overnight],{...options,maxRiskPerTradePct:1});
+  assert.equal(result.todayTradeCount,0);
+  assert.equal(result.maxRiskUsedToday,0);
+  assert.equal(result.maxOpenInitialRiskPercent,3);
+  assert.equal(result.status,'danger');
+  assert.ok(result.riskBreaches.includes('Open position entered above per-trade risk limit'));
+});
+
+test('overnight MT5 position without verified opening stop prevents green risk status',()=>{
+  const overnight=makeTrade({
+    id:'overnight-open-unknown',
+    status:'open',
+    trade_source:'mt5',
+    broker_details:{position_id:'open-10',initial_risk_known:false},
+    entry_time:'2026-10-18T10:00:00.000Z',
+    exit_time:null,
+    pnl:0,
+    risk_percent:0.5,
+  });
+  const result=calculateRiskMetrics([overnight],options);
+  assert.equal(result.todayTradeCount,0);
+  assert.equal(result.openRiskEvidenceMissingCount,1);
+  assert.equal(result.status,'unknown');
+});

@@ -153,8 +153,29 @@ export function RiskManagementPage() {
       </section>}
       {saveError && <p className="mb-4 text-sm text-error-500" role="alert">{saveError}</p>}
       {account ? <>
+      {metrics && metrics.status !== 'safe' && <div
+        className={`mb-5 rounded-xl border p-4 ${metrics.status === 'danger'
+          ? 'border-error-500/30 bg-error-500/10'
+          : 'border-warning-500/30 bg-warning-500/10'}`}
+        role="alert">
+        <p className={`text-sm font-semibold ${metrics.status === 'danger' ? 'text-error-500' : 'text-warning-500'}`}>
+          {metrics.status === 'danger' ? 'Risk policy breach recorded'
+            : metrics.status === 'unknown' ? 'Risk evidence is incomplete'
+              : 'Approaching a configured risk limit'}
+        </p>
+        <p className="mt-1 text-xs text-secondary">{metrics.statusReason}</p>
+        {(metrics.riskEvidenceMissingCount > 0 || metrics.openRiskEvidenceMissingCount > 0 || metrics.historicalPnlMissingCount > 0 || metrics.invalidEntryTimestampCount > 0 || !metrics.timeZoneVerified) &&
+          <p className="mt-1 text-xs text-secondary">
+            {metrics.riskEvidenceMissingCount} today’s entries lack verified initial-risk percentages;
+            {' '}{metrics.openRiskEvidenceMissingCount} open positions have unknown initial risk;
+            {' '}{metrics.historicalPnlMissingCount} historical closed trades lack realized P&amp;L;
+            {' '}{metrics.invalidEntryTimestampCount} entry timestamps are invalid.
+            {!metrics.timeZoneVerified && ' Account reset timezone needs correction.'}
+            Unobserved evidence is not zero exposure.
+          </p>}
+      </div>}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Today's P&L" value={formatMoney(todayPnl)} icon={<Wallet size={20} />} accent={todayPnl >= 0 ? 'emerald' : 'rose'} trend={todayPnl >= 0 ? 'up' : 'down'} trendValue={formatMoney(Math.abs(todayPnl))} />
+        <StatCard label="Today's P&L" value={formatMoney(todayPnl)} icon={<Wallet size={20} />} accent={metrics?.realizedPnlMissingCount ? 'amber' : todayPnl >= 0 ? 'emerald' : 'rose'} trend={todayPnl >= 0 ? 'up' : 'down'} trendValue={formatMoney(Math.abs(todayPnl))} sublabel={metrics?.realizedPnlMissingCount ? 'Known subtotal only — missing broker P&L' : undefined} />
         <StatCard label="Daily Loss Used" value={`${dailyLossPct.toFixed(1)}%`} icon={<AlertTriangle size={20} />} accent={dailyLossPct > 80 ? 'rose' : 'amber'} sublabel={`Limit: ${formatMoney(dailyLossLimit)}`} />
         <StatCard label="Max Drawdown" value={formatMoney(maxDD)} icon={<TrendingDown size={20} />} accent="rose" sublabel={`Limit: ${current.max_drawdown_pct}%`} />
         <StatCard label="7-Day P&L" value={formatMoney(weekPnl)} icon={<Gauge size={20} />} accent={weekPnl >= 0 ? 'emerald' : 'amber'} sublabel={`${weekTrades.length} trades`} />
