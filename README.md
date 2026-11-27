@@ -8,12 +8,13 @@
 
 <p align="center">
   <a href="https://ym-fx-staging.ethical-hacker263.workers.dev/"><strong>Explore staging ↗</strong></a> &nbsp; · &nbsp;
+  <a href="https://ym-fx-staging.ethical-hacker263.workers.dev/connector-download.html"><strong>Get Signal Desk ↗</strong></a> &nbsp; · &nbsp;
   <a href="https://github.com/cash-factory/YoungMoney3/tree/feat/rich-capture-staging-20261110">Current app source</a> &nbsp; · &nbsp;
   <a href="docs/ASSETS.md">Brand &amp; assets</a> &nbsp; · &nbsp;
   <a href="#run-locally">Run locally</a>
 </p>
 
-> **Current preview:** the screenshots and feature tour reflect the staging branch. Production promotion is a separate release step.
+> **Connector distribution:** Signal Desk is the primary Windows connector for all traders. It includes guided account setup and the secure signed-update path (active only when signing is configured). The previous classic executable is a restricted owner recovery tool; historic public GitHub binaries require separate archival/revocation.
 
 ## One workspace. A complete trading process.
 
