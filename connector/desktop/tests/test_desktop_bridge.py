@@ -135,6 +135,45 @@ class BridgeTests(unittest.TestCase):
             self.assertEqual([s['status'] for s in self.bridge.snapshot()['sessions']],
                              ['not-verified','not-verified'])
 
+    def test_thirty_two_local_discovery_probes_are_bounded_and_isolated(self):
+        import tempfile
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as temp:
+            items=[]
+            for index in range(32):
+                folder=Path(temp)/f'account-{index:02d}'
+                folder.mkdir()
+                (folder/'.ym-managed.json').write_text('{}',encoding='utf-8')
+                terminal=folder/'terminal64.exe'
+                terminal.touch()
+                items.append({'id':str(index).zfill(12),'name':'Test',
+                              'terminal':str(terminal),'enabled':True})
+            self.bridge._store.items=items
+            lock=threading.Lock()
+            active=[0]
+            peak=[0]
+            def fake_probe(path):
+                with lock:
+                    active[0]+=1
+                    peak[0]=max(peak[0],active[0])
+                try:
+                    time.sleep(0.01)
+                    index=int(Path(path).parent.name.rsplit('-',1)[-1])
+                    return {'status':'verified','login':str(10000+index),
+                            'server':'Demo-'+str(index),'mode':0,
+                            'account_name':'Account '+str(index),
+                            'company':'Test Broker','currency':'USD'}
+                finally:
+                    with lock:active[0]-=1
+            with patch('account_discovery.probe_terminal',side_effect=fake_probe):
+                result=self.bridge._scan_local_accounts()
+            self.assertEqual(len(result),32)
+            self.assertLessEqual(peak[0],4)
+            self.assertGreaterEqual(peak[0],2)
+            self.assertEqual(len({row['slot'] for row in result}),32)
+            self.assertEqual(len({row['login'] for row in result}),32)
+            self.assertEqual(result[-1]['login'],'10031')
+
     def test_more_than_one_hundred_verified_links_and_pauses_are_not_truncated(self):
         links=[{'slot':f'C:/YMFX/account-{index}/terminal64.exe',
                 'login':str(100000+index),'server':'Broker-Demo',
