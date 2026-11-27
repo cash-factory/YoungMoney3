@@ -68,7 +68,7 @@ function downloadJson(payload: TradingBackup | EncryptedBackup, encrypted: boole
   const href = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = href;
-  anchor.download = `trade-journal-backup-${new Date().toISOString().slice(0, 10)}${encrypted ? '.encrypted' : ''}.json`;
+  anchor.download = `youngmoney3-workspace-only-${new Date().toISOString().slice(0, 10)}${encrypted ? '.encrypted' : ''}.json`;
   anchor.click();
   URL.revokeObjectURL(href);
 }
@@ -177,6 +177,11 @@ export function DataBackupModal({ open, onClose }: DataBackupModalProps) {
 
       }
 
+      // A transient collection failure must never produce a misleading
+      // "successful backup" missing user workspace records.
+      if (unavailableTables.length) {
+        throw new Error('Workspace backup incomplete: could not read '+unavailableTables.join(', ')+'. No file was downloaded. Retry after the service is restored.');
+      }
       const payload: TradingBackup = {
         format: BACKUP_FORMAT,
         version: BACKUP_VERSION,
