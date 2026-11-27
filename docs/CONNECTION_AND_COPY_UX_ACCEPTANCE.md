@@ -33,7 +33,7 @@ npm ci
 npm run test:static
 ```
 
-The Dashboard unit test `src/lib/mt5Monitor.test.ts` covers active capture, missing PC, paused capture, evidence conflicts, recovery and failed login. The native test `connector/desktop/scripts/test-native-status.mjs` checks status counts and recommended actions. These tests **do not** demonstrate a real broker connection, Tauri interoperability, screen-reader compatibility, or copy execution.
+The Dashboard unit test `src/lib/mt5Monitor.test.ts` covers active capture, missing PC, paused capture, evidence conflicts, recovery and failed login. `src/lib/copyArmReadiness.test.ts` checks copy-mode isolation, account freshness, source and follower privileges and consent expiry. The native test `connector/desktop/scripts/test-native-status.mjs` checks status counts and recommended actions. These tests **do not** demonstrate a real broker connection, Tauri interoperability, screen-reader compatibility, or copy execution.
 
 ## Product acceptance matrix
 
