@@ -30,6 +30,7 @@ from concurrent_capture import run_parallel_smoke
 from managed_accounts import ManagedAccounts, discover_installations, INSTALL_PAGE
 from studio_ui import AnimatedButton, ResponsiveActions, ConnectionPath, StudioArt, brand_mark, windows_motion_enabled, restart_wait_seconds
 from version import VERSION
+from update_ui import ConnectorUpdateUI
 from enterprise_theme import COLORS, EnterpriseHeroArt, label_color
 from copy_execution import prepare_database as prepare_copy_database, set_consent as update_copy_consent
 
@@ -55,7 +56,7 @@ def terminal_candidates():
     return [str(exe) for exe, _ in discover_installations()]
 
 
-class ConnectorApp:
+class ConnectorApp(ConnectorUpdateUI):
     NAV = (("overview", "Home"), ("sessions", "My Accounts"),
            ("pair", "Connect this PC"), ("activity", "Recent Activity"),
            ("help", "Help & Guides"))
@@ -128,6 +129,8 @@ class ConnectorApp:
         self.code_error_var = tk.StringVar(value="32-character code • only used once, never stored in this app")
         self.pair_elapsed_var = tk.StringVar(value="")
         self.selected_details_var = tk.StringVar(value="Select a session to manage its account.")
+        self.update_root = ROOT
+        self._initialize_updates()
         self._configure_ttk()
         self._build()
         self.root.bind("<Configure>", self._queue_responsive_layout, add="+")
@@ -141,6 +144,8 @@ class ConnectorApp:
         if self.paired:
             self.root.after_idle(self.start)
         self._poll_job = self.root.after(160, self.poll)
+        if restore:
+            self._start_update_schedule()
 
     def _configure_ttk(self):
         style = ttk.Style(self.root)
@@ -449,6 +454,7 @@ class ConnectorApp:
         self._button(note, "Review Copy Studio",
                      lambda: webbrowser.open(STAGING_URL + "/#copy-studio"),
                      quiet=True).pack(anchor="w")
+        self._build_update_controls(page)
 
     def _build_sessions(self):
         page = self._scrollable_page("sessions")
@@ -1583,7 +1589,8 @@ class ConnectorApp:
         try:
             while True:
                 item = self.events.get_nowait()
-                self._event(item)
+                if not self._handle_update_event(item):
+                    self._event(item)
         except queue.Empty:
             pass
         if self.worker and not self.worker.is_alive():
@@ -1607,6 +1614,7 @@ class ConnectorApp:
                 str(int(time.monotonic() - self.busy_since)) + " seconds elapsed")
         if self.stopping:
             if self.worker is None and (not self.copy_worker or not self.copy_worker.is_alive()):
+                self._maybe_launch_updater_on_close()
                 self.root.destroy()
                 return
         self._poll_job = self.root.after(160, self.poll)
@@ -1618,6 +1626,7 @@ class ConnectorApp:
         self.copy_cancel.set()
         self.stop()
         if self.worker is None and (not self.copy_worker or not self.copy_worker.is_alive()):
+            self._maybe_launch_updater_on_close()
             self.root.destroy()
 
 def main():
