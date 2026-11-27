@@ -197,7 +197,9 @@ export function RiskGuardian({ trades, settings, account, plan, onConfigure }: R
           </p>
           <p className={`text-[10px] mt-0.5 ${riskData.maxRiskUsedToday > riskData.maxRiskPerTradePct ? 'text-error-500 font-semibold' : 'text-muted'}`}>
             {riskData.maxRiskUsedToday > 0 ? `Today observed max: ${formatPercent(riskData.maxRiskUsedToday)}` : 'No verified per-trade risk today'}
-            {riskData.riskEvidenceMissingCount > 0 && <span className="block text-warning-500">{riskData.riskEvidenceMissingCount} entries unverified</span>}
+            {riskData.riskEvidenceMissingCount > 0 && <span className="block text-warning-500">{riskData.riskEvidenceMissingCount} today’s entries unverified</span>}
+            {riskData.maxOpenInitialRiskPercent > 0 && <span className="block text-muted">Open positions' highest initial risk: {formatPercent(riskData.maxOpenInitialRiskPercent)}</span>}
+            {riskData.openRiskEvidenceMissingCount > 0 && <span className="block text-warning-500">{riskData.openRiskEvidenceMissingCount} open positions lack verified entry risk</span>}
           </p>
         </div>
 
