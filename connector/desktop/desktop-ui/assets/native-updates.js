@@ -15,7 +15,7 @@
     if (!deps) return false;
     const model = deps.getModel();
     // Missing evidence is NOT proof the account is idle.
-    return model.source === 'local-connector' && model.demo === false &&
+    return deps.hasBridge() && model.source === 'local-connector' && model.demo === false &&
       model.capture_active === false && model.copying_armed === false &&
       model.copy_permission_available === false && model.queued_updates === 0 &&
       !deps.isBusy() && !model.sessions.some(s => s.status === 'monitoring');
