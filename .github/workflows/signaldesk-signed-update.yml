@@ -1,0 +1,145 @@
+name: Publish signed Signal Desk staging update
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type PUBLISH-SIGNED-SIGNALDESK to approve this staging release'
+        type: string
+        required: true
+      version:
+        description: 'Must equal the current application version'
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: signaldesk-signed-updates
+  cancel-in-progress: false
+jobs:
+  signed-staging:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'PUBLISH-SIGNED-SIGNALDESK'
+    runs-on: windows-2022
+    environment: staging
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - name: Confirm private signer, main SHA and package identity
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPDATE_VERSION: ${{ inputs.version }}
+          UPDATE_PUBLIC_KEY: ${{ vars.YMFX_SIGNALDESK_UPDATE_PUBLIC_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:UPDATE_VERSION -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid version' }
+          if (!$env:UPDATE_PUBLIC_KEY -or !$env:TAURI_SIGNING_PRIVATE_KEY) { throw 'Signing keys not configured' }
+          $mainSha = gh api "repos/$env:GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha'
+          if ($LASTEXITCODE -ne 0 -or $mainSha -ne $env:GITHUB_SHA) { throw 'Main moved during approval' }
+          $manifest = Get-Content connector/desktop/package.json -Raw | ConvertFrom-Json
+          $config = Get-Content connector/desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          if ($manifest.version -ne $env:UPDATE_VERSION -or $config.version -ne $env:UPDATE_VERSION -or $config.identifier -ne 'za.youngmoney3.signaldesk.staging') {
+            throw 'Version or application identity mismatch'
+          }
+      - name: Validate and freeze local Python bridge
+        shell: pwsh
+        run: |
+          python -m pip install -r connector/requirements.txt 'pyinstaller==6.16.0'
+          python -m unittest discover -s connector/desktop/tests -p 'test_desktop_bridge.py'
+          if ($LASTEXITCODE -ne 0) { throw 'Bridge tests failed' }
+          python -m PyInstaller --noconfirm --clean --onefile --console --name ymfx-bridge --paths connector --collect-all MetaTrader5 --collect-all keyring --collect-all numpy --collect-all tzdata connector/desktop/bridge/desktop_bridge.py
+          if ($LASTEXITCODE -ne 0) { throw 'Bridge build failed' }
+          New-Item -ItemType Directory -Force connector/desktop/src-tauri/binaries | Out-Null
+          Copy-Item dist/ymfx-bridge.exe connector/desktop/src-tauri/binaries/ymfx-bridge-x86_64-pc-windows-msvc.exe
+          python connector/desktop/scripts/smoke_bridge_windows.py connector/desktop/src-tauri/binaries/ymfx-bridge-x86_64-pc-windows-msvc.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Bridge bootstrap failed' }
+      - name: Build signed updater NSIS bundle
+        working-directory: connector/desktop
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          YMFX_SIGNALDESK_UPDATE_PUBLIC_KEY: ${{ vars.YMFX_SIGNALDESK_UPDATE_PUBLIC_KEY }}
+        run: |
+          npm install --no-audit --no-fund
+          npm run test:static
+          if ($LASTEXITCODE -ne 0) { throw 'Native updater contract failed' }
+          npx tauri icon desktop-ui/assets/ymfx-brand.svg -o src-tauri/icons
+          npx tauri build --config '{"bundle":{"createUpdaterArtifacts":true}}'
+          if ($LASTEXITCODE -ne 0) { throw 'Signed Tauri updater build failed' }
+      - name: Stage exactly one signed installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = @(Get-ChildItem 'connector/desktop/src-tauri/target/release/bundle/nsis' -Filter '*-setup.exe' -File)
+          if ($files.Count -ne 1) { throw 'Exactly one NSIS installer is required' }
+          $signature = $files[0].FullName + '.sig'
+          if (!(Test-Path $signature) -or (Get-Item $signature).Length -lt 30) { throw 'Updater signature missing' }
+          New-Item -ItemType Directory -Force 'signed-staging' | Out-Null
+          Copy-Item $files[0].FullName 'signed-staging/YoungMoney3.SignalDesk.Setup.exe'
+          Copy-Item $signature 'signed-staging/YoungMoney3.SignalDesk.Setup.exe.sig'
+          $hash = (Get-FileHash 'signed-staging/YoungMoney3.SignalDesk.Setup.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash *YoungMoney3.SignalDesk.Setup.exe" | Set-Content -Encoding ascii 'signed-staging/YoungMoney3.SignalDesk.Setup.exe.sha256'
+          @{commit=$env:GITHUB_SHA;version='${{ inputs.version }}';sha256=$hash;signed=$true} |
+            ConvertTo-Json -Compress | Set-Content -Encoding utf8 'signed-staging/build-manifest.json'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signed-signaldesk-${{ inputs.version }}
+          path: signed-staging/*
+          if-no-files-found: error
+          retention-days: 3
+  publish-staging:
+    needs: signed-staging
+    runs-on: ubuntu-24.04
+    environment: staging
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: signed-signaldesk-${{ inputs.version }}
+          path: signed-staging
+      - name: Publish immutable signed version and channel pointer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$GITHUB_SHA"
+          test "$(jq -r .commit signed-staging/build-manifest.json)" = "$GITHUB_SHA"
+          test "$(jq -r .version signed-staging/build-manifest.json)" = "$VERSION"
+          digest="$(sha256sum signed-staging/YoungMoney3.SignalDesk.Setup.exe | awk '{print $1}')"
+          test "$digest" = "$(awk '{print $1}' signed-staging/YoungMoney3.SignalDesk.Setup.exe.sha256)"
+          tag="staging-signaldesk-v$VERSION-signed.1"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo 'Version release already exists; refusing overwrite'
+            exit 1
+          fi
+          gh release create "$tag" signed-staging/YoungMoney3.SignalDesk.Setup.exe signed-staging/YoungMoney3.SignalDesk.Setup.exe.sig signed-staging/YoungMoney3.SignalDesk.Setup.exe.sha256 signed-staging/build-manifest.json \
+            --target "$GITHUB_SHA" --title "Signal Desk $VERSION signed staging" \
+            --notes 'Signed staging update. Verified connector improvements; copying remains disabled in this native shell.' \
+            --prerelease --latest=false
+          signature="$(tr -d '\r\n' < signed-staging/YoungMoney3.SignalDesk.Setup.exe.sig)"
+          asset_url="https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/YoungMoney3.SignalDesk.Setup.exe"
+          jq -n --arg version "$VERSION" --arg url "$asset_url" --arg signature "$signature" \
+            '{version:$version,notes:"Connector improvements\n- Clearer account status\n- Safer update checks",platforms:{"windows-x86_64":{url:$url,signature:$signature}}}' > latest.json
+          # The channel pointer may change, but signed per-version assets cannot.
+          if gh release view staging-signaldesk-channel >/dev/null 2>&1; then
+            gh release upload staging-signaldesk-channel latest.json --clobber
+          else
+            gh release create staging-signaldesk-channel latest.json \
+              --target "$GITHUB_SHA" --title 'Signal Desk signed staging channel' \
+              --notes 'Signed updater channel manifest' --prerelease --latest=false
+          fi

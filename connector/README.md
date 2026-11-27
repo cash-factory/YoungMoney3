@@ -1,5 +1,13 @@
 # Windows MT5 connector
 
+## Automatic updates (newly updater-enabled versions)
+
+The Windows connector now offers **Check for updates**, unobtrusive notifications, concise changelogs and optional automatic download on its Home screen. It checks the official YoungMoney3 **staging connector release channel**, verifies the GitHub-published SHA-256 digest, and stages a new executable locally. The app installs a verified update only after capture and copying have stopped safely. Its previous executable is retained for recovery; account records, Windows credentials and broker evidence are not moved or deleted by the update helper.
+
+**Important:** existing installations need a **one-time upgrade** to a verified updater-enabled release before any automatic update can work. The update feature is currently in an unreleased review branch. A successful software installation does not prove broker capture has resumed; verify your account's latest confirmed scan. For production-scale unattended deployment, add independent Windows code signing and complete real MT5/Windows upgrade tests.
+
+The separately built Tauri Signal Desk preview has a different **signature-verified** updater; it remains disabled unless an update signing public key and signed release channel are configured. See [Automatic update contract and acceptance](../docs/CONNECTOR_AUTO_UPDATES.md).
+
 ## Windows app
 
 **Latest verified Windows connector:** use the [GitHub staging releases](https://github.com/cash-factory/YoungMoney3/releases) and verify the published SHA-256 checksum. The enterprise V1 interface is prepared for **v0.6.3-rc1** and must pass the immutable release workflow before users download it. Do not replace an installed connector with an unpublished preview.

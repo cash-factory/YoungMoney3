@@ -15,6 +15,15 @@ assert(!bridge.includes('authorize_live_copy'), 'The new bridge must not unlock 
 assert(bridge.includes("x.status==='monitoring'"),'An online PC must not masquerade as verified broker capture');
 assert(!bridge.includes('demo: true'));
 assert(conf.bundle.externalBin.includes('binaries/ymfx-bridge'));
+const updateClient=read('desktop-ui/assets/native-updates.js');
+const updateCss=read('desktop-ui/assets/native-updates.css');
+const rust=read('src-tauri/src/main.rs');
+assert.match(html,/assets\/native-updates\.js/);
+assert.match(html,/native-updates\.css/);
+assert(updateClient.includes('queued_updates === 0') && updateClient.includes('copy_permission_available === false'), 'Installer must wait for verified idle capture and copy state');
+assert(updateClient.includes('waitForBridgeStop'), 'Updater must close its local bridge before calling Windows installer');
+assert(rust.includes('tauri_plugin_updater') && rust.includes('option_env!'), 'Installer must verify signatures and omit unsigned updater when not configured');
+assert(updateCss.includes('prefers-reduced-motion:reduce'), 'Update UI must honor reduced motion');
 const shell=permission.permissions.find(p=>typeof p==='object'&&p.identifier==='shell:allow-spawn');
 assert(shell&&shell.allow.length===1&&shell.allow[0].name==='binaries/ymfx-bridge'&&shell.allow[0].args===false);
 for(const method of ['snapshot','scan_terminals','pair_pc','add_account','open_account_terminal','stop_monitoring','start_monitoring','retry_session','rename_session','remove_session'])

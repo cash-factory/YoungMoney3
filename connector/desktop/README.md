@@ -14,6 +14,12 @@ This implementation adapts the user-approved Signal Desk V4 interface into a Win
 - Copy trading execution, fleet arming and account authorization are **not** callable through the new shell pending separate real Windows/broker acceptance. Existing connector remains available.
 - Visual QA at 1600x940, 1366x768, 1024x768 and 900x700 for all six native screens; a standalone design-preview mode continues to show explicitly fictional data in an ordinary browser.
 
+## Signed Signal Desk updates
+
+The native shell includes a restrained **Check updates** control and a Home-page update panel. It checks for a signed version on a dedicated staging channel, shows at most four brief public improvements, and permits an automatic install only after verified monitoring and copying are stopped and pending uploads equal zero. It terminates its local Python bridge before invoking the Tauri Windows installer.
+
+Unsigned previews **cannot install updates automatically**. A trusted public verification key must be embedded at build time and the corresponding installer must be signed with an owner-controlled private key; the private key must never appear in this repository. Initial deployment of an updater-enabled build is a separate, supervised installation. See [Updater deployment and signing guide](../../docs/CONNECTOR_AUTO_UPDATES.md).
+
 ## Build and test on Windows
 
 1. Use Windows 11 with Python 3.13, Rust, Node 22+, MSVC Build Tools and WebView2. Tauri documentation: https://v2.tauri.app/start/prerequisites/

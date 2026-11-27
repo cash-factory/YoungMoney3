@@ -1,0 +1,80 @@
+name: Connector updater safety QA
+on:
+  pull_request:
+    paths:
+      - 'connector/**'
+      - 'scripts/build_connector_source_archive.py'
+      - '.github/workflows/connector-prerelease.yml'
+      - '.github/workflows/connector-updater-qa.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'connector/**'
+      - 'scripts/build_connector_source_archive.py'
+      - '.github/workflows/connector-updater-qa.yml'
+permissions:
+  contents: read
+jobs:
+  windows-update:
+    runs-on: windows-2022
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Offline release validation and account-safety tests
+        shell: pwsh
+        run: |
+          python -m unittest discover -s connector -p 'test_update_service.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'Updater unit tests failed' }
+          python scripts/test-connector-archive.py
+          if ($LASTEXITCODE -ne 0) { throw 'Connector source packaging failed' }
+      - name: Parse PowerShell helper without executing any update
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tokens = $null
+          $errors = $null
+          $null = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path 'connector/update_apply.ps1'), [ref]$tokens, [ref]$errors)
+          if ($errors.Count -gt 0) { throw ($errors | Out-String) }
+      - name: Simulate verified replacement and corrupt-download refusal
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # A rejected checksum MUST return nonzero; inspect that expected exit ourselves.
+          $PSNativeCommandUseErrorActionPreference = $false
+          $dir = Join-Path $env:RUNNER_TEMP 'updater-integration'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $target = Join-Path $dir 'YoungMoney3.Connector.exe'
+          $candidate = Join-Path $dir 'verified.exe'
+          $result = Join-Path $dir 'result.json'
+          $data = Join-Path $dir 'capture.db'
+          [IO.File]::WriteAllText($target, 'ORIGINAL_CONNECTOR')
+          [IO.File]::WriteAllText($candidate, 'VERIFIED_NEW_CONNECTOR')
+          [IO.File]::WriteAllText($data, 'IMMUTABLE_BROKER_DATA')
+          $hash = (Get-FileHash $candidate -Algorithm SHA256).Hash.ToLowerInvariant()
+          function Invoke-Swap([string]$digest, [string]$version) {
+            $script = (Resolve-Path 'connector/update_apply.ps1').Path
+            $arguments = @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',
+              '-File', ('"' + $script + '"'), '-ParentPid','2147483647',
+              '-Target', ('"' + $target + '"'), '-Candidate', ('"' + $candidate + '"'),
+              '-ExpectedHash',$digest,'-Version',$version,
+              '-ResultFile', ('"' + $result + '"'), '-NoRestart')
+            $process = Start-Process -FilePath powershell.exe -ArgumentList $arguments -Wait -PassThru -NoNewWindow
+            return $process.ExitCode
+          }
+          $code = Invoke-Swap $hash '0.7.0-rc1'
+          Write-Output "Verified replacement exit code: $code"
+          if (Test-Path $result) { Get-Content $result -Raw }
+          if ($code -ne 0) { throw 'Safe offline update simulation failed' }
+          if ((Get-Content $target -Raw) -ne 'VERIFIED_NEW_CONNECTOR') { throw 'New executable missing' }
+          if ((Get-Content "$target.previous" -Raw) -ne 'ORIGINAL_CONNECTOR') { throw 'Rollback backup missing' }
+          if ((Get-Content $data -Raw) -ne 'IMMUTABLE_BROKER_DATA') { throw 'Broker state modified by updater' }
+          if ((Get-Content $result -Raw | ConvertFrom-Json).status -ne 'installed') { throw 'Update receipt missing' }
+          $wrongHash = ('0' * 64)
+          $badCode = Invoke-Swap $wrongHash '0.7.1-rc1'
+          Write-Output "Tampered release rejection exit code: $badCode"
+          if ($badCode -eq 0) { throw 'Tampered update was accepted' }
+          if ((Get-Content $target -Raw) -ne 'VERIFIED_NEW_CONNECTOR') { throw 'Rejected update changed installed version' }
+          if ((Get-Content $data -Raw) -ne 'IMMUTABLE_BROKER_DATA') { throw 'Rejected update changed broker evidence' }

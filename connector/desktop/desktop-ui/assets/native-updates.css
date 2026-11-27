@@ -1,0 +1,16 @@
+/* Secure update controls are subordinate to broker safety and use the native palette. */
+.ym-native .native-update-panel{margin:17px 0 4px}
+.ym-native .native-update-message{font-size:13px;line-height:1.7;color:#58606d}
+.ym-native .native-update-version{display:block;margin-top:13px;font-size:16px;color:#252a33}
+.ym-native .native-update-notes{list-style:disc;margin:11px 0 14px;padding-left:22px;display:grid;gap:8px;color:#5a636e;font-size:12px;line-height:1.6}
+.ym-native .native-update-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:15px}
+.ym-native .native-update-actions button{min-height:42px;padding:10px 15px;font-size:12px}
+.ym-native .native-update-warning{background:#fff7f8;border:1px solid #f0d6dc;border-radius:9px;padding:11px;margin:12px 0;color:#9c233e!important}
+.ym-native .native-update-toggle{display:flex;align-items:center;gap:10px;margin:15px 0 9px;font-size:12px;font-weight:650;color:#343b45;cursor:pointer}
+.ym-native .native-update-toggle input{width:16px;height:16px;accent-color:#c81030}
+.ym-native .native-update-panel small{display:block;color:#89919c;line-height:1.55}
+.ym-native .native-update-toolbar{padding:7px 11px;border:1px solid #e6c0c9;background:#fff5f7;color:#a71a36;border-radius:8px;font-size:11px;font-weight:750;white-space:nowrap;cursor:pointer}
+.ym-native .native-update-toolbar:hover,.ym-native .native-update-toolbar:focus-visible{background:#fbe7eb;outline-color:#b81533}
+.ym-native .native-update-panel :is(button,input):focus-visible{outline:2px solid #c81030;outline-offset:3px}
+@media(max-width:650px){.ym-native .native-update-panel .native-pad{padding:15px}.ym-native .native-update-toolbar{padding:6px 8px;font-size:10px}}
+@media(prefers-reduced-motion:reduce){.ym-native .native-update-panel *, .ym-native .native-update-toolbar{animation:none!important;transition:none!important}}
