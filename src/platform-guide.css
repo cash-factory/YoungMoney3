@@ -261,7 +261,9 @@
   display:flex;
   flex-direction:column;
   overflow:hidden;
-  max-height:calc(100dvh - 24px);
+  /* Clamp even before React processes the next resize frame. */
+  top:clamp(8px,var(--ym-guide-placement-top,8vh),10vh)!important;
+  max-height:calc(100dvh - clamp(8px,var(--ym-guide-placement-top,8vh),10vh) - 12px);
   min-height:0;
   padding-block-end:calc(12px + env(safe-area-inset-bottom, 0px));
 }
@@ -289,6 +291,7 @@
 .ym-guide-tour-card .ym-guide-step-navigation .ym-guide-primary {min-width:126px}
 @media(max-width:680px){
   .ym-guide-layer[data-guide-view="tour"] .ym-guide-tour-card {
+    top:auto!important;
     max-height:min(88dvh,620px);
     bottom:calc(8px + env(safe-area-inset-bottom,0px));
   }
