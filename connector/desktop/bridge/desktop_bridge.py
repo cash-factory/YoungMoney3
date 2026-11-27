@@ -282,6 +282,8 @@ class Bridge:
             name='SignalDesk-dashboard-discovery',daemon=True)
         self._discovery_thread.start()
 
+    # 64 accounts per discovery request is an API payload bound, not a user-account cap.
+    # All verified sessions remain in the local store and isolated capture workers.
     def _scan_local_accounts(self):
         from account_discovery import probe_terminal
         verified=[]
@@ -304,7 +306,7 @@ class Bridge:
                  'mode':int(broker['mode'])}
             verified.append(row)
             with self._lock:self._discovered[entry['id']] = row
-        return verified[:24]
+        return verified[:64]
 
     def _accept_discovered_monitor(self, approval):
         # Adopt an explicitly selected verified login, never a remote path.
@@ -417,7 +419,7 @@ class Bridge:
             found = discover_installations()
             with self._lock:
                 self._sources = {uuid.uuid4().hex: (str(exe), str(servers) if servers else None)
-                                 for exe, servers in found[:24]}
+                                 for exe, servers in found[:64]}
                 return {'count':len(self._sources), 'terminals':[
                     {'id':ident, 'name':sanitized(Path(path).parent.name, 70)}
                     for ident, (path, _servers) in self._sources.items()]}
