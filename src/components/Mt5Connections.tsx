@@ -77,6 +77,7 @@ export function Mt5Connections() {
   const [code,setCode] = useState('');
   const [error,setError] = useState('');
   const [setupHint,setSetupHint] = useState('');
+  const [showAccountGuide,setShowAccountGuide] = useState(false);
   const [,setDemo] = useState(true);
   const [imported,setImported] = useState('');
   const [historyScan, setHistoryScan] = useState<SelectedScan | null>(null);
@@ -130,7 +131,12 @@ export function Mt5Connections() {
     }
   }
   function startAccountSetup() {
-    setSetupHint('Open Signal Desk on your Windows PC, choose My Accounts → Add MT5 Account, then sign in inside the new MT5 window. Return here and choose Scan for accounts on that PC. Your account is not monitored until you select it.');
+    setShowAccountGuide(open => !open);
+    setSetupHint('');
+    window.requestAnimationFrame(() => document.getElementById('ym-mt5-howto')?.scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      block: 'nearest',
+    }));
   }
   function scanDevice(deviceId:string) {
     void run(async()=>{
@@ -207,8 +213,22 @@ export function Mt5Connections() {
         <div><p className="ym-connection-eyebrow">01 / ACCOUNT DISCOVERY</p><h2 id="mt5-discovery-title">Find accounts from Signal Desk</h2>
           <p className="ym-discovery-intro">Create an account in the Windows connector, sign in to MT5, then scan the selected PC here. You choose which verified account to monitor; copying requires separate approval.</p>
         </div>
-        <button type="button" className="btn-secondary" onClick={startAccountSetup}><Laptop size={16}/> How to add an account</button>
+        <button type="button" className="btn-secondary" onClick={startAccountSetup} aria-expanded={showAccountGuide} aria-controls="ym-mt5-howto"><Laptop size={16}/> {showAccountGuide?'Hide account guide':'How to add an account'}</button>
       </header>
+      {showAccountGuide && <div id="ym-mt5-howto" className="ym-mt5-account-guide" role="region" aria-label="How to connect an MT5 account">
+        <div className="ym-mt5-account-guide-head"><div><span>YOUR CONNECTION WALKTHROUGH / 4 STEPS</span><h3>From your PC to verified trade capture.</h3><p>No passwords are entered on this website. Each MT5 login stays in its own dedicated Windows terminal.</p></div><button type="button" className="btn-ghost" onClick={()=>setShowAccountGuide(false)} aria-label="Close account guide"><X size={17}/></button></div>
+        <ol className="ym-mt5-account-guide-steps">
+          <li><strong>01 · Open Signal Desk</strong><span>On the Windows PC running MT5, launch Signal Desk. If this is your first device, pair it using the code from this page.</span></li>
+          <li><strong>02 · Add a broker login</strong><span>Choose My Accounts → Add MT5 account. Select the installed MT5 program and sign in inside the new terminal window.</span></li>
+          <li><strong>03 · Find the account here</strong><span>Return to this page. Choose your paired PC, then Scan for accounts. Match both the broker server and account number.</span></li>
+          <li><strong>04 · Decide what to monitor</strong><span>Select Monitor account and confirm status turns to Monitoring. An online PC alone is not evidence that trades are being captured.</span></li>
+        </ol>
+        <div className="ym-mt5-account-guide-actions">
+          <a href="/connector-download.html" className="btn-primary"><Laptop size={16}/> Open Signal Desk download</a>
+          <button type="button" className="btn-secondary" onClick={() => {setShowAccountGuide(false);document.getElementById('paired-pc-title')?.scrollIntoView({behavior:'smooth',block:'start'});}}>View paired PCs <ArrowRight size={15}/></button>
+          <span role="status">{devices.length===0?'No PC paired yet':`${devices.length} paired PC${devices.length===1?'':'s'} available`}</span>
+        </div>
+      </div>}
       {devices.length===0&&<div className="ym-connection-empty"><Monitor size={25}/><strong>No paired computer yet</strong><p>Pair the Windows connector before scanning for MT5 accounts.</p></div>}
       <div className="ym-discovery-devices">
         {devices.map(pc=>{
