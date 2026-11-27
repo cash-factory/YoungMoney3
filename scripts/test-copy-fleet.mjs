@@ -241,7 +241,7 @@ try{
     sourceLink:source,targets:[...targets,...extraFollowers]},owner.cookie);
   assert.equal(eight.status,200,JSON.stringify(eight.result));
   const eightPreview=await call('copy/fleet-preview',{id:eight.result.id,
-    sourceLots:0.2,sourceEquity:1000,stopDistance:0.005},owner.cookie);
+    sourceLots:0.2,sourceEquity:1000,entry:1.1,stop:1.095,direction:'buy'},owner.cookie);
   assert.equal(eightPreview.status,200,JSON.stringify(eightPreview.result));
   assert.equal(eightPreview.result.previews.length,8);
   assert.equal((await call('copy/fleet-status',{},owner.cookie)).result.fleets
