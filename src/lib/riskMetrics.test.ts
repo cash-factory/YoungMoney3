@@ -198,3 +198,37 @@ test('MT5 requires affirmative broker evidence for an otherwise numeric risk per
   assert.equal(confirmed.riskEvidenceMissingCount,0);
   assert.equal(confirmed.status,'safe');
 });
+
+test('overnight open 3% risk remains a recorded breach under a 1% limit',()=>{
+  const overnight=makeTrade({
+    id:'overnight-open',
+    status:'open',
+    entry_time:'2026-10-18T10:00:00.000Z',
+    exit_time:null,
+    pnl:0,
+    risk_percent:3,
+  });
+  const result=calculateRiskMetrics([overnight],{...options,maxRiskPerTradePct:1});
+  assert.equal(result.todayTradeCount,0);
+  assert.equal(result.maxRiskUsedToday,0);
+  assert.equal(result.maxOpenInitialRiskPercent,3);
+  assert.equal(result.status,'danger');
+  assert.ok(result.riskBreaches.includes('Open position entered above per-trade risk limit'));
+});
+
+test('overnight MT5 position without verified opening stop prevents green risk status',()=>{
+  const overnight=makeTrade({
+    id:'overnight-open-unknown',
+    status:'open',
+    trade_source:'mt5',
+    broker_details:{position_id:'open-10',initial_risk_known:false},
+    entry_time:'2026-10-18T10:00:00.000Z',
+    exit_time:null,
+    pnl:0,
+    risk_percent:0.5,
+  });
+  const result=calculateRiskMetrics([overnight],options);
+  assert.equal(result.todayTradeCount,0);
+  assert.equal(result.openRiskEvidenceMissingCount,1);
+  assert.equal(result.status,'unknown');
+});
