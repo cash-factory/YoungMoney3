@@ -24,6 +24,8 @@ try {
     const hub = page.getByRole('dialog', { name: /Make yourself at home/ });
     await hub.waitFor();
     assert.equal(await hub.getByRole('button', { name: /Go to / }).count(), 22);
+    assert.equal(await hub.getByRole('button', { name: /^Guided path:/ }).count(), 4,
+      'Four task-based learning paths should be available');
     assert.equal(await hub.getByRole('button', { name: 'Skip the tutorial' }).count(), 1);
 
     // The curated route highlights real DOM elements. Users can jump to a chosen feature.
@@ -52,6 +54,8 @@ try {
     await tour.waitFor();
     assert.equal(new URL(page.url()).hash, '#risk-management');
     await page.locator('[data-guide-stop="risk"][data-spotlight="active"]').waitFor();
+    assert.equal(await tour.getByText('Define your permitted risk and daily limits before a trade.').count(), 1,
+      'Critical features provide concrete how-to instructions');
 
     const geometry = await tour.evaluate(node => {
       const { width: cardWidth, height: cardHeight, left, right } = node.getBoundingClientRect();
@@ -72,8 +76,14 @@ try {
     await page.evaluate(() => { location.hash = 'dashboard'; });
     await page.getByRole('button', { name: 'Explore platform features' }).click();
     await hub.waitFor();
+    await hub.getByRole('button', { name: 'Guided path: Connect MetaTrader' }).click();
+    await page.getByRole('dialog', { name: 'Let execution find your journal' }).waitFor();
+    await page.locator('[data-guide-stop="mt5"]').waitFor();
+    await page.getByRole('button', { name: 'Skip to...' }).click();
+    await hub.waitFor();
     await hub.getByRole('button', { name: 'Skip the tutorial' }).click();
     await hub.waitFor({ state: 'detached' });
+    await page.evaluate(() => { location.hash = 'dashboard'; });
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.getByRole('heading', { name: /Trading Overview/ }).waitFor();
     assert.equal(await page.getByRole('dialog').count(), 0, 'Dismissal is sticky after reload');

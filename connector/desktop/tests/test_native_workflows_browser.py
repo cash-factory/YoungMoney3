@@ -1,7 +1,7 @@
 from pathlib import Path
 """Production UI contract against a fake, isolated local MT5 bridge only."""
 from playwright.sync_api import sync_playwright
-from test_ui_browser import HTML,CSS,NATIVE,APP,MOCK
+from test_ui_browser import HTML,CSS,NATIVE,UPDATES,APP,MOCK
 import re
 
 mock=MOCK.replace('const snapshot={','window.__testModel={').replace('result=snapshot;','result=window.__testModel;')
@@ -32,7 +32,7 @@ with sync_playwright() as p:
     page=b.new_page(viewport={'width':1366,'height':768})
     errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.set_content(re.sub(r'<script[^>]*></script>','',re.sub(r'<link[^>]*>','',HTML)),wait_until='domcontentloaded')
-    page.add_style_tag(content=CSS);page.evaluate(mock);page.add_script_tag(content=NATIVE);page.add_script_tag(content=APP)
+    page.add_style_tag(content=CSS);page.evaluate(mock);page.add_script_tag(content=NATIVE);page.add_script_tag(content=UPDATES);page.add_script_tag(content=APP)
     page.wait_for_function("() => window.YMFXNative.debug().modelKey !== null")
     page.locator('[data-page="accounts"]').first.click()
     assert page.locator('.native-account').count()==1
