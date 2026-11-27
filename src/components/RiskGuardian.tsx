@@ -36,6 +36,14 @@ export function RiskGuardian({ trades, settings, account, plan, onConfigure }: R
       icon: Shield,
       label: 'Within Limits',
     },
+    unknown: {
+      color: 'text-warning-500',
+      bg: 'bg-warning-500/5',
+      border: 'border-warning-500/20',
+      barColor: 'bg-warning-500',
+      icon: AlertTriangle,
+      label: 'Risk Evidence Incomplete',
+    },
     warning: {
       color: 'text-warning-500',
       bg: 'bg-warning-500/5',
@@ -71,7 +79,7 @@ export function RiskGuardian({ trades, settings, account, plan, onConfigure }: R
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`badge ${riskData.status === 'safe' ? 'badge-success' : riskData.status === 'warning' ? 'badge-warning' : 'badge-error'}`}>
+          <span className={`badge ${riskData.status === 'safe' ? 'badge-success' : riskData.status === 'danger' ? 'badge-error' : 'badge-warning'}`}>
             <StatusIcon size={12} />
             {cfg.label}
           </span>
@@ -87,16 +95,24 @@ export function RiskGuardian({ trades, settings, account, plan, onConfigure }: R
           <AlertOctagon size={18} className="text-error-500 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-semibold text-error-500">
-              {riskData.dailyLossPctUsed >= 100
-                ? 'Daily loss limit reached'
-                : riskData.todayTradeCount >= riskData.maxDailyTrades
-                  ? 'Daily entry limit reached'
-                  : 'Maximum drawdown reached'}
+              {riskData.riskBreaches.join(' · ')}
             </p>
             <p className="text-xs text-secondary mt-0.5">
               This is an advisory based on recorded trades, not a broker-side lock. Review the account rules before considering another entry.
             </p>
           </div>
+        </div>
+      )}
+
+      {riskData.status === 'unknown' && (
+        <div className="mb-4 p-3 rounded-xl bg-warning-500/10 border border-warning-500/30" role="alert">
+          <p className="text-sm font-semibold text-warning-500">Not enough verified evidence to confirm compliance</p>
+          <p className="text-xs text-secondary mt-1">{riskData.statusReason}</p>
+          <p className="text-xs text-secondary mt-1">
+            {riskData.riskEvidenceMissingCount} entry/entries missing risk percent ·
+            {' '}{riskData.realizedPnlMissingCount} closed trade(s) missing realized P&amp;L.
+            Unknown risk is not zero risk.
+          </p>
         </div>
       )}
 
@@ -108,7 +124,7 @@ export function RiskGuardian({ trades, settings, account, plan, onConfigure }: R
             <span className="text-xs font-semibold text-secondary uppercase tracking-wide">Daily Loss Limit</span>
           </div>
           <span className="text-xs font-mono font-bold">
-            {formatMoney(riskData.dailyLossUsed)} / {formatMoney(riskData.dailyLossLimitAmount)}
+            {formatMoney(riskData.dailyLossUsed)} observed / {formatMoney(riskData.dailyLossLimitAmount)}
           </span>
         </div>
         <div className="h-3 rounded-full bg-secondary overflow-hidden relative">
@@ -122,9 +138,11 @@ export function RiskGuardian({ trades, settings, account, plan, onConfigure }: R
         </div>
         <div className="flex items-center justify-between mt-1.5">
           <span className={`text-xs font-semibold ${riskData.dailyLossRemaining > 0 ? 'text-success-500' : 'text-error-500'}`}>
-            {riskData.dailyLossRemaining > 0
-              ? `${formatMoney(riskData.dailyLossRemaining)} remaining today`
-              : 'Limit exceeded'}
+            {riskData.realizedPnlMissingCount > 0 || riskData.undatedCloseCount > 0
+              ? 'Remaining daily loss capacity unverified'
+              : riskData.dailyLossRemaining > 0
+                ? `${formatMoney(riskData.dailyLossRemaining)} remaining today`
+                : 'Limit exceeded'}
           </span>
           <span className="text-xs text-muted">{formatPercent(riskData.dailyLossPctUsed)} used</span>
         </div>
@@ -160,6 +178,7 @@ export function RiskGuardian({ trades, settings, account, plan, onConfigure }: R
           </div>
           <p className={`text-lg font-bold font-mono ${riskData.todayPnl >= 0 ? 'text-success-500' : 'text-error-500'}`}>
             {formatMoney(riskData.todayPnl)}
+            {riskData.realizedPnlMissingCount > 0 && <span className="block text-[10px] text-warning-500 font-medium">Known subtotal only — {riskData.realizedPnlMissingCount} P&amp;L value(s) missing</span>}
           </p>
         </div>
 
@@ -173,7 +192,8 @@ export function RiskGuardian({ trades, settings, account, plan, onConfigure }: R
             {formatPercent(riskData.maxRiskPerTradePct)}
           </p>
           <p className={`text-[10px] mt-0.5 ${riskData.maxRiskUsedToday > riskData.maxRiskPerTradePct ? 'text-error-500 font-semibold' : 'text-muted'}`}>
-            {riskData.maxRiskUsedToday > 0 ? `Today max: ${formatPercent(riskData.maxRiskUsedToday)}` : 'No risk data today'}
+            {riskData.maxRiskUsedToday > 0 ? `Today observed max: ${formatPercent(riskData.maxRiskUsedToday)}` : 'No verified per-trade risk today'}
+            {riskData.riskEvidenceMissingCount > 0 && <span className="block text-warning-500">{riskData.riskEvidenceMissingCount} entries unverified</span>}
           </p>
         </div>
 
