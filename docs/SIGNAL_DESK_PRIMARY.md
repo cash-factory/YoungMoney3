@@ -8,6 +8,10 @@ The dashboard **MT5 Connections** section prominently links to `/connector-downl
 
 Signal Desk includes the actual local MT5 bridge, dedicated account sessions, the same signed-in dashboard account discovery, a four-route interactive **Help & Guides** experience (16 task steps, safe real-screen navigation and searchable FAQs), unobtrusive update checks, a readable changelog, and reduced-motion-aware feedback. Guide actions cannot start monitoring, approve copying or send broker orders.
 
+## Current public legacy exposure
+
+The read-only GitHub release inventory on 27 November 2026 contained **21 public** `YoungMoney3.Connector.exe` assets. No assets have been deleted. Run `node scripts/audit-classic-public-releases.mjs` to check the current count; `--strict` fails while public binaries remain. Complete private owner recovery and obtain explicit approval before deleting any legacy assets. See [High-priority acceptance](HIGH_PRIORITY_CAPTURE_ACCEPTANCE.md).
+
 ## Owner-only classic distribution
 
 A public repository cannot make an ordinary GitHub Releases EXE owner-only. Previously published classic releases are **still publicly addressable until removed or moved by the repository owner**. Removing links or disabling future publication does not revoke old downloads. Do not promise complete exclusivity before those assets have been removed.
