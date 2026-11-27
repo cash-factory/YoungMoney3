@@ -40,7 +40,7 @@ async function audit() {
     checked_release_count:all.length,
     public_classic_executables:assets.length,
     affected_release_tags:tags,
-    owner_only_distribution_verified:assets.length===0
+    public_binary_exposure_cleared:assets.length===0
   },null,2));
   // In strict mode, any public Classic EXE is an unresolved rollout blocker.
   if(process.argv.includes('--strict') && assets.length)process.exitCode=1;
