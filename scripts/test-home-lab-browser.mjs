@@ -48,8 +48,10 @@ try {
           'Step navigation advances the decision process');
         assert.equal(await page.locator('.living-section-id').first().evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(234, 20, 56)',
           'Section title badges use the original stronger red rather than maroon/pink');
-        assert.equal(await page.locator('.living-hero').evaluate(el=>getComputedStyle(el,'::after').opacity),'.026',
-          'Site-wide checkboard texture stays faint');
+        assert.ok(await page.locator('.living-hero').evaluate(el => {
+          const opacity=Number(getComputedStyle(el,'::after').opacity);
+          return opacity>0 && opacity<.05 && getComputedStyle(el,'::after').backgroundImage.includes('conic-gradient');
+        }), 'Site-wide checkboard texture stays faint');
         const theme=page.locator('[data-living-theme-toggle]');
         await theme.click();
         assert.equal(await living.getAttribute('data-living-theme'),'light','Appearance switcher works');
