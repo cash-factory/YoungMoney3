@@ -39,14 +39,13 @@
   };
   const logo = () => '<span class="ym-mark" aria-hidden="true">Y<span>M</span><i>.</i></span><span class="ym-wordmark">YOUNGMONEY <strong>FX</strong></span>';
   const btn = (label, type='primary', href='/') => `<a class="action action-${type}" href="${href}">${label}<span aria-hidden="true">${icon('arrow',16)}</span></a>`;
-  const samplePill = (light=false) => `<span class="sample-indicator ${light?'sample-indicator-light':''}"><span class="sample-dot"></span>ILLUSTRATIVE TRADES · NOT LIVE DATA</span>`;
   const sampleRibbon = () => {const words=['PROCESS','PRECISION','DISCIPLINE','CONSISTENCY','GROWTH'];const group=words.map(w=>`<span>${w}</span>`).join('<i aria-hidden="true">✳</i>');return `<div class="signature-ribbon" aria-label="Process, Precision, Discipline, Consistency, Growth"><div class="ribbon-motion"><div class="ribbon-sequence">${group}</div><div class="ribbon-sequence" aria-hidden="true">${group}</div></div></div>`};
   const siteNav = (right='VIEW THE PROCESS')=>`<header class="site-nav"><a class="site-logo" href="./" aria-label="YoungMoney FX Home Lab">${logo()}</a><nav class="site-links" aria-label="Page sections"><a href="#platform">Platform</a><a href="#method">The method</a><a href="#why">Why YM</a></nav><div class="site-nav-right"><span class="nav-tag">${right}</span><a class="nav-cta" href="/">Enter YM-FX ${icon('up',14)}</a></div></header>`;
   const tradePicker = () => `<div class="trade-picker" role="group" aria-label="Choose illustrative trade"><span class="trade-picker-label">EXPLORE A TRADE</span>${tradeExamples.map((x,i)=>`<button type="button" class="trade-pick ${i===selectedTrade?'is-active':''}" data-trade="${i}" aria-pressed="${i===selectedTrade}"><span class="trade-pick-symbol">${x.symbol}</span><small>${x.side}</small></button>`).join('')}</div>`;
   const formatPrice = (n,p)=>n.toFixed(p);
   function chartSVG(t){
     const W=940,H=380,left=50,right=825,top=20,bottom=326,n=34;
-    const span=t.step*15.8,mid=t.entry;let candles=[];
+    const mid=t.entry;let candles=[];
     for(let i=0;i<n;i++){
       const wave=Math.sin(i*.61)*1.45+Math.sin(i*1.48)*.65 + Math.cos(i*.18)*1.10;
       const drift=(i-17)*.13*t.direction;
