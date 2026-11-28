@@ -115,6 +115,12 @@
     Object.entries(setters).forEach(([sel,value])=>{const el=a.querySelector(sel);if(el)el.textContent=value;});
     const panel=a.querySelector('.living-method-panel');
     if(panel){panel.dataset.phase=String(activePhase);panel.classList.remove('living-phase-shift');void panel.offsetWidth;panel.classList.add('living-phase-shift');}
+    const progress=host?.querySelector('.living-method-play');
+    if(progress){
+      progress.classList.remove('living-stage-timer');
+      void progress.offsetWidth;
+      progress.classList.add('living-stage-timer');
+    }
   }
   function paintModule(i){
     activeModule=(i+modules.length)%modules.length;
@@ -191,6 +197,7 @@
     const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
     if(tourCleanup)tourCleanup();
     autoEnabled=!reduce;
+    host.querySelector('.living-method-play')?.classList.add('living-stage-timer');
     methodVisible=false;hoverPaused=false;keyboardPaused=false;
     remainingReadMs=READ_MS;
     host.addEventListener('click',event=>{
