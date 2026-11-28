@@ -119,6 +119,15 @@ jobs:
             grep -q 'YM-FX Home Lab' "$RUNNER_TEMP/home-lab.js"
             grep -q 'YM/FX HOME LAB' "$RUNNER_TEMP/home-lab.css"
             echo "Public design lab and both assets are reachable from the staging URL."
+            if [[ -f public/home-lab/concept-06-review.js ]]; then
+              for file in concept-06-review.js concept-06-review.css visual-atlas.svg; do
+                curl --fail --silent --show-error --retry 3 "$URL/$file" -o "$RUNNER_TEMP/$file"
+              done
+              grep -q "YMFXConcept06Review" "$RUNNER_TEMP/concept-06-review.js"
+              grep -q "living-slanted-ribbon" "$RUNNER_TEMP/concept-06-review.css"
+              grep -q "YM-FX finance interface illustrations" "$RUNNER_TEMP/visual-atlas.svg"
+              echo "All Concept 06 interaction, styling and art assets are publicly reachable."
+            fi
           fi
       - name: Release evidence
         shell: bash

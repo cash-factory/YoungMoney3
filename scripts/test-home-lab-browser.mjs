@@ -46,10 +46,12 @@ try {
         await page.locator('[data-living-next]').click();
         assert.equal(await page.locator('[data-living-phase="3"]').getAttribute('aria-pressed'),'true',
           'Step navigation advances the decision process');
-        await page.locator('[data-living-module="3"]').click();
-        assert.equal(await page.locator('[data-living-module="3"]').getAttribute('aria-pressed'),'true');
-        assert.match(await page.locator('[data-living-module-headline]').innerText(),/broker record/i,
-          'Accounts feature panel responds to tab selection');
+        assert.equal(await page.locator('.living-section-id').first().evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(234, 20, 56)',
+          'Section title badges use the original stronger red rather than maroon/pink');
+        assert.ok(await page.locator('.living-hero').evaluate(el => {
+          const opacity=Number(getComputedStyle(el,'::after').opacity);
+          return opacity>0 && opacity<.05 && getComputedStyle(el,'::after').backgroundImage.includes('conic-gradient');
+        }), 'Site-wide checkboard texture stays faint');
         const theme=page.locator('[data-living-theme-toggle]');
         await theme.click();
         assert.equal(await living.getAttribute('data-living-theme'),'light','Appearance switcher works');
@@ -67,7 +69,53 @@ try {
         assert.equal(await tour.getAttribute('aria-pressed'),'true','Process tour can start');
         await tour.click();
         assert.equal(await tour.getAttribute('aria-pressed'),'false','Process tour can be paused');
-        assert.ok(await page.locator('[data-living-module-preview] .living-module-preview').count()===1);
+        assert.equal(await page.locator('[data-explorer-area]').count(),18,'All eighteen actual platform areas are present');
+        if(width===1440) {
+          const layout=await page.locator('.living-hero').evaluate(hero=>{
+            const copy=hero.querySelector('.living-hero-copy').getBoundingClientRect();
+            const chart=hero.querySelector('.living-hero-visual').getBoundingClientRect();
+            return {copyLeft:copy.left,copyRight:copy.right,chartLeft:chart.left,
+              copyTop:copy.top,chartTop:chart.top,heroBottom:hero.getBoundingClientRect().bottom};
+          });
+          assert.ok(layout.chartLeft>layout.copyLeft+250 && layout.chartTop<layout.heroBottom,
+            'Desktop hero must present text and chart beside one another, not in a displaced grid row');
+          assert.ok(Math.abs(layout.chartTop-layout.copyTop)<250,
+            'Headline and illustrative chart must share the first hero row');
+        }
+        assert.equal(await page.locator('.living-line-svg').count(),1,'Hero uses the original-style line chart, not candlesticks');
+        assert.equal(await page.locator('.living-line-svg .candle').count(),0,'Hero has no candlesticks');
+        assert.equal(await page.locator('[data-recent-trade]').count(),3,'Recent fictional trades are available');
+        assert.equal(await page.locator('.living-slanted-divider').count(),1,'Angled signature ribbon divides the page');
+        assert.match(await page.locator('.living-recent-head').innerText(),/FICTIONAL RESULTS/i);
+        assert.match(await page.locator('.living-line-svg').getAttribute('aria-label'),/EURUSD/i);
+        await page.locator('[data-recent-trade="2"]').click();
+        assert.equal(await page.locator('[data-recent-trade="2"]').getAttribute('aria-pressed'),'true','Recent-trade card selects a scenario');
+        assert.match(await page.locator('.living-line-svg').getAttribute('aria-label'),/US100/i);
+        assert.equal(await page.locator('[data-story-step]').count(),4,'Evidence story includes intent through adjustment');
+        await page.locator('[data-story-step="2"]').click();
+        assert.equal(await page.locator('[data-story-step="2"]').getAttribute('aria-pressed'),'true');
+        assert.match(await page.locator('[data-story-title]').innerText(),/conclude/i);
+        await page.locator('[data-story-next]').click();
+        assert.match(await page.locator('[data-story-label]').innerText(),/ADJUSTMENT/i);
+        await page.locator('[data-explorer-area="11"]').click();
+        assert.match(await page.locator('[data-explorer-heading]').innerText(),/Copy Studio/);
+        await page.locator('[data-explorer-feature="2"]').click();
+        assert.match(await page.locator('[data-explorer-feature-name]').innerText(),/Local consent/i);
+        assert.match(await page.locator('[data-explorer-feature-why]').innerText(),/authoriz/i);
+        await page.locator('[data-explorer-area="0"]').click();
+        assert.equal(await page.locator('[data-explorer-feature]').count(),4,'Journal has specific functions');
+        await page.locator('[data-explorer-search]').fill('risk');
+        assert.ok((await page.locator('[data-explorer-area]:visible').count())>=1,'Category filter responds');
+        await page.locator('[data-explorer-search]').fill('');
+        assert.equal(await page.locator('[data-explorer-area]:visible').count(),18,'Clearing filter restores catalog');
+        assert.ok((await page.evaluate(()=>document.documentElement.scrollWidth))<=width+2,
+          'Expanded platform explorer must not overflow horizontally');
+        assert.ok(await page.locator('.living-explorer-area-art').evaluate(el =>
+          getComputedStyle(el).backgroundImage.includes('visual-atlas.svg')),
+          'Selected area receives a separate category-specific illustration');
+        assert.ok(await page.locator('.living-phase-art').evaluate(el =>
+          getComputedStyle(el).backgroundImage.includes('visual-atlas.svg')),
+          'Each decision stage receives contextual art');
       }
       await page.evaluate(()=>window.scrollTo(0,0));
       await page.screenshot({path:`artifacts/home-lab/${id}-${width}.png`,animations:'disabled'});
@@ -87,6 +135,11 @@ try {
     'ribbonTravel','The sixth signature ribbon really moves without reduced motion');
   assert.equal(await motion.locator('.living-hero-copy').evaluate(el=>getComputedStyle(el).animationName),
     'living-hero-enter','The sixth hero has a controlled entrance animation');
+  assert.equal(await motion.locator('.living-slanted-track').evaluate(el=>getComputedStyle(el).animationName),
+    'ribbonTravel','The slanted divider has authentic motion');
+  await motion.locator('[data-living-phase="1"]').click();
+  assert.ok(await motion.locator('.living-phase-art').evaluate(el=>getComputedStyle(el).backgroundImage.includes('visual-atlas.svg')),
+    'Slideshow phase art remains available with animation enabled');
   await motion.locator('[data-living-cycle]').click();
   assert.equal(await motion.locator('[data-living-cycle]').getAttribute('aria-pressed'),'true');
   await motion.locator('[data-living-cycle]').click();
