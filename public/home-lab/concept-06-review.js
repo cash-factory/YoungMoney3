@@ -94,7 +94,12 @@
     if(evidenceSummary)evidenceSummary.textContent='One trade story, four distinct moments. The original plan and broker evidence remain separate from interpretation.';
     const visual=root.querySelector('.living-hero-visual');if(visual)visual.querySelector('.living-decision-note')?.insertAdjacentHTML('beforebegin',recentHTML());
     const hero=root.querySelector('.living-hero');if(hero)hero.insertAdjacentHTML('afterend',slantedHTML());
-    root.querySelector('.living-process-art')?.insertAdjacentHTML('afterbegin',`<div class="living-phase-art" style="${art(phaseArt[0])}" aria-hidden="true"></div><div class="living-phase-pips" aria-hidden="true"><i class="is-current"></i><i></i><i></i><i></i></div>`);
+    // The image is a full-panel backdrop, not an illustration floating inside
+    // the orbit. Keep selection pips inside the orbit for clear interaction state.
+    const processPanel=root.querySelector('.living-method-panel');
+    processPanel?.insertAdjacentHTML('afterbegin',`<div class="living-phase-art" style="${art(phaseArt[0])}" aria-hidden="true"></div>`);
+    root.querySelector('.living-process-art')?.insertAdjacentHTML('afterbegin',
+      '<div class="living-phase-pips" aria-hidden="true"><i class="is-current"></i><i></i><i></i><i></i></div>');
     const oldEvidence=root.querySelector('.living-evidence-grid');if(oldEvidence)oldEvidence.outerHTML=storyHTML();
     const oldPlatform=root.querySelector('.living-platform-grid');if(oldPlatform)oldPlatform.outerHTML=explorerHTML();
     return template.innerHTML;
@@ -123,7 +128,15 @@
     if(!Number.isInteger(i)||i<0||i>3)return;
     const artEl=host.querySelector('.living-phase-art');if(artEl)artEl.style.cssText=art(phaseArt[i]);
     host.querySelectorAll('.living-phase-pips i').forEach((e,j)=>e.classList.toggle('is-current',i===j));
-    if(!reduce)host.querySelectorAll('.living-phase-art,.living-method-panel-copy').forEach((x,j)=>x.animate([{opacity:.15,transform:'translateX(24px) scale(.97)'},{opacity:1,transform:'translateX(0) scale(1)'}],{duration:480+j*100,easing:'cubic-bezier(.2,.8,.2,1)'}));
+    // Quietly dissolve the full-panel image, while text has a restrained slide.
+    // The image never changes size or rises above the panel's content.
+    if(!reduce){
+      const image=host.querySelector('.living-phase-art');
+      image?.animate([{opacity:0},{opacity:1}],{duration:600,easing:'ease-out'});
+      host.querySelector('.living-method-panel-copy')?.animate(
+        [{opacity:.60,transform:'translateX(12px)'},{opacity:1,transform:'translateX(0)'}],
+        {duration:430,easing:'cubic-bezier(.2,.8,.2,1)'});
+    }
   }
   core.mount=function(el){
     coreMount(el);host=el.querySelector('.concept-living');if(!host)return;
