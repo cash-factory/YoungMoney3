@@ -227,3 +227,191 @@
   .concept-living .living-hero>.living-hero-copy{padding-top:0}
 }
 @media(max-width:650px){.concept-living .living-hero{padding-top:40px}}
+
+
+/* 2026 refinement — CLabs-style true scarlet, not magenta / plum.
+   Retains a neutral charcoal canvas; bright red is reserved for emphases. */
+.concept-living{
+  --accent:#e60012;
+  --living-red:#e60012;
+  --living-coral:#ff4939;
+  --bg:#101115;
+  --panel:#18191e;
+  --living-soft:#1e2025;
+  --living-glass:#1b1d22;
+  --living-black:#101115;
+  --line:#35373e;
+  --living-hairline:#35373e;
+}
+.concept-living[data-living-theme="light"]{
+  --accent:#ce0713;
+  --living-red:#ce0713;
+  --living-coral:#ab0711;
+  --bg:#f3f4f5;
+  --panel:#fff;
+  --living-soft:#eceef0;
+  --living-glass:#fff;
+  --living-black:#e9ecef;
+  --line:#cfd2d8;
+  --living-hairline:#cfd2d8;
+}
+.concept-living .signature-ribbon{
+  background:var(--living-red);
+  color:#fff;
+  border-color:var(--living-red);
+}
+.concept-living .ribbon-sequence>span{color:#fff}
+.concept-living .ribbon-sequence>i{color:#fff;opacity:.8}
+.concept-living .living-slanted-ribbon{
+  background:var(--living-red);
+  box-shadow:0 11px 29px #05050726;
+}
+.concept-living .living-slanted-ribbon::after{
+  background:linear-gradient(90deg,var(--bg),transparent 8%,transparent 92%,var(--bg));
+  opacity:.12;
+}
+.concept-living .living-manifesto{
+  background:var(--bg);
+}
+.concept-living .living-evidence,
+.concept-living .living-outro{
+  background:var(--living-black);
+}
+.concept-living .living-method-panel{
+  position:relative;
+  isolation:isolate;
+  background:var(--panel);
+  border-color:var(--line);
+}
+.concept-living .living-method-panel::before{
+  content:"";position:absolute;inset:0;z-index:0;
+  pointer-events:none;
+  background:linear-gradient(105deg,transparent 30%,color-mix(in srgb,var(--panel) 48%,transparent));
+}
+/* Background art spans the ENTIRE combined panel, including its written half.
+   It is no longer positioned behind just the circular diagram. */
+.concept-living .living-method-panel>.living-phase-art{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  z-index:0;
+  pointer-events:none;
+  background-image:url('/home-lab/visual-atlas.svg');
+  background-position:var(--art-x) var(--art-y);
+  background-size:600% 300%;
+  background-repeat:no-repeat;
+  opacity:.14;
+  filter:grayscale(1) contrast(1.08);
+  mix-blend-mode:screen;
+  -webkit-mask-image:linear-gradient(90deg,#000b 0%,#000b 48%,#0005 100%);
+  mask-image:linear-gradient(90deg,#000b 0%,#000b 48%,#0005 100%);
+}
+.concept-living[data-living-theme="light"] .living-method-panel>.living-phase-art{
+  opacity:.10;
+  filter:grayscale(1) contrast(1.03);
+  mix-blend-mode:multiply;
+}
+.concept-living .living-method-panel-head,
+.concept-living .living-process-art,
+.concept-living .living-method-panel-copy{position:relative;z-index:2}
+.concept-living .living-method-panel-head{position:absolute;z-index:4}
+.concept-living .living-process-art{isolation:auto;background:transparent}
+.concept-living .living-process-art::before{pointer-events:none}
+.concept-living .living-method-panel-copy{
+  background:linear-gradient(90deg,transparent 0%,color-mix(in srgb,var(--panel) 82%,transparent) 78%);
+}
+.concept-living .living-step.is-current{
+  background:var(--panel);
+  border-color:var(--accent);
+  box-shadow:inset 4px 0 var(--accent);
+}
+.concept-living .living-step:hover{background:var(--living-soft)}
+.concept-living .living-story-step.is-current{
+  background:var(--panel);
+  border-color:var(--accent);
+  box-shadow:inset 3px 0 var(--accent);
+}
+.concept-living .living-recent-trade.is-current,
+.concept-living .living-explorer-area.is-current,
+.concept-living .living-explorer-feature.is-current{
+  background:var(--panel);
+  border-color:var(--accent);
+}
+.concept-living .living-explorer-detail{
+  background:var(--panel);
+}
+.concept-living .living-section-id,
+.concept-living .living-explorer-kicker,
+.concept-living .living-explorer-detail-kicker{
+  background:var(--living-red);
+  color:#fff;
+}
+.concept-living .living-method-play{position:relative;padding-bottom:23px}
+.concept-living .living-method-play::before,
+.concept-living .living-method-play::after{
+  content:"";
+  position:absolute;bottom:7px;left:3px;
+  width:calc(100% - 6px);
+  height:2px;
+  pointer-events:none;
+}
+.concept-living .living-method-play::before{background:var(--line)}
+.concept-living .living-method-play::after{
+  background:var(--accent);
+  transform:scaleX(0);
+  transform-origin:left;
+  animation:living-read-progress 9800ms linear forwards;
+  animation-play-state:paused;
+}
+.concept-living .living-method-play:not(.living-stage-timer)::after{
+  animation:none;
+}
+.concept-living .living-method.living-auto-playing .living-method-play::after{
+  animation-play-state:running;
+}
+.concept-living .living-method:not(.living-auto-playing) .living-method-play::after{
+  animation-play-state:paused;
+}
+.concept-living [data-living-cycle-status]{
+  font:600 9px/1.4 'IBM Plex Mono',monospace;
+  letter-spacing:.045em;
+  color:var(--muted);
+  text-align:right;
+}
+.concept-living .living-method[data-living-auto-state="hover-paused"] [data-living-cycle-status],
+.concept-living .living-method[data-living-auto-state="focus-paused"] [data-living-cycle-status]{
+  color:var(--living-coral);
+}
+@keyframes living-read-progress{
+  from{transform:scaleX(0)}to{transform:scaleX(1)}
+}
+@media(max-width:760px){
+  .concept-living .living-method-panel>.living-phase-art{
+    background-size:600% 300%;
+    opacity:.10;
+  }
+  .concept-living .living-method-panel-copy{
+    background:color-mix(in srgb,var(--panel) 84%,transparent);
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .concept-living .living-method-play::after{animation:none!important}
+  .concept-living .living-method-panel>.living-phase-art{filter:grayscale(1)}
+}
+
+
+/* Neutral depth instead of the previous wine-colored hero haze.
+   Scarlet remains a sharp brand signal, never a maroon surface wash. */
+.concept-living .living-ambient i:first-child{
+  background:radial-gradient(ellipse,rgba(230,0,18,.055),transparent 64%);
+}
+.concept-living .living-ambient i:nth-child(2){
+  background:radial-gradient(ellipse,rgba(230,0,18,.035),transparent 64%);
+}
+.concept-living .living-ambient i:last-child{
+  background:radial-gradient(ellipse,rgba(230,0,18,.035),transparent 67%);
+}
+.concept-living .living-hero-visual::before{
+  background:radial-gradient(ellipse at 65% 35%,rgba(230,0,18,.055),transparent 69%);
+}
