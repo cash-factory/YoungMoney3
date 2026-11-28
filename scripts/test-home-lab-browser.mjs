@@ -70,6 +70,18 @@ try {
         await tour.click();
         assert.equal(await tour.getAttribute('aria-pressed'),'false','Process tour can be paused');
         assert.equal(await page.locator('[data-explorer-area]').count(),18,'All eighteen actual platform areas are present');
+        if(width===1440) {
+          const layout=await page.locator('.living-hero').evaluate(hero=>{
+            const copy=hero.querySelector('.living-hero-copy').getBoundingClientRect();
+            const chart=hero.querySelector('.living-hero-visual').getBoundingClientRect();
+            return {copyLeft:copy.left,copyRight:copy.right,chartLeft:chart.left,
+              copyTop:copy.top,chartTop:chart.top,heroBottom:hero.getBoundingClientRect().bottom};
+          });
+          assert.ok(layout.chartLeft>layout.copyLeft+250 && layout.chartTop<layout.heroBottom,
+            'Desktop hero must present text and chart beside one another, not in a displaced grid row');
+          assert.ok(Math.abs(layout.chartTop-layout.copyTop)<250,
+            'Headline and illustrative chart must share the first hero row');
+        }
         assert.equal(await page.locator('.living-line-svg').count(),1,'Hero uses the original-style line chart, not candlesticks');
         assert.equal(await page.locator('.living-line-svg .candle').count(),0,'Hero has no candlesticks');
         assert.equal(await page.locator('[data-recent-trade]').count(),3,'Recent fictional trades are available');
