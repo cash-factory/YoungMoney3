@@ -210,3 +210,20 @@
 .concept-living .living-outro>.living-outro-shape{position:absolute;right:-8%;top:-30%;z-index:0;pointer-events:none}
 .concept-living .living-outro>.living-outro-inner{position:relative;z-index:1}
 .concept-living .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* Final visual review: keep hero copy aligned with the chart from the first viewport;
+   preserve the stronger original YM red instead of a muted maroon wash. */
+.concept-living{--living-coral:#ff2444}
+.concept-living[data-living-theme="light"]{--living-coral:#b50e2c}
+.concept-living .signature-ribbon{
+  background:color-mix(in srgb,var(--living-red) 66%,var(--bg));
+  color:#fff;border-color:color-mix(in srgb,var(--living-red) 72%,var(--line))
+}
+.concept-living .ribbon-sequence>i{color:#ffb4bd}
+.concept-living .living-hero{align-items:start;min-height:0;padding-top:clamp(44px,5.5vw,82px)}
+.concept-living .living-hero>.living-hero-copy{padding-top:clamp(10px,2.5vw,36px)}
+@media(max-width:1080px){
+  .concept-living .living-hero{padding-top:55px}
+  .concept-living .living-hero>.living-hero-copy{padding-top:0}
+}
+@media(max-width:650px){.concept-living .living-hero{padding-top:40px}}
