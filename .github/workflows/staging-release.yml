@@ -106,6 +106,20 @@ jobs:
             exit 1
           fi
           YM3_STAGING_URL="$DEPLOYED_URL" node scripts/check-staging-health.mjs
+      - name: Verify optional public homepage study
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f public/home-lab/index.html ]]; then
+            URL="https://ym-fx-staging.ethical-hacker263.workers.dev/home-lab"
+            curl --fail --silent --show-error --retry 3 "$URL/" -o "$RUNNER_TEMP/home-lab-index.html"
+            curl --fail --silent --show-error --retry 3 "$URL/lab.js" -o "$RUNNER_TEMP/home-lab.js"
+            curl --fail --silent --show-error --retry 3 "$URL/lab.css" -o "$RUNNER_TEMP/home-lab.css"
+            grep -q 'Home Page Design Lab' "$RUNNER_TEMP/home-lab-index.html"
+            grep -q 'YM-FX Home Lab' "$RUNNER_TEMP/home-lab.js"
+            grep -q 'YM/FX HOME LAB' "$RUNNER_TEMP/home-lab.css"
+            echo "Public design lab and both assets are reachable from the staging URL."
+          fi
       - name: Release evidence
         shell: bash
         run: |

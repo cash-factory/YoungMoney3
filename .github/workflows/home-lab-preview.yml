@@ -1,0 +1,54 @@
+name: Home Lab browser QA
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'public/home-lab/**'
+      - 'scripts/test-home-lab-browser.mjs'
+      - '.github/workflows/home-lab-preview.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'public/home-lab/**'
+      - 'scripts/test-home-lab-browser.mjs'
+      - '.github/workflows/home-lab-preview.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+      - name: Build the YM-FX public assets
+        run: npm run build
+      - name: Verify five responsive homepage concepts
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx vite preview --host 127.0.0.1 --port 4173 > "$RUNNER_TEMP/home-lab-preview.log" 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4173/home-lab/ >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:4173/home-lab/ | grep -q 'YM / FX'
+          YM3_PREVIEW_URL=http://127.0.0.1:4173 node scripts/test-home-lab-browser.mjs
+      - name: Upload concept screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: home-lab-screenshots
+          path: artifacts/home-lab/
+          retention-days: 10
