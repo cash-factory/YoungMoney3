@@ -3,7 +3,7 @@
 (() => {
   'use strict';
   const phases = [
-    {n:'01',name:'Plan',verb:'Define the idea before it becomes a trade.',detail:'Document the setup, the invalidation, and the protective limits while your judgment is still clear.',signal:'A PLAN WITH BOUNDARIES',meta:'SETUP · RISK · INVALDIATION',short:'What would make this trade valid?'},
+    {n:'01',name:'Plan',verb:'Define the idea before it becomes a trade.',detail:'Document the setup, the invalidation, and the protective limits while your judgment is still clear.',signal:'A PLAN WITH BOUNDARIES',meta:'SETUP · RISK · INVALIDATION',short:'What would make this trade valid?'},
     {n:'02',name:'Capture',verb:'Keep the record as it actually happened.',detail:'Connect the intended plan to captured execution context. Preserve original risk and subsequent changes as separate events.',signal:'EXECUTION WITH PROVENANCE',meta:'ORDERS · CHANGES · LIFECYCLE',short:'What happened, without hindsight?'},
     {n:'03',name:'Test',verb:'Turn curiosity into a deliberate experiment.',detail:'Compare a defined hypothesis against documented examples and keep your assumptions separate from observed results.',signal:'A HYPOTHESIS YOU CAN CHALLENGE',meta:'SETUPS · EXAMPLES · EVIDENCE',short:'What deserves another test?'},
     {n:'04',name:'Review',verb:'Make the next decision more informed.',detail:'Look for recurring decisions, rule deviations, and the context behind performance. Choose one improvement worth tracking.',signal:'LEARNING THAT TRAVELS FORWARD',meta:'REFLECTION · PATTERNS · NEXT STEP',short:'What will I do differently?'}
@@ -157,6 +157,7 @@
       }
     });
     if(!reduce&&'IntersectionObserver' in window){
+      host.classList.add('living-motion-ok');
       const observed=host.querySelectorAll('[data-living-reveal]');
       const observer=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('is-in-view');observer.unobserve(e.target);}}),{threshold:.08,rootMargin:'0px 0px -25px 0px'});
       observed.forEach(x=>observer.observe(x));
