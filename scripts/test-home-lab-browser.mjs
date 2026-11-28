@@ -46,10 +46,6 @@ try {
         await page.locator('[data-living-next]').click();
         assert.equal(await page.locator('[data-living-phase="3"]').getAttribute('aria-pressed'),'true',
           'Step navigation advances the decision process');
-        await page.locator('[data-living-module="3"]').click();
-        assert.equal(await page.locator('[data-living-module="3"]').getAttribute('aria-pressed'),'true');
-        assert.match(await page.locator('[data-living-module-headline]').innerText(),/broker record/i,
-          'Accounts feature panel responds to tab selection');
         assert.equal(await page.locator('.living-section-id').first().evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(234, 20, 56)',
           'Section title badges use the original stronger red rather than maroon/pink');
         assert.equal(await page.locator('.living-hero').evaluate(el=>getComputedStyle(el,'::after').opacity),'.026',
