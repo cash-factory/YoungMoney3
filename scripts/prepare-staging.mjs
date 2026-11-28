@@ -30,8 +30,8 @@ const stage={
   d1_databases:[{binding:'DB',database_name:name,database_id:id}],
   // Isolated staging KDF: separate Durable Object CPU allowance avoids
   // Cloudflare Free Worker 1102 errors without weakening stored verifiers.
-  durable_objects:{bindings:[{name:'AUTH_KDF',class_name:'AuthKdf'}]},
-  exports:{AuthKdf:{type:'durable-object',storage:'sqlite'}},
+  durable_objects:{bindings:[{name:'AUTH_KDF',class_name:'AuthKdf'},{name:'PRIVATE_FILES',class_name:'PrivateFiles'}]},
+  exports:{AuthKdf:{type:'durable-object',storage:'sqlite'},PrivateFiles:{type:'durable-object',storage:'sqlite'}},
   // Permit read-only linking and reconciliation of REAL MT5 accounts for the
   // invite-only pilot. This NEVER authorizes orders; live copy execution
   // remains independently disabled until broker acceptance.

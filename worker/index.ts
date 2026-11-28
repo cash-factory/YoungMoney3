@@ -17,12 +17,14 @@ import { WORKSPACE_TABLES } from '../src/lib/workspaceTables';
 import { deleteOwnedMedia } from '../src/lib/mediaCleanup';
 import {normalizeUsername, validUsername, usernameSuggestions} from '../src/lib/username';
 
+export { PrivateFiles } from './privateFiles';
 export { AuthKdf } from './auth-kdf';
 
 export interface Env {
   DB: D1Database;
   AUTH_KDF?: DurableObjectNamespace;
   MEDIA?: R2Bucket;
+  PRIVATE_FILES?: DurableObjectNamespace;
   /** Separate, non-public owner-controlled legacy release bucket. */
   CLASSIC_RELEASES?: R2Bucket;
   /** Exact owner user ID; admin alone is NOT sufficient. Fail closed when unset. */
@@ -527,7 +529,9 @@ async function databaseRoute(request: Request, env: Env, user: Record<string, un
 }
 
 const mediaLimit = 15 * 1024 * 1024;
+const documentTypes = new Set(['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']);
 const allowedMediaTypes = new Set([
+  ...documentTypes,
   'image/avif', 'image/gif', 'image/jpeg', 'image/png', 'image/webp',
   'audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm', 'audio/x-wav',
 ]);
@@ -633,7 +637,8 @@ async function mediaRoute(request: Request, env: Env, user: Record<string, unkno
   const configuredStorage = getSupabaseStorageConfig(env);
   if (configuredStorage && 'error' in configuredStorage) return response({ error: configuredStorage.error }, 503);
   const supabaseStorage = configuredStorage && 'key' in configuredStorage ? configuredStorage : null;
-  if (!supabaseStorage && !env.MEDIA) {
+  const archive = env.PRIVATE_FILES?.getByName(owner);
+  if (!supabaseStorage && !env.MEDIA && !archive) {
     return response({ error: 'Private media is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY and create the private trading-media bucket.' }, 503);
   }
 
@@ -642,6 +647,9 @@ async function mediaRoute(request: Request, env: Env, user: Record<string, unkno
     const root = owner + '/';
     const sub = url.searchParams.get('folder') || '';
     if (sub.length>1024 || sub.split('/').some(v=>v==='..'||v==='.'||v.includes('\\')) || sub.startsWith('/')) return response({error:'Invalid media folder.'},400);
+    if (url.searchParams.get('provider') === 'archive') {
+      return archive ? archive.fetch('https://private/list?after='+encodeURIComponent(cursor)) : response({files:[],folders:[],next:null});
+    }
     if (url.searchParams.get('provider') === 'r2') {
       if (!env.MEDIA) return response({files:[],folders:[],next:null});
       const page = await env.MEDIA.list({prefix:root,limit:100,cursor:cursor||undefined});
@@ -669,7 +677,10 @@ async function mediaRoute(request: Request, env: Env, user: Record<string, unkno
       supabaseFiles = listed.files;
     }
     const r2Files = await listR2Media(env.MEDIA, owner, count);
-    const files = [...new Map([...supabaseFiles, ...r2Files].map(file => [file.name, file])).values()]
+    const archived = archive ? await archive.fetch('https://private/list?limit='+count) : null;
+    if (archived && !archived.ok) return mediaProviderError(archived.status);
+    const localFiles = archived ? (await archived.json() as {files:MediaFile[]}).files : [];
+    const files = [...new Map([...supabaseFiles, ...r2Files, ...localFiles].map(file => [file.name, file])).values()]
       .sort((left, right) => left.name.localeCompare(right.name))
       .slice(offset, offset + limit);
     return response({ files });
@@ -684,10 +695,14 @@ async function mediaRoute(request: Request, env: Env, user: Record<string, unkno
     const declaredSize = Number(request.headers.get('content-length') || 0);
     if (declaredSize > mediaLimit) return response({ error: 'Attachments must be 15 MB or smaller.' }, 413);
     const contentType = (request.headers.get('content-type') || '').split(';', 1)[0].trim().toLowerCase();
-    if (!allowedMediaTypes.has(contentType)) return response({ error: 'Use a supported PNG, JPEG, WebP, GIF, AVIF, or audio file format.' }, 415);
+    if (!allowedMediaTypes.has(contentType)) return response({ error: 'Use a supported PNG, JPEG, WebP, GIF, AVIF, audio, PDF, or DOCX file format.' }, 415);
     const bytes = await readBoundedBody(request, mediaLimit);
     if (!bytes) return response({ error: 'Attachments must be 15 MB or smaller.' }, 413);
     if (!bytes.byteLength) return response({ error: 'The attachment is empty.' }, 400);
+    if (documentTypes.has(contentType)) {
+      const signature = contentType === 'application/pdf' ? [37,80,68,70,45] : [80,75,3,4];
+      if (!signature.every((b,i)=>bytes[i]===b)) return response({error:'Document contents do not match the selected format.'},415);
+    }
     const lease=id();
     const active=await env.DB.prepare("INSERT INTO active_media_uploads(id,owner,expires) SELECT ?,id,? FROM users WHERE id=? AND account_status='active'").bind(lease,Date.now()+900000,owner).run();
     if(!active.meta.changes) return response({error:'Account unavailable for uploads.'},403);
@@ -699,6 +714,9 @@ async function mediaRoute(request: Request, env: Env, user: Record<string, unkno
         body: bytes,
       });
       if (!result.ok) return mediaProviderError(result.status);
+    } else if (archive) {
+      const result = await archive.fetch('https://private/file?name='+encodeURIComponent(path.slice(owner.length+1)),{method:'PUT',headers:{'content-type':contentType},body:bytes});
+      if (!result.ok) return mediaProviderError(result.status);
     } else if (env.MEDIA) {
       const uploaded = await env.MEDIA.put(path, bytes, { httpMetadata: { contentType }, onlyIf: { etagDoesNotMatch: '*' } });
       if (!uploaded) return response({ error: 'File already exists.' }, 409);
@@ -708,29 +726,41 @@ async function mediaRoute(request: Request, env: Env, user: Record<string, unkno
   }
 
   if (request.method === 'GET' && url.pathname === '/api/media/download') {
+    const fileName = path.split('/').pop()!.replace(/^[0-9a-f-]{36}_/i,'').replace(/[^a-zA-Z0-9_.-]/g,'_');
+    function download(result:Response) {
+      if (!documentTypes.has(result.headers.get('content-type')?.split(';')[0] || '')) return result;
+      const headers = new Headers(result.headers);
+      headers.set('content-disposition', 'attachment; filename="'+fileName+'"');
+      return new Response(result.body,{headers});
+    }
+    if (archive) {
+      const result=await archive.fetch('https://private/file?name='+encodeURIComponent(path.slice(owner.length+1)));
+      if (result.ok) return download(result);
+      if (result.status!==404) return mediaProviderError(result.status);
+    }
     if (supabaseStorage) {
       const result = await supabaseStorageRequest(supabaseStorage, `object/trading-media/${path.split('/').map(encodeURIComponent).join('/')}`);
       if (result.ok) {
-        return new Response(result.body, {
+        return download(new Response(result.body, {
           headers: {
             'content-type': result.headers.get('content-type') || 'application/octet-stream',
             'cache-control': 'private, no-store',
             'x-content-type-options': 'nosniff',
           },
-        });
+        }));
       }
       if (result.status !== 404 || !env.MEDIA) return mediaProviderError(result.status);
     }
     if (!env.MEDIA) return response({ error: 'Attachment not found.' }, 404);
     const object = await env.MEDIA.get(path);
     if (!object) return response({ error: 'Attachment not found.' }, 404);
-    return new Response(object.body, {
+    return download(new Response(object.body, {
       headers: {
         'content-type': object.httpMetadata?.contentType || 'application/octet-stream',
         'cache-control': 'private, no-store',
         'x-content-type-options': 'nosniff',
       },
-    });
+    }));
   }
 
   return response({ error: 'Unsupported media action.' }, 404);
@@ -741,6 +771,10 @@ async function cleanupMemberMedia(env: Env, ownerId: string): Promise<void> {
   if (configuredStorage && 'error' in configuredStorage) throw new Error('Private media storage is not configured correctly.');
   const supabaseStorage = configuredStorage && 'key' in configuredStorage ? configuredStorage : null;
 
+  if (env.PRIVATE_FILES) {
+    const result = await env.PRIVATE_FILES.getByName(ownerId).fetch('https://private/account',{method:'DELETE'});
+    if (!result.ok) throw new Error('Private attachment cleanup failed.');
+  }
   await deleteOwnedMedia(ownerId, {
     listSupabasePage: async (userId, offset, limit) => {
       if (!supabaseStorage) return { paths: [], hasMore: false };

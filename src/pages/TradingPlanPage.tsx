@@ -166,6 +166,7 @@ function PlanForm({ initial, onSave, onCancel }: { initial: TradingPlan | null; 
   const [maxDrawdown, setMaxDrawdown] = useState(initial?.max_drawdown_pct?.toString() || '');
   const [screenshotUrl, setScreenshotUrl] = useState(initial?.screenshot_url || null);
   const [voiceUrl, setVoiceUrl] = useState(initial?.voice_note_url || null);
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -239,11 +240,11 @@ function PlanForm({ initial, onSave, onCancel }: { initial: TradingPlan | null; 
         <label className={labelCls}>Adherence Score (%)</label>
         <input type="number" className={inputCls} value={adherence} onChange={e => setAdherence(e.target.value)} placeholder="e.g. 85" />
       </div>
-      <div><label className={labelCls}>Plan attachment</label><ScreenshotUpload onUpload={setScreenshotUrl} existingUrl={screenshotUrl} label="Upload plan image" /></div>
+      <div><label className={labelCls}>Plan attachment</label><ScreenshotUpload allowDocuments onUploadingChange={setUploading} onUpload={setScreenshotUrl} existingUrl={screenshotUrl} label="Upload plan image or document" /></div>
       <div><label className={labelCls}>Voice note</label><VoiceRecorder onUpload={setVoiceUrl} existingUrl={voiceUrl} /></div>
 
       <div className="flex gap-3 pt-2">
-        <button onClick={handleSave} disabled={saving || !title} className="btn-primary flex-1">
+        <button onClick={handleSave} disabled={saving || uploading || !title} className="btn-primary flex-1">
           <Save size={16} /> {saving ? 'Saving...' : 'Save Plan'}
         </button>
         <button onClick={onCancel} className="btn-secondary">Cancel</button>

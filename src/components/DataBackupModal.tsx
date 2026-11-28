@@ -145,7 +145,7 @@ export function DataBackupModal({ open, onClose }: DataBackupModalProps) {
       const paths = new Set<string>();
       let estimatedBytes = new Blob([JSON.stringify(data)]).size;
       if (estimatedBytes > MAX_BACKUP_BYTES) throw new Error(backupTooLarge);
-      const queue = [{provider:'supabase',folder:'',cursor:''},{provider:'r2',folder:'',cursor:''}];
+      const queue = [{provider:'archive',folder:'',cursor:''},{provider:'supabase',folder:'',cursor:''},{provider:'r2',folder:'',cursor:''}];
       const visited=new Set<string>();
       const providerPaths=new Set<string>();
       while (queue.length) {

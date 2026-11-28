@@ -1,16 +1,18 @@
 import { useRef, useState } from 'react';
 import { X, Image as ImageIcon, Loader2 } from 'lucide-react';
-import { uploadPrivateMedia } from '@/lib/media';
+import { privateDocumentDownload, uploadPrivateMedia } from '@/lib/media';
 import { MediaImage } from './MediaPreview';
 
 interface ScreenshotUploadProps {
+  allowDocuments?: boolean;
+  documentsOnly?: boolean;
   onUpload: (url: string) => void;
   existingUrl?: string | null;
   label?: string;
   onUploadingChange?: (uploading: boolean) => void;
 }
 
-export function ScreenshotUpload({ onUpload, existingUrl, label, onUploadingChange }: ScreenshotUploadProps) {
+export function ScreenshotUpload({ onUpload, existingUrl, label, onUploadingChange, allowDocuments = false, documentsOnly = false }: ScreenshotUploadProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(existingUrl || null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,15 +21,13 @@ export function ScreenshotUpload({ onUpload, existingUrl, label, onUploadingChan
   const handleFile = async (file: File) => {
     if (uploading) return;
     setError(null);
-    if (!['image/avif', 'image/gif', 'image/jpeg', 'image/png', 'image/webp'].includes(file.type.toLowerCase())) {
-      setError('Choose a PNG, JPEG, WebP, GIF, or AVIF image.');
-      return;
-    }
-    if (file.size > 15 * 1024 * 1024) { setError('Images must be 15 MB or smaller.'); return; }
+    const isDocument = ['application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(file.type);
+    if (documentsOnly && !isDocument) { setError('Choose a PDF or DOCX document.'); return; }
+    if (isDocument && !allowDocuments && !documentsOnly) { setError('Choose an image.'); return; }
     setUploading(true);
     onUploadingChange?.(true);
     try {
-      const ref = await uploadPrivateMedia(file, 'image');
+      const ref = await uploadPrivateMedia(file, isDocument ? 'document' : 'image');
       setImageUrl(ref);
       onUpload(ref);
     } catch (uploadError) {
@@ -41,7 +41,7 @@ export function ScreenshotUpload({ onUpload, existingUrl, label, onUploadingChan
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) handleFile(file);
+    if (file) handleFile(file);
   };
 
   const removeImage = () => {
@@ -51,11 +51,13 @@ export function ScreenshotUpload({ onUpload, existingUrl, label, onUploadingChan
   };
 
   if (imageUrl) {
+    const download = privateDocumentDownload(imageUrl);
     return (
       <div className="relative group rounded-xl overflow-hidden border border-themed">
-        <MediaImage source={imageUrl} alt="Trade screenshot" className="w-full max-h-64 object-contain bg-secondary" />
+        {download ? <a className="btn-secondary" href={download}>Download document</a> : <MediaImage source={imageUrl} alt="Trade screenshot" className="w-full max-h-64 object-contain bg-secondary" />}
         <button
           type="button"
+          aria-label="Remove attachment"
           onClick={removeImage}
           disabled={uploading}
           className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
@@ -69,6 +71,8 @@ export function ScreenshotUpload({ onUpload, existingUrl, label, onUploadingChan
   return (
     <div>
       <div
+        role="button" tabIndex={0} aria-label={label || "Upload image"}
+        onKeyDown={e => { if (!uploading && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); inputRef.current?.click(); } }}
         onClick={() => { if (!uploading) inputRef.current?.click(); }}
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}
@@ -80,14 +84,14 @@ export function ScreenshotUpload({ onUpload, existingUrl, label, onUploadingChan
           <>
             <ImageIcon size={24} className="text-muted" />
             <p className="text-sm text-secondary">{label || 'Click or drag to upload a screenshot'}</p>
-            <p className="text-xs text-muted">Private to your account · PNG, JPG, WebP · up to 15 MB</p>
+            <p className="text-xs text-muted">Private to your account · {documentsOnly ? "PDF, DOCX" : allowDocuments ? "Images, PDF, DOCX" : "PNG, JPG, WebP"} · up to 15 MB</p>
           </>
         )}
       </div>
       <input
         ref={inputRef}
         type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+        accept={[...(documentsOnly ? [] : ["image/png","image/jpeg","image/webp","image/gif","image/avif"]),...(allowDocuments || documentsOnly ? [".pdf",".docx"] : [])].join(",")}
         className="hidden"
         disabled={uploading}
         onChange={(e) => {

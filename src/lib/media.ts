@@ -2,6 +2,8 @@ import { supabase } from '@/lib/supabase';
 
 const REF_PREFIX = 'private-media://';
 const FILE_EXTENSION_BY_TYPE: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
   'image/avif': 'avif',
   'image/gif': 'gif',
   'image/jpeg': 'jpg',
@@ -36,22 +38,29 @@ export async function resolveMediaUrl(value: string): Promise<string> {
   return data.signedUrl;
 }
 
-export async function uploadPrivateMedia(file: File | Blob, kind: 'image' | 'audio'): Promise<string> {
+export async function uploadPrivateMedia(file: File | Blob, kind: 'image' | 'audio' | 'document'): Promise<string> {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user) throw new Error('Sign in before uploading media.');
   const contentType = file.type.split(';', 1)[0].trim().toLowerCase() || (kind === 'audio' ? 'audio/webm' : '');
   const extension = FILE_EXTENSION_BY_TYPE[contentType];
-  if (!extension || !contentType.startsWith(`${kind}/`)) {
+  if (!extension || !(kind === 'document' ? ['pdf','docx'].includes(extension) : contentType.startsWith(`${kind}/`))) {
     throw new Error(kind === 'image'
       ? 'Use a PNG, JPEG, WebP, GIF, or AVIF image.'
-      : 'Use a supported AAC, MP4, MPEG, OGG, WAV, or WebM voice note.');
+      : kind === 'document' ? 'Choose a PDF or DOCX document.' : 'Use a supported AAC, MP4, MPEG, OGG, WAV, or WebM voice note.');
   }
   if (file.size > 15 * 1024 * 1024) throw new Error('Attachments must be 15 MB or smaller.');
   if (!file.size) throw new Error('The attachment is empty.');
-  const path = `${authData.user.id}/${crypto.randomUUID()}.${extension}`;
+  const filename = kind === 'document' && file instanceof File ? file.name.replace(/[^a-zA-Z0-9_.-]/g,'_').replace(/\.[^.]+$/,'').slice(0,100) : '';
+  const path = `${authData.user.id}/${crypto.randomUUID()}${filename ? '_'+filename : ''}.${extension}`;
   const { error } = await supabase.storage.from('trading-media').upload(path, file, { contentType, upsert: false });
   if (error) {
     throw new Error(typeof error.message === 'string' ? error.message : 'Failed to upload attachment. Please try again.');
   }
   return privateMediaRef('trading-media', path);
+}
+
+export function privateDocumentDownload(source: string): string | null {
+  const ref = parsePrivateMediaRef(source);
+  if (!ref || ref.bucket !== 'trading-media' || !/\.(pdf|docx)$/i.test(ref.path)) return null;
+  return '/api/media/download?' + new URLSearchParams({path:ref.path});
 }
