@@ -36,6 +36,9 @@ try {
       if(id==='06') {
         const living=page.locator('.concept-living');
         assert.equal(await living.count(),1,'Original-inspired sixth concept is present');
+        assert.ok(await page.locator('.living-decision-note').evaluate(el =>
+          el.getBoundingClientRect().top >= document.querySelector('.chart-shell-living').getBoundingClientRect().bottom + 6),
+          'Behind-the-chart note must not obstruct illustrative data disclaimer');
         await page.locator('[data-living-phase="2"]').click();
         assert.equal(await page.locator('[data-living-phase="2"]').getAttribute('aria-pressed'),'true',
           'Four-stage process selector is interactive');
@@ -53,6 +56,10 @@ try {
         assert.equal(await theme.getAttribute('aria-pressed'),'true','Appearance is accessible');
         assert.ok((await page.evaluate(()=>document.documentElement.scrollWidth))<=width+2,
           'Light appearance has no horizontal overflow');
+        if(width===390 || width===1440) {
+          await page.evaluate(()=>window.scrollTo(0,0));
+          await page.screenshot({path:`artifacts/home-lab/06-light-${width}.png`,animations:'disabled'});
+        }
         await theme.click();
         assert.equal(await living.getAttribute('data-living-theme'),'dark','Appearance can be restored');
         const tour=page.locator('[data-living-cycle]');
