@@ -15,9 +15,9 @@ try {
     const gallery = await page.goto(path,{waitUntil:'domcontentloaded'});
     assert.equal(gallery?.status(),200,'Public concept gallery must be accessible without login');
     await page.locator('.concept-choice').first().waitFor();
-    assert.equal(await page.locator('.concept-choice').count(),5,'All five design choices must be visible');
+    assert.equal(await page.locator('.concept-choice').count(),6,'All six design choices must be visible');
     assert.ok((await page.evaluate(()=>document.documentElement.scrollWidth))<=width+2,'Gallery must not overflow horizontally');
-    for(const id of ['01','02','03','04','05']) {
+    for(const id of ['01','02','03','04','05','06']) {
       const response = await page.goto(`${path}?concept=${id}`,{waitUntil:'domcontentloaded'});
       assert.equal(response?.status(),200,'Standalone concept '+id+' must be accessible');
       await page.locator(`.concept[data-design="${id}"]`).waitFor();
@@ -33,14 +33,64 @@ try {
       assert.equal(await page.locator('[data-trade="1"]').getAttribute('aria-pressed'),'true','Trade selector is interactive');
       assert.match(await page.locator('.market-svg').getAttribute('aria-label'),/EURUSD/i);
       assert.ok(await page.getByRole('link',{name:/Next concept/}).count()===1,'Comparison navigation exists');
+      if(id==='06') {
+        const living=page.locator('.concept-living');
+        assert.equal(await living.count(),1,'Original-inspired sixth concept is present');
+        assert.ok(await page.locator('.living-decision-note').evaluate(el =>
+          el.getBoundingClientRect().top >= document.querySelector('.chart-shell-living').getBoundingClientRect().bottom + 6),
+          'Behind-the-chart note must not obstruct illustrative data disclaimer');
+        await page.locator('[data-living-phase="2"]').click();
+        assert.equal(await page.locator('[data-living-phase="2"]').getAttribute('aria-pressed'),'true',
+          'Four-stage process selector is interactive');
+        assert.match(await page.locator('[data-living-step-title]').innerText(),/hypothesis|experiment/i);
+        await page.locator('[data-living-next]').click();
+        assert.equal(await page.locator('[data-living-phase="3"]').getAttribute('aria-pressed'),'true',
+          'Step navigation advances the decision process');
+        await page.locator('[data-living-module="3"]').click();
+        assert.equal(await page.locator('[data-living-module="3"]').getAttribute('aria-pressed'),'true');
+        assert.match(await page.locator('[data-living-module-headline]').innerText(),/broker record/i,
+          'Accounts feature panel responds to tab selection');
+        const theme=page.locator('[data-living-theme-toggle]');
+        await theme.click();
+        assert.equal(await living.getAttribute('data-living-theme'),'light','Appearance switcher works');
+        assert.equal(await theme.getAttribute('aria-pressed'),'true','Appearance is accessible');
+        assert.ok((await page.evaluate(()=>document.documentElement.scrollWidth))<=width+2,
+          'Light appearance has no horizontal overflow');
+        if(width===390 || width===1440) {
+          await page.evaluate(()=>window.scrollTo(0,0));
+          await page.screenshot({path:`artifacts/home-lab/06-light-${width}.png`,animations:'disabled'});
+        }
+        await theme.click();
+        assert.equal(await living.getAttribute('data-living-theme'),'dark','Appearance can be restored');
+        const tour=page.locator('[data-living-cycle]');
+        await tour.click();
+        assert.equal(await tour.getAttribute('aria-pressed'),'true','Process tour can start');
+        await tour.click();
+        assert.equal(await tour.getAttribute('aria-pressed'),'false','Process tour can be paused');
+        assert.ok(await page.locator('[data-living-module-preview] .living-module-preview').count()===1);
+      }
+      await page.evaluate(()=>window.scrollTo(0,0));
       await page.screenshot({path:`artifacts/home-lab/${id}-${width}.png`,animations:'disabled'});
+      if(id==='06' && (width===390 || width===1440)) {
+        await page.screenshot({path:`artifacts/home-lab/${id}-full-${width}.png`,fullPage:true,animations:'disabled'});
+      }
       results.push({id,width,overflow:false,tradeSelection:true});
     }
     assert.deepEqual(errors,[],'No runtime errors at '+width+'px');
     await page.close();
   }
-  console.log(JSON.stringify({passed:true,designs:5,widths:[390,768,1440],checks:results.length,
-    summary:'Public standalone gallery, responsive variants, accessible trade selectors, ribbon and sample-data labeling'}));
+  console.log(JSON.stringify({passed:true,designs:6,widths:[390,768,1440],checks:results.length,
+    summary:'Six standalone concepts, responsive variants, active trade charts, accessible original-inspired decisions, theme switching and labeled illustrative data'}));
+  const motion=await browser.newPage({viewport:{width:1280,height:900},reducedMotion:'no-preference'});
+  await motion.goto(path+'?concept=06',{waitUntil:'domcontentloaded'});
+  assert.equal(await motion.locator('.ribbon-motion').evaluate(el=>getComputedStyle(el).animationName),
+    'ribbonTravel','The sixth signature ribbon really moves without reduced motion');
+  assert.equal(await motion.locator('.living-hero-copy').evaluate(el=>getComputedStyle(el).animationName),
+    'living-hero-enter','The sixth hero has a controlled entrance animation');
+  await motion.locator('[data-living-cycle]').click();
+  assert.equal(await motion.locator('[data-living-cycle]').getAttribute('aria-pressed'),'true');
+  await motion.locator('[data-living-cycle]').click();
+  await motion.close();
 } finally {
   await browser.close();
 }
