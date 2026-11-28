@@ -62,7 +62,11 @@ try {
         assert.equal(await tour.getAttribute('aria-pressed'),'false','Process tour can be paused');
         assert.ok(await page.locator('[data-living-module-preview] .living-module-preview').count()===1);
       }
+      await page.evaluate(()=>window.scrollTo(0,0));
       await page.screenshot({path:`artifacts/home-lab/${id}-${width}.png`,animations:'disabled'});
+      if(id==='06' && (width===390 || width===1440)) {
+        await page.screenshot({path:`artifacts/home-lab/${id}-full-${width}.png`,fullPage:true,animations:'disabled'});
+      }
       results.push({id,width,overflow:false,tradeSelection:true});
     }
     assert.deepEqual(errors,[],'No runtime errors at '+width+'px');
