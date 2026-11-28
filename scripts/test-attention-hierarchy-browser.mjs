@@ -94,7 +94,8 @@ try {
         'The visible ribbon must contain every word without clipping its own loop');
       assert.equal(sample.ribbonGeometry[1].width,0,
         'Reduced motion hides the decorative duplicate rather than presenting repeated wording');
-      assert.ok(sample.ribbonTextSize>=10.5 && sample.ribbonTextSize<=12.5,'Premium ribbon words stay proportionate');
+      assert.ok(sample.ribbonTextSize>=(width===390?12:13.5) && sample.ribbonTextSize<=(width===390?13:14.5),
+        'Ribbon copy should be CLabs-adjacent and legible without increasing stripe height');
       assert.equal(sample.ribbonMotion,'none','Reduced motion must stop the moving words');
       assert.ok(sample.headingSize<=35,'Page heading must not feel enlarged: '+JSON.stringify(sample));
       assert.equal(sample.overflow,false,'The workspace must not overflow horizontally');

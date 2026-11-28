@@ -47,7 +47,7 @@ try{
       });
       assert.ok(snapshot.pageWidth<=width+2,'No horizontal overflow for '+palette+'/'+width);
       assert.match(snapshot.checkerBackground,/conic-gradient/,'Checkered flag texture must be rendered');
-      assert.ok(snapshot.checkerOpacity>0&&snapshot.checkerOpacity<.12,'Flag texture stays faint');
+      assert.ok(snapshot.checkerOpacity>=.02&&snapshot.checkerOpacity<=.05,'Checkered texture stays barely perceptible behind the stronger accent wash');
       assert.deepEqual(snapshot.modeArt.map(item=>item.kind),['prepare','capture','review','analyze']);
       for(const art of snapshot.modeArt){
         assert.match(art.mask,/assets\/desk-art\//,'Each mode renders a real vector visual, not a placeholder');

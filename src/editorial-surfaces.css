@@ -51,7 +51,7 @@
   position:absolute;inset:0;pointer-events:none;z-index:0;
   background-image:conic-gradient(from 90deg,var(--text-primary) 25%,transparent 0 50%,var(--text-primary) 0 75%,transparent 0);
   background-size:34px 34px;
-  opacity:.075;
+  opacity:.038;
   mask-image:linear-gradient(90deg,transparent 0%,black 24%,black 87%,transparent 100%);
   -webkit-mask-image:linear-gradient(90deg,transparent 0%,black 24%,black 87%,transparent 100%);
 }

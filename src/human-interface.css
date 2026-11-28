@@ -254,7 +254,7 @@
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background: color-mix(in srgb, var(--brand) 19%, var(--bg-card));
+  background: color-mix(in srgb, var(--brand) 30%, var(--bg-card));
   color: var(--ym-ribbon-ink);
   border: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--brand) 28%, var(--border));
@@ -300,10 +300,10 @@
   white-space: nowrap;
   color: var(--ym-ribbon-ink);
   font-family: 'Inter', system-ui, sans-serif;
-  font-size: 12px !important;
+  font-size: 14px !important;
   font-weight: 750;
   line-height: 1;
-  letter-spacing: .135em !important;
+  letter-spacing: .115em !important;
   text-transform: uppercase;
   font-variant-ligatures: none;
   transform: none !important;
@@ -431,8 +431,8 @@
   }
   :root[data-palette] .ym-workspace .ym-studio-stripe.ym-editorial-ribbon .ym-ribbon-word {
     min-height: 36px;
-    font-size: 11px !important;
-    letter-spacing: .105em !important;
+    font-size: 12.5px !important;
+    letter-spacing: .095em !important;
   }
   .ym-workspace .ym-editorial-ribbon .ym-ribbon-group { gap: 24px; padding-inline: 18px; }
   .ym-workspace .ym-editorial-ribbon .ym-ribbon-word + .ym-ribbon-word::before { margin-inline: 0 19px; }
