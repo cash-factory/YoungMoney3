@@ -70,7 +70,7 @@
   }
   function recentHTML(){
     const outcome=['DEMO +$82.40','DEMO −$34.20','DEMO +$46.10'];
-    return `<section class="living-recent" aria-label="Recent fictional trade examples"><div class="living-recent-head"><strong>RECENT TRADES</strong><span>FICTIONAL RESULTS · NOT BROKER DATA</span></div><div class="living-recent-grid">${trades.map((t,i)=>`<button type="button" class="living-recent-trade ${i?'':'is-current'}" data-recent-trade="${i}" aria-pressed="${!i}"><span><strong>${esc(t.symbol)}</strong><small>${esc(t.side)}</small></span><span class="living-recent-sub">${esc(t.setup)}</span><span class="living-recent-value"><small>${i===2?'EXAMPLE · PLANNED':'EXAMPLE · CLOSED'}</small><b class="${i===1?'negative':''}">${outcome[i]||'DEMO'}</b></span></button>`).join('')}</div></section>`;
+    return `<section class="living-recent" aria-label="Recent fictional trade examples"><div class="living-recent-head"><strong>RECENT TRADES</strong><span>FICTIONAL RESULTS · NOT BROKER DATA</span></div><div class="living-recent-grid">${trades.map((t,i)=>`<button type="button" class="living-recent-trade ${i?'':'is-current'}" data-recent-trade="${i}" aria-pressed="${!i}"><span><strong>${esc(t.symbol)}</strong><small>${esc(t.side)}</small></span><span class="living-recent-sub">${esc(t.setup)}</span><span class="living-recent-value"><small>EXAMPLE · CLOSED</small><b class="${i===1?'negative':''}">${outcome[i]||'DEMO'}</b></span></button>`).join('')}</div></section>`;
   }
   function slantedHTML(){
     const words=['PROCESS','PRECISION','DISCIPLINE','CONSISTENCY','GROWTH'];
@@ -88,6 +88,10 @@
     const template=document.createElement('template');template.innerHTML=coreRender(ctx);
     const root=template.content.querySelector('.concept-living');if(!root)return template.innerHTML;
     const svg=root.querySelector('.chart-shell-living .market-svg');if(svg && trades.length)svg.outerHTML=lineSVG(trades[0]);
+    const disclosure=root.querySelector('.chart-shell-living .chart-disclaimer');
+    if(disclosure)disclosure.textContent='Illustrative line chart, example levels and trade outcomes only · not actual account performance or live pricing';
+    const evidenceSummary=root.querySelector('.living-evidence .living-section-heading p');
+    if(evidenceSummary)evidenceSummary.textContent='One trade story, four distinct moments. The original plan and broker evidence remain separate from interpretation.';
     const visual=root.querySelector('.living-hero-visual');if(visual)visual.querySelector('.living-decision-note')?.insertAdjacentHTML('beforebegin',recentHTML());
     const hero=root.querySelector('.living-hero');if(hero)hero.insertAdjacentHTML('afterend',slantedHTML());
     root.querySelector('.living-process-art')?.insertAdjacentHTML('afterbegin',`<div class="living-phase-art" style="${art(phaseArt[0])}" aria-hidden="true"></div><div class="living-phase-pips" aria-hidden="true"><i class="is-current"></i><i></i><i></i><i></i></div>`);
