@@ -117,7 +117,7 @@
 .concept-living .chart-shell-living .chart-detail-row{background:color-mix(in srgb,var(--accent) 3%,var(--chart-bg))}
 .concept-living .chart-shell-living .chart-note{background:color-mix(in srgb,var(--accent) 6%,var(--chart-bg))}
 .concept-living .chart-shell-living .chart-disclaimer{opacity:.7;padding-bottom:19px}
-.living-decision-note{position:relative;display:flex;gap:15px;align-items:flex-start;width:83%;margin:-27px 0 0 auto;
+.living-decision-note{position:relative;display:flex;gap:15px;align-items:flex-start;width:83%;margin:13px 0 0 auto;
   background:var(--living-glass);border:1px solid color-mix(in srgb,var(--accent) 26%,var(--line));
   border-radius:10px;padding:19px 20px;box-shadow:0 15px 40px #0004;z-index:2}
 .living-note-mark{display:grid;place-items:center;width:30px;height:30px;flex:none;border-radius:8px;color:var(--living-coral);
@@ -371,7 +371,7 @@
   .concept-living .chart-shell-living .trade-pick{padding:7px 8px}
   .concept-living .chart-shell-living .chart-detail-row{grid-template-columns:repeat(2,minmax(0,1fr))}
   .concept-living .chart-shell-living .chart-note{padding:15px}
-  .living-decision-note{width:97%;margin-top:-8px;padding:14px}
+  .living-decision-note{width:97%;margin-top:12px;padding:14px}
   .living-method,.living-evidence,.living-platform{padding-inline:19px}
   .living-method-steps{gap:7px}
   .living-method-panel-head{top:10px}
