@@ -46,8 +46,10 @@ try {
         await page.locator('[data-living-next]').click();
         assert.equal(await page.locator('[data-living-phase="3"]').getAttribute('aria-pressed'),'true',
           'Step navigation advances the decision process');
-        assert.equal(await page.locator('.living-section-id').first().evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(234, 20, 56)',
-          'Section title badges use the original stronger red rather than maroon/pink');
+        assert.equal(await page.locator('.living-section-id').first().evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(230, 0, 18)',
+          'CLabs-style true scarlet title plates replace the old pink/maroon color');
+        assert.equal(await living.evaluate(el=>getComputedStyle(el).getPropertyValue('--living-red').trim()),'#e60012',
+          'Concept 06 uses true scarlet across all sections');
         assert.ok(await page.locator('.living-hero').evaluate(el => {
           const opacity=Number(getComputedStyle(el,'::after').opacity);
           return opacity>0 && opacity<.05 && getComputedStyle(el,'::after').backgroundImage.includes('conic-gradient');
@@ -116,6 +118,17 @@ try {
         assert.ok(await page.locator('.living-phase-art').evaluate(el =>
           getComputedStyle(el).backgroundImage.includes('visual-atlas.svg')),
           'Each decision stage receives contextual art');
+        assert.ok(await page.locator('.living-method-panel > .living-phase-art').evaluate(el => {
+          const frame=el.parentElement.getBoundingClientRect();
+          const image=el.getBoundingClientRect();
+          const opacity=Number(getComputedStyle(el).opacity);
+          return image.width>=frame.width*.98 && image.height>=frame.height*.98 &&
+            opacity>0 && opacity<=.18 && getComputedStyle(el).position==='absolute';
+        }), 'Stage illustration fills the full decision panel as a subdued backdrop, not a popup');
+        assert.ok(await page.locator('.living-step.is-current').evaluate(el => {
+          const color=getComputedStyle(el).backgroundColor.match(/\d+/g)?.map(Number)||[];
+          return color[0]<70 && Math.abs(color[0]-color[1])<20 && Math.abs(color[0]-color[2])<20;
+        }), 'Selected decision cards remain neutral, without a maroon/purple fill');
       }
       await page.evaluate(()=>window.scrollTo(0,0));
       await page.screenshot({path:`artifacts/home-lab/${id}-${width}.png`,animations:'disabled'});
@@ -140,9 +153,40 @@ try {
   await motion.locator('[data-living-phase="1"]').click();
   assert.ok(await motion.locator('.living-phase-art').evaluate(el=>getComputedStyle(el).backgroundImage.includes('visual-atlas.svg')),
     'Slideshow phase art remains available with animation enabled');
-  await motion.locator('[data-living-cycle]').click();
-  assert.equal(await motion.locator('[data-living-cycle]').getAttribute('aria-pressed'),'true');
-  await motion.locator('[data-living-cycle]').click();
+  const motionMethod=motion.locator('.living-method');
+  const motionTour=motion.locator('[data-living-cycle]');
+  assert.equal(await motionTour.getAttribute('aria-pressed'),'true',
+    'The decision loop is enabled automatically for regular motion preference');
+  await motion.locator('.living-method-grid').scrollIntoViewIfNeeded();
+  await motion.mouse.move(2,2);
+  await motion.waitForFunction(()=>
+    document.querySelector('.living-method')?.dataset.livingAutoState==='playing',
+    null,{timeout:6500});
+  assert.equal(await motion.locator('[data-living-cycle-status]').innerText(),
+    'AUTO · READ AT YOUR PACE');
+  await motion.locator('.living-method-grid').hover();
+  await motion.waitForFunction(()=>
+    document.querySelector('.living-method')?.dataset.livingAutoState==='hover-paused',
+    null,{timeout:4500});
+  const whenPaused=await motion.locator('[data-living-step-number]').innerText();
+  await motion.waitForTimeout(850);
+  assert.equal(await motion.locator('[data-living-step-number]').innerText(),whenPaused,
+    'Hovering must stop the automatic decision loop');
+  await motion.mouse.move(2,2);
+  await motion.waitForFunction(()=>
+    document.querySelector('.living-method')?.dataset.livingAutoState==='playing',
+    null,{timeout:4500});
+  await motion.waitForFunction(before=>
+    document.querySelector('[data-living-step-number]')?.textContent!==before,
+    whenPaused,{timeout:12500});
+  assert.notEqual(await motion.locator('[data-living-step-number]').innerText(),whenPaused,
+    'Autoplay resumes the remaining reading interval after hover leaves');
+  await motionTour.click();
+  assert.equal(await motionTour.getAttribute('aria-pressed'),'false',
+    'Manual pause stays available when autoplay is active');
+  await motionTour.click();
+  assert.equal(await motionTour.getAttribute('aria-pressed'),'true',
+    'Users can opt back into the automatic slideshow');
   await motion.close();
 } finally {
   await browser.close();
