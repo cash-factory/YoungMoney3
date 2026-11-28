@@ -399,3 +399,19 @@
   .concept-living .living-method-play::after{animation:none!important}
   .concept-living .living-method-panel>.living-phase-art{filter:grayscale(1)}
 }
+
+
+/* Neutral depth instead of the previous wine-colored hero haze.
+   Scarlet remains a sharp brand signal, never a maroon surface wash. */
+.concept-living .living-ambient i:first-child{
+  background:radial-gradient(ellipse,rgba(230,0,18,.055),transparent 64%);
+}
+.concept-living .living-ambient i:nth-child(2){
+  background:radial-gradient(ellipse,rgba(230,0,18,.035),transparent 64%);
+}
+.concept-living .living-ambient i:last-child{
+  background:radial-gradient(ellipse,rgba(230,0,18,.035),transparent 67%);
+}
+.concept-living .living-hero-visual::before{
+  background:radial-gradient(ellipse at 65% 35%,rgba(230,0,18,.055),transparent 69%);
+}
