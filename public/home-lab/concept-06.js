@@ -18,9 +18,16 @@
   let host = null;
   let activePhase = 0;
   let activeModule = 0;
-  let tour = null;
   let tourInterval = 0;
   let scrollRaf = 0;
+  let autoEnabled = true;
+  let methodVisible = false;
+  let hoverPaused = false;
+  let keyboardPaused = false;
+  let remainingReadMs = 9800;
+  let nextDeadline = 0;
+  let tourCleanup = null;
+  const READ_MS = 9800;
   const enc = v => String(v).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   function phaseButtons(){
     return phases.map((p,i) => '<button type="button" class="living-step'+(i===activePhase?' is-current':'')+'" data-living-phase="'+i+'" aria-pressed="'+(i===activePhase)+'"><span class="living-step-n">'+p.n+'</span><strong>'+p.name+'</strong><span class="living-step-arrow" aria-hidden="true">↗</span></button>').join('');
@@ -76,7 +83,7 @@
         '<div class="living-section-heading" data-living-reveal><span class="living-section-id">02 &nbsp; / &nbsp; A CONNECTED ROUTINE</span><div><h2>Four moments.<br><em>One better process.</em></h2><p>A simple loop that turns scattered trading activity into something you can learn from.</p></div></div>',
         '<div class="living-method-grid">',
           '<div class="living-method-steps" role="group" aria-label="Explore the trading process">'+phaseButtons()+
-          '<div class="living-method-play"><button type="button" class="living-cycle" data-living-cycle aria-pressed="false"><span data-living-cycle-symbol>▶</span> <span data-living-cycle-label>Play the decision loop</span></button><span>YOU CONTROL THE PACE</span></div></div>',
+          '<div class="living-method-play"><button type="button" class="living-cycle" data-living-cycle aria-pressed="false"><span data-living-cycle-symbol>Ⅱ</span> <span data-living-cycle-label>Pause automatic loop</span></button><span data-living-cycle-status aria-live="off">AUTO · HOVER TO PAUSE</span></div></div>',
           '<div class="living-method-panel" aria-live="polite"><div class="living-method-panel-head"><span>THE PROCESS / <strong data-living-step-number>'+p.n+'</strong></span><span data-living-step-meta>'+enc(p.meta)+'</span></div>',
           '<div class="living-process-art" aria-hidden="true"><span class="living-art-grid"></span><span class="living-art-ring living-art-ring-one"></span><span class="living-art-ring living-art-ring-two"></span><span class="living-art-core"><b data-living-art-number>'+p.n+'</b><i data-living-art-name>'+p.name+'</i></span><span class="living-art-laser"></span><span class="living-art-label">BEFORE → DURING → AFTER</span></div>',
           '<div class="living-method-panel-copy"><span class="living-panel-eyebrow" data-living-step-signal>'+p.signal+'</span><h3 data-living-step-title>'+p.verb+'</h3><p data-living-step-detail>'+p.detail+'</p><div class="living-method-next"><span data-living-step-question>'+p.short+'</span><button data-living-next type="button">Next moment &nbsp; ↗</button></div></div>',
@@ -124,10 +131,52 @@
     const tags=a.querySelector('[data-living-module-tags]');
     if(tags)tags.innerHTML=m.tags.map(s=>'<span>'+enc(s)+'</span>').join('');
   }
-  function stopTour(){
-    if(tourInterval){clearInterval(tourInterval);tourInterval=0;}
-    const btn=host?.querySelector('[data-living-cycle]');
-    if(btn){btn.setAttribute('aria-pressed','false');btn.querySelector('[data-living-cycle-symbol]').textContent='▶';btn.querySelector('[data-living-cycle-label]').textContent='Play the decision loop';}
+  // A readable, view-scoped autoplay: the remaining reading time is preserved
+  // across hover, keyboard focus, scrolling out of view and tab visibility changes.
+  function updateTourUI(){
+    const method=host?.querySelector('.living-method');
+    const button=host?.querySelector('[data-living-cycle]');
+    const running=Boolean(tourInterval);
+    if(method){
+      method.dataset.livingAutoState = !autoEnabled?'manual':
+        hoverPaused?'hover-paused':keyboardPaused?'focus-paused':
+        !methodVisible?'offscreen':document.hidden?'hidden':running?'playing':'paused';
+      method.classList.toggle('living-auto-playing',running);
+    }
+    if(!button)return;
+    button.setAttribute('aria-pressed',String(autoEnabled));
+    const label=button.querySelector('[data-living-cycle-label]');
+    const symbol=button.querySelector('[data-living-cycle-symbol]');
+    if(label)label.textContent=autoEnabled?'Pause automatic loop':'Resume automatic loop';
+    if(symbol)symbol.textContent=autoEnabled?'Ⅱ':'▶';
+    const status=host?.querySelector('[data-living-cycle-status]');
+    if(status)status.textContent=!autoEnabled?'MANUAL MODE':hoverPaused?'HOVER PAUSED':
+      keyboardPaused?'FOCUS PAUSED':!methodVisible?'AUTO · STARTS WHEN VISIBLE':
+      document.hidden?'PAUSED · TAB HIDDEN':running?'AUTO · READ AT YOUR PACE':'AUTO · PAUSED';
+  }
+  function pauseTour(){
+    if(tourInterval){
+      remainingReadMs=Math.max(180,nextDeadline-performance.now());
+      clearTimeout(tourInterval);
+      tourInterval=0;
+    }
+    updateTourUI();
+  }
+  function canAdvance(){
+    return Boolean(host?.isConnected&&autoEnabled&&methodVisible&&
+      !hoverPaused&&!keyboardPaused&&!document.hidden);
+  }
+  function scheduleTour(reset=false){
+    if(tourInterval){clearTimeout(tourInterval);tourInterval=0;}
+    if(reset)remainingReadMs=READ_MS;
+    if(!canAdvance()){updateTourUI();return;}
+    nextDeadline=performance.now()+remainingReadMs;
+    tourInterval=setTimeout(()=>{
+      tourInterval=0;
+      paintPhase(activePhase+1);
+      scheduleTour(true);
+    },remainingReadMs);
+    updateTourUI();
   }
   function updateProgress(){
     scrollRaf=0;
@@ -140,22 +189,63 @@
     host=el.querySelector('.concept-living');
     if(!host)return;
     const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if(tourCleanup)tourCleanup();
+    autoEnabled=!reduce;
+    methodVisible=false;hoverPaused=false;keyboardPaused=false;
+    remainingReadMs=READ_MS;
     host.addEventListener('click',event=>{
       const phase=event.target.closest('[data-living-phase]');
-      if(phase){stopTour();paintPhase(Number(phase.dataset.livingPhase));return;}
+      if(phase){paintPhase(Number(phase.dataset.livingPhase));scheduleTour(true);return;}
       const next=event.target.closest('[data-living-next]');
-      if(next){stopTour();paintPhase(activePhase+1);return;}
+      if(next){paintPhase(activePhase+1);scheduleTour(true);return;}
       const mod=event.target.closest('[data-living-module]');
       if(mod){paintModule(Number(mod.dataset.livingModule));return;}
       const toggle=event.target.closest('[data-living-theme-toggle]');
       if(toggle){const light=host.dataset.livingTheme!=='light';host.dataset.livingTheme=light?'light':'dark';toggle.setAttribute('aria-pressed',String(light));toggle.setAttribute('aria-label','Switch this concept to '+(light?'dark':'light')+' appearance');toggle.querySelector('span').textContent=light?'DARK VIEW':'LIGHT VIEW';return;}
       const cycle=event.target.closest('[data-living-cycle]');
       if(cycle){
-        if(tourInterval){stopTour();return;}
-        paintPhase(0);cycle.setAttribute('aria-pressed','true');cycle.querySelector('[data-living-cycle-symbol]').textContent='Ⅱ';cycle.querySelector('[data-living-cycle-label]').textContent='Pause sequence';
-        let count=0;tourInterval=setInterval(()=>{count++;if(count>=4){stopTour();return;}paintPhase(count);},reduce?1700:2700);
+        autoEnabled=!autoEnabled;
+        if(autoEnabled)scheduleTour(true);
+        else pauseTour();
       }
     });
+    const method=host.querySelector('.living-method');
+    if(method){
+      // Pointer hover pauses on desktop; leaving resumes the unread time.
+      const hoverCapable=matchMedia('(hover: hover) and (pointer: fine)').matches;
+      if(hoverCapable){
+        method.addEventListener('pointerenter',()=>{hoverPaused=true;pauseTour();});
+        method.addEventListener('pointerleave',()=>{hoverPaused=false;scheduleTour();});
+      }
+      let pointerActivated=false;
+      method.addEventListener('pointerdown',()=>{pointerActivated=true;keyboardPaused=false;});
+      method.addEventListener('keydown',()=>{pointerActivated=false;keyboardPaused=true;pauseTour();});
+      method.addEventListener('focusin',()=>{
+        if(!pointerActivated){keyboardPaused=true;pauseTour();}
+      });
+      method.addEventListener('focusout',e=>{
+        if(!method.contains(e.relatedTarget)){
+          keyboardPaused=false;pointerActivated=false;scheduleTour();
+        }
+      });
+      const onVisibility=()=>{if(document.hidden)pauseTour();else scheduleTour();};
+      document.addEventListener('visibilitychange',onVisibility);
+      let observer=null;
+      if('IntersectionObserver' in window){
+        observer=new IntersectionObserver(entries=>{
+          const entry=entries[0];if(!entry)return;
+          methodVisible=entry.isIntersecting&&entry.intersectionRatio>=.22;
+          if(methodVisible)scheduleTour();else pauseTour();
+        },{threshold:[0,.22,.45]});
+        observer.observe(method);
+      }else{methodVisible=true;scheduleTour();}
+      tourCleanup=()=>{
+        pauseTour();
+        observer?.disconnect();
+        document.removeEventListener('visibilitychange',onVisibility);
+      };
+    }
+    updateTourUI();
     if(!reduce&&'IntersectionObserver' in window){
       host.classList.add('living-motion-ok');
       const observed=host.querySelectorAll('[data-living-reveal]');
