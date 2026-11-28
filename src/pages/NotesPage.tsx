@@ -113,6 +113,7 @@ function NoteForm({ initial, onSave, onCancel }: { initial: Note | null; onSave:
   const [tagsStr, setTagsStr] = useState(initial?.tags.join(', ') || '');
   const [isPinned, setIsPinned] = useState(initial?.is_pinned ?? false);
   const [screenshotUrl, setScreenshotUrl] = useState(initial?.screenshot_url || null);
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -141,14 +142,14 @@ function NoteForm({ initial, onSave, onCancel }: { initial: Note | null; onSave:
       </div>
       <div>
         <label className={labelCls}>Image</label>
-        <ScreenshotUpload onUpload={setScreenshotUrl} existingUrl={screenshotUrl} label="Upload chart markup or reference image" />
+        <ScreenshotUpload allowDocuments onUploadingChange={setUploading} onUpload={setScreenshotUrl} existingUrl={screenshotUrl} label="Upload chart or document" />
       </div>
       <label className="flex items-center gap-2 cursor-pointer">
         <input type="checkbox" checked={isPinned} onChange={e => setIsPinned(e.target.checked)} className="w-4 h-4 rounded border-themed" />
         <span className="text-sm">Pin to top</span>
       </label>
       <div className="flex gap-3 pt-2">
-        <button onClick={handleSave} disabled={saving || !title} className="btn-primary flex-1">
+        <button onClick={handleSave} disabled={saving || uploading || !title} className="btn-primary flex-1">
           <Save size={16} /> {saving ? 'Saving...' : 'Save Note'}
         </button>
         <button onClick={onCancel} className="btn-secondary">Cancel</button>

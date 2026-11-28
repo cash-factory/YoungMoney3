@@ -30,6 +30,8 @@ Do not commit the invite code or any account credentials. New account creation f
 
 ## Private media storage
 
+Staging binds PRIVATE_FILES to a SQLite-backed Durable Object per authenticated user. It stores each attachment in ordered chunks in one transaction. This works without external storage secrets. The private library, source-document downloads, account cleanup and backup use the same owner scope. Existing Supabase and R2 objects remain readable. Supabase takes precedence for new uploads when configured. Production configuration is independent. The document uploader supports PDF and DOCX files up to 15 MiB.
+
 Create a Supabase personal access token from [Supabase account tokens](https://supabase.com/dashboard/account/tokens) with access to create projects and read project API keys. Do not paste the token into chat, a command argument, or a committed file. From a VS Code terminal, enter:
 
 ```sh

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpRight, FolderOpen, Image, LayoutGrid, List, Mic, RefreshCw, Search, X } from 'lucide-react';
+import { privateDocumentDownload, uploadPrivateMedia } from '@/lib/media';
+import { FileText, Upload, ArrowUpRight, FolderOpen, Image, LayoutGrid, List, Mic, RefreshCw, Search, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { buildMediaLibrary, MEDIA_RECORD_SOURCES, type LibraryAsset, type LibraryFile, type LibraryKind, type LibraryPhase } from '@/lib/mediaLibrary';
@@ -8,7 +9,7 @@ import { announceAction } from '@/lib/actionFeedback';
 import '@/library-studio.css';
 
 async function listPrivateUploads(signal: AbortSignal): Promise<LibraryFile[]> {
-  const queue = [{ provider: 'supabase', folder: '', cursor: '' }, { provider: 'r2', folder: '', cursor: '' }];
+  const queue = [{provider:'archive',folder:'',cursor:''}, { provider: 'supabase', folder: '', cursor: '' }, { provider: 'r2', folder: '', cursor: '' }];
   const visited = new Set<string>();
   const files = new Map<string, LibraryFile>();
   while (queue.length) {
@@ -60,8 +61,8 @@ function AssetPreview({ asset, onClose }: { asset: LibraryAsset; onClose: () => 
     // dispatch onClose during React Strict Mode's effect replay.
   }, []);
   return <dialog ref={dialog} className="ym-library-lightbox" onCancel={onClose} onClose={onClose} aria-label="Attachment preview">
-    <div className="ym-library-lightbox-header"><div><small>{asset.kind === 'image' ? 'Image preview' : 'Voice note'}</small><h2>{asset.references[0]?.title || asset.name}</h2></div><button type="button" className="btn-ghost" onClick={onClose} aria-label="Close attachment preview"><X size={22} /></button></div>
-    <div className="ym-library-preview-body">{asset.kind === 'image' ? <MediaImage source={asset.source} alt={asset.references[0]?.title || asset.name} className="ym-library-full-image" /> : <div className="ym-library-audio-preview"><Mic size={44} /><MediaAudioPlayer source={asset.source} /></div>}</div>
+    <div className="ym-library-lightbox-header"><div><small>{asset.kind === 'document' ? 'Document' : asset.kind === 'image' ? 'Image preview' : 'Voice note'}</small><h2>{asset.references[0]?.title || asset.name}</h2></div><button type="button" className="btn-ghost" onClick={onClose} aria-label="Close attachment preview"><X size={22} /></button></div>
+    <div className="ym-library-preview-body">{asset.kind === 'document' ? <a className="btn-primary" href={privateDocumentDownload(asset.source) || undefined}>Download document</a> : asset.kind === 'image' ? <MediaImage source={asset.source} alt={asset.references[0]?.title || asset.name} className="ym-library-full-image" /> : <div className="ym-library-audio-preview"><Mic size={44} /><MediaAudioPlayer source={asset.source} /></div>}</div>
     <div className="ym-library-preview-context"><p className="text-xs text-muted mb-3">Captured {dateLabel(asset.date)}</p><AssetReferences asset={asset} /></div>
   </dialog>;
 }
@@ -117,8 +118,19 @@ export function MediaLibraryPage() {
     return () => { active = false; controller.abort(); };
   }, [user?.id, attempt]);
 
+  const [uploading,setUploading] = useState(false);
+  async function upload(file?:File) {
+    if (!file || uploading) return;
+    setUploading(true);
+    try {
+      await uploadPrivateMedia(file,file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'audio' : 'document');
+      announceAction('success','Private attachment uploaded.'); setAttempt(value=>value+1);
+    } catch (error) { announceAction('error',error instanceof Error ? error.message : 'Upload failed.'); }
+    finally {setUploading(false);}
+  }
   const images = assets.filter(asset => asset.kind === 'image').length;
-  const audio = assets.length - images;
+  const audio = assets.filter(asset=>asset.kind==='audio').length;
+  const documents=assets.length-images-audio;
   const linkedTrades = new Set(assets.flatMap(asset => asset.references.flatMap(reference => reference.tradeIds))).size;
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -133,24 +145,24 @@ export function MediaLibraryPage() {
     <header className="ym-library-hero">
       <div className="ym-library-hero-copy"><p className="ym-library-kicker">TRADING EVIDENCE / YOUR PRIVATE ARCHIVE</p><h1>Media <span>Library</span></h1>
         <p>Charts, screenshots and voice reflections—organised around the decisions you recorded.</p>
-        <div className="ym-library-hero-stats"><span><strong>{images}</strong> screenshots</span><span><strong>{audio}</strong> voice notes</span><span><strong>{linkedTrades}</strong> linked trades</span></div>
+        <div className="ym-library-hero-stats"><span><strong>{images}</strong> screenshots</span><span><strong>{audio}</strong> voice notes</span><span><strong>{documents}</strong> documents</span><span><strong>{linkedTrades}</strong> linked trades</span></div>
       </div>
       <figure className="ym-library-art"><img src="/visuals/media-still-life.png" alt="Abstract still life of trading-media materials" /><figcaption>YOUR VISUAL JOURNAL</figcaption></figure>
     </header>
     <div className="ym-library-workbench">
       <aside className="ym-library-sidebar" aria-label="Library collections">
         <p className="ym-library-kicker">COLLECTIONS</p>
-        {([{ id: 'all', label: 'All media', count: assets.length, Icon: FolderOpen }, { id: 'image', label: 'Images', count: images, Icon: Image }, { id: 'audio', label: 'Voice notes', count: audio, Icon: Mic }] as const).map(({ id, label, count, Icon }) => <button key={id} type="button" aria-pressed={kind === id} onClick={() => setKind(id)}><Icon size={17} /><span>{label}</span><small>{count}</small></button>)}
+        {([{ id: 'all', label: 'All media', count: assets.length, Icon: FolderOpen }, { id: 'image', label: 'Images', count: images, Icon: Image }, { id: 'audio', label: 'Voice notes', count: audio, Icon: Mic }, { id: 'document',label:'Documents',count:documents,Icon:FileText }] as const).map(({ id, label, count, Icon }) => <button key={id} type="button" aria-pressed={kind === id} onClick={() => setKind(id)}><Icon size={17} /><span>{label}</span><small>{count}</small></button>)}
         <details className="ym-library-side-note"><summary>About this library</summary><p>Select an image or recording to see its linked trade and any review notes.</p></details>
       </aside>
       <section className="ym-library-results" aria-label="Media files">
-        <div className="ym-library-toolbar"><label className="ym-library-search"><Search size={17} /><span className="sr-only">Search media or linked trade</span><input className="input-field" placeholder="Search media, instrument or trade…" value={search} onChange={event => setSearch(event.target.value)} /></label><button type="button" className="btn-secondary" disabled={loading} onClick={() => {refreshRequested.current=true;setAttempt(value => value + 1);}} aria-label="Refresh media library"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button><div className="ym-library-view"><button type="button" aria-label="Grid view" aria-pressed={view === 'grid'} onClick={() => setView('grid')}><LayoutGrid size={17} /></button><button type="button" aria-label="List view" aria-pressed={view === 'list'} onClick={() => setView('list')}><List size={17} /></button></div></div>
+        <div className="ym-library-toolbar"><label className="btn-secondary"><Upload size={16}/>{uploading ? 'Uploading…' : 'Upload file'}<input type="file" aria-label="Upload private file" className="sr-only" accept="image/png,image/jpeg,image/gif,image/avif,image/webp,audio/*,.pdf,.docx" disabled={uploading} onChange={e=>{const file=e.target.files?.[0]; e.target.value=''; void upload(file);}}/></label><label className="ym-library-search"><Search size={17} /><span className="sr-only">Search media or linked trade</span><input className="input-field" placeholder="Search media, instrument or trade…" value={search} onChange={event => setSearch(event.target.value)} /></label><button type="button" className="btn-secondary" disabled={loading} onClick={() => {refreshRequested.current=true;setAttempt(value => value + 1);}} aria-label="Refresh media library"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button><div className="ym-library-view"><button type="button" aria-label="Grid view" aria-pressed={view === 'grid'} onClick={() => setView('grid')}><LayoutGrid size={17} /></button><button type="button" aria-label="List view" aria-pressed={view === 'list'} onClick={() => setView('list')}><List size={17} /></button></div></div>
         <div className="ym-library-filter-row"><div aria-label="Capture phase" className="ym-library-phase">{([{ id: 'all', label: 'All captures' }, { id: 'entry', label: 'Entry' }, { id: 'closure', label: 'Closure' }, { id: 'unlinked', label: 'Unlinked' }] as const).map(option => <button type="button" key={option.id} aria-pressed={phase === option.id} onClick={() => setPhase(option.id)}>{option.label}</button>)}</div><button type="button" className="ym-library-sort" onClick={() => setOldest(value => !value)}>{oldest ? 'Oldest first' : 'Newest first'} ↕</button></div>
         {!!warnings.length && <div role="alert" className="ym-library-warning"><p>{warnings.join(' ')}</p><button type="button" onClick={() => setAttempt(value => value + 1)}>Retry loading</button></div>}
         <p className="ym-library-result-count" role="status">{loading ? 'Loading your private archive…' : `${filtered.length} ${filtered.length === 1 ? 'attachment' : 'attachments'}`}</p>
         {loading ? <div className="ym-library-grid" aria-busy="true">{[1, 2, 3].map(number => <div key={number} className="ym-library-skeleton" />)}</div> : !filtered.length ? <div className="ym-library-empty"><FolderOpen size={38} /><h2>{assets.length ? 'No matching captures' : warnings.length ? 'Your archive could not be fully loaded' : 'Your story starts with a capture'}</h2><p>{assets.length ? 'Try another instrument, file type, or capture phase.' : 'Screenshots and voice notes uploaded in trades, journals, plans and tests will appear here automatically.'}</p>{!!assets.length && <button type="button" className="btn-secondary" onClick={() => { setSearch(''); setKind('all'); setPhase('all'); }}>Clear filters</button>}</div> : <div className={view === 'grid' ? 'ym-library-grid' : 'ym-library-list'}>
           {filtered.slice(0, shown).map(asset => <article key={asset.source} className="ym-library-card">
-            <div className="ym-library-thumbnail">{asset.kind === 'image' ? <button type="button" className="ym-library-image-open" aria-label={'Preview '+(asset.references[0]?.title||asset.name)} onClick={() => setPreview(asset)}><MediaImage source={asset.source} alt={asset.references[0]?.title || 'Uploaded screenshot'} className="ym-library-thumb-image" /></button> : <><button type="button" className="ym-library-audio-cover" onClick={() => setPreview(asset)} aria-label={`Preview ${asset.references[0]?.title || 'voice note'}`}><Mic size={30} /><span className="ym-library-wave" aria-hidden="true">{[12, 24, 18, 34, 22, 42, 28, 18, 32, 16, 24, 12].map((height, i) => <i key={i} style={{ height }} />)}</span></button><MediaAudioPlayer source={asset.source} className="ym-library-audio-player" /></>}<span className="ym-library-type">{asset.kind === 'image' ? 'IMAGE' : 'VOICE NOTE'}</span></div>
+            <div className="ym-library-thumbnail">{asset.kind === 'document' ? <a className="btn-secondary" href={privateDocumentDownload(asset.source) || undefined}><FileText size={24}/> Download document</a> : asset.kind === 'image' ? <button type="button" className="ym-library-image-open" aria-label={'Preview '+(asset.references[0]?.title||asset.name)} onClick={() => setPreview(asset)}><MediaImage source={asset.source} alt={asset.references[0]?.title || 'Uploaded screenshot'} className="ym-library-thumb-image" /></button> : <><button type="button" className="ym-library-audio-cover" onClick={() => setPreview(asset)} aria-label={`Preview ${asset.references[0]?.title || 'voice note'}`}><Mic size={30} /><span className="ym-library-wave" aria-hidden="true">{[12, 24, 18, 34, 22, 42, 28, 18, 32, 16, 24, 12].map((height, i) => <i key={i} style={{ height }} />)}</span></button><MediaAudioPlayer source={asset.source} className="ym-library-audio-player" /></>}<span className="ym-library-type">{asset.kind === 'document' ? 'DOCUMENT' : asset.kind === 'image' ? 'IMAGE' : 'VOICE NOTE'}</span></div>
             <div className="ym-library-card-content"><div className="ym-library-card-heading"><div><h2>{asset.references[0]?.title || asset.name}</h2><p>{dateLabel(asset.date)} · {asset.references.length} linked {asset.references.length===1?'record':'records'}</p></div>
             <button type="button" className="ym-library-open" aria-label={'Open '+(asset.references[0]?.title||asset.name)} onClick={() => setPreview(asset)}><ArrowUpRight size={19} /></button></div></div>
           </article>)}

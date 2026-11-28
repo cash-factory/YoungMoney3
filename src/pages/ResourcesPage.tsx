@@ -1,3 +1,4 @@
+import { privateDocumentDownload } from '@/lib/media';
 import { Select } from '@/components/Select';
 import { useState, useMemo } from 'react';
 import { BookOpen, Plus, Trash2, Save, Search, ExternalLink, Bookmark } from 'lucide-react';
@@ -103,7 +104,7 @@ function ResourceCard({ resource, onEdit, onDelete }: { resource: Resource; onEd
   return <article className="ym-resource-row">
     <div className="ym-resource-cover">{resource.thumbnail_url ? <MediaImage source={resource.thumbnail_url} alt={`${resource.title} thumbnail`} className="ym-resource-thumbnail" /> : <Icon size={26} />}</div>
     <div className="ym-resource-copy"><p className="ym-output-eyebrow">{CATEGORY_LABELS[resource.category] || resource.category}</p><h2>{resource.title}</h2>{resource.description && <p>{resource.description}</p>}{resource.tags.length > 0 && <div className="ym-resource-tags">{resource.tags.map(tag => <span key={tag}>#{tag}</span>)}</div>}<small>Saved {format(parseISO(resource.created_at), 'MMM d, yyyy')}</small></div>
-    <div className="ym-resource-row-actions">{resource.url && <a href={resource.url} target="_blank" rel="noopener noreferrer" className="btn-secondary" aria-label={`Open ${resource.title}`}>Open source <ExternalLink size={14} /></a>}<div><button type="button" aria-label={`Edit ${resource.title}`} onClick={onEdit} className="btn-ghost text-xs">Edit</button><button type="button" aria-label={`Delete ${resource.title}`} onClick={onDelete} className="btn-ghost text-error-500"><Trash2 size={14} /></button></div></div>
+    <div className="ym-resource-row-actions">{resource.url && <a href={privateDocumentDownload(resource.url) || resource.url} target="_blank" rel="noopener noreferrer" className="btn-secondary" aria-label={`Open ${resource.title}`}>{privateDocumentDownload(resource.url) ? "Download document" : "Open source"} <ExternalLink size={14} /></a>}<div><button type="button" aria-label={`Edit ${resource.title}`} onClick={onEdit} className="btn-ghost text-xs">Edit</button><button type="button" aria-label={`Delete ${resource.title}`} onClick={onDelete} className="btn-ghost text-error-500"><Trash2 size={14} /></button></div></div>
   </article>;
 }
 
@@ -114,6 +115,8 @@ function ResourceForm({ initial, onSave, onCancel }: { initial: Resource | null;
   const [description, setDescription] = useState(initial?.description || '');
   const [tagsStr, setTagsStr] = useState(initial?.tags.join(', ') || '');
   const [thumbnailUrl, setThumbnailUrl] = useState(initial?.thumbnail_url || null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -148,7 +151,8 @@ function ResourceForm({ initial, onSave, onCancel }: { initial: Resource | null;
         </div>
         <div>
           <label className={labelCls}>URL</label>
-          <input className={inputCls} value={url} onChange={e => setUrl(e.target.value)} placeholder="https://..." />
+        {privateDocumentDownload(url) ? null : (<input className={inputCls} value={url} onChange={e => setUrl(e.target.value)} placeholder="https://..." />)}
+        <ScreenshotUpload key={privateDocumentDownload(url) ? url : 'document'} documentsOnly onUploadingChange={setUploadingDoc} existingUrl={privateDocumentDownload(url) ? url : null} onUpload={setUrl} label="Upload source document" />
         </div>
       </div>
       <div>
@@ -161,10 +165,10 @@ function ResourceForm({ initial, onSave, onCancel }: { initial: Resource | null;
       </div>
       <div>
         <label className={labelCls}>Thumbnail Image</label>
-        <ScreenshotUpload onUpload={setThumbnailUrl} existingUrl={thumbnailUrl} label="Upload thumbnail image" />
+        <ScreenshotUpload onUploadingChange={setUploading} onUpload={setThumbnailUrl} existingUrl={thumbnailUrl} label="Upload thumbnail image" />
       </div>
       <div className="flex gap-3 pt-2">
-        <button onClick={handleSave} disabled={saving || !title} className="btn-primary flex-1">
+        <button onClick={handleSave} disabled={saving || uploading || uploadingDoc || !title} className="btn-primary flex-1">
           <Save size={16} /> {saving ? 'Saving...' : 'Save Resource'}
         </button>
         <button onClick={onCancel} className="btn-secondary">Cancel</button>

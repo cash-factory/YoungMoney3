@@ -24,6 +24,7 @@ const bucketConfiguration = {
   public: false,
   file_size_limit: 15 * 1024 * 1024,
   allowed_mime_types: [
+    'application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'image/avif', 'image/gif', 'image/jpeg', 'image/png', 'image/webp',
     'audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm', 'audio/x-wav',
   ],
